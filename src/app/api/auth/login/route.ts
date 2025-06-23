@@ -165,7 +165,7 @@ export async function POST(request: Request) {
   let db;
 
   // استخرج publicKey من الطلب إذا كان متاحًا
-  const { publicKey } = await request.json().catch(() => ({}));
+  //const { publicKey } = await request.json().catch(() => ({}));
 
   
   try {

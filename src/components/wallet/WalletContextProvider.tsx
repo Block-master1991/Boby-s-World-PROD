@@ -28,9 +28,9 @@ import { SOL_NETWORK, DEDICATED_RPC_ENDPOINT } from '@/lib/constants';
 if (typeof window !== 'undefined') {
 registerMwa({
     appIdentity: {
-        name: 'Bobys Worlad',
+        name: 'Bobys World',
         uri: 'https://divine-bedbug-valued.ngrok-free.app', // تأكد من تحديث هذا الرابط إلى رابط التطبيق الخاص بك
-        icon: 'public/Boby-logo.png', // تأكد أن هذا المسار صحيح ويشير إلى ملف داخل public
+        icon: '/Boby-logo.png', // تأكد أن هذا المسار صحيح ويشير إلى ملف داخل public
     },
     authorizationCache: createDefaultAuthorizationCache(),
     chains: ['solana:devnet', 'solana:mainnet'],
@@ -66,7 +66,7 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
 
     return (
         <ConnectionProvider endpoint={endpoint}>
-            <WalletProvider wallets={wallets} autoConnect={true}>
+            <WalletProvider wallets={wallets} autoConnect={false}>
                 <WalletModalProvider>{children}</WalletModalProvider>
             </WalletProvider>
         </ConnectionProvider>
