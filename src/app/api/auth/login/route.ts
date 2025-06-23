@@ -249,8 +249,8 @@ export async function POST(request: Request) {
       message: 'Signature verified successfully. JWTs issued.',
       publicKey
     });
-    response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60)); // 15 دقيقة
-    response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60)); // 7 أيام
+    response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60));
+    response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60));
 
     // نهاية العملية
     console.log('[LOGIN] Login process completed successfully');
