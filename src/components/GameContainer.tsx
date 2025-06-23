@@ -21,8 +21,10 @@ const GameContainer: React.FC = () => {
         isLoading: isLoadingAuth,
         login: loginAuthHook,
         logout: logoutAuthSessionHook,
-        error: authErrorFromContext // Get error from context
+        error: authErrorFromContext,// Get error from context
+        checkSession
     } = useAuth();
+    
     const { 
         disconnectFromSession: disconnectWalletAdapterSession
     } = useSessionWallet();
@@ -38,6 +40,18 @@ const GameContainer: React.FC = () => {
     const [isCheckingSession, setIsCheckingSession] = useState(true);
 
     const siteKey = RECAPTCHA_SITE_KEY;
+
+
+    useEffect(() => {
+    const runSessionCheck = async () => {
+      setIsCheckingSession(true);
+      const sessionValid = await checkSession();
+      setCaptchaVerified(sessionValid);
+      // هنا يمكن تحديث AuthUser و IsAuthenticated تلقائيًا ضمن checkSession في AuthContext
+      setIsCheckingSession(false);
+    };
+    runSessionCheck();
+  }, [checkSession]);
 
     const handleCaptchaSuccess = useCallback(() => {
         console.log("[GameContainer] Captcha verified successfully.");
@@ -103,42 +117,42 @@ const GameContainer: React.FC = () => {
         console.log("[GameContainer] Component mounted.");
     }, []);
 
-    // تحقق من الجلسة عند تحميل الصفحة
-    useEffect(() => {
-        const checkSession = async () => {
-            try {
-                const response = await fetch('/api/auth/session', {
-                    method: 'GET',
-                    credentials: 'include',
-                });
-                if (response.ok) {
-                    const data = await response.json();
-                    if (data.authenticated && data.user && data.user.wallet) {
-                        setCaptchaVerified(true);
-                        setIsAuthenticated(true);
-                        setAuthUser({ wallet: data.user.wallet, publicKey: data.user.wallet });
+       /* // تحقق من الجلسة عند تحميل الصفحة
+        useEffect(() => {
+            const checkSession = async () => {
+                try {
+                    const response = await fetch('/api/auth/session', {
+                        method: 'GET',
+                        credentials: 'include',
+                    });
+                    if (response.ok) {
+                        const data = await response.json();
+                        if (data.authenticated && data.user && data.user.wallet) {
+                            setCaptchaVerified(true);
+                            setIsAuthenticated(true);
+                            setAuthUser({ wallet: data.user.wallet, publicKey: data.user.wallet });
+                        } else {
+                            setCaptchaVerified(false);
+                            setIsAuthenticated(false);
+                            setAuthUser(null);
+                        }
                     } else {
                         setCaptchaVerified(false);
                         setIsAuthenticated(false);
                         setAuthUser(null);
                     }
-                } else {
+                } catch {
                     setCaptchaVerified(false);
                     setIsAuthenticated(false);
                     setAuthUser(null);
+                } finally {
+                    setIsCheckingSession(false);
                 }
-            } catch {
-                setCaptchaVerified(false);
-                setIsAuthenticated(false);
-                setAuthUser(null);
-            } finally {
-                setIsCheckingSession(false);
-            }
-        };
-        checkSession();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
-
+            };
+            checkSession();
+            // eslint-disable-next-line react-hooks/exhaustive-deps
+        }, []);
+*/
 
     useEffect(() => {
         if (isLoadingAuth) {

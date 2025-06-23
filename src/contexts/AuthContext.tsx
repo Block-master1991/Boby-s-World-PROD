@@ -48,7 +48,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
     console.log('[AuthContext checkSession] Starting session check.');
     try {
-      const response = await fetch('/api/auth/session', { method: 'GET', credentials: 'include' });
+      const response = await fetch('/api/auth/session', { 
+        method: 'GET', 
+        credentials: 'include' });
+
       if (response.ok) {
         const data = await response.json();
         if (data.authenticated && data.user && data.user.wallet) {
@@ -61,11 +64,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return true;
         }
       }
-      setAuthState(prev => ({ ...prev, isAuthenticated: false, isLoading: false, user: null }));
+      setAuthState(prev => ({ ...prev, 
+        isAuthenticated: false, 
+        isLoading: false, 
+        user: null 
+      }));
       return false;
     } catch (error) {
       console.error('[AuthContext checkSession] Session check request failed:', error);
-      setAuthState(prev => ({ ...prev, isAuthenticated: false, isLoading: false, user: null, error: 'Session check failed.' }));
+      setAuthState(prev => ({ 
+        ...prev, 
+        isAuthenticated: false, 
+        isLoading: false, 
+        user: null, 
+        error: 'Session check failed.' 
+      }));
       return false;
     }
   }, []);
@@ -94,6 +107,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('[AuthContext login] Step 2: Requesting signature from wallet...');
       const message = `Sign this message to authenticate with Boby's World.\nNonce: ${nonce}`;
       const messageBytes = new TextEncoder().encode(message);
+      
       let signatureHex;
       try {
         const signature = await walletSignMessage(messageBytes);
@@ -128,6 +142,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setAuthState(prev => ({ ...prev, isLoading: false, error: errMsgLogin }));
         throw new Error(errMsgLogin);
       }
+      
       const loginData = await loginResponse.json();
 
       if (loginData.success && loginData.publicKey) {
