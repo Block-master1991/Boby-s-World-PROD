@@ -6,13 +6,24 @@ export async function GET(request: Request) {
   try {
     // In a real application, you would add authentication/authorization here
     // to ensure only admins can access this endpoint.
-    await initializeAdminApp(); // Ensure the admin app is initialized
+    try {
+      await initializeAdminApp(); // Ensure the admin app is initialized
+    } catch (initError: any) {
+      console.error('Firebase Admin SDK initialization failed:', initError);
+      return NextResponse.json({
+        error: 'Firebase Admin SDK initialization failed. Check server logs for details.',
+        details: process.env.NODE_ENV === 'development' ? initError.message : undefined
+      }, { status: 500 });
+    }
 
     const usersRef = db.collection('users');
     console.log('Attempting to fetch users from collection:', usersRef.path);
     const snapshot = await usersRef.get();
     const totalUsers = snapshot.size;
     console.log('Total users fetched:', totalUsers);
+    if (totalUsers === 0) {
+      console.warn('No documents found in the "users" collection. Is the collection name correct or is it empty?');
+    }
 
     const now = Date.now();
     const onlineThreshold = 5 * 60 * 1000; // 5 minutes
