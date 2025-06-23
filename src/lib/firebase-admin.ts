@@ -1,11 +1,14 @@
 import * as admin from 'firebase-admin';
+import { getFirestore } from 'firebase-admin/firestore';
 import {FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY} from './constants';
 
 let app: admin.app.App;
+export let db: admin.firestore.Firestore;
 
 export async function initializeAdminApp() {
   if (admin.apps.length > 0) {
     app = admin.apps[0] as admin.app.App;
+    db = getFirestore(app);
     return app;
   }
 
@@ -40,5 +43,6 @@ export async function initializeAdminApp() {
     credential,
   });
 
+  db = getFirestore(app);
   return app;
 }

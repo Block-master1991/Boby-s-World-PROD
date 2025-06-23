@@ -34,6 +34,9 @@ export default function AdminPage() {
   const [message, setMessage] = useState<{type: 'success'|'error', text: string}|null>(null);
   const [confirmDelete, setConfirmDelete] = useState<{ip: string, list: 'whitelist'|'blacklist'}|null>(null);
 
+  // User Statistics
+  const [userStats, setUserStats] = useState<{totalUsers: number, onlineUsers: number, offlineUsers: number}|null>(null);
+
   // Search & Pagination
   const [search, setSearch] = useState('');
   const [whitePage, setWhitePage] = useState(1);
@@ -81,9 +84,27 @@ export default function AdminPage() {
   }
 
   useEffect(() => {
-    if (user?.publicKey === ADMIN_WALLET_ADDRESS) fetchLists();
+    if (user?.publicKey === ADMIN_WALLET_ADDRESS) {
+      fetchLists();
+      fetchUserStats();
+    }
     // eslint-disable-next-line
   }, [user, search, whitePage, blackPage]);
+
+  // Fetch user statistics
+  async function fetchUserStats() {
+    try {
+      const response = await fetch('/api/admin/users');
+      if (!response.ok) {
+        throw new Error('Failed to fetch user statistics');
+      }
+      const data = await response.json();
+      setUserStats(data);
+    } catch (err) {
+      console.error('Error fetching user stats:', err);
+      setMessage({ type: 'error', text: 'Failed to fetch user statistics.' });
+    }
+  }
 
   // Add IP
   async function handleAddIp() {
@@ -195,8 +216,9 @@ export default function AdminPage() {
                         <CardTitle className="text-lg">User Statistics</CardTitle>
                     </CardHeader>
                     <CardContent>
-                        <p className="text-sm text-muted-foreground">Total Players: Fetching...</p>
-                        <p className="text-sm text-muted-foreground">Online Now: Fetching...</p>
+                        <p className="text-sm text-muted-foreground">Total Players: {userStats?.totalUsers ?? 'Fetching...'}</p>
+                        <p className="text-sm text-muted-foreground">Online Now: {userStats?.onlineUsers ?? 'Fetching...'}</p>
+                        <p className="text-sm text-muted-foreground">Offline: {userStats?.offlineUsers ?? 'Fetching...'}</p>
                     </CardContent>
                 </Card>
                  <Card className="bg-card/50">
