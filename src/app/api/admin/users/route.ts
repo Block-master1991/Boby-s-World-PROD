@@ -26,20 +26,16 @@ export async function GET(request: Request) {
     }
 
     const now = Date.now();
-    const onlineThreshold = 5 * 60 * 1000; // 5 minutes
+    const onlineThreshold = 30 * 1000; // 30 seconds for online status
 
     let onlineUsers = 0;
     snapshot.docs.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
       const userData = doc.data();
-      // console.log(`Player ${doc.id} lastInteraction raw:`, userData.lastInteraction); // Optional: Log raw lastInteraction field for debugging
       if (userData.lastInteraction && typeof userData.lastInteraction.toDate === 'function') {
         const lastInteractionTime = userData.lastInteraction.toDate().getTime();
-        // console.log(`Player ${doc.id} lastInteraction converted:`, new Date(lastInteractionTime).toLocaleString()); // Optional: Log converted time
         if (now - lastInteractionTime < onlineThreshold) {
           onlineUsers++;
         }
-      } else {
-        // console.log(`Player ${doc.id} has no valid lastInteraction field or it's not a Timestamp.`); // Optional: Log missing/invalid field
       }
     });
 
