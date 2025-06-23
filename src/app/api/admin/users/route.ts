@@ -31,9 +31,15 @@ export async function GET(request: Request) {
     let onlineUsers = 0;
     snapshot.docs.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
       const userData = doc.data();
-      // console.log(`User ${doc.id} lastOnline:`, userData.lastOnline?.toDate?.().toLocaleString()); // Log each user's lastOnline
-      if (userData.lastOnline && (now - userData.lastOnline.toDate().getTime() < onlineThreshold)) {
-        onlineUsers++;
+      console.log(`User ${doc.id} lastOnline raw:`, userData.lastOnline); // Log raw lastOnline field
+      if (userData.lastOnline && typeof userData.lastOnline.toDate === 'function') {
+        const lastOnlineTime = userData.lastOnline.toDate().getTime();
+        console.log(`User ${doc.id} lastOnline converted:`, new Date(lastOnlineTime).toLocaleString()); // Log converted time
+        if (now - lastOnlineTime < onlineThreshold) {
+          onlineUsers++;
+        }
+      } else {
+        console.log(`User ${doc.id} has no valid lastOnline field or it's not a Timestamp.`);
       }
     });
 
