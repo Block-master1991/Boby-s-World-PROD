@@ -22,21 +22,26 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [captchaTokenForAutoVerify, setCaptchaTokenForAutoVerify] = useState<string | null>(null);
 
-  useEffect(() => {
-    const preferredTheme = typeof document !== 'undefined' && document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-    setTheme(preferredTheme);
+  const detectTheme = () =>
+  document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
-    const observer = new MutationObserver(() => {
-        const newTheme = document.documentElement.classList.contains('dark') ? 'dark' : 'light';
-        if (newTheme !== theme) {
-            setTheme(newTheme);
-            recaptchaRef.current?.reset();
-            setCaptchaTokenForAutoVerify(null); // Reset token on theme change
-        }
-    });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class']});
-    return () => observer.disconnect();
-  }, [theme]);
+useEffect(() => {
+  const preferredTheme = detectTheme();
+  setTheme(preferredTheme);
+
+  const observer = new MutationObserver(() => {
+    const newTheme = detectTheme();
+    if (newTheme !== theme) {
+      setTheme(newTheme);
+      recaptchaRef.current?.reset();
+      setCaptchaTokenForAutoVerify(null); // Reset token on theme change
+    }
+  });
+
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+  return () => observer.disconnect();
+}, [theme]);
+
 
   const verifyToken = useCallback(async (token: string) => {
     if (isVerifyingCaptcha) return; // Prevent multiple simultaneous verifications
@@ -48,10 +53,12 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
       const response = await fetch('/api/verify-captcha', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
         body: JSON.stringify({ token: token }),
       });
       const data = await response.json();
       if (data.success) {
+        setCaptchaTokenForAutoVerify(null);
         onVerificationSuccess();
       } else {
         setCaptchaError(data.error || 'CAPTCHA verification failed. Please try again.');
@@ -71,14 +78,13 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
   }, [onVerificationSuccess, toast, isVerifyingCaptcha]);
 
   const handleCaptchaChange = useCallback((tokenValue: string | null) => {
-    setCaptchaTokenForAutoVerify(tokenValue); // Store the token
-    if (tokenValue) {
-      setCaptchaError(null);
-      // Automatically trigger verification when a new token is received
-      verifyToken(tokenValue);
-    }
-  }, [verifyToken]);
-  
+  if (tokenValue && tokenValue !== captchaTokenForAutoVerify) {
+    setCaptchaTokenForAutoVerify(tokenValue);
+    setCaptchaError(null);
+    verifyToken(tokenValue);
+  }
+}, [verifyToken, captchaTokenForAutoVerify]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
       {BobyLogo && <Image src={BobyLogo} alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />}

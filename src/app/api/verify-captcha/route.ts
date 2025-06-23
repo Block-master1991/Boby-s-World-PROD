@@ -18,16 +18,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: 'Server configuration error for CAPTCHA. Secret key is missing.' }, { status: 500 });
     }
 
-    const verificationUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
-
-    const response = await fetch(verificationUrl, {
+    const params = new URLSearchParams();
+    params.append('secret', secretKey);
+    params.append('response', token);
+    const response = await fetch(`https://www.google.com/recaptcha/api/siteverify`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
-      }
+      },
+            body: params
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (jsonError) {
+      console.error('Failed to parse reCAPTCHA verification response as JSON:', jsonError);
+      return NextResponse.json({ success: false, error: 'Invalid response from reCAPTCHA server' }, { status: 502 });
+    }
 
     if (data.success) {
       // Add score checking for v3 if needed, or other business logic
