@@ -16,13 +16,13 @@ export async function GET(request: Request) {
       }, { status: 500 });
     }
 
-    const usersRef = db.collection('users');
-    console.log('Attempting to fetch users from collection:', usersRef.path);
-    const snapshot = await usersRef.get();
-    const totalUsers = snapshot.size;
-    console.log('Total users fetched:', totalUsers);
+    const playersRef = db.collection('players'); // Changed from 'users' to 'players'
+    console.log('Attempting to fetch players from collection:', playersRef.path);
+    const snapshot = await playersRef.get();
+    const totalUsers = snapshot.size; // Renamed to totalUsers for consistency with frontend
+    console.log('Total players fetched:', totalUsers);
     if (totalUsers === 0) {
-      console.warn('No documents found in the "users" collection. Is the collection name correct or is it empty?');
+      console.warn('No documents found in the "players" collection. Is the collection name correct or is it empty?');
     }
 
     const now = Date.now();
