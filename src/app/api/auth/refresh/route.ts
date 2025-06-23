@@ -4,6 +4,7 @@ import { JWTManager } from '@/lib/jwt-utils';
 import { createAuthErrorResponse } from '@/lib/auth-middleware';
 
 export async function POST(request: Request) {
+  
   console.log('[REFRESH] Received refresh token request');
   try {
     const cookieStore = await cookies();
@@ -19,10 +20,10 @@ export async function POST(request: Request) {
     console.log('[REFRESH] Refresh result:', !!result);
 
     if (result) {
-    console.log('[REFRESH] New tokens issued');
-  } else {
-    console.warn('[REFRESH] Refresh token invalid or expired');
-  }
+      console.log('[REFRESH] New tokens issued');
+    } else {
+      console.warn('[REFRESH] Refresh token invalid or expired');
+    }
 
     if (!result) {
       await JWTManager.revokeToken(refreshTokenValue, 'expired');

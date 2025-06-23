@@ -1,4 +1,3 @@
-
 import { BOBY_TOKEN_MINT_ADDRESS, SOL_TOKEN_MINT_ADDRESS } from '@/lib/constants';
 import { NextResponse, type NextRequest } from 'next/server';
 import { initializeAdminApp } from '@/lib/firebase-admin';
@@ -24,6 +23,8 @@ let cachedPriceData: { price: number; timestamp: number } | null = null;
 const CACHE_DURATION_MS = 3 * 1000; // 3 seconds cache for the API response
 
 export async function GET(request: NextRequest) {
+  console.log(`[boby-price-jup] Received request for Boby price from Jupiter API. Request URL: ${request.url}`);
+
   if (cachedPriceData && (Date.now() - cachedPriceData.timestamp < CACHE_DURATION_MS)) {
     console.log(`[boby-price-jup] Returning cached Boby price from Jupiter. Timestamp: ${new Date(cachedPriceData.timestamp).toISOString()}`);
     return NextResponse.json({ price: cachedPriceData.price, source: 'jupiter-cache' });
@@ -138,4 +139,4 @@ export async function GET(request: NextRequest) {
 }
 
 export const dynamic = 'force-dynamic';
-    
+

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { validateTokenFromRequest, createAuthErrorResponse } from '@/lib/auth-middleware';
 
 export async function GET(request: Request) {
+  console.log('[SESSION CHECK] Received session check request');
   try {
     const jwtPayload = await validateTokenFromRequest(request);
     if (!jwtPayload) {

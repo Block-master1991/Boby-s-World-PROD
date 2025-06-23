@@ -1,9 +1,11 @@
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { RECAPTCHA_SECRET_KEY } from '@/lib/constants'
+import { RECAPTCHA_SECRET_KEY } from '@/lib/constants';
 
 export async function POST(request: NextRequest) {
+  console.log('[CAPTCHA VERIFY] Received CAPTCHA verification request');
+
   try {
     const { token } = await request.json();
 
@@ -26,7 +28,7 @@ export async function POST(request: NextRequest) {
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
       },
-            body: params
+      body: params
     });
 
     let data;

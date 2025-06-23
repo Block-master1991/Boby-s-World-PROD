@@ -164,6 +164,10 @@ export async function POST(request: Request) {
   console.log('[LOGIN] Received login request');
   let db;
 
+  // استخرج publicKey من الطلب إذا كان متاحًا
+  const { publicKey } = await request.json().catch(() => ({}));
+
+  
   try {
     await initializeAdminApp();
     db = getFirestore();
