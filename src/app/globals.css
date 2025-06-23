@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+@layer base {
+  :root {
+    --background: 27 100% 75%; /* Approximation of lighter #ffa55e, e.g., #ffb780 */
+    --foreground: 220 40% 15%; /* Dark indigo/charcoal (darker) */
+    --card: 25 100% 93%; /* Almost white with peach tint (darker) */
+    --card-foreground: 220 40% 15%; /* Darker indigo/charcoal */
+    --popover: 25 100% 93%; /* Darker peach tint */
+    --popover-foreground: 220 40% 15%; /* Darker indigo/charcoal */
+    --primary: 35 70% 45%; /* Golden Tan (even darker) */
+    --primary-foreground: 220 30% 25%; /* Dark grayish blue for better contrast on primary elements */
+    --secondary: 25 80% 86%; /* Light peach (darker) */
+    --secondary-foreground: 35 60% 25%; /* Darker tan (darker) */
+    --muted: 25 70% 91%; /* Very subtle peach (darker) */
+    --muted-foreground: 220 30% 40%; /* Muted indigo (darker) */
+    --accent: 210 30% 55%; /* Blue-Grey (darker) */
+    --accent-foreground: 0 0% 100%; /* White for contrast */
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 25 60% 80%; /* Light peach border (darker) */
+    --input: 25 60% 80%; /* Darker peach for input */
+    --ring: 35 70% 45%; /* Golden Tan for ring (even darker) */
+    --chart-1: 12 76% 61%;
+    --chart-2: 173 58% 39%;
+    --chart-3: 197 37% 24%;
+    --chart-4: 43 74% 66%;
+    --chart-5: 27 87% 67%;
+    --radius: 0.5rem;
+
+    /* Sidebar Light Theme Colors */
+    --sidebar-background: 25 100% 92%; /* Light peach for sidebar (darker) */
+    --sidebar-foreground: 220 40% 20%; /* Dark indigo text for sidebar (darker) */
+    --sidebar-primary: 35 70% 45%; /* Golden Tan for sidebar (even darker) */
+    --sidebar-primary-foreground: 0 0% 100%; /* White */
+    --sidebar-accent: 25 90% 86%; /* Light peach for hover/active (darker) */
+    --sidebar-accent-foreground: 35 65% 40%; /* Darker tan text on accent (darker) */
+    --sidebar-border: 25 70% 84%; /* Light peach border for sidebar (darker) */
+    --sidebar-ring: 35 70% 45%; /* Golden Tan for sidebar ring (even darker) */
+  }
+
+  .dark {
+    --background: 220 40% 10%; /* Very dark indigo */
+    --foreground: 25 100% 90%; /* Light peach text */
+    --card: 220 40% 15%; /* Dark indigo card */
+    --card-foreground: 25 100% 90%;
+    --popover: 220 40% 15%;
+    --popover-foreground: 25 100% 90%;
+    --primary: 35 70% 60%; /* Slightly brighter Golden Tan for dark mode */
+    --primary-foreground: 220 40% 10%; /* Very dark indigo text on primary */
+    --secondary: 220 35% 20%; /* Darker indigo for secondary elements */
+    --secondary-foreground: 25 90% 80%; /* Lighter peach text */
+    --muted: 220 30% 22%; /* Dark muted indigo */
+    --muted-foreground: 25 80% 70%; /* Medium-light peach */
+    --accent: 210 35% 55%; /* Slightly adjusted Blue-Grey for dark mode */
+    --accent-foreground: 220 40% 10%; /* Very dark indigo text on accent */
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 220 30% 25%; /* Dark indigo border */
+    --input: 220 30% 25%;
+    --ring: 35 70% 60%; /* Golden Tan for ring in dark mode */
+    --chart-1: 220 70% 50%;
+    --chart-2: 160 60% 45%;
+    --chart-3: 30 80% 55%;
+    --chart-4: 280 65% 60%;
+    --chart-5: 340 75% 55%;
+
+    /* Sidebar Dark Theme Colors */
+    --sidebar-background: 220 40% 12%; /* Slightly off-main-dark-bg indigo */
+    --sidebar-foreground: 25 100% 88%; /* Light peach text */
+    --sidebar-primary: 35 70% 60%; /* Golden Tan */
+    --sidebar-primary-foreground: 220 40% 10%; /* Dark indigo text */
+    --sidebar-accent: 220 35% 22%; /* Darker indigo for hover/active */
+    --sidebar-accent-foreground: 25 90% 85%; /* Light peach text on accent */
+    --sidebar-border: 220 30% 20%; /* Dark indigo border */
+    --sidebar-ring: 35 70% 60%; /* Golden Tan */
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer components {
+  .toast-custom {
+    @apply bg-background/20 backdrop-blur-xl text-foreground p-2 px-3 rounded-lg shadow-lg;
+  }
+  .toast-custom-destructive {
+    @apply bg-destructive/20 backdrop-blur-xl text-destructive-foreground p-2 px-3 rounded-lg shadow-lg;
+  }
+}

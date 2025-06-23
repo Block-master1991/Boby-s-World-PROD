@@ -1,0 +1,102 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // authNonces: Used for login nonce. Server (Admin SDK) access only.
+    // Admin SDK operations bypass these client-side rules.
+    match /authNonces/{userId} {
+      allow read, write: if false; // Deny all client access.
+    }
+
+    // revokedAuthTokens: Used for JWT blacklist. Server (Admin SDK) access only.
+    match /revokedAuthTokens/{jti} {
+      allow read, write: if false; // Deny all client access.
+    }
+
+    // bobyJupiterPriceHistory: Price history written by server API. Server (Admin SDK) access only.
+    match /bobyJupiterPriceHistory/{logId} {
+      allow read, write: if false; // Deny all client access.
+    }
+
+    // players: Player-specific game data.
+    match /players/{playerId} {
+
+      // Helper function to check if the request is from an authenticated user matching the playerId
+      function isAuthenticatedUser() {
+        return request.auth != null && request.auth.uid == playerId;
+      }
+
+      // Helper function to validate the structure of an inventory item
+      // Based on StoreItemDefinition and how items are added in InGameStore.tsx
+      function isValidInventoryItem(item) {
+        return item.keys().hasAll(['id', 'name', 'instanceId', 'image', 'description', 'dataAiHint']) &&
+               item.id is string && item.id.size() > 0 &&
+               item.name is string && item.name.size() > 0 &&
+               item.instanceId is string && item.instanceId.size() > 0 &&
+               item.image is string && item.image.size() > 0 && // Assuming image is a non-empty URL string
+               item.description is string && item.description.size() > 0 &&
+               item.dataAiHint is string; // dataAiHint can be empty string
+      }
+
+      // Helper function to validate the entire inventory list
+      function isValidInventoryList(inventoryList) {
+        return inventoryList is list &&
+               inventoryList.size() <= 200 && // Example: Max 200 items/stacks in inventory
+               (inventoryList.size() == 0 || inventoryList.all(item, isValidInventoryItem(item)));
+      }
+
+      // Read access: Player can read their own data.
+      allow read: if isAuthenticatedUser();
+
+      // Create access: Player can create their own document upon first session setup.
+      allow create: if isAuthenticatedUser() &&
+                       // Validate initial data structure and values
+                       request.resource.data.walletAddress == playerId &&
+                       request.resource.data.createdAt == request.time && // serverTimestamp evaluates to request.time
+                       request.resource.data.lastLogin == request.time &&
+                       request.resource.data.gameUSDTBalance == 0.0 &&
+                       isValidInventoryList(request.resource.data.inventory) &&
+                       request.resource.data.inventory.size() == 0 &&
+                       // Ensure no extra fields are being added on creation
+                       request.resource.data.keys().hasAll(['walletAddress', 'createdAt', 'lastLogin', 'gameUSDTBalance', 'inventory']) &&
+                       request.resource.data.size() == 5;
+
+      // Update access: Player can update their own document under specific conditions.
+      allow update: if isAuthenticatedUser() &&
+                       // Fields that should NOT change after creation
+                       request.resource.data.walletAddress == resource.data.walletAddress &&
+                       request.resource.data.createdAt == resource.data.createdAt &&
+                       // lastLogin can be updated to the current server time
+                       request.resource.data.lastLogin == request.time &&
+                       // gameUSDTBalance validation:
+                       // - Must be a number and non-negative.
+                       // - IMPORTANT: Direct client updates to balance are risky.
+                       //   Ideally, all balance changes are server-authoritative via API calls.
+                       //   This rule is a basic safeguard for current client-side update patterns.
+                       request.resource.data.gameUSDTBalance is number &&
+                       request.resource.data.gameUSDTBalance >= 0.0 &&
+                       // Allow gameUSDTBalance to change if only specific other fields are also changing or no other fields.
+                       // This prevents arbitrary changes if, for example, only 'inventory' was meant to change.
+                       (
+                         (request.resource.data.gameUSDTBalance != resource.data.gameUSDTBalance &&
+                          request.resource.data.diff(resource.data).affectedKeys().hasAny(['gameUSDTBalance', 'lastLogin'])) ||
+                         request.resource.data.gameUSDTBalance == resource.data.gameUSDTBalance // Or balance didn't change
+                       ) &&
+                       // Inventory validation
+                       isValidInventoryList(request.resource.data.inventory) &&
+                       // Ensure only specific fields are being modified or are present.
+                       // Check that no unexpected fields are added or modified.
+                       request.resource.data.keys().hasAll(['walletAddress', 'createdAt', 'lastLogin', 'gameUSDTBalance', 'inventory']) &&
+                       request.resource.data.size() == 5 &&
+                       // Check that only allowed fields are changing from their previous values
+                       request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastLogin', 'gameUSDTBalance', 'inventory']);
+
+
+      // Delete access: Generally, players should not delete their own accounts directly.
+      // This should be an admin-only operation or a managed process.
+      allow delete: if false;
+    }
+  }
+}

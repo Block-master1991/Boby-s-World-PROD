@@ -1,0 +1,45 @@
+
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
+import { RECAPTCHA_SECRET_KEY } from '@/lib/constants'
+
+export async function POST(request: NextRequest) {
+  try {
+    const { token } = await request.json();
+
+    if (!token) {
+      return NextResponse.json({ success: false, error: 'Missing CAPTCHA token' }, { status: 400 });
+    }
+
+    const secretKey = RECAPTCHA_SECRET_KEY;
+
+    if (!secretKey) {
+      console.error('RECAPTCHA_SECRET_KEY is not set in environment variables. This is a critical configuration error.');
+      return NextResponse.json({ success: false, error: 'Server configuration error for CAPTCHA. Secret key is missing.' }, { status: 500 });
+    }
+
+    const verificationUrl = `https://www.google.com/recaptcha/api/siteverify?secret=${secretKey}&response=${token}`;
+
+    const response = await fetch(verificationUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      }
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      // Add score checking for v3 if needed, or other business logic
+      // e.g., if (data.score < 0.5) { return NextResponse.json({ success: false, error: 'Low CAPTCHA score' }); }
+      return NextResponse.json({ success: true });
+    } else {
+      console.error('reCAPTCHA verification failed:', data['error-codes']);
+      return NextResponse.json({ success: false, error: 'CAPTCHA verification failed', details: data['error-codes'] }, { status: 400 });
+    }
+
+  } catch (error) {
+    console.error('Error in CAPTCHA verification API:', error);
+    return NextResponse.json({ success: false, error: 'Internal server error during CAPTCHA verification' }, { status: 500 });
+  }
+}
