@@ -17,6 +17,8 @@ import DisconnectButton from '@/components/shared/DisconnectButton'; // Added im
 
 interface GameMenuSheetContentProps {
   isWalletMismatch: boolean;
+  isAuthenticated: boolean; // New prop
+  authUserPublicKey: string | undefined; // New prop
   sessionPublicKey: PublicKey | null;
   adapterPublicKey: PublicKey | null;
   isFetchingPlayerUSDT: boolean;
@@ -30,6 +32,8 @@ interface GameMenuSheetContentProps {
 
 const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
   isWalletMismatch,
+  isAuthenticated, // Destructure new prop
+  authUserPublicKey, // Destructure new prop
   sessionPublicKey,
   adapterPublicKey,
   isFetchingPlayerUSDT,
@@ -37,8 +41,7 @@ const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
   MIN_WITHDRAWAL_USDT,
   isWithdrawing,
   onWithdrawUSDT,
-  // onDisconnectSession, // Removed
-  dbAppOptionsProjectId,
+  dbAppOptionsProjectId
 }) => {
   const firebaseNotConfigured = !dbAppOptionsProjectId || dbAppOptionsProjectId.includes("YOUR_PROJECT_ID");
 
@@ -50,9 +53,15 @@ const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
         {isWalletMismatch && sessionPublicKey && adapterPublicKey && (
           <div className="mt-2 p-2 text-xs bg-destructive/10 text-destructive rounded-md border border-destructive/30">
             <p className="font-semibold flex items-center gap-1"><AlertCircle size={14} /> Wallet Mismatch!</p>
-            <p>Active wallet in extension ({`${adapterPublicKey.toBase58().substring(0, 4)}...${adapterPublicKey.toBase58().substring(adapterPublicKey.toBase58().length - 4)}`}) </p>
-            <p>differs from session wallet ({`${sessionPublicKey.toBase58().substring(0, 4)}...${sessionPublicKey.toBase58().substring(sessionPublicKey.toBase58().length - 4)}`}).</p>
+            <p>Connected wallet ({`${adapterPublicKey.toBase58().substring(0, 4)}...${adapterPublicKey.toBase58().substring(adapterPublicKey.toBase58().length - 4)}`}) </p>
+            <p>differs from authenticated session ({`${sessionPublicKey.toBase58().substring(0, 4)}...${sessionPublicKey.toBase58().substring(sessionPublicKey.toBase58().length - 4)}`}).</p>
             <p className="mt-1">Please switch wallet in extension or reconnect.</p>
+          </div>
+        )}
+        {!isAuthenticated && (
+          <div className="mt-2 p-2 text-xs bg-yellow-500/10 text-yellow-500 rounded-md border border-yellow-500/30">
+            <p className="font-semibold flex items-center gap-1"><Info size={14} /> Not Authenticated</p>
+            <p>Please connect and authenticate your wallet to access all features.</p>
           </div>
         )}
       </SheetHeader>
@@ -89,16 +98,16 @@ const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
             <CardTitle className="text-sm font-medium flex items-center gap-2"><Info className="h-4 w-4" /> Player Data Note</CardTitle>
           </CardHeader>
           <ShadCardDescription className="text-xs px-6 pb-4 text-muted-foreground">
-            Your wallet address (sessionPublicKey) is used as your unique identifier.
+            Your wallet address (authenticated user's public key) is used as your unique identifier.
             Progress data is stored in Firestore.
           </ShadCardDescription>
         </Card>
       </ScrollArea>
       <SheetFooter className="p-4 border-t mt-auto flex flex-col sm:flex-col space-y-2 sm:space-y-2 sm:justify-start">
-        {sessionPublicKey && (
+        {isAuthenticated && authUserPublicKey && (
           <div className="text-xs text-muted-foreground p-2 border rounded-md bg-background/50 text-center break-all">
-            <p className="font-semibold mb-1 flex items-center justify-center gap-1"><Wallet className="h-4 w-4" />Session Wallet:</p>
-            {`${sessionPublicKey.toBase58().substring(0, 6)}...${sessionPublicKey.toBase58().substring(sessionPublicKey.toBase58().length - 4)}`}
+            <p className="font-semibold mb-1 flex items-center justify-center gap-1"><Wallet className="h-4 w-4" />Authenticated Wallet:</p>
+            {`${authUserPublicKey.substring(0, 6)}...${authUserPublicKey.substring(authUserPublicKey.length - 4)}`}
           </div>
         )}
         <DisconnectButton data-testid="disconnect-button-test" /> 

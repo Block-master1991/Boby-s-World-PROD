@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import type { WalletSignMessageError } from '@solana/wallet-adapter-base';
 import type { PublicKey as SolanaPublicKey } from '@solana/web3.js';
@@ -22,8 +22,7 @@ export interface AuthContextType extends AuthState {
   login: () => Promise<boolean>; // Returns true on success, throws error on failure
   logout: () => Promise<void>;
   checkSession: () => Promise<boolean>;
-  setIsAuthenticated: (v: boolean) => void; // أضف هذا
-  setAuthUser: (user: User | null) => void; // وأضف هذا
+  isWalletConnectedAndMatching: boolean; // New: Indicates if the connected wallet matches the authenticated user
 }
 
 // --- Create Context ---
@@ -39,35 +38,49 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
-    isLoading: true,
+    isLoading: true, // Start as loading to check session
     user: null,
     error: null
   });
 
+  // Derived state: Is the wallet connected AND does its public key match the authenticated user's public key?
+  const isWalletConnectedAndMatching = useMemo(() => {
+    // Ensure 'connected' is treated as a boolean, as useWallet's 'connected' can sometimes be null/undefined during initial render
+    return !!connected && !!adapterPublicKey && authState.user?.publicKey === adapterPublicKey.toBase58();
+  }, [connected, adapterPublicKey, authState.user?.publicKey]);
+
   const checkSession = useCallback(async (): Promise<boolean> => {
-    setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+    // Only set loading if not already authenticated, to avoid flickering if session is valid
+    if (!authState.isAuthenticated) {
+      setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
+    }
     console.log('[AuthContext checkSession] Starting session check.');
     try {
       const response = await fetch('/api/auth/session', { 
         method: 'GET', 
-        credentials: 'include' });
+        credentials: 'include' 
+      });
 
       if (response.ok) {
         const data = await response.json();
         if (data.authenticated && data.user && data.user.wallet) {
-          setAuthState({ 
+          setAuthState(prev => ({ 
+            ...prev, // Keep existing loading state if it was true
             isAuthenticated: true, 
-            isLoading: false,
             user: { publicKey: data.user.wallet, wallet: data.user.wallet },
             error: null
-          });
+          }));
+          console.log('[AuthContext checkSession] Session check successful. Authenticated.');
           return true;
         }
       }
-      setAuthState(prev => ({ ...prev, 
+      // If response not OK or not authenticated, clear auth state
+      console.log('[AuthContext checkSession] Session check failed or not authenticated.');
+      setAuthState(prev => ({ 
+        ...prev, 
         isAuthenticated: false, 
-        isLoading: false, 
-        user: null 
+        user: null, 
+        error: null // Clear error on successful check that just shows not authenticated
       }));
       return false;
     } catch (error) {
@@ -75,13 +88,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthState(prev => ({ 
         ...prev, 
         isAuthenticated: false, 
-        isLoading: false, 
         user: null, 
-        error: 'Session check failed.' 
+        error: 'Session check failed due to network or server error.' 
       }));
       return false;
+    } finally {
+      setAuthState(prev => ({ ...prev, isLoading: false })); // Always set loading to false at the end
     }
-  }, []);
+  }, [authState.isAuthenticated]); // Depend on isAuthenticated to avoid unnecessary loading state changes
 
   const login = useCallback(async (): Promise<boolean> => {
     if (!adapterPublicKey || !walletSignMessage || !connected) {
@@ -163,7 +177,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // This catch block handles errors thrown explicitly above, or unexpected errors.
       // Ensure error state is set before re-throwing.
       const finalErrMsg = error.message || 'An unknown error occurred during the login process.';
-      if (authState.error !== finalErrMsg) { // Avoid redundant state updates if error is already set by a specific throw
+      // Only update error state if it's different to avoid unnecessary re-renders
+      if (authState.error !== finalErrMsg) { 
           setAuthState(prev => ({ ...prev, isAuthenticated: false, isLoading: false, user: null, error: finalErrMsg }));
       }
       console.error('[AuthContext login] Login process failed:', finalErrMsg, 'Stack:', error.stack);
@@ -191,17 +206,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [authState.user?.publicKey]);
 
+  // Initial session check on mount
   useEffect(() => {
-    if (!connected) {
-        if (authState.isAuthenticated) {
-             console.log("[AuthContext] Wallet disconnected externally. Resetting auth state.");
-             setAuthState({ isAuthenticated: false, isLoading: false, user: null, error: null });
-        } else if (authState.isLoading) { 
-             setAuthState(prev => ({ ...prev, isLoading: false }));
-        }
-    }
-    if(authState.isLoading && !connected && !authState.isAuthenticated){
-        setAuthState(prev => ({ ...prev, isLoading: false}));
+    checkSession();
+  }, [checkSession]);
+
+  // Effect to handle wallet connection changes
+  useEffect(() => {
+    // If wallet disconnects, but we are authenticated, we don't clear isAuthenticated.
+    // We rely on checkSession to validate JWTs.
+    // If wallet connects and we are not authenticated, we might trigger login attempt in AuthenticationScreen.
+    // If wallet disconnects and we are NOT authenticated, ensure isLoading is false.
+    if (!connected && !authState.isAuthenticated && authState.isLoading) {
+      setAuthState(prev => ({ ...prev, isLoading: false }));
     }
   }, [connected, authState.isAuthenticated, authState.isLoading]);
 
@@ -210,8 +227,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     login,
     logout,
     checkSession,
-    setIsAuthenticated: (v: boolean) => setAuthState(prev => ({ ...prev, isAuthenticated: v })),
-    setAuthUser: (user: User | null) => setAuthState(prev => ({ ...prev, user })),
+    isWalletConnectedAndMatching, // Include the new derived state
   };
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

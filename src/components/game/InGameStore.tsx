@@ -21,16 +21,26 @@ import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
 
+interface InGameStoreProps {
+    isAuthenticated: boolean;
+    authUserPublicKey: string | undefined;
+    isWalletConnectedAndMatching: boolean;
+}
+
 const BOBY_TOKEN_DECIMALS = 6; // Boby token has 6 decimal places
 
-const InGameStore: React.FC = () => {
+const InGameStore: React.FC<InGameStoreProps> = ({
+    isAuthenticated,
+    authUserPublicKey,
+    isWalletConnectedAndMatching,
+}) => {
     const { connection } = useConnection();
     const {
-        sessionPublicKey,
-        isWalletMismatch,
+        sessionPublicKey, // Keep for reference if needed, but authUserPublicKey is primary for data
+        isWalletMismatch, // Keep for display warnings
         sendTransaction,
-        wallet,
-        adapterPublicKey
+        wallet, // Wallet adapter instance
+        adapterPublicKey // Current connected wallet's public key
     } = useSessionWallet();
     const { toast } = useToast();
 
@@ -98,10 +108,12 @@ const InGameStore: React.FC = () => {
     };
 
     const handlePurchase = async (item: StoreItemDefinition) => {
-        if (!sessionPublicKey || !wallet || !sendTransaction) {
-            toast({ title: 'Wallet Not Connected', description: 'Please connect your wallet for the game session.', variant: 'destructive' });
+        // Check if authenticated and wallet is connected and matching
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey || !wallet || !sendTransaction) {
+            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet to make purchases.', variant: 'destructive' });
             return;
         }
+        // isWalletMismatch is handled by isWalletConnectedAndMatching, but keep the toast for explicit feedback
         if (isWalletMismatch) {
             toast({ title: 'Wallet Mismatch', description: 'Purchase paused. Your active wallet does not match your game session. Please align them or reconnect.', variant: 'destructive', duration: 7000 });
             return;
@@ -153,7 +165,7 @@ const InGameStore: React.FC = () => {
             signature = await sendTransaction(transaction, connection);
             toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Adding to inventory.` });
 
-            const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+            const playerDocRef = doc(db, 'players', authUserPublicKey);
             const itemsToAdd = Array(quantity).fill(null).map(() => ({
                 id: item.id, name: item.name, image: item.image, description: item.description, dataAiHint: item.dataAiHint,
                 instanceId: `item-${Date.now()}-${Math.random().toString(36).substring(2, 11)}` 
@@ -212,8 +224,19 @@ const InGameStore: React.FC = () => {
                 </div>
 
                 <div className="p-6 pt-0 space-y-4">
-                    {!sessionPublicKey && ( <p className="text-sm text-muted-foreground text-center py-8">Connect your wallet to access the store.</p> )}
-                    {sessionPublicKey && storeItems.map((item) => {
+                    {/* Display message if not authenticated or wallet mismatch */}
+                    {(!isAuthenticated || !isWalletConnectedAndMatching) && (
+                        <div className="text-center py-8">
+                            <p className="text-lg text-muted-foreground mb-4">
+                                Please connect and authenticate your wallet to access the store.
+                            </p>
+                            {/* Optionally add a button to trigger wallet connection/login if not already handled by GameContainer */}
+                            {/* <WalletMultiButton /> */}
+                        </div>
+                    )}
+
+                    {/* Render store items only if authenticated and wallet is connected and matching */}
+                    {isAuthenticated && isWalletConnectedAndMatching && storeItems.map((item) => {
                         const quantity = quantities[item.id] || 1;
                         const totalUsdPrice = item.price * quantity;
                         const calculatedBobyPricePerUnit = bobyUsdPrice && bobyUsdPrice > 0 ? (item.price / bobyUsdPrice) : null;
@@ -245,7 +268,7 @@ const InGameStore: React.FC = () => {
                                             {totalBobyPrice !== null ? (
                                                 <>
                                                     {totalBobyPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: BOBY_TOKEN_DECIMALS})}
-                                                    <Image src={BobyLogo} alt="Boby Token" width={14} height={14} className="rounded-full" priority={false} />
+                                                    <Image src={BobyLogo} alt="Boby Token" width={14} height={14} className="rounded-none" priority={false} />
                                                 </>
                                             ) : (
                                                 '--- BOBY'
@@ -255,7 +278,7 @@ const InGameStore: React.FC = () => {
                                     </div>
                                 </div>
                                  <Button variant="default" size="sm" onClick={() => handlePurchase(item)}
-                                    disabled={isLoading === item.id || !sessionPublicKey || isWalletMismatch || STORE_TREASURY_WALLET_ADDRESS === 'REPLACE_WITH_YOUR_STORE_TREASURY_WALLET_ADDRESS' || STORE_TREASURY_WALLET_ADDRESS === 'EXAMPLE_DO_NOT_USE' || isBobyPriceLoading || !bobyUsdPrice || bobyUsdPrice <= 0}
+                                    disabled={isLoading === item.id || !isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey || STORE_TREASURY_WALLET_ADDRESS === 'REPLACE_WITH_YOUR_STORE_TREASURY_WALLET_ADDRESS' || STORE_TREASURY_WALLET_ADDRESS === 'EXAMPLE_DO_NOT_USE' || isBobyPriceLoading || !bobyUsdPrice || bobyUsdPrice <= 0}
                                     className="bg-accent hover:bg-accent/90 text-accent-foreground w-full mt-3 py-2 px-4">
                                     {isLoading === item.id ? <Loader2 className="mr-2 rtl:ml-2 h-4 w-4 animate-spin" /> : ( <><Send className="mr-2 rtl:ml-2 h-4 w-4" /> Purchase ({quantity})</> )}
                                 </Button>

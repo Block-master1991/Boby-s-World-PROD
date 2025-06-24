@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -13,27 +13,48 @@ import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button'; // Import Button for item usage
 
 interface AggregatedInventoryItem {
     definition: StoreItemDefinition;
     count: number;
 }
 
-const PlayerInventory: React.FC = () => {
-    const { sessionPublicKey } = useSessionWallet();
+interface PlayerInventoryProps {
+    isAuthenticated: boolean;
+    authUserPublicKey: string | undefined;
+    isWalletConnectedAndMatching: boolean;
+    speedyPawsTreatCount: number;
+    guardianShieldCount: number;
+    protectionBoneCount: number;
+    coinMagnetTreatCount: number;
+    onUseConsumableItem: (itemId: string) => Promise<void>;
+}
+
+const PlayerInventory: React.FC<PlayerInventoryProps> = ({
+    isAuthenticated,
+    authUserPublicKey,
+    isWalletConnectedAndMatching,
+    speedyPawsTreatCount,
+    guardianShieldCount,
+    protectionBoneCount,
+    coinMagnetTreatCount,
+    onUseConsumableItem,
+}) => {
     const { toast } = useToast();
     const [aggregatedInventory, setAggregatedInventory] = useState<AggregatedInventoryItem[]>([]);
     const [isLoading, setIsLoading] = useState(true);
 
     useEffect(() => {
-        if (!sessionPublicKey || !db) {
+        // Only fetch inventory if authenticated and user public key is available
+        if (!isAuthenticated || !authUserPublicKey || !db) {
             setAggregatedInventory([]);
             setIsLoading(false);
             return;
         }
 
         setIsLoading(true);
-        const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+        const playerDocRef = doc(db, 'players', authUserPublicKey);
 
         const unsubscribe = onSnapshot(playerDocRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -81,8 +102,19 @@ const PlayerInventory: React.FC = () => {
         });
 
         return () => unsubscribe();
-    }, [sessionPublicKey, toast]);
+    }, [isAuthenticated, authUserPublicKey, toast]);
     
+    // Helper to get current count for a specific item ID
+    const getItemCount = useCallback((itemId: string) => {
+        switch (itemId) {
+            case '3': return speedyPawsTreatCount;
+            case '2': return guardianShieldCount;
+            case '1': return protectionBoneCount;
+            case '4': return coinMagnetTreatCount;
+            default: return 0;
+        }
+    }, [speedyPawsTreatCount, guardianShieldCount, protectionBoneCount, coinMagnetTreatCount]);
+
     return (
         <>
             <SheetHeader className="p-6 pb-4 border-b">
@@ -93,46 +125,66 @@ const PlayerInventory: React.FC = () => {
             </SheetHeader>
             <ScrollArea className="flex-grow">
                 <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {!sessionPublicKey && (
-                        <p className="text-sm text-muted-foreground text-center py-8 sm:col-span-2">Connect your wallet to view your inventory.</p>
+                    {(!isAuthenticated || !isWalletConnectedAndMatching) && (
+                        <div className="text-center py-8 sm:col-span-2">
+                            <p className="text-lg text-muted-foreground mb-4">
+                                Please connect and authenticate your wallet to view your inventory.
+                            </p>
+                            {/* Optionally add a button to trigger wallet connection/login */}
+                            {/* <WalletMultiButton /> */}
+                        </div>
                     )}
-                    {sessionPublicKey && isLoading && (
+                    {isAuthenticated && isWalletConnectedAndMatching && isLoading && (
                         <div className="flex justify-center items-center py-8 sm:col-span-2">
                             <Loader2 className="h-8 w-8 animate-spin text-primary" />
                             <p className="ml-2 rtl:mr-2 text-muted-foreground">Loading inventory...</p>
                         </div>
                     )}
-                    {sessionPublicKey && !isLoading && aggregatedInventory.length === 0 && (
+                    {isAuthenticated && isWalletConnectedAndMatching && !isLoading && aggregatedInventory.length === 0 && (
                         <div className="text-center py-8 sm:col-span-2">
                             <PackageSearch className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
                             <p className="text-muted-foreground">Your inventory is currently empty.</p>
                             <p className="text-xs text-muted-foreground mt-1">Visit the store to buy some items!</p>
                         </div>
                     )}
-                    {sessionPublicKey && !isLoading && aggregatedInventory.length > 0 && (
-                        aggregatedInventory.map((itemGroup) => (
-                            <Card key={itemGroup.definition.id} className="flex flex-col">
-                                <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
-                                    <Image 
-                                        src={itemGroup.definition.image || 'https://placehold.co/60x60.png'} 
-                                        alt={itemGroup.definition.name} 
-                                        width={48} 
-                                        height={48} 
-                                        className="rounded-md border"
-                                        data-ai-hint={itemGroup.definition.dataAiHint || 'item placeholder'} 
-                                    />
-                                    <div>
-                                        <CardTitle className="text-lg">{itemGroup.definition.name}</CardTitle>
-                                        <Badge variant="secondary" className="mt-1">Quantity: {itemGroup.count}</Badge>
-                                    </div>
-                                </CardHeader>
-                                {itemGroup.definition.description && (
-                                    <CardContent className="p-4 pt-0">
-                                        <CardDescription className="text-xs">{itemGroup.definition.description}</CardDescription>
-                                    </CardContent>
-                                )}
-                            </Card>
-                        ))
+                    {isAuthenticated && isWalletConnectedAndMatching && !isLoading && aggregatedInventory.length > 0 && (
+                        aggregatedInventory.map((itemGroup) => {
+                            const currentCount = getItemCount(itemGroup.definition.id);
+                            const isConsumable = ['1', '2', '3', '4'].includes(itemGroup.definition.id); // Check if item is consumable
+                            return (
+                                <Card key={itemGroup.definition.id} className="flex flex-col">
+                                    <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
+                                        <Image 
+                                            src={itemGroup.definition.image || 'https://placehold.co/60x60.png'} 
+                                            alt={itemGroup.definition.name} 
+                                            width={48} 
+                                            height={48} 
+                                            className="rounded-md border"
+                                            data-ai-hint={itemGroup.definition.dataAiHint || 'item placeholder'} 
+                                        />
+                                        <div>
+                                            <CardTitle className="text-lg">{itemGroup.definition.name}</CardTitle>
+                                            <Badge variant="secondary" className="mt-1">Quantity: {currentCount}</Badge>
+                                        </div>
+                                    </CardHeader>
+                                    {itemGroup.definition.description && (
+                                        <CardContent className="p-4 pt-0">
+                                            <CardDescription className="text-xs">{itemGroup.definition.description}</CardDescription>
+                                            {isConsumable && currentCount > 0 && (
+                                                <Button 
+                                                    variant="default" 
+                                                    size="sm" 
+                                                    className="mt-3 w-full"
+                                                    onClick={() => onUseConsumableItem(itemGroup.definition.id)}
+                                                >
+                                                    Use Item
+                                                </Button>
+                                            )}
+                                        </CardContent>
+                                    )}
+                                </Card>
+                            );
+                        })
                     )}
                 </div>
             </ScrollArea>

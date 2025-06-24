@@ -8,6 +8,8 @@ import PlayerInventory from '@/components/game/PlayerInventory';
 import GameOverlayUI from '@/components/game/ui/GameOverlayUI';
 import GameMenuSheetContent from '@/components/game/ui/GameMenuSheetContent';
 
+import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
@@ -36,12 +38,16 @@ const MAX_JOYSTICK_TRAVEL = (JOYSTICK_BASE_SIZE / 2) - (JOYSTICK_KNOB_SIZE / 2);
 
 const GameUI: React.FC = () => {
     const isMobile = useIsMobile();
-    const {
+    const { 
         sessionPublicKey,
         adapterPublicKey,
         isWalletMismatch,
-        // disconnectFromSession, // Removed as DisconnectButton handles its own logic
     } = useSessionWallet();
+    const { 
+        isAuthenticated, // Get isAuthenticated from useAuth
+        user: authUser,  // Get authenticated user from useAuth
+        isWalletConnectedAndMatching, // Import isWalletConnectedAndMatching
+    } = useAuth();
     const { toast } = useToast();
 
     const [isStoreOpen, setIsStoreOpen] = useState(false);
@@ -92,7 +98,8 @@ const GameUI: React.FC = () => {
     const isGameEffectivelyPaused = isMenuOpen || isStoreOpen || isInventoryOpen || isWalletMismatch;
 
     const handleCanvasTouchStart = useCallback((screenX: number, screenY: number) => {
-        if (!isMobile || isGameEffectivelyPaused || isWalletMismatch || !sessionPublicKey) return;
+        // Only allow touch if authenticated and wallet is connected and matching
+        if (!isMobile || isGameEffectivelyPaused || !isAuthenticated || !isWalletConnectedAndMatching) return;
         setDynamicJoystickState({
             visible: true,
             baseScreenX: screenX,
@@ -101,7 +108,7 @@ const GameUI: React.FC = () => {
             knobOffsetY: 0,
         });
         setJoystickMovement({ x: 0, y: 0 });
-    }, [isMobile, isGameEffectivelyPaused, isWalletMismatch, sessionPublicKey]);
+    }, [isMobile, isGameEffectivelyPaused, isAuthenticated, isWalletConnectedAndMatching]);
 
     const handleCanvasTouchMove = useCallback((rawDeltaX: number, rawDeltaY: number) => {
         if (!dynamicJoystickState.visible) return;
@@ -141,13 +148,14 @@ const GameUI: React.FC = () => {
 
     const handleCoinCollected = useCallback(async () => {
         setSessionCollectedUSDT(prev => prev + USDT_PER_COIN);
-        if (sessionPublicKey && db && db.app && db.app.options && db.app.options.projectId && !db.app.options.projectId.includes("YOUR_PROJECT_ID")) {
-            if (isWalletMismatch) {
-                toast({ title: 'Wallet Mismatch', description: 'Action paused. Align your wallet in the extension with the game session or reconnect.', variant: 'destructive' });
-                return;
-            }
+        // Only proceed if authenticated and wallet is connected and matching
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey) {
+            toast({ title: 'Action Blocked', description: 'Please ensure your wallet is connected and authenticated to collect coins.', variant: 'destructive' });
+            return;
+        }
+        if (db && db.app && db.app.options && db.app.options.projectId && !db.app.options.projectId.includes("YOUR_PROJECT_ID")) {
             try {
-                const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+                const playerDocRef = doc(db, 'players', authUser.publicKey);
                 await updateDoc(playerDocRef, {
                     gameUSDTBalance: increment(USDT_PER_COIN),
                     lastInteraction: serverTimestamp()
@@ -157,7 +165,7 @@ const GameUI: React.FC = () => {
                 toast({ title: 'Sync Error', description: 'Could not update your total USDT balance.', variant: 'destructive' });
             }
         }
-    }, [sessionPublicKey, toast, isWalletMismatch]); // setSessionCollectedUSDT is stable
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast]); // setSessionCollectedUSDT is stable
 
     const handleRemainingCoinsUpdate = useCallback((remaining: number) => {
         setRemainingCoinsOnMap(remaining);
@@ -165,16 +173,17 @@ const GameUI: React.FC = () => {
 
     useEffect(() => {
         let unsubscribe: Unsubscribe | undefined;
-        if (sessionPublicKey && db && db.app && db.app.options) {
+        // Only subscribe to player data if authenticated and a user public key is available
+        if (isAuthenticated && authUser?.publicKey && db && db.app && db.app.options) {
             setIsFetchingPlayerUSDT(true);
-            const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+            const playerDocRef = doc(db, 'players', authUser.publicKey);
 
             const initializePlayerDocument = async () => {
                 try {
                     const docSnap = await getDoc(playerDocRef);
                     if (!docSnap.exists()) {
                         await setDoc(playerDocRef, {
-                            walletAddress: sessionPublicKey.toBase58(),
+                            walletAddress: authUser.publicKey,
                             createdAt: serverTimestamp(),
                             lastLogin: serverTimestamp(),
                             inventory: [],
@@ -243,6 +252,7 @@ const GameUI: React.FC = () => {
                 });
             }
         } else {
+            // If not authenticated or no user public key, clear all player-specific states
             setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
             setIsFetchingPlayerUSDT(false);
         }
@@ -252,7 +262,7 @@ const GameUI: React.FC = () => {
             if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
             if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
         };
-    }, [sessionPublicKey, toast]);
+    }, [isAuthenticated, authUser?.publicKey, toast]); // Depend on isAuthenticated and authUser.publicKey
 
     useEffect(() => {
         if (shouldShowSpeedBoostWoreOffToast) {
@@ -357,11 +367,9 @@ const GameUI: React.FC = () => {
     };
 
     const handleUseConsumableItem = async (itemIdToConsume: string) => {
-        if (!sessionPublicKey || !db) {
-            toast({ title: 'Error', description: 'Wallet not connected or DB error.', variant: 'destructive' }); return;
-        }
-        if (isWalletMismatch) {
-            toast({ title: 'Wallet Mismatch', description: 'Action paused. Align wallet or reconnect.', variant: 'destructive' }); return;
+        // Ensure authenticated and wallet is connected and matching for actions
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || !db) {
+            toast({ title: 'Error', description: 'Please connect and authenticate your wallet to use items.', variant: 'destructive' }); return;
         }
 
         let currentProjectId: string | undefined;
@@ -404,7 +412,7 @@ const GameUI: React.FC = () => {
         }
 
         try {
-            const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+            const playerDocRef = doc(db, 'players', authUser.publicKey);
             const playerDocSnap = await getDoc(playerDocRef);
             if (playerDocSnap.exists()) {
                 const playerData = playerDocSnap.data();
@@ -430,11 +438,9 @@ const GameUI: React.FC = () => {
     };
 
     const handleWithdrawUSDT = async () => {
-        if (!sessionPublicKey || !db || playerGameUSDT < MIN_WITHDRAWAL_USDT) {
-            toast({ title: "Withdrawal Unavailable", description: `Need at least ${MIN_WITHDRAWAL_USDT} USDT. Your balance: ${playerGameUSDT.toFixed(4)} USDT`, variant: "destructive" }); return;
-        }
-        if (isWalletMismatch) {
-            toast({ title: 'Wallet Mismatch', description: 'Withdrawal paused. Align wallet or reconnect.', variant: 'destructive' }); return;
+        // Ensure authenticated and wallet is connected and matching for withdrawal
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || !db || playerGameUSDT < MIN_WITHDRAWAL_USDT) {
+            toast({ title: "Withdrawal Unavailable", description: `Please connect and authenticate your wallet, and ensure you have at least ${MIN_WITHDRAWAL_USDT} USDT. Your balance: ${playerGameUSDT.toFixed(4)} USDT`, variant: "destructive" }); return;
         }
 
         let currentProjectId: string | undefined;
@@ -449,7 +455,7 @@ const GameUI: React.FC = () => {
         await new Promise(resolve => setTimeout(resolve, 2000));
         const withdrawalAmount = MIN_WITHDRAWAL_USDT; 
         try {
-            const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+            const playerDocRef = doc(db, 'players', authUser.publicKey);
             await updateDoc(playerDocRef, {
                 gameUSDTBalance: increment(-withdrawalAmount), 
                 lastInteraction: serverTimestamp()
@@ -464,13 +470,11 @@ const GameUI: React.FC = () => {
     };
 
     const handleConsumeProtectionBone = useCallback(async () => {
-        if (!sessionPublicKey || !db || protectionBoneCount <= 0) {
-            console.warn("[GameUI] Consume bone called but no bones or no session.");
+        // Ensure authenticated and wallet is connected and matching for actions
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || !db || protectionBoneCount <= 0) {
+            console.warn("[GameUI] Consume bone called but not authenticated, wallet mismatch, or no bones.");
+            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet to use items.', variant: 'destructive' });
             return;
-        }
-        if (isWalletMismatch) {
-             toast({ title: 'Wallet Mismatch', description: 'Bone not used. Align wallet or reconnect.', variant: 'destructive' });
-             return;
         }
         let currentProjectId: string | undefined;
         if (db.app && db.app.options) { currentProjectId = db.app.options.projectId; }
@@ -479,7 +483,7 @@ const GameUI: React.FC = () => {
         }
 
         try {
-            const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+            const playerDocRef = doc(db, 'players', authUser.publicKey);
             const playerDocSnap = await getDoc(playerDocRef);
 
             if (playerDocSnap.exists()) {
@@ -514,9 +518,9 @@ const GameUI: React.FC = () => {
     }, [sessionPublicKey, toast, isWalletMismatch, protectionBoneCount, db]);
 
     const handleEnemyCollisionPenalty = useCallback(async () => {
-        if (!sessionPublicKey || !db) return;
-        if (isWalletMismatch) {
-            toast({ title: 'Wallet Mismatch', description: 'Penalty not applied. Align wallet or reconnect.', variant: 'destructive' });
+        // Ensure authenticated and wallet is connected and matching for actions
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || !db) {
+            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet to apply penalties.', variant: 'destructive' });
             return;
         }
         let currentProjectId: string | undefined;
@@ -526,7 +530,7 @@ const GameUI: React.FC = () => {
         }
 
         try {
-            const playerDocRef = doc(db, 'players', sessionPublicKey.toBase58());
+            const playerDocRef = doc(db, 'players', authUser.publicKey);
             const currentBalance = playerGameUSDT; // Use state value which is kept in sync by onSnapshot
             const newBalance = Math.max(0, currentBalance - ENEMY_COLLISION_PENALTY_USDT);
             
@@ -551,7 +555,7 @@ const GameUI: React.FC = () => {
         <div className="relative flex flex-col min-h-screen bg-background text-foreground overflow-hidden">
             <main className="flex-grow flex flex-col relative">
                 <GameCanvas
-                    sessionPublicKey={sessionPublicKey}
+                    sessionPublicKey={sessionPublicKey} // Keep sessionPublicKey for Three.js context if needed, but logic should use authUser.publicKey
                     isSpeedBoostActive={isSpeedBoostActive}
                     isShieldActive={isShieldActive}
                     isCoinMagnetActive={isCoinMagnetActive}
@@ -610,14 +614,15 @@ const GameUI: React.FC = () => {
                         <SheetContent side="left" className="w-full sm:max-w-xs p-0 flex flex-col">
                             <GameMenuSheetContent
                                 isWalletMismatch={isWalletMismatch}
-                                sessionPublicKey={sessionPublicKey}
-                                adapterPublicKey={adapterPublicKey}
+                                isAuthenticated={isAuthenticated} // Pass isAuthenticated
+                                authUserPublicKey={authUser?.publicKey} // Pass authenticated user's public key
+                                sessionPublicKey={sessionPublicKey} // Keep for display if needed
+                                adapterPublicKey={adapterPublicKey} // Keep for display if needed
                                 isFetchingPlayerUSDT={isFetchingPlayerUSDT}
                                 playerGameUSDT={playerGameUSDT}
                                 MIN_WITHDRAWAL_USDT={MIN_WITHDRAWAL_USDT}
                                 isWithdrawing={isWithdrawing}
                                 onWithdrawUSDT={handleWithdrawUSDT}
-                                // onDisconnectSession={disconnectFromSession} // Removed
                                 dbAppOptionsProjectId={db?.app?.options?.projectId}
                             />
                         </SheetContent>
@@ -635,7 +640,11 @@ const GameUI: React.FC = () => {
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
-                            <InGameStore />
+                            <InGameStore 
+                                isAuthenticated={isAuthenticated}
+                                authUserPublicKey={authUser?.publicKey}
+                                isWalletConnectedAndMatching={isWalletConnectedAndMatching}
+                            />
                         </SheetContent>
                     </Sheet>
                     
@@ -649,7 +658,16 @@ const GameUI: React.FC = () => {
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
-                           <PlayerInventory />
+                           <PlayerInventory 
+                                isAuthenticated={isAuthenticated}
+                                authUserPublicKey={authUser?.publicKey}
+                                isWalletConnectedAndMatching={isWalletConnectedAndMatching}
+                                speedyPawsTreatCount={speedyPawsTreatCount}
+                                guardianShieldCount={guardianShieldCount}
+                                protectionBoneCount={protectionBoneCount}
+                                coinMagnetTreatCount={coinMagnetTreatCount}
+                                onUseConsumableItem={handleUseConsumableItem}
+                           />
                         </SheetContent>
                     </Sheet>
                 </div>

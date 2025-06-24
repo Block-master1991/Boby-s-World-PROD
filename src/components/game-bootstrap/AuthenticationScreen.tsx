@@ -20,18 +20,20 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
     onLoginAttempt,
     captchaVerified
 }) => {
-  const { isLoading: isLoadingAuth, error: authError, isAuthenticated } = useAuth();
+  const { isLoading: isLoadingAuth, error: authError, isAuthenticated, user, isWalletConnectedAndMatching } = useAuth();
   const wallet = useWallet();
 
   useEffect(() => {
-    // لا تحاول تسجيل الدخول إلا إذا تم التحقق من الكابتشا
+    // Attempt automatic login if captcha is verified, wallet is connected,
+    // and we are not already authenticated with the connected wallet.
+    // Also, ensure we are not already in an auth loading state.
     if (
       captchaVerified &&
       wallet.connected &&
       !wallet.disconnecting &&
       wallet.publicKey &&
       !isLoadingAuth &&
-      !isAuthenticated
+      (!isAuthenticated || !isWalletConnectedAndMatching) // If not authenticated OR authenticated but wallet mismatch
     ) {
       console.log("[AuthenticationScreen] Wallet connected, captcha verified, and conditions met for automatic login attempt.");
       onLoginAttempt();
@@ -43,9 +45,11 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
     wallet.publicKey,
     isLoadingAuth,
     isAuthenticated,
+    isWalletConnectedAndMatching, // Added new dependency
     onLoginAttempt
   ]);
   
+  // Display loading screen if authentication is in progress
   if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
@@ -65,6 +69,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
       {BobyLogo && <Image src={BobyLogo} alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />}
       <h1 className="text-4xl font-bold mb-4 font-headline">Welcome to Boby's World!</h1>
 
+      {/* State 1: Wallet not connected */}
       {!wallet.connected && (
         <>
           <p className="text-xl text-muted-foreground mb-10 max-w-md">
@@ -84,18 +89,47 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
         </>
       )}
 
-      {wallet.connected && wallet.publicKey && !isAuthenticated && ( 
+      {/* State 2: Wallet connected, but not authenticated OR authenticated with a different wallet */}
+      {wallet.connected && wallet.publicKey && (!isAuthenticated || !isWalletConnectedAndMatching) && ( 
         <>
           <p className="text-xl text-muted-foreground mb-6 max-w-md">
             Wallet <span className="font-semibold text-primary">{wallet.publicKey.toBase58().substring(0, 4)}...{wallet.publicKey.toBase58().substring(wallet.publicKey.toBase58().length - 4)}</span> connected.
           </p>
-          <p className="text-lg text-muted-foreground mb-8">
-            <Loader2 className="inline-block mr-2 h-5 w-5 animate-spin" />
-            Authenticating... Please check your wallet if prompted.
-          </p>
+          {isAuthenticated && user && !isWalletConnectedAndMatching ? (
+            <>
+              <p className="text-lg text-destructive mb-4">
+                <AlertTriangle className="inline-block mr-2 h-5 w-5" />
+                Authenticated as <span className="font-semibold text-destructive">{user.publicKey.substring(0, 4)}...{user.publicKey.substring(user.publicKey.length - 4)}</span>, but a different wallet is connected.
+              </p>
+              <p className="text-md text-muted-foreground mb-8">
+                Please disconnect the current wallet and connect with your authenticated wallet, or log in with the current wallet.
+              </p>
+              <Button onClick={onLoginAttempt} className="mb-3">
+                <ShieldCheck className="mr-2 h-5 w-5" /> Authenticate with Current Wallet
+              </Button>
+            </>
+          ) : (
+            <p className="text-lg text-muted-foreground mb-8">
+              <Loader2 className="inline-block mr-2 h-5 w-5 animate-spin" />
+              Authenticating... Please check your wallet if prompted.
+            </p>
+          )}
           <Button onClick={onRequestDisconnect} variant="outline" className="mt-3">
             <LogOutIcon className="mr-2 h-5 w-5" /> Disconnect Wallet
           </Button>
+        </>
+      )}
+
+      {/* State 3: Authenticated and wallet connected and matching */}
+      {isAuthenticated && isWalletConnectedAndMatching && (
+        <>
+          <p className="text-xl text-muted-foreground mb-6 max-w-md">
+            You are logged in as <span className="font-semibold text-primary">{user?.publicKey.substring(0, 4)}...{user?.publicKey.substring(user?.publicKey.length - 4)}</span>.
+          </p>
+          <p className="text-lg text-muted-foreground mb-8">
+            Ready to enter Boby's World!
+          </p>
+          {/* No explicit button to "enter game" here, as GameContainer handles the transition */}
         </>
       )}
 

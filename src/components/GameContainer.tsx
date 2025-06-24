@@ -15,14 +15,13 @@ import { ADMIN_WALLET_ADDRESS, RECAPTCHA_SITE_KEY } from '@/lib/constants';
 const GameContainer: React.FC = () => {
     const { 
         isAuthenticated,
-        setIsAuthenticated,
         user: authUser,
-        setAuthUser,
         isLoading: isLoadingAuth,
         login: loginAuthHook,
         logout: logoutAuthSessionHook,
-        error: authErrorFromContext,// Get error from context
-        checkSession
+        error: authErrorFromContext,
+        checkSession,
+        isWalletConnectedAndMatching // Use the new derived state
     } = useAuth();
     
     const { 
@@ -43,15 +42,22 @@ const GameContainer: React.FC = () => {
 
 
     useEffect(() => {
-    const runSessionCheck = async () => {
-      setIsCheckingSession(true);
-      const sessionValid = await checkSession();
-      setCaptchaVerified(sessionValid);
-      // هنا يمكن تحديث AuthUser و IsAuthenticated تلقائيًا ضمن checkSession في AuthContext
-      setIsCheckingSession(false);
-    };
-    runSessionCheck();
-  }, [checkSession]);
+        const runSessionCheck = async () => {
+            setIsCheckingSession(true);
+            console.log("[GameContainer] Initial session check initiated.");
+            const sessionValid = await checkSession();
+            // If session is valid, we can consider captcha verified for flow purposes
+            if (sessionValid) {
+                setCaptchaVerified(true);
+                console.log("[GameContainer] Initial session check successful. Captcha marked as verified.");
+            } else {
+                console.log("[GameContainer] Initial session check failed or no active session.");
+                setCaptchaVerified(false); // Ensure captcha is reset if no valid session
+            }
+            setIsCheckingSession(false);
+        };
+        runSessionCheck();
+    }, [checkSession]);
 
     const handleCaptchaSuccess = useCallback(() => {
         console.log("[GameContainer] Captcha verified successfully.");
@@ -156,22 +162,23 @@ const GameContainer: React.FC = () => {
 
     useEffect(() => {
         if (isLoadingAuth) {
-            console.log("[GameContainer] Global Auth is loading, deferring admin/game resource decisions.");
+            console.log("[GameContainer] AuthContext is loading, deferring admin/game resource decisions.");
             return;
         }
 
-        console.log(`[GameContainer] Auth state updated. IsAuth: ${isAuthenticated}, UserPK: ${authUser?.publicKey}, AdminPK: ${ADMIN_WALLET_ADDRESS}, Current Path: ${pathname}`);
+        console.log(`[GameContainer] Auth state updated. IsAuth: ${isAuthenticated}, UserPK: ${authUser?.publicKey}, WalletConnectedAndMatching: ${isWalletConnectedAndMatching}, AdminPK: ${ADMIN_WALLET_ADDRESS}, Current Path: ${pathname}`);
 
         if (isAuthenticated && authUser?.publicKey) {
             if (authUser.publicKey === ADMIN_WALLET_ADDRESS) {
                 if (!isRedirectingToAdmin && pathname !== '/admin') {
-                    console.log("[GameContainer] Admin user detected via global auth. Redirecting to /admin.");
+                    console.log("[GameContainer] Admin user detected. Redirecting to /admin.");
                     setIsRedirectingToAdmin(true);
                     router.push('/admin');
                 }
             } else { 
+                // Regular user authenticated
                 if (!isLoadingGameResources && !isGameUIVisible()) { 
-                    console.log("[GameContainer] Authenticated as regular user via global auth. Loading game resources...");
+                    console.log("[GameContainer] Authenticated as regular user. Loading game resources...");
                     setIsLoadingGameResources(true);
                     const timer = setTimeout(() => {
                         setIsLoadingGameResources(false);
@@ -181,53 +188,67 @@ const GameContainer: React.FC = () => {
                 }
             }
         } else { 
+            // Not authenticated or authUser is null
             if (isLoadingGameResources) setIsLoadingGameResources(false);
             if (isRedirectingToAdmin) setIsRedirectingToAdmin(false);
-            // captchaVerified is reset by handleDisconnect
+            // captchaVerified is reset by handleDisconnect or if checkSession fails
         }
-    }, [isAuthenticated, authUser, isLoadingAuth, pathname, isRedirectingToAdmin, isLoadingGameResources, ADMIN_WALLET_ADDRESS]);
+    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, isLoadingGameResources, ADMIN_WALLET_ADDRESS]);
 
 
+    // Determine if GameUI should be visible
     const isGameUIVisible = () => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin;
 
+    // Render logic based on authentication and loading states
     if (isCheckingSession) {
+        console.log("[GameContainer] Displaying: Checking session...");
         return <LoadingScreen message="Checking session..." showLogo />;
     }
     if (!siteKey) {
-        console.log("[GameContainer] Waiting for CAPTCHA site key to be ready...");
+        console.log("[GameContainer] Displaying: Preparing verification (no CAPTCHA site key).");
         return <LoadingScreen message="Preparing verification..." showLogo />;
     }
     if (!captchaVerified) {
-        console.log("[GameContainer] Awaiting captcha verification.");
+        console.log("[GameContainer] Displaying: Awaiting captcha verification.");
         return <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
     }
-    if (isLoadingAuth && !authUser) { 
-        console.log("[GameContainer] Waiting for authentication to complete.");
-        return <LoadingScreen message="Processing authentication..." showLogo />;
-    }
-    if (isRedirectingToAdmin) {
-        console.log("[GameContainer] Redirecting to admin panel...");
-        return <LoadingScreen message="Redirecting to admin panel..." showLogo />;
-    }
-    if (!isAuthenticated) {
-        console.log("[GameContainer] User not authenticated. Showing AuthenticationScreen.");
+    
+    // If authenticated, but wallet is not connected or mismatched, show AuthenticationScreen
+    // This allows the user to reconnect the correct wallet without re-logging in
+    if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
+        console.log("[GameContainer] Displaying: Authenticated but wallet mismatch/disconnected. Showing AuthenticationScreen.");
         return <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
     }
-    if (authUser?.publicKey !== ADMIN_WALLET_ADDRESS) {
-        if (isLoadingGameResources) {
-            console.log("[GameContainer] Loading game resources for regular user.");
-            return <LoadingScreen message="Loading game resources..." showLogo />;
-        }
-        if (isGameUIVisible()) {
-            console.log("[GameContainer] Showing GameUI for regular user.");
-            return <GameUI />;
-        }
+
+    // If not authenticated at all, show AuthenticationScreen
+    if (!isAuthenticated) {
+        console.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");
+        return <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
     }
-    if (authUser?.publicKey === ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin) {
-      console.log("[GameContainer] Admin user authenticated, but not yet redirected. Showing loading/finalizing screen.");
-      return <LoadingScreen message="Finalizing admin setup..." showLogo />;
+
+    // If authenticated as admin, redirect
+    if (isAuthenticated && authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
+        if (!isRedirectingToAdmin) { // This state should trigger the useEffect above
+            console.log("[GameContainer] Admin user authenticated, initiating redirect.");
+            return <LoadingScreen message="Redirecting to admin panel..." showLogo />;
+        }
+        console.log("[GameContainer] Displaying: Redirecting to admin panel...");
+        return <LoadingScreen message="Redirecting to admin panel..." showLogo />;
     }
-    console.log("[GameContainer] Finalizing setup. Showing default loading screen.");
+
+    // If authenticated as regular user and game resources are loading
+    if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && isLoadingGameResources) {
+        console.log("[GameContainer] Displaying: Loading game resources for regular user.");
+        return <LoadingScreen message="Loading game resources..." showLogo />;
+    }
+
+    // If all conditions met, show GameUI
+    if (isGameUIVisible()) {
+        console.log("[GameContainer] Displaying: GameUI for regular user.");
+        return <GameUI />;
+    }
+
+    console.log("[GameContainer] Fallback: Showing default loading screen (should not be reached often).");
     return <LoadingScreen message="Finalizing setup..." showLogo />;
 };
 

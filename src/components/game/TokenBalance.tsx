@@ -10,6 +10,8 @@ import { BOBY_TOKEN_MINT_ADDRESS, USDT_TOKEN_MINT_ADDRESS, LAMPORTS_PER_SOL } fr
 import { Gem, AlertTriangle, Loader2, Coins, WalletCards, CircleDollarSign } from 'lucide-react';
 import Image from 'next/image';
 import BobyLogo from '@/app/Boby-logo.png';
+import SolanaLogo from '@/app/Solana-logo.png'; // Assuming you have a Solana logo image
+import UsdtLogo from '@/app/USDT-logo.png'; // Assuming you have a USDT logo image
 
 type ErrorType = 'rpc' | 'other' | null;
 
@@ -154,7 +156,7 @@ const TokenBalance: React.FC = () => {
                     balance={solBalance}
                     error={solError}
                     currencyName="SOL"
-                    icon={<Gem className="h-6 w-6 text-purple-500" />}
+                    icon={<Image src={SolanaLogo} alt="Solana Token" width={24} height={24} className="rounded-full" priority />}
                     onRetry={fetchBalances}
                 />
                 <BalanceDisplay
@@ -162,7 +164,7 @@ const TokenBalance: React.FC = () => {
                     balance={bobyBalance}
                     error={bobyError}
                     currencyName="Boby"
-                    icon={<Image src={BobyLogo} alt="Boby Token" width={24} height={24} className="rounded-full" priority />}
+                    icon={<Image src={BobyLogo} alt="Boby Token" width={24} height={24} className="rounded-none" priority />}
                     onRetry={fetchBalances}
                 />
                 <BalanceDisplay
@@ -170,7 +172,7 @@ const TokenBalance: React.FC = () => {
                     balance={usdtBalance} 
                     error={usdtError} 
                     currencyName="USDT" 
-                    icon={<CircleDollarSign className="h-6 w-6 text-green-500" />}
+                    icon={<Image src={UsdtLogo} alt="USDT-sol Token" width={24} height={24} className="rounded-full" priority />}
                     onRetry={fetchBalances}
                 />
                 

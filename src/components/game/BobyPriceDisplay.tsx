@@ -102,7 +102,7 @@ const BobyPriceDisplay: React.FC = () => {
         <div className="p-2.5 mb-3 rounded-md bg-card/60 border border-border/70 shadow-sm">
             <div className="flex items-center justify-between text-sm">
                 <div className="flex items-center gap-2">
-                    {BobyLogo && <Image src={BobyLogo} alt="Boby Token" width={20} height={20} className="rounded-full" data-ai-hint="dog logo" priority />}
+                    {BobyLogo && <Image src={BobyLogo} alt="Boby Token" width={24} height={24} className="rounded-none" data-ai-hint="dog logo" priority />}
                     <span className="font-medium text-foreground">Boby Price:</span>
                 </div>
                 <div className="flex items-center gap-1.5">
