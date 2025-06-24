@@ -3,8 +3,7 @@
 
 import * as React from 'react';
 import * as THREE from 'three';
-// OrbitControls is no longer needed
-// import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+
 import type { MutableRefObject } from 'react';
 
 interface UseSceneSetupProps {
@@ -12,7 +11,7 @@ interface UseSceneSetupProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   rendererRef: MutableRefObject<THREE.WebGLRenderer | null>;
-  // controlsRef is removed
+
   isPausedRef: MutableRefObject<boolean>;
   isJoystickInteractionActiveRef: MutableRefObject<boolean>; // Kept for other potential uses, though not for controls here
 }
@@ -22,7 +21,7 @@ export const useSceneSetup = ({
   sceneRef,
   cameraRef,
   rendererRef,
-  // controlsRef, // Removed
+
   isPausedRef,
   isJoystickInteractionActiveRef,
 }: UseSceneSetupProps) => {
@@ -46,18 +45,7 @@ export const useSceneSetup = ({
     currentMount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // OrbitControls initialization is removed
-    // if (cameraRef.current && rendererRef.current) {
-    //     const controls = new OrbitControls(cameraRef.current, rendererRef.current.domElement);
-    //     controls.enablePan = false;
-    //     controls.enableZoom = true;
-    //     controls.minDistance = 2;
-    //     controls.maxDistance = 15;
-    //     controls.maxPolarAngle = Math.PI / 2.1;
-    //     controlsRef.current = controls;
-    // } else {
-    //     console.error("[useSceneSetup] Camera or Renderer not available for OrbitControls initialization.");
-    // }
+
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
@@ -93,12 +81,7 @@ export const useSceneSetup = ({
     }
   }, [cameraRef, rendererRef, mountRef]);
 
-  // updateControlsState is removed as OrbitControls are removed
-  // const updateControlsState = React.useCallback(() => {
-  //   if (controlsRef.current) {
-  //       controlsRef.current.enabled = !isPausedRef.current && !isJoystickInteractionActiveRef.current;
-  //   }
-  // }, [controlsRef, isPausedRef, isJoystickInteractionActiveRef]);
+  
 
 
   const cleanupScene = React.useCallback(() => {
@@ -118,16 +101,14 @@ export const useSceneSetup = ({
         });
         sceneRef.current.clear(); sceneRef.current = null;
     }
-    // controlsRef cleanup is removed
-    // if (controlsRef.current) { controlsRef.current.dispose(); controlsRef.current = null; }
+   
     console.log("[useSceneSetup] Cleanup complete.");
-  }, [rendererRef, sceneRef, mountRef]); // controlsRef removed from dependencies
+  }, [rendererRef, sceneRef, mountRef]); 
 
 
   return {
     initializeScene,
     handleResize,
-    // updateControlsState, // Removed
     cleanupScene,
   };
 };

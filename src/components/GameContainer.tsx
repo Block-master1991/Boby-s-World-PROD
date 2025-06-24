@@ -21,7 +21,8 @@ const GameContainer: React.FC = () => {
         logout: logoutAuthSessionHook,
         error: authErrorFromContext,
         checkSession,
-        isWalletConnectedAndMatching // Use the new derived state
+        isWalletConnectedAndMatching, // Use the new derived state
+        logoutAndRedirect // Import the new function
     } = useAuth();
     
     const { 
@@ -199,6 +200,14 @@ const GameContainer: React.FC = () => {
     // Determine if GameUI should be visible
     const isGameUIVisible = () => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin;
 
+    // Effect to handle wallet mismatch and force logout
+    useEffect(() => {
+        if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
+            console.warn("[GameContainer] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout and redirect.");
+            logoutAndRedirect('/');
+        }
+    }, [isAuthenticated, authUser, isWalletConnectedAndMatching, logoutAndRedirect]);
+
     // Render logic based on authentication and loading states
     if (isCheckingSession) {
         console.log("[GameContainer] Displaying: Checking session...");
@@ -213,13 +222,6 @@ const GameContainer: React.FC = () => {
         return <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
     }
     
-    // If authenticated, but wallet is not connected or mismatched, show AuthenticationScreen
-    // This allows the user to reconnect the correct wallet without re-logging in
-    if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
-        console.log("[GameContainer] Displaying: Authenticated but wallet mismatch/disconnected. Showing AuthenticationScreen.");
-        return <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
-    }
-
     // If not authenticated at all, show AuthenticationScreen
     if (!isAuthenticated) {
         console.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");

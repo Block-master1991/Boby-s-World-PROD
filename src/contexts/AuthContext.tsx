@@ -22,7 +22,8 @@ export interface AuthContextType extends AuthState {
   login: () => Promise<boolean>; // Returns true on success, throws error on failure
   logout: () => Promise<void>;
   checkSession: () => Promise<boolean>;
-  isWalletConnectedAndMatching: boolean; // New: Indicates if the connected wallet matches the authenticated user
+  isWalletConnectedAndMatching: boolean; // Indicates if the connected wallet matches the authenticated user
+  logoutAndRedirect: (redirectPath?: string) => Promise<void>; // New: Force logout and redirect
 }
 
 // --- Create Context ---
@@ -206,12 +207,28 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }, [authState.user?.publicKey]);
 
+  const logoutAndRedirect = useCallback(async (redirectPath: string = '/') => {
+    console.log(`[AuthContext logoutAndRedirect] Forcing logout and redirecting to ${redirectPath}`);
+    await logout(); // Perform the regular logout process (clears server-side session)
+    if (connected) {
+      try {
+        await adapterDisconnect(); // Disconnect the wallet adapter
+        console.log("[AuthContext logoutAndRedirect] Wallet adapter disconnected.");
+      } catch (error) {
+        console.error("[AuthContext logoutAndRedirect] Error disconnecting wallet adapter:", error);
+      }
+    }
+    // Use window.location.href for a full page reload to ensure all state is reset
+    // This is more robust for security-critical redirects than Next.js router.push
+    window.location.href = redirectPath;
+  }, [logout, connected, adapterDisconnect]);
+
   // Initial session check on mount
   useEffect(() => {
     checkSession();
   }, [checkSession]);
 
-  // Effect to handle wallet connection changes
+  // Effect to handle wallet connection changes and enforce mismatch logout
   useEffect(() => {
     // If wallet disconnects, but we are authenticated, we don't clear isAuthenticated.
     // We rely on checkSession to validate JWTs.
@@ -220,7 +237,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!connected && !authState.isAuthenticated && authState.isLoading) {
       setAuthState(prev => ({ ...prev, isLoading: false }));
     }
-  }, [connected, authState.isAuthenticated, authState.isLoading]);
+
+    // NEW LOGIC: Force logout if authenticated but wallet is mismatched
+    if (authState.isAuthenticated && authState.user && !isWalletConnectedAndMatching) {
+      console.warn("[AuthContext] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout.");
+      logoutAndRedirect('/'); // Redirect to home without a flag
+    }
+  }, [connected, authState.isAuthenticated, authState.isLoading, authState.user, isWalletConnectedAndMatching, logoutAndRedirect]);
 
   const contextValue: AuthContextType = {
     ...authState,
@@ -228,6 +251,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     checkSession,
     isWalletConnectedAndMatching, // Include the new derived state
+    logoutAndRedirect, // Include the new function
   };
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
