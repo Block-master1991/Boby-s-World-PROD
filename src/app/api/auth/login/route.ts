@@ -240,7 +240,7 @@ export async function POST(request: Request) {
     // === إصدار JWTs ===
     console.log('[LOGIN] Issuing JWTs for:', publicKey);
     const accessToken = JWTManager.createAccessToken(publicKey, clientNonce);
-    const refreshToken = JWTManager.createRefreshToken(publicKey);
+    const refreshToken = JWTManager.createRefreshToken(publicKey, clientNonce);
 
     // إعداد الكوكيز الآمنة
     console.log('[LOGIN] Setting cookies for accessToken and refreshToken');

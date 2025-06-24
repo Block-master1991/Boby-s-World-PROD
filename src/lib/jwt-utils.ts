@@ -35,17 +35,17 @@ export class JWTManager {
     return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { algorithm: 'HS256' });
   }
 
-  static createRefreshToken(publicKey: string): string {
+  static createRefreshToken(publicKey: string, nonce?: string): string {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const payload: JWTPayload = {
       sub: publicKey,
       iat: nowSeconds,
       exp: nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS, 
       jti: randomBytes(16).toString('hex'),
-      type: 'refresh'
-      // No nonce needed for refresh token payload itself, it's identified by JTI
+      type: 'refresh',
+      nonce // Include nonce in refresh token payload
     };
-    console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Exp: ${new Date(payload.exp * 1000).toISOString()}`);
+    console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, Exp: ${new Date(payload.exp * 1000).toISOString()}`);
     return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { algorithm: 'HS256' });
   }
 
@@ -177,10 +177,10 @@ export class JWTManager {
     // or if it was part of the refresh token payload, which it isn't here)
     // For simplicity and security, a new access token generated via refresh might not carry the original login nonce
     // unless specifically designed for that. Here, we'll use the sub from the refresh token.
-    // If nonce needs to be preserved across refreshes, it should be part of the refresh token payload itself.
-    // For now, the new access token will not include the old nonce.
-    const newAccessToken = this.createAccessToken(decodedRefreshToken.sub /* no old nonce here */); 
-    const newRefreshToken = this.createRefreshToken(decodedRefreshToken.sub);
+    // Pass the nonce from the old refresh token to the new access token
+    const newAccessToken = this.createAccessToken(decodedRefreshToken.sub, decodedRefreshToken.nonce); 
+    // Pass the nonce from the old refresh token to the new refresh token
+    const newRefreshToken = this.createRefreshToken(decodedRefreshToken.sub, decodedRefreshToken.nonce);
     
     const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;
     const newRefreshDecoded = jwt.decode(newRefreshToken) as JWTPayload | null;
@@ -213,4 +213,3 @@ export class JWTManager {
     return options;
   }
 }
-    
