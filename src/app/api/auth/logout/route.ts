@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     response.cookies.set('accessToken', '', expiredCookieOptions);
     response.cookies.set('refreshToken', '', expiredCookieOptions);
     response.cookies.set('session', '', expiredCookieOptions); // إذا كنت تستخدم كوكيز أخرى للجلسة
+    response.cookies.set('nonce', '', expiredCookieOptions);
 
     console.log('[LOGOUT] Logout process completed');
     return response;

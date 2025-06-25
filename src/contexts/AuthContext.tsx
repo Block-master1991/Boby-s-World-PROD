@@ -3,7 +3,8 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import type { WalletSignMessageError } from '@solana/wallet-adapter-base';
-import type { PublicKey as SolanaPublicKey } from '@solana/web3.js';
+import { useToast } from '@/hooks/use-toast';
+
 
 // --- Types for AuthState and AuthContext ---
 export interface User {
@@ -24,6 +25,8 @@ export interface AuthContextType extends AuthState {
   checkSession: () => Promise<boolean>;
   isWalletConnectedAndMatching: boolean; // Indicates if the connected wallet matches the authenticated user
   logoutAndRedirect: (redirectPath?: string) => Promise<void>; // New: Force logout and redirect
+  retrySessionCheck: () => void;
+
 }
 
 // --- Create Context ---
@@ -34,15 +37,21 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+function buildSignMessage(nonce: string): string {
+  return `Sign this message to authenticate with Boby's World.\nNonce: ${nonce}`;
+}
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const { publicKey: adapterPublicKey, signMessage: walletSignMessage, connected, disconnect: adapterDisconnect } = useWallet();
-  
+  const { toast } = useToast();
+
   const [authState, setAuthState] = useState<AuthState>({
     isAuthenticated: false,
     isLoading: true, // Start as loading to check session
     user: null,
     error: null
   });
+  const [retryRequested, setRetryRequested] = useState(false);
 
   // Derived state: Is the wallet connected AND does its public key match the authenticated user's public key?
   const isWalletConnectedAndMatching = useMemo(() => {
@@ -74,7 +83,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.log('[AuthContext checkSession] Session check successful. Authenticated.');
           return true;
         }
-      }
+      } else if (response.status === 401 || response.status === 403) {
+          console.warn('[AuthContext checkSession] Session expired or unauthorized. Forcing logout and redirect.');
+          await logoutAndRedirect('/');
+                  toast({ variant: 'destructive', title: 'Session Expired', description: 'You have been logged out due to session timeout or wallet mismatch.' });
+          return false;
+        }
       // If response not OK or not authenticated, clear auth state
       console.log('[AuthContext checkSession] Session check failed or not authenticated.');
       setAuthState(prev => ({ 
@@ -92,16 +106,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         user: null, 
         error: 'Session check failed due to network or server error.' 
       }));
+      toast({ variant: 'destructive', title: 'Network Error', description: 'Failed to validate session. Please check your connection.' });
       return false;
     } finally {
       setAuthState(prev => ({ ...prev, isLoading: false })); // Always set loading to false at the end
+      setRetryRequested(false);
+
     }
   }, [authState.isAuthenticated]); // Depend on isAuthenticated to avoid unnecessary loading state changes
+
+  const retrySessionCheck = useCallback(() => {
+    setRetryRequested(true);
+  }, []);
+
+  useEffect(() => {
+    if (retryRequested) {
+      checkSession();
+    }
+  }, [retryRequested, checkSession]);
 
   const login = useCallback(async (): Promise<boolean> => {
     if (!adapterPublicKey || !walletSignMessage || !connected) {
       const errMsg = 'Wallet not connected or signMessage not available for login.';
       setAuthState(prev => ({ ...prev, isLoading: false, error: errMsg }));
+      toast({ variant: 'destructive', title: 'Login Error', description: errMsg });
       throw new Error(errMsg);
     }
     setAuthState(prev => ({ ...prev, isLoading: true, error: null }));
@@ -114,29 +142,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const errorData = await nonceResponse.json().catch(() => ({ error: 'Nonce fetch failed or non-JSON response' }));
         const errMsg = errorData.error || `Failed to get nonce (status ${nonceResponse.status})`;
         setAuthState(prev => ({ ...prev, isLoading: false, error: errMsg }));
+        toast({ variant: 'destructive', title: 'Login Error', description: errMsg });
         throw new Error(errMsg);
       }
       const { nonce } = await nonceResponse.json();
       console.log('[AuthContext login] Nonce received:', nonce);
 
       console.log('[AuthContext login] Step 2: Requesting signature from wallet...');
-      const message = `Sign this message to authenticate with Boby's World.\nNonce: ${nonce}`;
-      const messageBytes = new TextEncoder().encode(message);
+      
       
       let signatureHex;
       try {
+        const message = buildSignMessage(nonce);
+        const messageBytes = new TextEncoder().encode(message);
         const signature = await walletSignMessage(messageBytes);
         signatureHex = Buffer.from(signature).toString('hex');
         console.log('[AuthContext login] Signature received (hex):', signatureHex ? `${signatureHex.substring(0,10)}...` : 'Empty');
       } catch (signError: any) {
         let userFacingError = 'Failed to sign message.';
-        if (signError?.name === 'WalletSignMessageError') {
-            userFacingError = `Wallet signing error: ${(signError as WalletSignMessageError).message || 'User rejected or unknown error.'}`;
+
+        if (signError?.message?.includes('User rejected')) {
+          userFacingError = 'User rejected the signature request.';
+        } else if (signError?.name === 'WalletSignMessageError') {
+          userFacingError = `Wallet signing error: ${(signError as WalletSignMessageError).message || 'User rejected or unknown error.'}`;
         } else if (signError?.message) {
-            userFacingError = `Signing error: ${signError.message}`;
+          userFacingError = `Signing error: ${signError.message}`;
         }
+        
+        toast({
+          variant: 'destructive',
+          title: 'Signature Failed',
+          description: userFacingError,
+        });
+
         setAuthState({ isAuthenticated: false, isLoading: false, user: null, error: userFacingError });
         throw new Error(userFacingError);
+
       }
 
       console.log('[AuthContext login] Step 3: Sending signature and nonce to /api/auth/login (POST)...');
@@ -151,42 +192,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
          })
       });
 
+      const loginData = await loginResponse.json().catch(() => ({ error: 'Login failed.' }));
       if (!loginResponse.ok) {
-        const errorDataLogin = await loginResponse.json().catch(() => ({error: 'Login verification failed or non-JSON response'}));
-        const errMsgLogin = errorDataLogin.error || `Login verification failed (status ${loginResponse.status})`;
-        setAuthState(prev => ({ ...prev, isLoading: false, error: errMsgLogin }));
-        throw new Error(errMsgLogin);
+        const errMsg = loginData.error;
+        if (loginResponse.status === 403) {
+          await logoutAndRedirect('/');
+          toast({ variant: 'destructive', title: 'Access Denied', description: errMsg });
+          return false;
+        }
+        toast({ variant: 'destructive', title: 'Login Failed', description: errMsg });
+        setAuthState(prev => ({ ...prev, isLoading: false, error: errMsg }));
+        throw new Error(errMsg);
+
       }
-      
-      const loginData = await loginResponse.json();
 
       if (loginData.success && loginData.publicKey) {
-        console.log('[AuthContext login] Login successful. User PK:', loginData.publicKey);
-        setAuthState({ 
-          isAuthenticated: true, 
-          isLoading: false, 
-          user: { publicKey: loginData.publicKey, wallet: loginData.publicKey }, 
-          error: null 
-        });
+        setAuthState({ isAuthenticated: true, isLoading: false, user: { publicKey: loginData.publicKey, wallet: loginData.publicKey }, error: null });
+        toast({ variant: 'default', title: 'Login Successful', description: `Welcome back! Wallet ${loginData.publicKey.slice(0, 8)}...` });
         return true;
-      } else {
-        const serverErrorMsg = loginData.error || 'Login failed: Server indicated failure but provided no specific error message.';
-        setAuthState(prev => ({...prev, isLoading: false, error: serverErrorMsg}));
-        throw new Error(serverErrorMsg);
-      }
-    } catch (error: any) {
-      // This catch block handles errors thrown explicitly above, or unexpected errors.
-      // Ensure error state is set before re-throwing.
-      const finalErrMsg = error.message || 'An unknown error occurred during the login process.';
-      // Only update error state if it's different to avoid unnecessary re-renders
-      if (authState.error !== finalErrMsg) { 
-          setAuthState(prev => ({ ...prev, isAuthenticated: false, isLoading: false, user: null, error: finalErrMsg }));
-      }
-      console.error('[AuthContext login] Login process failed:', finalErrMsg, 'Stack:', error.stack);
-      throw error; // Re-throw the error so the caller (GameContainer) can catch it
-    }
-  }, [adapterPublicKey, walletSignMessage, connected, authState.error]); // authState.error added to deps to avoid stale closure issues if retrying
 
+      }
+
+      const fallbackError = loginData.error || 'Login failed.';
+      setAuthState(prev => ({ ...prev, isLoading: false, error: fallbackError }));
+      toast({ variant: 'destructive', title: 'Login Failed', description: fallbackError });
+      throw new Error(fallbackError);
+    } catch (error: any) {
+      const errMsg = error.message || 'Unknown login error';
+      setAuthState(prev => ({ ...prev, isAuthenticated: false, isLoading: false, user: null, error: errMsg }));
+      toast({ variant: 'destructive', title: 'Login Error', description: errMsg });
+      throw error;
+    }
+  }, [adapterPublicKey, walletSignMessage, connected, authState.error]);
+  
   const logout = useCallback(async (): Promise<void> => {
     const currentPK = authState.user?.publicKey;
     console.log(`[AuthContext logout] Logging out user: ${currentPK || 'N/A'}`);
@@ -199,9 +237,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         credentials: 'include',
         body: JSON.stringify({ publicKey: currentPK })
       });
-      console.log('[FRONTEND] Logout successful');
+      toast({ variant: 'default', title: 'Logged Out', description: 'You have been logged out successfully.' });
     } catch (error) {
-      console.error('[AuthContext logout] /api/auth/logout request failed:', error);
+      toast({ variant: 'destructive', title: 'Logout Failed', description: 'Failed to contact server during logout.' });
     } finally {
       setAuthState({ isAuthenticated: false, isLoading: false, user: null, error: null });
     }
@@ -230,10 +268,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Effect to handle wallet connection changes and enforce mismatch logout
   useEffect(() => {
-    // If wallet disconnects, but we are authenticated, we don't clear isAuthenticated.
-    // We rely on checkSession to validate JWTs.
-    // If wallet connects and we are not authenticated, we might trigger login attempt in AuthenticationScreen.
-    // If wallet disconnects and we are NOT authenticated, ensure isLoading is false.
+    
     if (!connected && !authState.isAuthenticated && authState.isLoading) {
       setAuthState(prev => ({ ...prev, isLoading: false }));
     }
@@ -242,6 +277,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (authState.isAuthenticated && authState.user && !isWalletConnectedAndMatching) {
       console.warn("[AuthContext] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout.");
       logoutAndRedirect('/'); // Redirect to home without a flag
+      toast({ variant: 'destructive', title: 'Wallet Mismatch', description: 'Your connected wallet does not match the session.' });
+
     }
   }, [connected, authState.isAuthenticated, authState.isLoading, authState.user, isWalletConnectedAndMatching, logoutAndRedirect]);
 
@@ -252,6 +289,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkSession,
     isWalletConnectedAndMatching, // Include the new derived state
     logoutAndRedirect, // Include the new function
+    retrySessionCheck
   };
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

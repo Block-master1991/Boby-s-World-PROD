@@ -21,8 +21,9 @@ const GameContainer: React.FC = () => {
         logout: logoutAuthSessionHook,
         error: authErrorFromContext,
         checkSession,
-        isWalletConnectedAndMatching, // Use the new derived state
-        logoutAndRedirect // Import the new function
+        isWalletConnectedAndMatching,
+        logoutAndRedirect,
+        retrySessionCheck
     } = useAuth();
     
     const { 
@@ -46,19 +47,39 @@ const GameContainer: React.FC = () => {
         const runSessionCheck = async () => {
             setIsCheckingSession(true);
             console.log("[GameContainer] Initial session check initiated.");
-            const sessionValid = await checkSession();
-            // If session is valid, we can consider captcha verified for flow purposes
-            if (sessionValid) {
-                setCaptchaVerified(true);
-                console.log("[GameContainer] Initial session check successful. Captcha marked as verified.");
-            } else {
-                console.log("[GameContainer] Initial session check failed or no active session.");
-                setCaptchaVerified(false); // Ensure captcha is reset if no valid session
+            try {
+              const sessionValid = await checkSession();
+              if (sessionValid) {
+                  setCaptchaVerified(true);
+                  console.log("[GameContainer] Initial session check successful. Captcha marked as verified.");
+              } else if (isAuthenticated) {
+                  toast({
+                    title: "Session Expired",
+                    description: "Your session is invalid or expired. Please log in again.",
+                    variant: "destructive"
+                  });
+                  setCaptchaVerified(false);
+              } else {
+                  console.log("[GameContainer] Initial session check failed or no active session.");
+                  setCaptchaVerified(false);
+              }
+            } catch (error: any) {
+              console.error("[GameContainer] Session check error:", error);
+              toast({
+                title: "Network Error",
+                description: "Failed to validate session. Retrying...",
+                variant: "destructive",
+                duration: 4000,
+              });
+              setTimeout(() => {
+                checkSession();
+              }, 3000);
+            } finally {
+              setIsCheckingSession(false);
             }
-            setIsCheckingSession(false);
         };
         runSessionCheck();
-    }, [checkSession]);
+    }, [checkSession, isAuthenticated, toast]);
 
     const handleCaptchaSuccess = useCallback(() => {
         console.log("[GameContainer] Captcha verified successfully.");
@@ -74,6 +95,7 @@ const GameContainer: React.FC = () => {
             const loginSuccess = await loginAuthHook(); 
             if (loginSuccess) {
                 console.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
+                toast({ title: "Login Successful", description: "Welcome to Boby's World!", duration: 3000 });
             } else {
                  console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
                  toast({ title: "Login Failed", description: "An unexpected issue occurred during login.", variant: "destructive" });
@@ -120,47 +142,7 @@ const GameContainer: React.FC = () => {
     }, [logoutAuthSessionHook, disconnectWalletAdapterSession, toast]);
 
 
-    useEffect(() => {
-        console.log("[GameContainer] Component mounted.");
-    }, []);
-
-       /* // تحقق من الجلسة عند تحميل الصفحة
-        useEffect(() => {
-            const checkSession = async () => {
-                try {
-                    const response = await fetch('/api/auth/session', {
-                        method: 'GET',
-                        credentials: 'include',
-                    });
-                    if (response.ok) {
-                        const data = await response.json();
-                        if (data.authenticated && data.user && data.user.wallet) {
-                            setCaptchaVerified(true);
-                            setIsAuthenticated(true);
-                            setAuthUser({ wallet: data.user.wallet, publicKey: data.user.wallet });
-                        } else {
-                            setCaptchaVerified(false);
-                            setIsAuthenticated(false);
-                            setAuthUser(null);
-                        }
-                    } else {
-                        setCaptchaVerified(false);
-                        setIsAuthenticated(false);
-                        setAuthUser(null);
-                    }
-                } catch {
-                    setCaptchaVerified(false);
-                    setIsAuthenticated(false);
-                    setAuthUser(null);
-                } finally {
-                    setIsCheckingSession(false);
-                }
-            };
-            checkSession();
-            // eslint-disable-next-line react-hooks/exhaustive-deps
-        }, []);
-*/
-
+    // Check session on initial load
     useEffect(() => {
         if (isLoadingAuth) {
             console.log("[GameContainer] AuthContext is loading, deferring admin/game resource decisions.");
@@ -211,7 +193,7 @@ const GameContainer: React.FC = () => {
     // Render logic based on authentication and loading states
     if (isCheckingSession) {
         console.log("[GameContainer] Displaying: Checking session...");
-        return <LoadingScreen message="Checking session..." showLogo />;
+        return <LoadingScreen message="" showLogo />;
     }
     if (!siteKey) {
         console.log("[GameContainer] Displaying: Preparing verification (no CAPTCHA site key).");

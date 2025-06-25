@@ -31,7 +31,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true,
         <AlertTriangle className="h-16 w-16 text-destructive mb-6" />
       )}
       <h1 className={`text-3xl font-bold mb-3 font-headline ${isError ? 'text-destructive' : 'text-primary'}`}>
-        {isError ? 'Configuration Error' : "Loading..."}
+        {isError ? 'Configuration Error' : ""}
       </h1>
       <p className={`text-xl ${isError ? 'text-destructive/80' : 'text-muted-foreground'} max-w-md`}>
         {message}

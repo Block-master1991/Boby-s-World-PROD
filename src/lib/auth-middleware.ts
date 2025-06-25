@@ -1,15 +1,61 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { JWTManager, type JWTPayload } from './jwt-utils'; // Ensure type is imported if not already
+import { getClientIp } from '@/lib/request-utils'; // دالة مساعدة لاستخراج IP من request
 
 export interface AuthenticatedRequest extends NextRequest {
   user?: JWTPayload;
 }
 
+function extractAuthRequestMetadata(request: NextRequest | Request): {
+  accessToken: string | null;
+  refreshToken: string | null;
+  userAgent: string;
+  ip: string;
+  cookieHeader?: string | null;
+} {
+  const isEdge = typeof (request as NextRequest).cookies?.get === 'function';
+
+  const cookieHeader = 'headers' in request ? request.headers.get('cookie') : undefined;
+
+  const accessToken = isEdge
+  ? (request as NextRequest).cookies.get('accessToken')?.value ?? null
+  : cookieHeader
+    ? JWTManager.extractTokenFromCookies(cookieHeader, 'accessToken')
+    : null;
+
+const refreshToken = isEdge
+  ? (request as NextRequest).cookies.get('refreshToken')?.value ?? null
+  : cookieHeader
+    ? JWTManager.extractTokenFromCookies(cookieHeader, 'refreshToken')
+    : null;
+
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  const ip = getClientIp(request);
+
+  return { accessToken, refreshToken, userAgent, ip, cookieHeader };
+}
+
+export function createAuthErrorResponse(
+  message: string,
+  code: string,
+  status: number = 401,
+  details?: string
+) {
+  return NextResponse.json({
+    authenticated: false,
+    error: message,
+    code,
+    details
+  }, { status });
+}
+
 export function withAuth(handler: (req: AuthenticatedRequest) => Promise<NextResponse>) {
   return async (request: NextRequest): Promise<NextResponse> => {
     try {
-      const accessToken = request.cookies.get('accessToken')?.value;
+            
+      const { accessToken, refreshToken, userAgent, ip } = extractAuthRequestMetadata(request);
+
       console.log('[AuthMiddleware withAuth] Attempting to get accessToken from cookies. Found:', accessToken ? 'Yes' : 'No');
 
       if (!accessToken) {
@@ -19,21 +65,20 @@ export function withAuth(handler: (req: AuthenticatedRequest) => Promise<NextRes
           code: 'NO_ACCESS_TOKEN'
         }, { status: 401 });
       }
-
-      let payload = await JWTManager.verifyAccessToken(accessToken); 
+      
+      let payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip); 
       console.log('[AuthMiddleware withAuth] Initial access token verification payload:', payload);
 
 
       if (!payload) {
-        const refreshTokenValue = request.cookies.get('refreshToken')?.value; 
-        console.log('[AuthMiddleware withAuth] Access token invalid or expired. Attempting to refresh. Refresh token found:', refreshTokenValue ? 'Yes' : 'No');
-        
-        if (refreshTokenValue) {
-          const refreshResult = await JWTManager.refreshAccessToken(refreshTokenValue); 
+        console.log('[AuthMiddleware withAuth] Access token invalid or expired. Attempting to refresh. Refresh token found:', refreshToken ? 'Yes' : 'No');
+
+        if (refreshToken) {
+          const refreshResult = await JWTManager.refreshAccessToken(refreshToken, userAgent, ip);
           console.log('[AuthMiddleware withAuth] Refresh token result:', refreshResult);
           
           if (refreshResult) {
-            payload = await JWTManager.verifyAccessToken(refreshResult.accessToken);
+            payload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
             console.log('[AuthMiddleware withAuth] Verification payload of newly refreshed access token:', payload);
             if (!payload) {
                 console.error("[AuthMiddleware withAuth] Failed to verify newly refreshed access token. This is unexpected.");
@@ -73,11 +118,13 @@ export function withAuth(handler: (req: AuthenticatedRequest) => Promise<NextRes
 export async function extractUserFromToken(request: NextRequest): Promise<JWTPayload | null> { 
   console.log('[extractUserFromToken] Attempting to extract user from token.');
   try {
-    const accessToken = request.cookies.get('accessToken')?.value;
+        
+    const { accessToken, userAgent, ip } = extractAuthRequestMetadata(request);
+
     console.log('[extractUserFromToken] AccessToken from cookies:', accessToken ? 'Found' : 'Not Found');
     if (!accessToken) return null;
 
-    const payload = await JWTManager.verifyAccessToken(accessToken);
+    const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
     console.log('[extractUserFromToken] Verified payload:', payload);
     return payload;
   } catch (error: any) {
@@ -89,7 +136,8 @@ export async function extractUserFromToken(request: NextRequest): Promise<JWTPay
 export async function validateTokenFromRequest(request: Request): Promise<JWTPayload | null> {
   console.log('[validateTokenFromRequest] Starting token validation from request.');
   try {
-    const cookieHeader = request.headers.get('cookie');
+        const { userAgent, ip, cookieHeader } = extractAuthRequestMetadata(request);
+
     console.log('[validateTokenFromRequest] Cookie header:', cookieHeader ? `"${cookieHeader.substring(0,100)}..."` : 'Not found');
 
     if (!cookieHeader) {
@@ -106,7 +154,7 @@ export async function validateTokenFromRequest(request: Request): Promise<JWTPay
     }
 
     console.log('[validateTokenFromRequest] Attempting to verify accessToken:', accessToken.substring(0,20) + "...");
-    const payload = await JWTManager.verifyAccessToken(accessToken);
+    const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
     
     if (payload) {
       console.log('[validateTokenFromRequest] Access token verification successful. Payload sub:', payload.sub);
@@ -121,11 +169,5 @@ export async function validateTokenFromRequest(request: Request): Promise<JWTPay
   }
 }
 
-export function createAuthErrorResponse(message: string, code: string, status: number = 401): NextResponse {
-  console.warn(`[AuthErrorResponse] Creating error response: Status ${status}, Code ${code}, Message: ${message}`);
-  return NextResponse.json({
-    error: message,
-    code,
-    timestamp: new Date().toISOString()
-  }, { status });
-}
+
+

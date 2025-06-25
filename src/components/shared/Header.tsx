@@ -39,7 +39,7 @@ const Header: React.FC = () => {
                             disabled={isLoading || (connected && isAuthenticated && !user)} // Disable if loading or connected but user not loaded yet
                             className="bg-accent text-accent-foreground hover:bg-accent/90"
                         >
-                            {isLoading ? 'Loading...' : (isAuthenticated ? 'Logout' : 'Login')}
+                            {isLoading ? '' : (isAuthenticated ? 'Logout' : 'Login')}
                         </Button>
                     )}
                     {isClient ? (

@@ -5,8 +5,16 @@ import nacl from 'tweetnacl';
 import { PublicKey } from '@solana/web3.js';
 import { randomBytes } from 'crypto';
 import { JWTManager } from '@/lib/jwt-utils'; // تأكد من وجود هذا الملف وتصديره للدوال المطلوبة
+import { createHash } from 'crypto';
+import { getClientIp } from '@/lib/request-utils';
+
 
 const MAX_NONCE_ATTEMPTS = 3; // Max attempts to verify a specific nonce
+
+
+function sha256Base64(input: string): string {
+  return createHash('sha256').update(input).digest('base64');
+}
 
 async function generateNonce(publicKey: string): Promise<string | null> {
   console.log(`[AuthNonces] Called generateNonce for publicKey: ${publicKey}`);
@@ -164,8 +172,10 @@ export async function POST(request: Request) {
   console.log('[LOGIN] Received login request');
   let db;
 
-  // استخرج publicKey من الطلب إذا كان متاحًا
-  //const { publicKey } = await request.json().catch(() => ({}));
+  const ip = getClientIp(request);
+  const userAgent = request.headers.get('user-agent') || 'unknown';
+  const ipHash = sha256Base64(ip);
+  const userAgentHash = sha256Base64(userAgent);
 
   
   try {
@@ -196,8 +206,13 @@ export async function POST(request: Request) {
     // تحقق من nonce
     const nonceIsValid = await verifyAndConsumeNonce(publicKey, clientNonce);
     if (!nonceIsValid) {
-      return NextResponse.json({ error: 'Invalid, expired, or already used nonce.' }, { status: 403 });
+    console.warn('[LOGIN] Invalid, expired, or used nonce. Forcing logout by clearing cookies.');
+    const response = NextResponse.json({ error: 'Invalid nonce. Session terminated. Please login again.' }, { status: 403 });
+    response.cookies.set('accessToken', '', { maxAge: 0, path: '/' });
+    response.cookies.set('refreshToken', '', { maxAge: 0, path: '/' });
+    return response;
     }
+
     console.log('[LOGIN] Nonce verification result:', nonceIsValid);
 
 
@@ -239,8 +254,20 @@ export async function POST(request: Request) {
 
     // === إصدار JWTs ===
     console.log('[LOGIN] Issuing JWTs for:', publicKey);
-    const accessToken = JWTManager.createAccessToken(publicKey, clientNonce);
-    const refreshToken = JWTManager.createRefreshToken(publicKey, clientNonce);
+    
+    const accessToken = JWTManager.createAccessToken({
+      publicKey,
+      nonce: clientNonce,
+      userAgentHash,
+      ipHash,
+    });
+
+    const refreshToken = JWTManager.createRefreshToken({
+      publicKey,
+      nonce: clientNonce,
+      userAgentHash,
+      ipHash,
+    });
 
     // إعداد الكوكيز الآمنة
     console.log('[LOGIN] Setting cookies for accessToken and refreshToken');

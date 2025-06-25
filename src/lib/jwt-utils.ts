@@ -3,6 +3,7 @@ import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { TokenBlacklistManager } from './token-blacklist'; 
 import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './constants'; // Adjust the import path as needed
+import { createHash } from 'crypto';
 
 export interface JWTPayload {
   sub: string; // Subject (user's public key)
@@ -11,9 +12,47 @@ export interface JWTPayload {
   jti: string; // JWT ID (unique identifier for the token)
   type: 'access' | 'refresh';
   nonce?: string; // Nonce used for this specific login session, tied to access token
+  userAgentHash?: string;
+  ipHash?: string; // Optional (can be undefined)
+}
+
+interface CreateTokenParams {
+  publicKey: string;
+  nonce?: string;
+  userAgentHash?: string;
+  ipHash?: string;
 }
 
 export class JWTManager {
+
+  private static verifyFingerprint(
+    decoded: JWTPayload,
+    userAgent: string,
+    ip: string
+  ): boolean {
+    const expectedUserAgentHash = decoded.userAgentHash || '';
+    const expectedIpHash = decoded.ipHash || '';
+
+    const actualUserAgentHash = expectedUserAgentHash
+      ? createHash('sha256').update(userAgent).digest('base64')
+      : '';
+    const actualIpHash = expectedIpHash
+      ? createHash('sha256').update(ip).digest('base64')
+      : '';
+
+    if (expectedUserAgentHash && actualUserAgentHash !== expectedUserAgentHash) {
+      console.warn(`[JWTManager] User-Agent hash mismatch for token ${decoded.jti}`);
+      return false;
+    }
+
+    if (expectedIpHash && actualIpHash !== expectedIpHash) {
+      console.warn(`[JWTManager] IP hash mismatch for token ${decoded.jti}`);
+      return false;
+    }
+
+    return true;
+  }
+
   private static readonly ACCESS_TOKEN_SECRET = JWT_ACCESS_SECRET || 'access-secret-dev-for-boby-world-app-CHANGE-IN-PROD'; 
   private static readonly REFRESH_TOKEN_SECRET = JWT_REFRESH_SECRET || 'refresh-secret-dev-for-boby-world-app-CHANGE-IN-PROD';
   
@@ -21,35 +60,42 @@ export class JWTManager {
   private static readonly ACCESS_TOKEN_EXPIRY_SECONDS = 15 * 60; // 15 minutes
   private static readonly REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60; // 7 days
 
-  static createAccessToken(publicKey: string, nonce?: string): string {
+  static createAccessToken(params: CreateTokenParams): string {
+    const { publicKey, nonce, userAgentHash, ipHash } = params;
     const nowSeconds = Math.floor(Date.now() / 1000);
     const payload: JWTPayload = {
-      sub: publicKey,
-      iat: nowSeconds,
-      exp: nowSeconds + this.ACCESS_TOKEN_EXPIRY_SECONDS, 
-      jti: randomBytes(16).toString('hex'),
-      type: 'access',
-      nonce // Include the nonce that was successfully verified for this access token
-    };
-    console.log(`[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, Exp: ${new Date(payload.exp * 1000).toISOString()}`);
-    return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { algorithm: 'HS256' });
-  }
+        sub: publicKey,
+        iat: nowSeconds,
+        exp: nowSeconds + this.ACCESS_TOKEN_EXPIRY_SECONDS, 
+        jti: randomBytes(16).toString('hex'),
+        type: 'access',
+        nonce,
+        userAgentHash,
+        ipHash,
+      };
+      console.log(`[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
+      return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { algorithm: 'HS256' });
+    }
 
-  static createRefreshToken(publicKey: string, nonce?: string): string {
-    const nowSeconds = Math.floor(Date.now() / 1000);
-    const payload: JWTPayload = {
-      sub: publicKey,
-      iat: nowSeconds,
-      exp: nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS, 
-      jti: randomBytes(16).toString('hex'),
-      type: 'refresh',
-      nonce // Include nonce in refresh token payload
-    };
-    console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, Exp: ${new Date(payload.exp * 1000).toISOString()}`);
-    return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { algorithm: 'HS256' });
-  }
+  static createRefreshToken(params: CreateTokenParams): string {
+    const { publicKey, nonce, userAgentHash, ipHash } = params;
+      const nowSeconds = Math.floor(Date.now() / 1000);
+      const payload: JWTPayload = {
+        sub: publicKey,
+        iat: nowSeconds,
+        exp: nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS, 
+        jti: randomBytes(16).toString('hex'),
+        type: 'refresh',
+        nonce,
+        userAgentHash,
+        ipHash,
+      };
+      console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
+      return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { algorithm: 'HS256' });
+    }
 
-  static async verifyAccessToken(token: string): Promise<JWTPayload | null> {
+
+static async verifyAccessToken(token: string, userAgent: string, ip: string): Promise<JWTPayload | null> { 
     let decodedForLog: JWTPayload | null = null;
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null; // Decode for logging before verification
@@ -74,20 +120,22 @@ export class JWTManager {
         await TokenBlacklistManager.addToBlacklist(decoded.jti, decoded.exp, 'expired');
         return null;
       }
-      console.log(`[JWTManager] Access token ${decoded.jti} verified successfully (not blacklisted, correct type, not expired).`);
+
+      if (!this.verifyFingerprint(decoded, userAgent, ip)) return null;
+
       return decoded;
     } catch (error: any) {
       const jti = decodedForLog?.jti || 'unknown_jti_on_error';
-      console.error(`[JWTManager] Access token (JTI: ${jti}) verification failed. Token (first 20 chars): ${token.substring(0,20)}... Error: ${error.name} - ${error.message}`);
-      if (error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) {
-        console.warn(`[JWTManager] Access token ${decodedForLog.jti} confirmed expired by error. Blacklisting.`);
+      console.error(`[JWTManager] Access token verification failed. JTI: ${jti}`, error.message);
+      if (error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) 
+        {
         await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, 'expired');
       }
       return null;
     }
   }
 
-  static async verifyRefreshToken(token: string): Promise<JWTPayload | null> {
+  static async verifyRefreshToken(token: string, userAgent: string, ip: string): Promise<JWTPayload | null> {
     let decodedForLog: JWTPayload | null = null;
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null;
@@ -111,13 +159,16 @@ export class JWTManager {
         await TokenBlacklistManager.addToBlacklist(decoded.jti, decoded.exp, 'expired'); 
         return null; 
       }
+      
+      if (!this.verifyFingerprint(decoded, userAgent, ip)) return null;
+
       console.log(`[JWTManager] Refresh token ${decoded.jti} verified successfully (not blacklisted, correct type, not expired).`);
       return decoded;
     } catch (error: any) {
       const jti = decodedForLog?.jti || 'unknown_jti_on_error';
-      console.error(`[JWTManager] Refresh token (JTI: ${jti}) verification failed. Token (first 20 chars): ${token.substring(0,20)}... Error: ${error.name} - ${error.message}`);
-      if (error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) {
-        console.warn(`[JWTManager] Refresh token ${decodedForLog.jti} confirmed expired by error. Blacklisting.`);
+      console.error(`[JWTManager] Refresh token verification failed. JTI: ${jti}`, error.message);
+      if (error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) 
+        {
         await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, 'expired');
       }
       return null;
@@ -158,9 +209,9 @@ export class JWTManager {
     }
   }
 
-  static async refreshAccessToken(refreshTokenValue: string): Promise<{ accessToken: string; newRefreshToken: string } | null> {
+  static async refreshAccessToken(refreshTokenValue: string, userAgent: string, ip: string): Promise<{ accessToken: string; newRefreshToken: string } | null> {
     console.log(`[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0,20)}...`);
-    const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue); 
+    const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
     if (!decodedRefreshToken) {
       console.warn('[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed.');
       // verifyRefreshToken should have already blacklisted it if it was expired or invalid and verifiable
@@ -171,20 +222,32 @@ export class JWTManager {
     // This prevents replay of the same refresh token if something goes wrong after this point.
     console.log(`[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`);
     await this.revokeToken(refreshTokenValue, 'expired'); // Mark as 'expired' because it's consumed
-
-    // The nonce from the original login is associated with the access token, not the refresh token chain directly.
-    // We pass the original nonce (if available in the current, soon-to-be-invalid access token's payload,
-    // or if it was part of the refresh token payload, which it isn't here)
-    // For simplicity and security, a new access token generated via refresh might not carry the original login nonce
-    // unless specifically designed for that. Here, we'll use the sub from the refresh token.
-    // Pass the nonce from the old refresh token to the new access token
-    const newAccessToken = this.createAccessToken(decodedRefreshToken.sub, decodedRefreshToken.nonce); 
-    // Pass the nonce from the old refresh token to the new refresh token
-    const newRefreshToken = this.createRefreshToken(decodedRefreshToken.sub, decodedRefreshToken.nonce);
     
+    const userAgentHash = userAgent ? createHash('sha256').update(userAgent).digest('base64') : '';
+    const ipHash = ip ? createHash('sha256').update(ip).digest('base64') : '';
+
+    const newAccessToken = this.createAccessToken({
+      publicKey: decodedRefreshToken.sub,
+      nonce: decodedRefreshToken.nonce,
+      userAgentHash,
+      ipHash,
+    } );
+
+    const newRefreshToken = this.createRefreshToken({
+      publicKey: decodedRefreshToken.sub,
+      nonce: decodedRefreshToken.nonce,
+      userAgentHash,
+      ipHash,
+    } );
+
+
     const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;
     const newRefreshDecoded = jwt.decode(newRefreshToken) as JWTPayload | null;
-    console.log(`[JWTManager] New access token (JTI: ${newAccessDecoded?.jti}) and refresh token (JTI: ${newRefreshDecoded?.jti}) created for sub: ${decodedRefreshToken.sub}`);
+
+
+    console.log(`[JWTManager] New tokens generated for ${decodedRefreshToken.sub}`);
+    console.log(`→ New accessToken JTI: ${newAccessDecoded?.jti}`);
+    console.log(`→ New refreshToken JTI: ${newRefreshDecoded?.jti}`);
 
     return {
       accessToken: newAccessToken,
