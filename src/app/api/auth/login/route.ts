@@ -278,6 +278,7 @@ export async function POST(request: Request) {
     });
     response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60));
     response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60));
+    response.cookies.set('nonce', clientNonce, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60)); // Set nonce cookie
 
     // نهاية العملية
     console.log('[LOGIN] Login process completed successfully');
@@ -302,5 +303,3 @@ export async function POST(request: Request) {
     }, { status: 500 });
   }
 }
-
-

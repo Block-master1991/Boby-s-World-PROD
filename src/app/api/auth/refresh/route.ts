@@ -62,10 +62,6 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
     }
 
     if (!result) {
-      console.warn('[REFRESH] Refresh token invalid or expired, revoking...');
-      // إبطال التوكن
-      await JWTManager.revokeToken(refreshTokenValue, 'expired');
-
       // حذف الكوكيز
       const response = createAuthErrorResponse('Invalid or expired refresh token. Please login again.', 'INVALID_REFRESH_TOKEN', 401);
       response.cookies.delete('accessToken');

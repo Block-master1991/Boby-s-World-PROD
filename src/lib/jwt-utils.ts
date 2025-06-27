@@ -264,15 +264,16 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
 
   // maxAge is expected in seconds for cookie
   static createSecureCookieOptions(maxAgeSeconds: number) {
-    const sameSiteValue = 'none' as const;
+    const isProduction = process.env.NODE_ENV === 'production';
+    const sameSiteValue = isProduction ? 'none' : 'lax'; // Use 'lax' for development, 'none' for production
     const options = {
       httpOnly: true,
-      secure: true, // true in production, false if NODE_ENV is 'development' or undefined
-      sameSite: sameSiteValue,
+      secure: isProduction, // true in production, false otherwise
+      sameSite: sameSiteValue as 'none' | 'lax' | 'strict', // Cast to valid SameSite type
       maxAge: maxAgeSeconds,
       path: '/', 
     };
-    console.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure}, SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path} (NODE_ENV: ${process.env.NODE_ENV})`);
+    console.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProduction: ${isProduction}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path} (NODE_ENV: ${process.env.NODE_ENV})`);
     return options;
   }
 }
