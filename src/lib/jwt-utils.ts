@@ -263,17 +263,40 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
   }
 
   // maxAge is expected in seconds for cookie
-  static createSecureCookieOptions(maxAgeSeconds: number) {
+  static createSecureCookieOptions(maxAgeSeconds: number, requestHost?: string) {
     const isProduction = process.env.NODE_ENV === 'production';
-    const sameSiteValue = isProduction ? 'none' : 'lax'; // Use 'lax' for development, 'none' for production
-    const options = {
+    let secureCookie = isProduction;
+    let sameSiteValue: 'none' | 'lax' | 'strict' = isProduction ? 'none' : 'lax';
+    let cookieDomain: string | undefined = undefined;
+
+    if (requestHost) {
+      // Extract base domain from host (e.g., "divine-bedbug-valued.ngrok-free.app:443" -> "divine-bedbug-valued.ngrok-free.app")
+      const hostWithoutPort = requestHost.split(':')[0];
+      // For ngrok or other cross-origin development, we need SameSite=None and Secure=true
+      // if the request is coming from an HTTPS origin.
+      // We assume if requestHost is provided, it's the public-facing domain.
+      if (!isProduction && hostWithoutPort.includes('ngrok')) { // Specific check for ngrok in dev
+        secureCookie = true;
+        sameSiteValue = 'none';
+        cookieDomain = hostWithoutPort; // Set domain for cross-origin cookies
+      } else if (isProduction) {
+        cookieDomain = hostWithoutPort; // In production, set domain to host
+      }
+    }
+
+    const options: any = {
       httpOnly: true,
-      secure: isProduction, // true in production, false otherwise
-      sameSite: sameSiteValue as 'none' | 'lax' | 'strict', // Cast to valid SameSite type
+      secure: secureCookie,
+      sameSite: sameSiteValue,
       maxAge: maxAgeSeconds,
       path: '/', 
     };
-    console.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProduction: ${isProduction}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path} (NODE_ENV: ${process.env.NODE_ENV})`);
+
+    if (cookieDomain) {
+      options.domain = cookieDomain;
+    }
+
+    console.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProduction: ${isProduction}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path}, Domain=${options.domain || 'N/A'} (NODE_ENV: ${process.env.NODE_ENV}, RequestHost: ${requestHost || 'N/A'})`);
     return options;
   }
 }

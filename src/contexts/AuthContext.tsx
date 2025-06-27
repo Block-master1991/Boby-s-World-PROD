@@ -84,13 +84,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return true;
         }
       } else if (response.status === 401 || response.status === 403) {
-          console.warn('[AuthContext checkSession] Session expired or unauthorized. Forcing logout and redirect.');
-          await logoutAndRedirect('/');
-                  toast({ variant: 'destructive', title: 'Session Expired', description: 'You have been logged out due to session timeout or wallet mismatch.' });
+          // If the user was previously authenticated, and now the session is invalid, force logout.
+          // If they were not authenticated, it's just a normal unauthenticated state, no need to force logout/redirect.
+          if (authState.isAuthenticated) {
+            console.warn('[AuthContext checkSession] Session expired or unauthorized for an authenticated user. Forcing logout and redirect.');
+            await logoutAndRedirect('/');
+            toast({ variant: 'destructive', title: 'Session Expired', description: 'You have been logged out due to session timeout or wallet mismatch.' });
+          } else {
+            console.log('[AuthContext checkSession] Not authenticated, which is expected for new/logged out users.');
+            setAuthState(prev => ({ 
+              ...prev, 
+              isAuthenticated: false, 
+              user: null, 
+              error: null 
+            }));
+          }
           return false;
         }
-      // If response not OK or not authenticated, clear auth state
-      console.log('[AuthContext checkSession] Session check failed or not authenticated.');
+      // If response not OK and not 401/403, clear auth state (e.g., 500 error, or other non-auth related issues)
+      console.log('[AuthContext checkSession] Session check failed or not authenticated (non-401/403 response).');
       setAuthState(prev => ({ 
         ...prev, 
         isAuthenticated: false, 

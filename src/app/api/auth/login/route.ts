@@ -276,9 +276,11 @@ export async function POST(request: Request) {
       message: 'Signature verified successfully. JWTs issued.',
       publicKey
     });
-    response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60));
-    response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60));
-    response.cookies.set('nonce', clientNonce, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60)); // Set nonce cookie
+    const requestHost = request.headers.get('host') || undefined; // Get the Host header
+    console.log(`[LOGIN] Request Host: ${requestHost}`); // Add this log
+    response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60, requestHost));
+    response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost));
+    response.cookies.set('nonce', clientNonce, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)); // Set nonce cookie
 
     // نهاية العملية
     console.log('[LOGIN] Login process completed successfully');

@@ -77,10 +77,12 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
       message: 'Tokens refreshed successfully'
     });
 
-    const secureOptions = JWTManager.createSecureCookieOptions(15 * 60); // 15 دقيقة
+    const requestHost = request.headers.get('host') || undefined; // Get the Host header
+    console.log(`[REFRESH] Request Host: ${requestHost}`); // Add this log
+    const secureOptions = JWTManager.createSecureCookieOptions(15 * 60, requestHost); // 15 دقيقة
     response.cookies.set('accessToken', accessToken, secureOptions);
 
-    const refreshOptions = JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60); // 7 أيام
+    const refreshOptions = JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost); // 7 أيام
     response.cookies.set('refreshToken', newRefreshToken, refreshOptions);
 
     
