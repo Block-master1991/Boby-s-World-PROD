@@ -104,7 +104,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         </div>
       )}
 
-      <div className={`absolute top-[calc(2.5rem+var(--sat))] left-1/2 -translate-x-1/2 z-20 bg-primary/80 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex flex-col md:flex-row items-center md:justify-center space-y-1 md:space-y-0 md:space-x-4 ${isWalletMismatch ? 'mt-12' : ''}`}>
+      <div className={`absolute top-[calc(1rem+var(--sat))] left-1/2 -translate-x-1/2 z-20 bg-primary/80 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex flex-col md:flex-row items-center md:justify-center space-y-1 md:space-y-0 md:space-x-4 ${isWalletMismatch ? 'mt-12' : ''}`}>
         <div className="flex items-center">
           <Coins className="h-5 w-5 mr-2 rtl:ml-2" />
           <span>{sessionCollectedUSDT.toFixed(4)} USDT</span>
