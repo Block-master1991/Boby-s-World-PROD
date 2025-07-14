@@ -16,8 +16,8 @@ import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/co
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, getAccount, TokenAccountNotFoundError } from '@solana/spl-token';
 import BobyLogo from '@/app/Boby-logo.png';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, arrayUnion } from 'firebase/firestore';
+// import { db } from '@/lib/firebase'; // Removed as Firestore update is moved to backend
+// import { doc, updateDoc, arrayUnion } from 'firebase/firestore'; // Removed
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
 
@@ -25,6 +25,7 @@ interface InGameStoreProps {
     isAuthenticated: boolean;
     authUserPublicKey: string | undefined;
     isWalletConnectedAndMatching: boolean;
+    onPurchaseSuccess?: () => Promise<void>;
 }
 
 const BOBY_TOKEN_DECIMALS = 6; // Boby token has 6 decimal places
@@ -33,6 +34,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     isAuthenticated,
     authUserPublicKey,
     isWalletConnectedAndMatching,
+    onPurchaseSuccess,
 }) => {
     const { connection } = useConnection();
     const {
@@ -163,15 +165,28 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             transaction.add(createTransferInstruction(fromTokenAccountAddress, toTokenAccountAddress, adapterPublicKey, bobyAmountInSmallestUnit, [], TOKEN_PROGRAM_ID));
             
             signature = await sendTransaction(transaction, connection);
-            toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Adding to inventory.` });
+            toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Processing inventory update.` });
 
-            const playerDocRef = doc(db, 'players', authUserPublicKey);
-            const itemsToAdd = Array(quantity).fill(null).map(() => ({
-                id: item.id, name: item.name, image: item.image, description: item.description, dataAiHint: item.dataAiHint,
-                instanceId: `item-${Date.now()}-${Math.random().toString(36).substring(2, 11)}` 
-            }));
-            await updateDoc(playerDocRef, { inventory: arrayUnion(...itemsToAdd) });
-            toast({ title: 'Items Added to Inventory', description: `${quantity} ${item.name} now in Firestore.` });
+            // Call backend API to update inventory
+            const inventoryUpdateResponse = await fetch('/api/game/purchaseItem', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authUserPublicKey}` // Assuming authUserPublicKey is the token or part of it
+                },
+                body: JSON.stringify({ itemId: item.id, quantity, transactionSignature: signature })
+            });
+
+            const inventoryUpdateData = await inventoryUpdateResponse.json();
+
+            if (inventoryUpdateResponse.ok) {
+                toast({ title: 'Inventory Updated', description: inventoryUpdateData.message || `${quantity} ${item.name} added to inventory.` });
+                if (onPurchaseSuccess) {
+                    await onPurchaseSuccess(); // Re-fetch player data to update inventory counts
+                }
+            } else {
+                throw new Error(inventoryUpdateData.error || 'Failed to update inventory after purchase.');
+            }
 
         } catch (error: any) { 
             console.error('Purchase failed:', error);

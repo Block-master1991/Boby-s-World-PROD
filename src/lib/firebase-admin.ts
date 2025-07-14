@@ -12,6 +12,11 @@ export async function initializeAdminApp() {
     return app;
   }
 
+  console.log("[Firebase Admin Init] Checking environment variables...");
+  console.log("FIREBASE_PROJECT_ID:", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
+  console.log("FIREBASE_CLIENT_EMAIL:", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
+  console.log("FIREBASE_PRIVATE_KEY (first 20 chars):", FIREBASE_PRIVATE_KEY ? FIREBASE_PRIVATE_KEY.substring(0, 20) + "..." : "MISSING_OR_EMPTY");
+
   const privateKey = FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
   if (
@@ -21,16 +26,16 @@ export async function initializeAdminApp() {
     privateKey === "YOUR_FIREBASE_PRIVATE_KEY_HERE_WITH_NEWLINES_AS_\\n" // Explicit check for placeholder
   ) {
     console.error("Firebase Admin SDK environment variables are not set correctly or private key is placeholder.");
-    console.error("FIREBASE_PROJECT_ID:", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
-    console.error("FIREBASE_CLIENT_EMAIL:", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
-    console.error("FIREBASE_PRIVATE_KEY:", 
+    console.error("FIREBASE_PROJECT_ID (Error Check):", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
+    console.error("FIREBASE_CLIENT_EMAIL (Error Check):", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
+    console.error("FIREBASE_PRIVATE_KEY (Error Check):", 
       privateKey 
         ? (privateKey === "YOUR_FIREBASE_PRIVATE_KEY_HERE_WITH_NEWLINES_AS_\\n" 
             ? "IS_PLACEHOLDER_VALUE" 
             : "Set (verify content and format)") 
         : "MISSING_OR_EMPTY"
     );
-    throw new Error('Firebase Admin SDK environment variables are not set correctly. Please check your .env file, especially FIREBASE_PRIVATE_KEY.');
+    throw new Error('Firebase Admin SDK environment variables are not set correctly. Please check your .env file, especially FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.');
   }
 
   const credential = admin.credential.cert({

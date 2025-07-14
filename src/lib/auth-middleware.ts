@@ -2,6 +2,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { JWTManager, type JWTPayload } from './jwt-utils'; // Ensure type is imported if not already
 import { getClientIp } from '@/lib/request-utils'; // دالة مساعدة لاستخراج IP من request
+import { cookies, headers } from 'next/headers';
+
+export async function verifySessionOrReject(request: Request): Promise<{ user: { publicKey: string } }> {
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get('accessToken')?.value;
+
+  if (!accessToken) {
+    throw new Error('Missing access token');
+  }
+
+  // قراءة معلومات البصمة (fingerprint)
+  const ip = getClientIp(request); // تأكد أن هذه الدالة موجودة في lib/request-utils.ts
+const userAgent = (await headers()).get('user-agent') || 'unknown';
+
+  const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
+  if (!payload || !payload.sub) {
+    throw new Error('Invalid or expired access token');
+  }
+
+  return { user: { publicKey: payload.sub } };
+}
 
 export interface AuthenticatedRequest extends NextRequest {
   user?: JWTPayload;

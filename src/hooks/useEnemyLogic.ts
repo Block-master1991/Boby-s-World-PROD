@@ -14,7 +14,7 @@ interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   dogModelRef: MutableRefObject<THREE.Group | null>;
   isShieldActiveRef: MutableRefObject<boolean>;
-  protectionBoneCountRef: MutableRefObject<number>;
+  protectionBoneCountRef: MutableRefObject<number>; // Changed back to ref
   onConsumeProtectionBone: () => void;
   onEnemyCollisionPenalty: () => void;
   isPausedRef: MutableRefObject<boolean>;
@@ -24,7 +24,7 @@ export const useEnemyLogic = ({
   sceneRef,
   dogModelRef,
   isShieldActiveRef,
-  protectionBoneCountRef,
+  protectionBoneCountRef, // Changed back to ref
   onConsumeProtectionBone,
   onEnemyCollisionPenalty,
   isPausedRef,
@@ -94,7 +94,7 @@ export const useEnemyLogic = ({
 
           if (isShieldActiveRef.current) {
             // Shield active: enemy "dies", no penalty to player
-          } else if (protectionBoneCountRef.current > 0) {
+          } else if (protectionBoneCountRef.current > 0) { // Use ref's current value
             onConsumeProtectionBone(); // Consume a bone
           } else {
             onEnemyCollisionPenalty(); // Apply penalty to player
@@ -105,11 +105,11 @@ export const useEnemyLogic = ({
   }, [
     dogModelRef,
     isShieldActiveRef,
-    protectionBoneCountRef,
+    protectionBoneCountRef, // Changed dependency back to ref
     onConsumeProtectionBone,
     onEnemyCollisionPenalty,
     isPausedRef,
-    sceneRef, // Added sceneRef here
+    sceneRef,
   ]);
   
   const resetEnemies = React.useCallback(() => {

@@ -118,7 +118,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     });
 
     const { initializeEnemies, updateEnemies, resetEnemies } = useEnemyLogic({
-        sceneRef, dogModelRef, isShieldActiveRef, protectionBoneCountRef,
+        sceneRef, dogModelRef, isShieldActiveRef, protectionBoneCountRef, // Pass protectionBoneCount directly
         onConsumeProtectionBone: () => onConsumeProtectionBoneCallbackRef.current(),
         onEnemyCollisionPenalty: () => onEnemyCollisionPenaltyCallbackRef.current(),
         isPausedRef,

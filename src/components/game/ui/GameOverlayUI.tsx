@@ -139,7 +139,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         )}
       </div>
 
-      <div className="absolute bottom-6 left-6 z-10 flex flex-col space-y-3">
+      <div className="absolute bottom-16 left-6 z-10 flex flex-col space-y-3">
         {coinMagnetTreatDef && (
           <Button
             onClick={() => onUseConsumableItem('4')}
