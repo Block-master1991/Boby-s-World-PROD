@@ -98,13 +98,13 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
   return (
     <>
       {isWalletMismatch && (
-        <div className="absolute top-6 left-1/2 -translate-x-1/2 z-50 bg-destructive/90 text-destructive-foreground px-4 py-2 rounded-lg shadow-lg flex items-center animate-pulse">
+        <div className="absolute top-[calc(1.5rem+var(--sat))] left-1/2 -translate-x-1/2 z-50 bg-destructive/90 text-destructive-foreground px-4 py-2 rounded-lg shadow-lg flex items-center animate-pulse">
           <AlertCircle className="h-5 w-5 mr-2 rtl:ml-2" />
           <span>Wallet Mismatch! Align wallet in extension or reconnect. Actions paused.</span>
         </div>
       )}
 
-      <div className={`absolute top-10 left-1/2 -translate-x-1/2 z-20 bg-primary/80 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex flex-col md:flex-row items-center md:justify-center space-y-1 md:space-y-0 md:space-x-4 ${isWalletMismatch ? 'mt-12' : ''}`}>
+      <div className={`absolute top-[calc(2.5rem+var(--sat))] left-1/2 -translate-x-1/2 z-20 bg-primary/80 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex flex-col md:flex-row items-center md:justify-center space-y-1 md:space-y-0 md:space-x-4 ${isWalletMismatch ? 'mt-12' : ''}`}>
         <div className="flex items-center">
           <Coins className="h-5 w-5 mr-2 rtl:ml-2" />
           <span>{sessionCollectedUSDT.toFixed(4)} USDT</span>
@@ -121,7 +121,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         )}
       </div>
 
-      <div className="absolute top-10 right-4 z-20 flex flex-col space-y-2">
+      <div className="absolute top-[calc(2.5rem+var(--sat))] right-[calc(1rem+var(--sar))] z-20 flex flex-col space-y-2">
         {isSpeedBoostActive && speedBoostTimeLeft > 0 && (
           <div className="bg-yellow-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
             <Zap className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> Speed Boost! ({speedBoostTimeLeft}s)
@@ -139,7 +139,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         )}
       </div>
 
-      <div className="absolute bottom-16 left-6 z-10 flex flex-col space-y-3">
+      <div className="absolute bottom-[calc(4rem+var(--sab))] left-[calc(1.5rem+var(--sal))] z-10 flex flex-col space-y-3">
         {coinMagnetTreatDef && (
           <Button
             onClick={() => onUseConsumableItem('4')}

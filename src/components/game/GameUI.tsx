@@ -662,7 +662,7 @@ const GameUI: React.FC = () => {
                 />
 
                 {/* Sheet Triggers and Content */}
-                <div className="absolute top-4 left-4 z-10">
+                <div className="absolute top-[calc(1rem+var(--sat))] left-[calc(1rem+var(--sal))] z-10">
                     <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
                         <SheetTrigger asChild>
                             <Button
@@ -690,7 +690,7 @@ const GameUI: React.FC = () => {
                     </Sheet>
                 </div>
 
-                <div className="absolute bottom-16 right-6 z-10 flex flex-col space-y-3">
+                <div className="absolute bottom-[calc(4rem+var(--sab))] right-[calc(1.5rem+var(--sar))] z-10 flex flex-col space-y-3">
                     <Sheet open={isStoreOpen} onOpenChange={setIsStoreOpen}>
                         <SheetTrigger asChild>
                             <Button
