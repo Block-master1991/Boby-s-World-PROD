@@ -690,7 +690,7 @@ const GameUI: React.FC = () => {
                     </Sheet>
                 </div>
 
-                <div className="absolute bottom-[calc(4rem+var(--sab))] right-[calc(1.5rem+var(--sar))] z-10 flex flex-col space-y-3">
+                <div className="absolute bottom-[calc(4rem+var(--sab))] right-[calc(0.5rem+var(--sar))] z-10 flex flex-col space-y-3">
                     <Sheet open={isStoreOpen} onOpenChange={setIsStoreOpen}>
                         <SheetTrigger asChild>
                             <Button
