@@ -139,7 +139,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         )}
       </div>
 
-      <div className="absolute bottom-[calc(4rem+var(--sab))] left-[calc(1.5rem+var(--sal))] z-10 flex flex-col space-y-3">
+      <div className="absolute bottom-[calc(4rem+var(--sab))] left-[calc(0.5rem+var(--sal))] z-10 flex flex-col space-y-3">
         {coinMagnetTreatDef && (
           <Button
             onClick={() => onUseConsumableItem('4')}
