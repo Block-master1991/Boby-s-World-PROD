@@ -12,7 +12,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { ShoppingCart, Backpack, Settings } from 'lucide-react';
+import Image from 'next/image';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 
 import { useToast } from '@/hooks/use-toast';
@@ -666,10 +666,11 @@ const GameUI: React.FC = () => {
                     <Sheet open={isMenuOpen} onOpenChange={setIsMenuOpen}>
                         <SheetTrigger asChild>
                             <Button
-                                variant="outline" size="icon" className="rounded-full h-12 w-12 shadow-lg bg-background/80 hover:bg-accent/90 backdrop-blur-sm border-primary"
+                                onClick={() => setIsMenuOpen(true)}
                                 disabled={(isGameEffectivelyPaused && !isMenuOpen) || isWalletMismatch}
+                                className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
                             >
-                                <Settings className="h-6 w-6 text-primary" />
+                                <Image src="/GameMenu.png" alt="Game Menu" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="left" className="w-full sm:max-w-xs p-0 flex flex-col">
@@ -694,10 +695,12 @@ const GameUI: React.FC = () => {
                     <Sheet open={isStoreOpen} onOpenChange={setIsStoreOpen}>
                         <SheetTrigger asChild>
                             <Button
-                                variant="outline" size="icon" className="rounded-full h-14 w-14 shadow-lg bg-background/80 hover:bg-accent/90 backdrop-blur-sm border-primary"
+                                onClick={() => setIsStoreOpen(true)}
                                 disabled={(isGameEffectivelyPaused && !isStoreOpen) || isWalletMismatch}
+                                className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
+                               
                             >
-                                <ShoppingCart className="h-7 w-7 text-primary" />
+                                <Image src="/GameStore-lg.png" alt="Game Store" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
@@ -713,10 +716,11 @@ const GameUI: React.FC = () => {
                     <Sheet open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
                         <SheetTrigger asChild>
                             <Button
-                                variant="outline" size="icon" className="rounded-full h-14 w-14 shadow-lg bg-background/80 hover:bg-accent/90 backdrop-blur-sm border-primary"
+                                onClick={() => setIsInventoryOpen(true)}
                                 disabled={(isGameEffectivelyPaused && !isInventoryOpen) || isWalletMismatch}
-                            >
-                                <Backpack className="h-7 w-7 text-primary" />
+                                className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
+                            > 
+                                <Image src="/PlayerInventory.png" alt="Player Inventory" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">

@@ -2,11 +2,10 @@
 'use client';
 
 import React from 'react';
-import type { ElementType } from 'react';
+
 import { Button } from '@/components/ui/button';
-// SheetTrigger is removed as it's now handled in GameUI.tsx
-// import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'; 
-import { Coins, Target, Bone, Zap, Shield, Magnet, AlertCircle } from 'lucide-react';
+
+import { Coins, Target, Bone, AlertCircle } from 'lucide-react';
 import Joystick from '@/components/shared/Joystick';
 import type { StoreItemDefinition } from '@/lib/items';
 
@@ -33,15 +32,7 @@ interface GameOverlayUIProps {
   coinMagnetTreatCount: number;
 
   onUseConsumableItem: (itemId: string) => void;
-  // Props for toggling sheets are removed as triggers are now in GameUI
-  // onToggleStore: (open: boolean) => void;
-  // onToggleInventory: (open: boolean) => void;
-  // onToggleMenu: (open: boolean) => void;
-
-  // Props for sheet open states are removed as they are not directly used for disabling these buttons anymore
-  // isStoreOpen: boolean;
-  // isInventoryOpen: boolean;
-  // isMenuOpen: boolean;
+  
 
   isGameEffectivelyPaused: boolean;
   isWalletMismatch: boolean;
@@ -77,12 +68,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
   guardianShieldCount,
   coinMagnetTreatCount,
   onUseConsumableItem,
-  // onToggleStore, // Removed
-  // onToggleInventory, // Removed
-  // onToggleMenu, // Removed
-  // isStoreOpen, // Removed
-  // isInventoryOpen, // Removed
-  // isMenuOpen, // Removed
+
   isGameEffectivelyPaused,
   isWalletMismatch,
   isMobile,
@@ -90,10 +76,9 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
   JOYSTICK_BASE_SIZE,
   JOYSTICK_KNOB_SIZE,
 }) => {
-  const SpeedyPawsIcon = speedyPawsTreatDef?.icon || Zap;
-  const GuardianShieldIcon = guardianShieldDef?.icon || Shield;
+
   const ProtectionBoneIcon = protectionBoneDef?.icon || Bone;
-  const CoinMagnetIcon = coinMagnetTreatDef?.icon || Magnet;
+
 
   return (
     <>
@@ -124,17 +109,17 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
       <div className="absolute top-[calc(2.5rem+var(--sat))] right-[calc(1rem+var(--sar))] z-20 flex flex-col space-y-2">
         {isSpeedBoostActive && speedBoostTimeLeft > 0 && (
           <div className="bg-yellow-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
-            <Zap className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> Speed Boost! ({speedBoostTimeLeft}s)
+            <img src="/speedyPawsTreat.png" alt="Speed Boost" className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({speedBoostTimeLeft}s)
           </div>
         )}
         {isShieldActive && shieldTimeLeft > 0 && (
           <div className="bg-blue-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
-            <Shield className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> Shield Active! ({shieldTimeLeft}s)
+            <img src="/guardianShield.png" alt="Guardian Shield" className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({shieldTimeLeft}s)
           </div>
         )}
         {isCoinMagnetActive && coinMagnetTimeLeft > 0 && (
           <div className="bg-purple-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
-            <Magnet className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> Coin Magnet! ({coinMagnetTimeLeft}s)
+            <img src="/coinMagnetTreat.png" alt="Coin Magnet" className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({coinMagnetTimeLeft}s)
           </div>
         )}
       </div>
@@ -144,30 +129,30 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
           <Button
             onClick={() => onUseConsumableItem('4')}
             disabled={coinMagnetTreatCount === 0 || (isGameEffectivelyPaused && !isCoinMagnetActive)}
-            variant="outline" size="icon" className="relative rounded-full h-14 w-14 shadow-lg bg-background/80 hover:bg-accent/90 backdrop-blur-sm border-primary group"
+            className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
-            <CoinMagnetIcon className="h-7 w-7 text-purple-500 group-disabled:text-muted-foreground" />
-            {coinMagnetTreatCount > 0 && (<span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{coinMagnetTreatCount}</span>)}
+            <img src="/coinMagnetTreat.png" alt="Coin Magnet" className="h-full w-full object-contain" />
+            {coinMagnetTreatCount > 0 && (<span className="absolute -bottom-1 -right-1 text-black font-bold text-xs flex items-center justify-center">{coinMagnetTreatCount}</span>)}
           </Button>
         )}
         {speedyPawsTreatDef && (
           <Button
             onClick={() => onUseConsumableItem('3')}
             disabled={speedyPawsTreatCount === 0 || (isGameEffectivelyPaused && !isSpeedBoostActive)}
-            variant="outline" size="icon" className="relative rounded-full h-14 w-14 shadow-lg bg-background/80 hover:bg-accent/90 backdrop-blur-sm border-primary group"
+            className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
-            <SpeedyPawsIcon className="h-7 w-7 text-yellow-500 group-disabled:text-muted-foreground" />
-            {speedyPawsTreatCount > 0 && (<span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{speedyPawsTreatCount}</span>)}
+            <img src="/speedyPawsTreat.png" alt="Speedy Paws" className="h-full w-full object-contain" />
+            {speedyPawsTreatCount > 0 && (<span className="absolute -bottom-1 -right-1 text-black font-bold text-xs flex items-center justify-center">{speedyPawsTreatCount}</span>)}
           </Button>
         )}
         {guardianShieldDef && (
           <Button
             onClick={() => onUseConsumableItem('2')}
             disabled={guardianShieldCount === 0 || (isGameEffectivelyPaused && !isShieldActive)}
-            variant="outline" size="icon" className="relative rounded-full h-14 w-14 shadow-lg bg-background/80 hover:bg-accent/90 backdrop-blur-sm border-primary group"
+            className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
-            <GuardianShieldIcon className="h-7 w-7 text-blue-500 group-disabled:text-muted-foreground" />
-            {guardianShieldCount > 0 && (<span className="absolute -top-1 -right-1 bg-primary text-primary-foreground text-xs font-bold rounded-full h-5 w-5 flex items-center justify-center">{guardianShieldCount}</span>)}
+            <img src="/guardianShield.png" alt="Guardian Shield" className="h-full w-full object-contain" />
+            {guardianShieldCount > 0 && (<span className="absolute -bottom-1 -right-1 text-black font-bold text-xs flex items-center justify-center">{guardianShieldCount}</span>)}
           </Button>
         )}
       </div>
