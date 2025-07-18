@@ -10,7 +10,7 @@ const DogMovement: React.FC = () => {
         <Card className="w-full shadow-md bg-opacity-80 backdrop-blur-sm">
             <CardHeader>
                 <CardTitle className="text-md font-headline flex items-center gap-2">
-                    <PawPrint className="h-5 w-5 text-primary" /> Dog Controls
+                    <PawPrint className="h-5 w-5 text-primary" /> Controls
                 </CardTitle>
             </CardHeader>
             <CardContent>
@@ -23,9 +23,6 @@ const DogMovement: React.FC = () => {
                 <p className="text-sm text-muted-foreground mt-1">
                     On mobile, use the on-screen joystick.
                 </p>
-                <div className="mt-3 p-3 bg-secondary/30 rounded-md">
-                    <p className="text-xs italic">3D dog movement and animations would be rendered here via Three.js.</p>
-                </div>
             </CardContent>
         </Card>
     );

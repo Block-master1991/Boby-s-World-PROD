@@ -7,12 +7,8 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { PublicKey } from '@solana/web3.js';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BOBY_TOKEN_MINT_ADDRESS, USDT_TOKEN_MINT_ADDRESS, LAMPORTS_PER_SOL } from '@/lib/constants';
-import { Gem, AlertTriangle, Loader2, Coins, WalletCards, CircleDollarSign } from 'lucide-react';
+import { AlertTriangle, Loader2, WalletCards } from 'lucide-react';
 import Image from 'next/image';
-import BobyLogo from '@/app/Boby-logo.png';
-import SolanaLogo from '@/app/Solana-logo.png'; // Assuming you have a Solana logo image
-import UsdtLogo from '@/app/USDT-logo.png'; // Assuming you have a USDT logo image
-
 type ErrorType = 'rpc' | 'other' | null;
 
 interface BalanceDisplayProps {
@@ -156,7 +152,7 @@ const TokenBalance: React.FC = () => {
                     balance={solBalance}
                     error={solError}
                     currencyName="SOL"
-                    icon={<Image src={SolanaLogo} alt="Solana Token" width={24} height={24} className="rounded-full" priority />}
+                    icon={<Image src="/Solana-logo.png" alt="Solana Token" width={24} height={24} className="rounded-full" priority />}
                     onRetry={fetchBalances}
                 />
                 <BalanceDisplay
@@ -164,7 +160,7 @@ const TokenBalance: React.FC = () => {
                     balance={bobyBalance}
                     error={bobyError}
                     currencyName="Boby"
-                    icon={<Image src={BobyLogo} alt="Boby Token" width={24} height={24} className="rounded-none" priority />}
+                    icon={<Image src="/Boby-logo.png" alt="Boby Token" width={24} height={24} className="rounded-none" priority />}
                     onRetry={fetchBalances}
                 />
                 <BalanceDisplay
@@ -172,7 +168,7 @@ const TokenBalance: React.FC = () => {
                     balance={usdtBalance} 
                     error={usdtError} 
                     currencyName="USDT" 
-                    icon={<Image src={UsdtLogo} alt="USDT-sol Token" width={24} height={24} className="rounded-full" priority />}
+                    icon={<Image src="/USDT-logo.png" alt="USDT-sol Token" width={24} height={24} className="rounded-full" priority />}
                     onRetry={fetchBalances}
                 />
                 

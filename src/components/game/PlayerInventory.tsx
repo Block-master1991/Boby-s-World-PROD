@@ -7,7 +7,7 @@ import { db } from '@/lib/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
 import { SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Backpack, PackageSearch, Loader2 } from 'lucide-react';
+import { PackageSearch, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -119,7 +119,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
         <>
             <SheetHeader className="p-6 pb-4 border-b">
                 <SheetTitle className="text-2xl font-headline flex items-center gap-2">
-                    <Backpack className="h-6 w-6" /> Inventory
+                    <Image src="/PlayerInventory.png" alt="Inventory Icon" width={28} height={28} className="h-7 w-7" /> Inventory
                 </SheetTitle>
                 <SheetDescription>Items you own and the count of each.</SheetDescription>
             </SheetHeader>

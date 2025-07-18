@@ -4,7 +4,6 @@
 import React from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
-import BobyLogo from '@/app/Boby-logo.png'; // Ensure this path is correct
 
 interface LoadingScreenProps {
   message: string;
@@ -15,9 +14,9 @@ interface LoadingScreenProps {
 const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true, isError = false }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
-      {showLogo && BobyLogo && (
+      {showLogo && (
         <Image 
-            src={BobyLogo} 
+            src="/Boby-logo.png" 
             alt="Boby's World Logo" 
             width={180} height={180} 
             className="mb-8 rounded-md" 

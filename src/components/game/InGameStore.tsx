@@ -4,20 +4,18 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { Card, CardContent, CardHeader, CardTitle, CardFooter, CardDescription } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ShoppingCart, Send, PackagePlus, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Send, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
 import { PublicKey, Transaction } from '@solana/web3.js';
 import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, getAccount, TokenAccountNotFoundError } from '@solana/spl-token';
-import BobyLogo from '@/app/Boby-logo.png';
-// import { db } from '@/lib/firebase'; // Removed as Firestore update is moved to backend
-// import { doc, updateDoc, arrayUnion } from 'firebase/firestore'; // Removed
+
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
 
@@ -200,7 +198,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         <>
             <SheetHeader className="p-6 pb-4 border-b">
                 <SheetTitle className="text-2xl font-headline flex items-center gap-2">
-                    <ShoppingCart className="h-6 w-6" /> Store
+                    <Image src="/GameStore-lg.png" alt="Store Icon" width={28} height={28} className="h-7 w-7" /> Store
                 </SheetTitle>
                 <SheetDescription>
                     Purchase items using Boby tokens.
@@ -283,7 +281,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                             {totalBobyPrice !== null ? (
                                                 <>
                                                     {totalBobyPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: BOBY_TOKEN_DECIMALS})}
-                                                    <Image src={BobyLogo} alt="Boby Token" width={14} height={14} className="rounded-none" priority={false} />
+                                                    <Image src="/Boby-logo.png" alt="Boby Token" width={14} height={14} className="rounded-none" priority={false} />
                                                 </>
                                             ) : (
                                                 '--- BOBY'

@@ -45,19 +45,9 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
       if (onDisconnect) {
         onDisconnect();
       }
-      
-      // Redirect to the specified path (defaults to '/')
-      // This will effectively "reload" the page by navigating and re-triggering GameContainer's logic
       if (pathname !== redirectPath) {
         router.push(redirectPath);
       } else {
-        // If already on the target path, a push might not trigger a full desired re-render cycle
-        // for all layouts. A reload might be more forceful, but router.push is generally preferred.
-        // For now, if we are on the same page, the state changes in useAuth/useSessionWallet
-        // should be enough to re-render GameContainer and restart the flow.
-        // If a hard reload is truly needed, this could be window.location.reload(),
-        // but let's see if router.push('/') for the current page is sufficient.
-        // Forcing a push even if on the same page to ensure re-evaluation.
         router.push(redirectPath);
       }
 

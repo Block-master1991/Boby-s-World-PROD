@@ -7,7 +7,7 @@ import InGameStore from '@/components/game/InGameStore';
 import PlayerInventory from '@/components/game/PlayerInventory';
 import GameOverlayUI from '@/components/game/ui/GameOverlayUI';
 import GameMenuSheetContent from '@/components/game/ui/GameMenuSheetContent';
-
+import PlayerWallet from '@/components/game/ui/PlayerWallet'
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
@@ -52,6 +52,7 @@ const GameUI: React.FC = () => {
     const [isStoreOpen, setIsStoreOpen] = useState(false);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
+    const [isWalletOpen, setIsWalletOpen] = useState(false);
 
     // Game Effect States
     const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -101,7 +102,7 @@ const GameUI: React.FC = () => {
     const coinMagnetTreatDef = storeItems.find(item => item.id === '4');
 
     // Derived State for game pausing
-    const isGameEffectivelyPaused = isMenuOpen || isStoreOpen || isInventoryOpen || isWalletMismatch;
+    const isGameEffectivelyPaused = isMenuOpen || isStoreOpen || isInventoryOpen || isWalletOpen || isWalletMismatch;
 
 
     /**
@@ -680,13 +681,8 @@ const GameUI: React.FC = () => {
                                 authUserPublicKey={authUser?.publicKey}
                                 sessionPublicKey={sessionPublicKey}
                                 adapterPublicKey={adapterPublicKey}
-                                isFetchingPlayerUSDT={isFetchingPlayerUSDT}
-                                playerGameUSDT={playerGameUSDT}
-                                MIN_WITHDRAWAL_USDT={MIN_WITHDRAWAL_USDT}
-                                isWithdrawing={isWithdrawing}
-                                onWithdrawUSDT={handleWithdrawUSDT}
-                                // No longer need dbAppOptionsProjectId as we're not directly using Firebase
                             />
+
                         </SheetContent>
                     </Sheet>
                 </div>
@@ -713,6 +709,32 @@ const GameUI: React.FC = () => {
                         </SheetContent>
                     </Sheet>
 
+                    <Sheet open={isWalletOpen} onOpenChange={setIsWalletOpen}>
+                        <SheetTrigger asChild>
+                            <Button
+                                onClick={() => setIsWalletOpen(true)}
+                                disabled={(isGameEffectivelyPaused && !isWalletOpen) || isWalletMismatch}
+                                className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
+                            >
+                                <Image src="/wallet.png" alt="Player Wallet" width={48} height={48} className="h-full w-full object-contain" />
+                            </Button>
+                        </SheetTrigger>
+                        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                            <PlayerWallet
+                                isAuthenticated={isAuthenticated}
+                                authUserPublicKey={authUser?.publicKey}
+                                isWalletMismatch={isWalletMismatch}
+                                sessionPublicKey={sessionPublicKey}
+                                adapterPublicKey={adapterPublicKey}
+                                isFetchingPlayerUSDT={isFetchingPlayerUSDT}
+                                playerGameUSDT={playerGameUSDT}
+                                MIN_WITHDRAWAL_USDT={MIN_WITHDRAWAL_USDT}
+                                isWithdrawing={isWithdrawing}
+                                onWithdrawUSDT={handleWithdrawUSDT}
+                            />
+                        </SheetContent>
+                    </Sheet>
+                    
                     <Sheet open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
                         <SheetTrigger asChild>
                             <Button
@@ -736,6 +758,7 @@ const GameUI: React.FC = () => {
                            />
                         </SheetContent>
                     </Sheet>
+
                 </div>
             </main>
         </div>

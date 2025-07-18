@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'; // Button might still be used i
 import { Loader2, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
-import BobyLogo from '@/app/Boby-logo.png';
 
 interface CaptchaScreenProps {
   siteKey: string;
@@ -87,7 +86,7 @@ useEffect(() => {
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
-      {BobyLogo && <Image src={BobyLogo} alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />}
+      <Image src="/Boby-logo.png" alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
       <h1 className="text-4xl font-bold mb-4 font-headline">Verification Required</h1>
       <p className="text-xl text-muted-foreground mb-6 max-w-md">
         Please complete the verification below.

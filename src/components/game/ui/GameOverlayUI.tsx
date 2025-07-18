@@ -5,7 +5,8 @@ import React from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { Coins, Target, Bone, AlertCircle } from 'lucide-react';
+import { Target, Bone, AlertCircle } from 'lucide-react';
+import Image from 'next/image';
 import Joystick from '@/components/shared/Joystick';
 import type { StoreItemDefinition } from '@/lib/items';
 
@@ -91,7 +92,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
 
       <div className={`absolute top-[calc(1rem+var(--sat))] left-1/2 -translate-x-1/2 z-20 bg-primary/80 text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex flex-col md:flex-row items-center md:justify-center space-y-1 md:space-y-0 md:space-x-4 ${isWalletMismatch ? 'mt-12' : ''}`}>
         <div className="flex items-center">
-          <Coins className="h-5 w-5 mr-2 rtl:ml-2" />
+          <Image src="/USDT-logo.png" alt="USDT Icon" width={20} height={20} className="h-5 w-5 mr-2 rtl:ml-2" />
           <span>{sessionCollectedUSDT.toFixed(4)} USDT</span>
         </div>
         <div className="flex items-center text-xs opacity-90">

@@ -6,7 +6,6 @@ import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Button } from '@/components/ui/button';
 import { Loader2, AlertTriangle, LogOutIcon, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
-import BobyLogo from '@/app/Boby-logo.png';
 import { useAuth } from '@/hooks/useAuth';
 
 interface AuthenticationScreenProps {
@@ -53,7 +52,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-        {BobyLogo && <Image src={BobyLogo} alt="Boby's World Loading" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />}
+        <Image src="/Boby-logo.png" alt="Boby's World Loading" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
         <h1 className="text-4xl font-bold mb-2 font-headline">Boby's World</h1>
         <p className="text-xl text-muted-foreground">
@@ -66,7 +65,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
-      {BobyLogo && <Image src={BobyLogo} alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />}
+      <Image src="/Boby-logo.png" alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
       <h1 className="text-4xl font-bold mb-4 font-headline">Welcome to Boby's World!</h1>
 
       {/* State 1: Wallet not connected */}
