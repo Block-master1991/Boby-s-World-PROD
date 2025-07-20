@@ -4,12 +4,12 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { useConnection } from '@solana/wallet-adapter-react';
-import { Card } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Send, AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { Send, AlertCircle, Loader2, RefreshCw, Plus, Minus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
@@ -106,6 +106,20 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         const newQuantity = Math.max(1, isNaN(numberValue) ? 1 : numberValue);
         setQuantities(prev => ({ ...prev, [itemId]: newQuantity }));
     };
+
+    const handleIncrement = useCallback((itemId: string) => {
+        setQuantities(prev => {
+            const currentQuantity = prev[itemId] || 0;
+            return { ...prev, [itemId]: currentQuantity + 1 };
+        });
+    }, []);
+
+    const handleDecrement = useCallback((itemId: string) => {
+        setQuantities(prev => {
+            const currentQuantity = prev[itemId] || 0;
+            return { ...prev, [itemId]: Math.max(currentQuantity - 1, 1) }; // Minimum 1
+        });
+    }, []);
 
     const handlePurchase = async (item: StoreItemDefinition) => {
         // Check if authenticated and wallet is connected and matching
@@ -256,14 +270,14 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         const totalBobyPrice = bobyUsdPrice && bobyUsdPrice > 0 ? (totalUsdPrice / bobyUsdPrice) : null;
 
                         return (
-                            <Card key={item.id} className="p-3 bg-card shadow-sm hover:shadow-md transition-shadow group">
-                                <div className="flex flex-col sm:flex-row items-center gap-3">
+                            <Card key={item.id} className="flex flex-col"> {/* Added flex flex-col */}
+                                <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
                                     <Image src={item.image} alt={item.name} width={60} height={60} className="rounded-md border" data-ai-hint={item.dataAiHint} priority={item.id === '1'}/>
-                                    <div className="flex-grow text-center sm:text-left">
-                                        <h3 className="font-semibold text-md">{item.name}</h3>
-                                        <p className="text-xs text-muted-foreground">{item.description}</p>
+                                    <div>
+                                        <CardTitle className="text-lg">{item.name}</CardTitle> {/* Changed h3 to CardTitle */}
+                                        <CardDescription className="text-xs">{item.description}</CardDescription> {/* Changed p to CardDescription */}
                                         <p className="text-sm font-semibold text-primary flex items-center justify-center sm:justify-start gap-1 mt-1">
-                                            ${item.price.toFixed(2)} USD
+                                            ${item.price.toFixed(3)} USD
                                             {calculatedBobyPricePerUnit !== null && (
                                                 <span className="text-xs text-muted-foreground ml-1 rtl:mr-1">
                                                     (~{calculatedBobyPricePerUnit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})} BOBY)
@@ -271,30 +285,47 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                             )}
                                         </p>
                                     </div>
-                                    <div className="flex flex-col items-center sm:items-end gap-2 mt-2 sm:mt-0">
-                                        <div className='flex items-center gap-2'>
-                                            <Label htmlFor={`quantity-${item.id}`} className="text-xs whitespace-nowrap">Quantity:</Label>
-                                            <Input id={`quantity-${item.id}`} type="number" min="1" value={quantity} onChange={(e) => handleQuantityChange(item.id, e.target.value)} className="h-8 w-16 text-sm p-1 text-center" />
-                                        </div>
-                                        <p className="text-xs font-semibold text-primary flex items-center justify-center sm:justify-end gap-1">
-                                            Total:
-                                            {totalBobyPrice !== null ? (
-                                                <>
-                                                    {totalBobyPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: BOBY_TOKEN_DECIMALS})}
-                                                    <Image src="/Boby-logo.png" alt="Boby Token" width={14} height={14} className="rounded-none" priority={false} />
-                                                </>
-                                            ) : (
-                                                '--- BOBY'
-                                            )}
-                                        </p>
-                                         <p className="text-xs text-muted-foreground -mt-1">(${totalUsdPrice.toFixed(2)} USD)</p>
+                                </CardHeader>
+                                <CardContent className="p-4 pt-0 flex flex-col flex-grow"> {/* New CardContent */}
+                                    <div className="flex items-center justify-center space-x-2 mt-4">
+                                        {/* Removed Label for Quantity as it's not in PlayerInventory's quantity controls */}
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon" 
+                                            className="h-9 w-9" 
+                                            onClick={() => handleDecrement(item.id)}
+                                            disabled={quantity <= 1}
+                                        >
+                                            <Minus className="h-4 w-4" />
+                                        </Button>
+                                        <Input id={`quantity-${item.id}`} type="number" min="1" value={quantity} onChange={(e) => handleQuantityChange(item.id, e.target.value)} className="h-9 w-24 text-center no-spinners flex-grow" />
+                                        <Button 
+                                            variant="outline" 
+                                            size="icon" 
+                                            className="h-9 w-9" 
+                                            onClick={() => handleIncrement(item.id)}
+                                        >
+                                            <Plus className="h-4 w-4" />
+                                        </Button>
                                     </div>
-                                </div>
-                                 <Button variant="default" size="sm" onClick={() => handlePurchase(item)}
-                                    disabled={isLoading === item.id || !isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey || STORE_TREASURY_WALLET_ADDRESS === 'REPLACE_WITH_YOUR_STORE_TREASURY_WALLET_ADDRESS' || STORE_TREASURY_WALLET_ADDRESS === 'EXAMPLE_DO_NOT_USE' || isBobyPriceLoading || !bobyUsdPrice || bobyUsdPrice <= 0}
-                                    className="bg-accent hover:bg-accent/90 text-accent-foreground w-full mt-3 py-2 px-4">
-                                    {isLoading === item.id ? <Loader2 className="mr-2 rtl:ml-2 h-4 w-4 animate-spin" /> : ( <><Send className="mr-2 rtl:ml-2 h-4 w-4" /> Purchase ({quantity})</> )}
-                                </Button>
+                                    <p className="text-xs font-semibold text-primary flex items-center justify-center gap-1 mt-2">
+                                        Total:
+                                        {totalBobyPrice !== null ? (
+                                            <>
+                                                {totalBobyPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: BOBY_TOKEN_DECIMALS})}
+                                                <Image src="/Boby-logo.png" alt="Boby Token" width={14} height={14} className="rounded-none" priority={false} />
+                                            </>
+                                        ) : (
+                                            '--- BOBY'
+                                        )}
+                                        <span className="text-muted-foreground ml-2">(${totalUsdPrice.toFixed(3)} USD)</span> {/* Increased ml-1 to ml-2 */}
+                                    </p>
+                                    <Button variant="default" size="sm" onClick={() => handlePurchase(item)}
+                                        disabled={isLoading === item.id || !isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey || STORE_TREASURY_WALLET_ADDRESS === 'REPLACE_WITH_YOUR_STORE_TREASURY_WALLET_ADDRESS' || STORE_TREASURY_WALLET_ADDRESS === 'EXAMPLE_DO_NOT_USE' || isBobyPriceLoading || !bobyUsdPrice || bobyUsdPrice <= 0}
+                                        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full mt-4 text-xs px-2 py-1">
+                                        {isLoading === item.id ? <Loader2 className="mr-2 rtl:ml-2 h-4 w-4 animate-spin" /> : ( <><Send className="mr-2 rtl:ml-2 h-4 w-4" /> Purchase ({quantity})</> )}
+                                    </Button>
+                                </CardContent>
                             </Card>
                         );
                     })}

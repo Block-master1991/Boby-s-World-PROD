@@ -16,36 +16,53 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
-    const { itemId } = await request.json();
+    const { itemId, amount } = await request.json();
 
-    if (!itemId) {
-      return NextResponse.json({ error: 'Item ID is required.' }, { status: 400 });
+    if (!itemId || typeof itemId !== 'string') {
+      return NextResponse.json({ error: 'Item ID is required and must be a string.' }, { status: 400 });
+    }
+    if (typeof amount !== 'number' || amount <= 0 || !Number.isInteger(amount)) {
+      return NextResponse.json({ error: 'Amount is required and must be a positive integer.' }, { status: 400 });
     }
 
     const playerDocRef = db.collection('players').doc(userPublicKey);
     const docSnap = await playerDocRef.get();
 
     if (!docSnap.exists) {
-      return NextResponse.json({ error: 'Player not found' }, { status: 404 });
+      return NextResponse.json({ error: 'Player not found.' }, { status: 404 });
     }
 
     const data = docSnap.data()!;
-    const inventory = data.inventory || [];
+    let inventory = data.inventory || [];
 
-    const index = inventory.findIndex((entry: any) => entry?.id === itemId);
-    if (index !== -1) {
-      inventory.splice(index, 1);
+    // Count how many of the requested item the player actually has
+    const currentItemCount = inventory.filter((entry: any) => entry?.id === itemId).length;
 
-      await playerDocRef.update({
-        inventory,
-        lastInteraction: FieldValue.serverTimestamp(),
-      });
+    if (currentItemCount < amount) {
+      return NextResponse.json({ error: `You do not have enough ${itemId} to use. You have ${currentItemCount}, but requested ${amount}.` }, { status: 400 });
     }
 
-    return NextResponse.json({ success: true });
+    // Remove 'amount' number of items from the inventory
+    let itemsRemoved = 0;
+    const newInventory = [];
+    for (const entry of inventory) {
+      if (entry?.id === itemId && itemsRemoved < amount) {
+        itemsRemoved++;
+      } else {
+        newInventory.push(entry);
+      }
+    }
+    inventory = newInventory;
+
+    await playerDocRef.update({
+      inventory,
+      lastInteraction: FieldValue.serverTimestamp(),
+    });
+
+    return NextResponse.json({ success: true, itemsUsed: itemsRemoved });
   } catch (error: any) {
     console.error('[useItem] Error:', error);
-    let errorMessage = error.message || 'Failed to use item';
+    let errorMessage = error.message || 'Failed to use item.';
     let statusCode = 500;
 
     if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {
@@ -53,7 +70,7 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       statusCode = 500;
     } else if (errorMessage.includes("Authentication required")) {
       statusCode = 401;
-    } else if (errorMessage.includes("Item ID is required")) {
+    } else if (errorMessage.includes("Item ID is required") || errorMessage.includes("Amount is required") || errorMessage.includes("You do not have enough")) {
       statusCode = 400;
     } else if (errorMessage.includes("Player not found")) {
       statusCode = 404;

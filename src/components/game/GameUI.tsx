@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useState, useRef, useCallback } from 'react';
@@ -312,105 +311,100 @@ const GameUI: React.FC = () => {
     /**
      * Activates or extends the Speed Boost effect.
      */
-    const activateSpeedBoost = useCallback(() => {
-        let newTimeLeft = speedBoostTimeLeft > 0 ? speedBoostTimeLeft + SPEED_BOOST_DURATION : SPEED_BOOST_DURATION;
-        setSpeedBoostTimeLeft(newTimeLeft);
-        setIsSpeedBoostActive(true);
-
-        if (speedBoostTimeLeft > 0) {
-            toast({ title: "Speed Boost Extended!", description: `Total duration now ${newTimeLeft} seconds.` });
-        } else {
-            toast({ title: "Speed Boost Activated!", description: `You're running faster for ${newTimeLeft} seconds.` });
-        }
-
-        // Clear any existing interval to prevent multiple timers running
-        if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);
-        speedBoostIntervalRef.current = setInterval(() => {
-            setSpeedBoostTimeLeft(prevTime => {
-                if (prevTime <= 1) {
-                    clearInterval(speedBoostIntervalRef.current!);
-                    speedBoostIntervalRef.current = null;
-                    setIsSpeedBoostActive(false);
-                    setSpeedBoostTimeLeft(0);
-                    setShouldShowSpeedBoostWoreOffToast(true); // Trigger toast for effect wearing off
-                    return 0;
-                }
-                return prevTime - 1;
-            });
-        }, 1000);
-    }, [speedBoostTimeLeft, toast]); // Include speedBoostTimeLeft as dependency for extension logic
+    const activateSpeedBoost = useCallback((amount: number) => {
+        setSpeedBoostTimeLeft(prevTime => {
+            const newTime = prevTime + (SPEED_BOOST_DURATION * amount);
+            if (newTime > 0 && !isSpeedBoostActive) {
+                setIsSpeedBoostActive(true);
+                if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);
+                speedBoostIntervalRef.current = setInterval(() => {
+                    setSpeedBoostTimeLeft(pTime => {
+                        if (pTime <= 1) {
+                            clearInterval(speedBoostIntervalRef.current!);
+                            speedBoostIntervalRef.current = null;
+                            setIsSpeedBoostActive(false);
+                            setShouldShowSpeedBoostWoreOffToast(true);
+                            return 0;
+                        }
+                        return pTime - 1;
+                    });
+                }, 1000);
+            }
+            return newTime;
+        });
+        toast({ title: "Speed Boost Activated!", description: `You're running faster for ${SPEED_BOOST_DURATION * amount} seconds.` });
+    }, [isSpeedBoostActive, toast]);
 
     /**
      * Activates or extends the Guardian Shield effect.
      */
-    const activateGuardianShield = useCallback(() => {
-        let newTimeLeft = shieldTimeLeft > 0 ? shieldTimeLeft + SHIELD_DURATION : SHIELD_DURATION;
-        setShieldTimeLeft(newTimeLeft);
-        setIsShieldActive(true);
-
-        if (shieldTimeLeft > 0) {
-             toast({ title: "Guardian Shield Extended!", description: `Total duration now ${newTimeLeft} seconds.` });
-        } else {
-            toast({ title: "Guardian Shield Activated!", description: `You're protected for ${newTimeLeft} seconds.` });
-        }
-
-        if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
-        shieldIntervalRef.current = setInterval(() => {
-            setShieldTimeLeft(prevTime => {
-                if (prevTime <= 1) {
-                    clearInterval(shieldIntervalRef.current!);
-                    shieldIntervalRef.current = null;
-                    setIsShieldActive(false);
-                    setShieldTimeLeft(0);
-                    setShouldShowShieldWoreOffToast(true);
-                    return 0;
-                }
-                return prevTime - 1;
-            });
-        }, 1000);
-    }, [shieldTimeLeft, toast]);
+    const activateGuardianShield = useCallback((amount: number) => {
+        setShieldTimeLeft(prevTime => {
+            const newTime = prevTime + (SHIELD_DURATION * amount);
+            if (newTime > 0 && !isShieldActive) {
+                setIsShieldActive(true);
+                if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
+                shieldIntervalRef.current = setInterval(() => {
+                    setShieldTimeLeft(pTime => {
+                        if (pTime <= 1) {
+                            clearInterval(shieldIntervalRef.current!);
+                            shieldIntervalRef.current = null;
+                            setIsShieldActive(false);
+                            setShouldShowShieldWoreOffToast(true);
+                            return 0;
+                        }
+                        return pTime - 1;
+                    });
+                }, 1000);
+            }
+            return newTime;
+        });
+        toast({ title: "Guardian Shield Activated!", description: `You're protected for ${SHIELD_DURATION * amount} seconds.` });
+    }, [isShieldActive, toast]);
 
     /**
      * Activates or extends the Coin Magnet effect.
      */
-    const activateCoinMagnet = useCallback(() => {
-        let newTimeLeft = coinMagnetTimeLeft > 0 ? coinMagnetTimeLeft + COIN_MAGNET_DURATION : COIN_MAGNET_DURATION;
-        setCoinMagnetTimeLeft(newTimeLeft);
-        setIsCoinMagnetActive(true);
-
-        if (coinMagnetTimeLeft > 0) {
-            toast({ title: "Coin Magnet Extended!", description: `Total duration now ${newTimeLeft} seconds.` });
-        } else {
-            toast({ title: "Coin Magnet Activated!", description: `Collecting nearby coins for ${newTimeLeft} seconds.` });
-        }
-
-        if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
-        coinMagnetIntervalRef.current = setInterval(() => {
-            setCoinMagnetTimeLeft(prevTime => {
-                if (prevTime <= 1) {
-                    clearInterval(coinMagnetIntervalRef.current!);
-                    coinMagnetIntervalRef.current = null;
-                    setIsCoinMagnetActive(false);
-                    setCoinMagnetTimeLeft(0);
-                    setShouldShowCoinMagnetWoreOffToast(true);
-                    return 0;
-                }
-                return prevTime - 1;
-            });
-        }, 1000);
-    }, [coinMagnetTimeLeft, toast]);
+    const activateCoinMagnet = useCallback((amount: number) => {
+        setCoinMagnetTimeLeft(prevTime => {
+            const newTime = prevTime + (COIN_MAGNET_DURATION * amount);
+            if (newTime > 0 && !isCoinMagnetActive) {
+                setIsCoinMagnetActive(true);
+                if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
+                coinMagnetIntervalRef.current = setInterval(() => {
+                    setCoinMagnetTimeLeft(pTime => {
+                        if (pTime <= 1) {
+                            clearInterval(coinMagnetIntervalRef.current!);
+                            coinMagnetIntervalRef.current = null;
+                            setIsCoinMagnetActive(false);
+                            setShouldShowCoinMagnetWoreOffToast(true);
+                            return 0;
+                        }
+                        return pTime - 1;
+                    });
+                }, 1000);
+            }
+            return newTime;
+        });
+        toast({ title: "Coin Magnet Activated!", description: `Collecting nearby coins for ${COIN_MAGNET_DURATION * amount} seconds.` });
+    }, [isCoinMagnetActive, toast]);
 
     /**
      * Handles the consumption of a consumable item via backend API.
      * @param itemIdToConsume The ID of the item to consume.
+     * @param amountToUse The quantity of the item to consume.
      */
-    const handleUseConsumableItem = useCallback(async (itemIdToConsume: string) => {
+    const handleUseConsumableItem = useCallback(async (itemIdToConsume: string, amountToUse: number) => {
         if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey) {
             toast({ title: 'Error', description: 'Please connect and authenticate your wallet to use items.', variant: 'destructive' }); return;
         }
+        if (amountToUse <= 0) {
+            toast({ title: 'Invalid Quantity', description: 'Please enter a quantity greater than 0.', variant: 'destructive' }); return;
+        }
+
         // Determine which item to consume based on the provided ID
         let itemDefinition: StoreItemDefinition | undefined;
-        let activationFunction: (() => void) | undefined;
+        let activationFunction: ((amount: number) => void) | undefined; // Updated type
         let currentItemCount = 0;
 
         if (itemIdToConsume === '3') {
@@ -432,17 +426,17 @@ const GameUI: React.FC = () => {
         if (!itemDefinition) {
              toast({ title: 'Item Error', description: 'Item definition not found.', variant: 'destructive'}); return;
         }
-        if (currentItemCount === 0) {
-            toast({ title: 'No Items Left', description: `You don't have any ${itemDefinition.name}.`, variant: 'destructive'}); return;
+        if (currentItemCount < amountToUse) {
+            toast({ title: 'No Items Left', description: `You don't have enough ${itemDefinition.name}. You have ${currentItemCount}, but tried to use ${amountToUse}.`, variant: 'destructive'}); return;
         }
 
         // Optimistically decrement the item count
         if (itemIdToConsume === '3') {
-            setSpeedyPawsTreatCount(prev => prev - 1);
+            setSpeedyPawsTreatCount(prev => prev - amountToUse);
         } else if (itemIdToConsume === '2') {
-            setGuardianShieldCount(prev => prev - 1);
+            setGuardianShieldCount(prev => prev - amountToUse);
         } else if (itemIdToConsume === '4') {
-            setCoinMagnetTreatCount(prev => prev - 1);
+            setCoinMagnetTreatCount(prev => prev - amountToUse);
         }
 
         try {
@@ -452,22 +446,22 @@ const GameUI: React.FC = () => {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${authUser.publicKey}`
                 },
-                body: JSON.stringify({ itemId: itemIdToConsume })
+                body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse }) // Pass amount
             });
             const data = await response.json();
 
             if (response.ok) {
-                if(activationFunction) activationFunction(); // Activate the item's effect on success
-                toast({ title: 'Item Used!', description: `${itemDefinition.name} consumed.`, variant: 'default' });
+                if(activationFunction) activationFunction(amountToUse); // Pass amount to activation function
+                toast({ title: 'Item Used!', description: `${amountToUse} ${itemDefinition.name}(s) consumed.`, variant: 'default' });
                 fetchPlayerData(); // Re-fetch inventory to ensure sync
             } else {
                 // If backend fails, rollback the local count
                 if (itemIdToConsume === '3') {
-                    setSpeedyPawsTreatCount(prev => prev + 1);
+                    setSpeedyPawsTreatCount(prev => prev + amountToUse);
                 } else if (itemIdToConsume === '2') {
-                    setGuardianShieldCount(prev => prev + 1);
+                    setGuardianShieldCount(prev => prev + amountToUse);
                 } else if (itemIdToConsume === '4') {
-                    setCoinMagnetTreatCount(prev => prev + 1);
+                    setCoinMagnetTreatCount(prev => prev + amountToUse);
                 }
                 throw new Error(data.error || `Failed to use ${itemDefinition.name}.`);
             }
@@ -476,11 +470,11 @@ const GameUI: React.FC = () => {
             toast({ title: 'Failed to Use Item', description: `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error}`, variant: 'destructive' });
             // Ensure rollback if an error occurs
             if (itemIdToConsume === '3') {
-                setSpeedyPawsTreatCount(prev => prev + 1);
+                setSpeedyPawsTreatCount(prev => prev + amountToUse);
             } else if (itemIdToConsume === '2') {
-                setGuardianShieldCount(prev => prev + 1);
+                setGuardianShieldCount(prev => prev + amountToUse);
             } else if (itemIdToConsume === '4') {
-                setCoinMagnetTreatCount(prev => prev + 1);
+                setCoinMagnetTreatCount(prev => prev + amountToUse);
             }
         }
     }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, speedyPawsTreatCount, guardianShieldCount, coinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData]);
@@ -747,13 +741,6 @@ const GameUI: React.FC = () => {
                         </SheetTrigger>
                         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
                            <PlayerInventory
-                                isAuthenticated={isAuthenticated}
-                                authUserPublicKey={authUser?.publicKey}
-                                isWalletConnectedAndMatching={isWalletConnectedAndMatching}
-                                speedyPawsTreatCount={speedyPawsTreatCount}
-                                guardianShieldCount={guardianShieldCount}
-                                protectionBoneCount={protectionBoneCount}
-                                coinMagnetTreatCount={coinMagnetTreatCount}
                                 onUseConsumableItem={handleUseConsumableItem}
                            />
                         </SheetContent>

@@ -32,7 +32,7 @@ interface GameOverlayUIProps {
   guardianShieldCount: number;
   coinMagnetTreatCount: number;
 
-  onUseConsumableItem: (itemId: string) => void;
+  onUseConsumableItem: (itemId: string, amount: number) => void; // Updated to accept amount
   
 
   isGameEffectivelyPaused: boolean;
@@ -128,7 +128,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
       <div className="absolute bottom-[calc(4rem+var(--sab))] left-[calc(0.5rem+var(--sal))] z-10 flex flex-col space-y-3">
         {coinMagnetTreatDef && (
           <Button
-            onClick={() => onUseConsumableItem('4')}
+            onClick={() => onUseConsumableItem('4', 1)} // Pass amount as 1
             disabled={coinMagnetTreatCount === 0 || (isGameEffectivelyPaused && !isCoinMagnetActive)}
             className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
@@ -138,7 +138,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         )}
         {speedyPawsTreatDef && (
           <Button
-            onClick={() => onUseConsumableItem('3')}
+            onClick={() => onUseConsumableItem('3', 1)} // Pass amount as 1
             disabled={speedyPawsTreatCount === 0 || (isGameEffectivelyPaused && !isSpeedBoostActive)}
             className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
@@ -148,7 +148,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
         )}
         {guardianShieldDef && (
           <Button
-            onClick={() => onUseConsumableItem('2')}
+            onClick={() => onUseConsumableItem('2', 1)} // Pass amount as 1
             disabled={guardianShieldCount === 0 || (isGameEffectivelyPaused && !isShieldActive)}
             className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
