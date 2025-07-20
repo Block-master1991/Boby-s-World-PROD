@@ -26,17 +26,20 @@ import { SOL_NETWORK, DEDICATED_RPC_ENDPOINT } from '@/lib/constants';
 
 // ✅ تسجيل الـ MWA خارج React
 if (typeof window !== 'undefined') {
+const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000' || 'https://divine-bedbug-valued.ngrok-free.app'; // استخدام متغير بيئة أو افتراضي
+const appHost = new URL(appUrl).host; // استخراج المضيف من URL
+
 registerMwa({
     appIdentity: {
         name: 'Bobys World',
-        uri: 'https://divine-bedbug-valued.ngrok-free.app', // تأكد من تحديث هذا الرابط إلى رابط التطبيق الخاص بك
+        uri: appUrl, // استخدام متغير البيئة
         icon: '/Boby-logo.png', // تأكد أن هذا المسار صحيح ويشير إلى ملف داخل public
     },
     authorizationCache: createDefaultAuthorizationCache(),
     chains: ['solana:devnet', 'solana:mainnet'],
     chainSelector: createDefaultChainSelector(),
     onWalletNotFound: createDefaultWalletNotFoundHandler(),
-    remoteHostAuthority: 'divine-bedbug-valued.ngrok-free.app', // ✅ هذا مهم لتشغيل خيار الاتصال عن بُعد
+    remoteHostAuthority: appHost, // استخدام المضيف المستخرج من متغير البيئة
 });
 }
 

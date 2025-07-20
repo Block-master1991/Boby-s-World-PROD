@@ -109,12 +109,13 @@ export function withAuth(handler: (req: AuthenticatedRequest) => Promise<NextRes
             (request as AuthenticatedRequest).user = payload;
             const response = await handler(request as AuthenticatedRequest);
             
-            console.log('[AuthMiddleware withAuth] Setting new tokens in cookies after refresh.');
+            const requestHost = request.headers.get('host') || undefined; // استخراج المضيف
+            console.log('[AuthMiddleware withAuth] Setting new tokens in cookies after refresh. Request Host:', requestHost);
             response.cookies.set('accessToken', refreshResult.accessToken, 
-              JWTManager.createSecureCookieOptions(15 * 60) // Max age in seconds
+              JWTManager.createSecureCookieOptions(15 * 60, requestHost) // Max age in seconds, pass requestHost
             );
             response.cookies.set('refreshToken', refreshResult.newRefreshToken, 
-              JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60) // Max age in seconds
+              JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost) // Max age in seconds, pass requestHost
             );
             return response;
           } else {
@@ -189,6 +190,3 @@ export async function validateTokenFromRequest(request: Request): Promise<JWTPay
     return null;
   }
 }
-
-
-

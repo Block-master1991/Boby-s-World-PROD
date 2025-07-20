@@ -18,11 +18,11 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  ...(process.env.NODE_ENV === 'development' && {
+  ...(process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_ORIGIN && {
   experimental: {
-    allowedDevOrigins: ['https://divine-bedbug-valued.ngrok-free.app'],
+    allowedDevOrigins: [process.env.NEXT_PUBLIC_DEV_ORIGIN],
   },
-}), // Only add this in development mode
+}), // Only add this in development mode if NEXT_PUBLIC_DEV_ORIGIN is set
 }
 
 
