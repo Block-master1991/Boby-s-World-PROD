@@ -7,6 +7,7 @@ import { randomBytes } from 'crypto';
 import { JWTManager } from '@/lib/jwt-utils'; // تأكد من وجود هذا الملف وتصديره للدوال المطلوبة
 import { createHash } from 'crypto';
 import { getClientIp } from '@/lib/request-utils';
+import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
 
 
 const MAX_NONCE_ATTEMPTS = 3; // Max attempts to verify a specific nonce
@@ -281,6 +282,17 @@ export async function POST(request: Request) {
     response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60, requestHost));
     response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost));
     response.cookies.set('nonce', clientNonce, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)); // Set nonce cookie
+
+    // === إصدار CSRF Token ===
+    const csrfToken = await CSRFManager.getOrCreateToken(publicKey); // استخدام publicKey كـ sessionId
+    response.cookies.set('csrfToken', csrfToken, {
+      httpOnly: false, // يجب أن يكون متاحًا للـ JavaScript لقراءته وإرساله في رأس الطلب
+      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure, // نفس إعداد Secure للكوكيز الأخرى
+      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite, // نفس إعداد SameSite للكوكيز الأخرى
+      maxAge: 30 * 60, // 30 دقيقة، نفس مدة صلاحية رمز CSRF
+      path: '/',
+    });
+    console.log('[LOGIN] CSRF token issued and set in cookie.');
 
     // نهاية العملية
     console.log('[LOGIN] Login process completed successfully');

@@ -1,9 +1,12 @@
 import { NextResponse } from 'next/server';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { initializeAdminApp } from '@/lib/firebase-admin';
+import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
+import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
+import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
+import { initializeAdminApp } from '@/lib/firebase-admin'; // استيراد db و initializeAdminApp
 
-export const POST = withAuth(async (request: AuthenticatedRequest) => {
+export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   console.log("[API] /api/game/useItem called");
 
   try {
@@ -59,13 +62,28 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       lastInteraction: FieldValue.serverTimestamp(),
     });
 
-    return NextResponse.json({ success: true, itemsUsed: itemsRemoved });
+    const response = NextResponse.json({ success: true, itemsUsed: itemsRemoved });
+
+    // إصدار CSRF Token جديد بعد الطلب الناجح
+    const requestHost = request.headers.get('host') || undefined;
+    const csrfToken = await CSRFManager.getOrCreateToken(userPublicKey);
+    response.cookies.set('csrfToken', csrfToken, {
+      httpOnly: false,
+      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
+      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
+      maxAge: 30 * 60, // 30 دقيقة
+      path: '/',
+    });
+    console.log('[useItem] New CSRF token issued and set in cookie.');
+
+    return response;
   } catch (error: any) {
     console.error('[useItem] Error:', error);
     let errorMessage = error.message || 'Failed to use item.';
     let statusCode = 500;
 
-    if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {
+    // إذا كان الخطأ يشير إلى عدم تهيئة Firebase، فقم بمعالجته بشكل خاص
+    if (errorMessage.includes("Firebase Admin SDK not initialized")) {
       errorMessage = "Server configuration error: Firebase Admin SDK not properly set up.";
       statusCode = 500;
     } else if (errorMessage.includes("Authentication required")) {
@@ -78,4 +96,4 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
     return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
-});
+}));

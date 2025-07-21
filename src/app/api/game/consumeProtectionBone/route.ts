@@ -2,8 +2,11 @@ import { NextResponse } from 'next/server';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
+import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
+import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
 
-export const POST = withAuth(async (request: AuthenticatedRequest) => {
+export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   console.log("[API] /api/game/consumeProtectionBone called");
 
   // userPublicKey is now available directly from request.user
@@ -41,8 +44,21 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    return NextResponse.json({ message: 'Protection Bone consumed successfully.', newInventory: currentInventory });
+    const response = NextResponse.json({ message: 'Protection Bone consumed successfully.', newInventory: currentInventory });
 
+    // إصدار CSRF Token جديد بعد الطلب الناجح
+    const requestHost = request.headers.get('host') || undefined;
+    const csrfToken = await CSRFManager.getOrCreateToken(userPublicKey);
+    response.cookies.set('csrfToken', csrfToken, {
+      httpOnly: false,
+      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
+      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
+      maxAge: 30 * 60, // 30 دقيقة
+      path: '/',
+    });
+    console.log('[consumeProtectionBone] New CSRF token issued and set in cookie.');
+
+    return response;
   } catch (error: any) {
     console.error("Error consuming protection bone:", error);
     let errorMessage = error.message || 'Failed to consume protection bone.';
@@ -61,4 +77,4 @@ export const POST = withAuth(async (request: AuthenticatedRequest) => {
 
     return NextResponse.json({ error: errorMessage }, { status: statusCode });
   }
-});
+}));

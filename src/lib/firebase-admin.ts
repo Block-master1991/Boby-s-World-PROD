@@ -25,7 +25,7 @@ export async function initializeAdminApp() {
     !privateKey ||
     privateKey === "YOUR_FIREBASE_PRIVATE_KEY_HERE_WITH_NEWLINES_AS_\\n" // Explicit check for placeholder
   ) {
-    console.error("Firebase Admin SDK environment variables are not set correctly or private key is placeholder.");
+    console.error("Firebase Admin SDK environment variables are not set correctly or private key is placeholder. Firebase will not be initialized.");
     console.error("FIREBASE_PROJECT_ID (Error Check):", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
     console.error("FIREBASE_CLIENT_EMAIL (Error Check):", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
     console.error("FIREBASE_PRIVATE_KEY (Error Check):", 
@@ -35,7 +35,8 @@ export async function initializeAdminApp() {
             : "Set (verify content and format)") 
         : "MISSING_OR_EMPTY"
     );
-    throw new Error('Firebase Admin SDK environment variables are not set correctly. Please check your .env file, especially FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, and FIREBASE_PRIVATE_KEY.');
+    // لا ترمي خطأ هنا، بل عد بـ null للسماح للمعالج بالتعامل معها
+    return null; 
   }
 
   const credential = admin.credential.cert({

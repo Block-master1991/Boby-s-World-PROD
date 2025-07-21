@@ -3,7 +3,9 @@ import { cookies } from 'next/headers';
 import { JWTManager } from '@/lib/jwt-utils';
 import { createAuthErrorResponse } from '@/lib/auth-middleware';
 import { getClientIp } from '@/lib/request-utils';
-export async function POST(request: Request) {
+import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
+import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
+export const POST = withCsrfProtection(async (request: Request) => {
   
   console.log('[REFRESH] Received refresh token request');
   try {
@@ -85,6 +87,23 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
     const refreshOptions = JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost); // 7 أيام
     response.cookies.set('refreshToken', newRefreshToken, refreshOptions);
 
+    // === إصدار CSRF Token جديد ===
+    // يجب استخراج publicKey من Access Token الجديد أو من payload الـ refreshToken
+      // بما أن withCsrfProtection قد تحقق من Access Token، يمكننا استخدام payload.sub
+      const accessTokenPayload = await JWTManager.verifyAccessToken(accessToken, request.headers.get('user-agent') || 'unknown', getClientIp(request));
+      if (accessTokenPayload && accessTokenPayload.sub) {
+        const csrfToken = await CSRFManager.getOrCreateToken(accessTokenPayload.sub);
+      response.cookies.set('csrfToken', csrfToken, {
+        httpOnly: false,
+        secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
+        sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
+        maxAge: 30 * 60, // 30 دقيقة
+        path: '/',
+      });
+      console.log('[REFRESH] New CSRF token issued and set in cookie.');
+    } else {
+      console.warn('[REFRESH] Could not get publicKey to issue new CSRF token after refresh.');
+    }
     
     return response;
 
@@ -104,4 +123,4 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
     return response;
   }
 
-}
+});

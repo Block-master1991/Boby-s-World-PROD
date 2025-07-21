@@ -16,6 +16,7 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 
 import { useToast } from '@/hooks/use-toast';
 import { storeItems, type StoreItemDefinition } from '@/lib/items'; // Assuming '@/lib/items' defines store items
+import { fetchWithCsrf } from '@/lib/utils'; // استيراد fetchWithCsrf
 
 // Game Constants
 const USDT_PER_COIN = 0.001;
@@ -234,11 +235,11 @@ const GameUI: React.FC = () => {
         setPlayerGameUSDT(prev => prev + USDT_PER_COIN);
 
         try {
-            const response = await fetch('/api/game/addCoin', {
+            const response = await fetchWithCsrf('/api/game/addCoin', { // استخدام fetchWithCsrf
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
+                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ amount: USDT_PER_COIN })
             });
@@ -253,9 +254,13 @@ const GameUI: React.FC = () => {
                 setPlayerGameUSDT(prev => prev - USDT_PER_COIN);
                 throw new Error(data.error || 'Failed to add coin.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error adding coin to backend:", error);
-            toast({ title: 'Sync Error', description: `Could not update your total USDT balance: ${error}`, variant: 'destructive' });
+            let errorMessage = `Could not update your total USDT balance: ${error.message || String(error)}`;
+            if (error.message && error.message.includes('CSRF token missing')) {
+                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            }
+            toast({ title: 'Sync Error', description: errorMessage, variant: 'destructive' });
             // Ensure rollback if an error occurs
             setPlayerGameUSDT(prev => prev - USDT_PER_COIN);
         }
@@ -440,11 +445,11 @@ const GameUI: React.FC = () => {
         }
 
         try {
-            const response = await fetch('/api/game/useItem', {
+            const response = await fetchWithCsrf('/api/game/useItem', { // استخدام fetchWithCsrf
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
+                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse }) // Pass amount
             });
@@ -465,9 +470,13 @@ const GameUI: React.FC = () => {
                 }
                 throw new Error(data.error || `Failed to use ${itemDefinition.name}.`);
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error using item via backend:", error);
-            toast({ title: 'Failed to Use Item', description: `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error}`, variant: 'destructive' });
+            let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error.message || String(error)}`;
+            if (error.message && error.message.includes('CSRF token missing')) {
+                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            }
+            toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
             // Ensure rollback if an error occurs
             if (itemIdToConsume === '3') {
                 setSpeedyPawsTreatCount(prev => prev + amountToUse);
@@ -496,11 +505,11 @@ const GameUI: React.FC = () => {
         setPlayerGameUSDT(prev => Math.max(0, prev - MIN_WITHDRAWAL_USDT));
 
         try {
-            const response = await fetch('/api/game/withdrawUSDT', {
+            const response = await fetchWithCsrf('/api/game/withdrawUSDT', { // استخدام fetchWithCsrf
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
+                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ amount: MIN_WITHDRAWAL_USDT })
             });
@@ -516,9 +525,13 @@ const GameUI: React.FC = () => {
                 setPlayerGameUSDT(oldBalance);
                 throw new Error(data.error || 'Withdrawal failed.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error withdrawing USDT via backend:", error);
-            toast({ title: "Withdrawal Error", description: `Withdrawal failed: ${error}`, variant: "destructive" });
+            let errorMessage = `Withdrawal failed: ${error.message || String(error)}`;
+            if (error.message && error.message.includes('CSRF token missing')) {
+                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            }
+            toast({ title: "Withdrawal Error", description: errorMessage, variant: "destructive" });
             // Ensure rollback if an error occurs
             setPlayerGameUSDT(oldBalance);
         } finally {
@@ -539,11 +552,11 @@ const GameUI: React.FC = () => {
         setProtectionBoneCount(prev => prev - 1);
 
         try {
-            const response = await fetch('/api/game/consumeProtectionBone', {
+            const response = await fetchWithCsrf('/api/game/consumeProtectionBone', { // استخدام fetchWithCsrf
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
+                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 }
             });
             const data = await response.json();
@@ -556,9 +569,13 @@ const GameUI: React.FC = () => {
                 setProtectionBoneCount(prev => prev + 1);
                 throw new Error(data.error || 'Failed to consume protection bone.');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error consuming protection bone via backend:", error);
-            toast({ title: 'Failed to Use Bone', description: `Could not consume Protection Bone. Error: ${error}`, variant: 'destructive' });
+            let errorMessage = `Could not consume Protection Bone. Error: ${error.message || String(error)}`;
+            if (error.message && error.message.includes('CSRF token missing')) {
+                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            }
+            toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
         }
     }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, protectionBoneCount, toast, fetchPlayerData]);
 
@@ -576,11 +593,11 @@ const GameUI: React.FC = () => {
         toast({ title: 'Ouch!', description: `Lost ${ENEMY_COLLISION_PENALTY_USDT.toFixed(4)} USDT from enemy collision!`, variant: 'destructive' });
 
         try {
-            const response = await fetch('/api/game/applyPenalty', {
+            const response = await fetchWithCsrf('/api/game/applyPenalty', { // استخدام fetchWithCsrf
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
+                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ amount: ENEMY_COLLISION_PENALTY_USDT })
             });
@@ -596,9 +613,13 @@ const GameUI: React.FC = () => {
                 throw new Error(data.error || 'Failed to apply penalty.');
             }
 
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error applying enemy collision penalty via backend:", error);
-            toast({ title: 'Penalty Error', description: `Could not apply penalty. Error: ${error}`, variant: 'destructive' });
+            let errorMessage = `Could not apply penalty. Error: ${error.message || String(error)}`;
+            if (error.message && error.message.includes('CSRF token missing')) {
+                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            }
+            toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
             // Ensure rollback if an error occurs
             setPlayerGameUSDT(prev => prev + ENEMY_COLLISION_PENALTY_USDT);
         }

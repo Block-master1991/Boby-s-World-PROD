@@ -17,6 +17,7 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccou
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
+import { fetchWithCsrf } from '@/lib/utils'; // استيراد fetchWithCsrf
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -179,11 +180,11 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Processing inventory update.` });
 
             // Call backend API to update inventory
-            const inventoryUpdateResponse = await fetch('/api/game/purchaseItem', {
+            const inventoryUpdateResponse = await fetchWithCsrf('/api/game/purchaseItem', { // استخدام fetchWithCsrf
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUserPublicKey}` // Assuming authUserPublicKey is the token or part of it
+                    // 'Authorization': `Bearer ${authUserPublicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ itemId: item.id, quantity, transactionSignature: signature })
             });

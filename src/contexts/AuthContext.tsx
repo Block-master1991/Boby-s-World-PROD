@@ -88,6 +88,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // If they were not authenticated, it's just a normal unauthenticated state, no need to force logout/redirect.
           if (authState.isAuthenticated) {
             console.warn('[AuthContext checkSession] Session expired or unauthorized for an authenticated user. Forcing logout and redirect.');
+            console.log('[AuthContext checkSession] Triggering logoutAndRedirect from checkSession due to 401/403.');
             await logoutAndRedirect('/');
             toast({ variant: 'destructive', title: 'Session Expired', description: 'You have been logged out due to session timeout or wallet mismatch.' });
           } else {
@@ -243,9 +244,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setAuthState(prev => ({ ...prev, isLoading: true }));
     try {
       console.log('[FRONTEND] Starting logout process');
+
+      // Get CSRF token from cookies
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrfToken='))?.split('=')[1];
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+        console.log('[FRONTEND] CSRF token found and added to headers.');
+      } else {
+        console.warn('[FRONTEND] CSRF token not found in cookies for logout request.');
+      }
+
       await fetch('/api/auth/logout', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: headers,
         credentials: 'include',
         body: JSON.stringify({ publicKey: currentPK })
       });
@@ -273,10 +289,47 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     window.location.href = redirectPath;
   }, [logout, connected, adapterDisconnect]);
 
-  // Initial session check on mount
+  // Initial session check on mount and periodic refresh
   useEffect(() => {
-    checkSession();
-  }, [checkSession]);
+    let sessionCheckInterval: NodeJS.Timeout | null = null; // Initialize with null
+
+    const startSessionCheckInterval = () => {
+      // Clear any existing interval first
+      if (sessionCheckInterval) { // Check if it's not null before clearing
+        clearInterval(sessionCheckInterval);
+      }
+      // Check session every 12 minutes (720,000 ms)
+      // This should be less than ACCESS_TOKEN_EXPIRY_SECONDS (15 minutes)
+      sessionCheckInterval = setInterval(() => {
+        console.log('[AuthContext] Periodically checking session...');
+        checkSession();
+      }, 12 * 60 * 1000); // 12 minutes
+    };
+
+    // Perform initial check
+    checkSession().then(isAuthenticated => {
+      if (isAuthenticated) {
+        startSessionCheckInterval();
+      }
+    });
+
+    // Restart interval if authentication state changes to authenticated
+    if (authState.isAuthenticated) {
+      startSessionCheckInterval();
+    } else {
+      // If not authenticated, clear the interval
+      if (sessionCheckInterval) {
+        clearInterval(sessionCheckInterval);
+      }
+    }
+
+    // Cleanup on unmount
+    return () => {
+      if (sessionCheckInterval) {
+        clearInterval(sessionCheckInterval);
+      }
+    };
+  }, [checkSession, authState.isAuthenticated]); // Depend on checkSession and isAuthenticated
 
   // Effect to handle wallet connection changes and enforce mismatch logout
   useEffect(() => {
@@ -288,6 +341,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // NEW LOGIC: Force logout if authenticated but wallet is mismatched
     if (authState.isAuthenticated && authState.user && !isWalletConnectedAndMatching) {
       console.warn("[AuthContext] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout.");
+      console.log(`[AuthContext useEffect] isWalletConnectedAndMatching: ${isWalletConnectedAndMatching}. Triggering logoutAndRedirect from useEffect.`);
       logoutAndRedirect('/'); // Redirect to home without a flag
       toast({ variant: 'destructive', title: 'Wallet Mismatch', description: 'Your connected wallet does not match the session.' });
 

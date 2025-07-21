@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'; // Button might still be used i
 import { Loader2, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
+// import { fetchWithCsrf } from '@/lib/utils'; // لم يعد مطلوبًا لهذا الملف
 
 interface CaptchaScreenProps {
   siteKey: string;
@@ -49,7 +50,7 @@ useEffect(() => {
     setCaptchaError(null);
 
     try {
-      const response = await fetch('/api/verify-captcha', {
+      const response = await fetch('/api/verify-captcha', { // استخدام fetch الأصلي
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
