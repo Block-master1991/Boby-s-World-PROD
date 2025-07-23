@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useState, useRef, useCallback, useMemo } from 'react';
 import GameCanvas from '@/components/game/GameCanvas';
 import InGameStore from '@/components/game/InGameStore';
 import PlayerInventory from '@/components/game/PlayerInventory';
@@ -28,6 +28,16 @@ const COIN_MAGNET_RADIUS = 8;
 const ENEMY_COLLISION_PENALTY_USDT = 0.001;
 const COIN_COUNT_FOR_GAME_LOGIC = 1000;
 
+// Define types for optimistic updates
+interface OptimisticUpdate {
+    id: string; // Unique ID for the update
+    type: 'coin' | 'penalty' | 'useItem' | 'consumeBone' | 'withdraw';
+    amount?: number; // For coin/penalty/withdraw
+    itemId?: string; // For useItem
+    timestamp: number;
+    status: 'pending' | 'failed'; // 'completed' updates will be removed
+}
+
 // Joystick Constants
 const JOYSTICK_BASE_SIZE = 120;
 const JOYSTICK_KNOB_SIZE = 40;
@@ -53,6 +63,9 @@ const GameUI: React.FC = () => {
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isWalletOpen, setIsWalletOpen] = useState(false);
+
+    // New State for pending optimistic updates
+    const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate[]>([]);
 
     // Game Effect States
     const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -104,6 +117,61 @@ const GameUI: React.FC = () => {
     // Derived State for game pausing
     const isGameEffectivelyPaused = isMenuOpen || isStoreOpen || isInventoryOpen || isWalletOpen || isWalletMismatch;
 
+    // Derived State for displayed values
+    const displayedPlayerGameUSDT = useMemo(() => {
+        let currentUSDT = playerGameUSDT;
+        optimisticUpdates.forEach(update => {
+            if (update.status === 'pending') {
+                if (update.type === 'coin') {
+                    currentUSDT += (update.amount || 0);
+                } else if (update.type === 'penalty' || update.type === 'withdraw') {
+                    currentUSDT -= (update.amount || 0);
+                }
+            }
+        });
+        return currentUSDT;
+    }, [playerGameUSDT, optimisticUpdates]);
+
+    const displayedProtectionBoneCount = useMemo(() => {
+        let currentCount = protectionBoneCount;
+        optimisticUpdates.forEach(update => {
+            if (update.status === 'pending' && update.type === 'consumeBone') {
+                currentCount -= (update.amount || 1);
+            }
+        });
+        return currentCount;
+    }, [protectionBoneCount, optimisticUpdates]);
+
+    const displayedSpeedyPawsTreatCount = useMemo(() => {
+        let currentCount = speedyPawsTreatCount;
+        optimisticUpdates.forEach(update => {
+            if (update.status === 'pending' && update.type === 'useItem' && update.itemId === '3') {
+                currentCount -= (update.amount || 1);
+            }
+        });
+        return currentCount;
+    }, [speedyPawsTreatCount, optimisticUpdates]);
+
+    const displayedGuardianShieldCount = useMemo(() => {
+        let currentCount = guardianShieldCount;
+        optimisticUpdates.forEach(update => {
+            if (update.status === 'pending' && update.type === 'useItem' && update.itemId === '2') {
+                currentCount -= (update.amount || 1);
+            }
+        });
+        return currentCount;
+    }, [guardianShieldCount, optimisticUpdates]);
+
+    const displayedCoinMagnetTreatCount = useMemo(() => {
+        let currentCount = coinMagnetTreatCount;
+        optimisticUpdates.forEach(update => {
+            if (update.status === 'pending' && update.type === 'useItem' && update.itemId === '4') {
+                currentCount -= (update.amount || 1);
+            }
+        });
+        return currentCount;
+    }, [coinMagnetTreatCount, optimisticUpdates]);
+
 
     /**
      * Fetches player data from the backend API.
@@ -141,14 +209,16 @@ const GameUI: React.FC = () => {
                 setGuardianShieldCount(shieldCount);
                 setSpeedyPawsTreatCount(speedyCount);
                 setCoinMagnetTreatCount(magnetCount);
+                setOptimisticUpdates([]); // Clear optimistic updates on successful fetch
             } else {
-                throw new Error(data.error || 'Failed to fetch player data.');
+                console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.'); // Log error instead of throwing
             }
         } catch (error) {
-            console.error("Error fetching player data from backend:", error);
+            console.error("Network or unexpected error fetching player data from backend:", error);
             toast({ title: 'Data Sync Error', description: `Could not fetch player data: ${error}`, variant: 'destructive' });
             // Reset counts and balance on error or if not authenticated
             setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
+            setOptimisticUpdates(prev => prev.map(update => ({ ...update, status: 'failed' }))); // Mark pending as failed
         } finally {
             setIsFetchingPlayerUSDT(false);
         }
@@ -231,40 +301,49 @@ const GameUI: React.FC = () => {
             return;
         }
 
-        // Optimistically increment the player's game USDT balance
-        setPlayerGameUSDT(prev => prev + USDT_PER_COIN);
+        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        setOptimisticUpdates(prev => [...prev, {
+            id: updateId,
+            type: 'coin',
+            amount: USDT_PER_COIN,
+            timestamp: Date.now(),
+            status: 'pending'
+        }]);
 
         try {
-            const response = await fetchWithCsrf('/api/game/addCoin', { // استخدام fetchWithCsrf
+            const response = await fetchWithCsrf('/api/game/addCoin', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ amount: USDT_PER_COIN })
             });
             const data = await response.json();
 
             if (response.ok) {
-                // Backend confirmed, no need to update again unless there's a slight discrepancy
-                // For simplicity, we trust the optimistic update here. If backend returns a different value,
-                // fetchPlayerData will eventually sync it.
+                // On success, remove the optimistic update and re-fetch data to sync
+                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
+                fetchPlayerData();
             } else {
-                // If backend fails, rollback the local balance
-                setPlayerGameUSDT(prev => prev - USDT_PER_COIN);
-                throw new Error(data.error || 'Failed to add coin.');
+                // On failure, mark as failed or remove and show error
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                console.error("Backend error adding coin:", data.error || 'Failed to add coin.'); // Log error instead of throwing
             }
         } catch (error: any) {
-            console.error("Error adding coin to backend:", error);
+            console.error("Network or unexpected error adding coin to backend:", error);
             let errorMessage = `Could not update your total USDT balance: ${error.message || String(error)}`;
             if (error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
             toast({ title: 'Sync Error', description: errorMessage, variant: 'destructive' });
-            // Ensure rollback if an error occurs
-            setPlayerGameUSDT(prev => prev - USDT_PER_COIN);
+            // Ensure rollback by marking as failed if an error occurs
+            setOptimisticUpdates(prev => prev.map(update =>
+                update.id === updateId ? { ...update, status: 'failed' } : update
+            ));
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData]);
 
     /**
      * Callback function for when the remaining coins on the map update.
@@ -317,16 +396,17 @@ const GameUI: React.FC = () => {
      * Activates or extends the Speed Boost effect.
      */
     const activateSpeedBoost = useCallback((amount: number) => {
+        let currentIntervalId: NodeJS.Timeout | null = null;
         setSpeedBoostTimeLeft(prevTime => {
             const newTime = prevTime + (SPEED_BOOST_DURATION * amount);
             if (newTime > 0 && !isSpeedBoostActive) {
                 setIsSpeedBoostActive(true);
                 if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);
-                speedBoostIntervalRef.current = setInterval(() => {
+                currentIntervalId = setInterval(() => {
                     setSpeedBoostTimeLeft(pTime => {
                         if (pTime <= 1) {
-                            clearInterval(speedBoostIntervalRef.current!);
-                            speedBoostIntervalRef.current = null;
+                            clearInterval(currentIntervalId!);
+                            currentIntervalId = null;
                             setIsSpeedBoostActive(false);
                             setShouldShowSpeedBoostWoreOffToast(true);
                             return 0;
@@ -334,26 +414,37 @@ const GameUI: React.FC = () => {
                         return pTime - 1;
                     });
                 }, 1000);
+                speedBoostIntervalRef.current = currentIntervalId;
             }
             return newTime;
         });
         toast({ title: "Speed Boost Activated!", description: `You're running faster for ${SPEED_BOOST_DURATION * amount} seconds.` });
+
+        return () => { // Rollback function
+            if (currentIntervalId) clearInterval(currentIntervalId);
+            if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);
+            speedBoostIntervalRef.current = null;
+            setIsSpeedBoostActive(false);
+            setSpeedBoostTimeLeft(0);
+            toast({ title: "Speed Boost Rolled Back", description: "The speed boost was cancelled due to a backend error.", variant: "destructive" });
+        };
     }, [isSpeedBoostActive, toast]);
 
     /**
      * Activates or extends the Guardian Shield effect.
      */
     const activateGuardianShield = useCallback((amount: number) => {
+        let currentIntervalId: NodeJS.Timeout | null = null;
         setShieldTimeLeft(prevTime => {
             const newTime = prevTime + (SHIELD_DURATION * amount);
             if (newTime > 0 && !isShieldActive) {
                 setIsShieldActive(true);
                 if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
-                shieldIntervalRef.current = setInterval(() => {
+                currentIntervalId = setInterval(() => {
                     setShieldTimeLeft(pTime => {
                         if (pTime <= 1) {
-                            clearInterval(shieldIntervalRef.current!);
-                            shieldIntervalRef.current = null;
+                            clearInterval(currentIntervalId!);
+                            currentIntervalId = null;
                             setIsShieldActive(false);
                             setShouldShowShieldWoreOffToast(true);
                             return 0;
@@ -361,26 +452,37 @@ const GameUI: React.FC = () => {
                         return pTime - 1;
                     });
                 }, 1000);
+                shieldIntervalRef.current = currentIntervalId;
             }
             return newTime;
         });
         toast({ title: "Guardian Shield Activated!", description: `You're protected for ${SHIELD_DURATION * amount} seconds.` });
+
+        return () => { // Rollback function
+            if (currentIntervalId) clearInterval(currentIntervalId);
+            if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
+            shieldIntervalRef.current = null;
+            setIsShieldActive(false);
+            setShieldTimeLeft(0);
+            toast({ title: "Guardian Shield Rolled Back", description: "The shield was cancelled due to a backend error.", variant: "destructive" });
+        };
     }, [isShieldActive, toast]);
 
     /**
      * Activates or extends the Coin Magnet effect.
      */
     const activateCoinMagnet = useCallback((amount: number) => {
+        let currentIntervalId: NodeJS.Timeout | null = null;
         setCoinMagnetTimeLeft(prevTime => {
             const newTime = prevTime + (COIN_MAGNET_DURATION * amount);
             if (newTime > 0 && !isCoinMagnetActive) {
                 setIsCoinMagnetActive(true);
                 if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
-                coinMagnetIntervalRef.current = setInterval(() => {
+                currentIntervalId = setInterval(() => {
                     setCoinMagnetTimeLeft(pTime => {
                         if (pTime <= 1) {
-                            clearInterval(coinMagnetIntervalRef.current!);
-                            coinMagnetIntervalRef.current = null;
+                            clearInterval(currentIntervalId!);
+                            currentIntervalId = null;
                             setIsCoinMagnetActive(false);
                             setShouldShowCoinMagnetWoreOffToast(true);
                             return 0;
@@ -388,10 +490,20 @@ const GameUI: React.FC = () => {
                         return pTime - 1;
                     });
                 }, 1000);
+                coinMagnetIntervalRef.current = currentIntervalId;
             }
             return newTime;
         });
         toast({ title: "Coin Magnet Activated!", description: `Collecting nearby coins for ${COIN_MAGNET_DURATION * amount} seconds.` });
+
+        return () => { // Rollback function
+            if (currentIntervalId) clearInterval(currentIntervalId);
+            if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
+            coinMagnetIntervalRef.current = null;
+            setIsCoinMagnetActive(false);
+            setCoinMagnetTimeLeft(0);
+            toast({ title: "Coin Magnet Rolled Back", description: "The coin magnet was cancelled due to a backend error.", variant: "destructive" });
+        };
     }, [isCoinMagnetActive, toast]);
 
     /**
@@ -409,7 +521,7 @@ const GameUI: React.FC = () => {
 
         // Determine which item to consume based on the provided ID
         let itemDefinition: StoreItemDefinition | undefined;
-        let activationFunction: ((amount: number) => void) | undefined; // Updated type
+        let activationFunction: ((amount: number) => (() => void)) | undefined; // Updated type to return rollback function
         let currentItemCount = 0;
 
         if (itemIdToConsume === '3') {
@@ -435,149 +547,173 @@ const GameUI: React.FC = () => {
             toast({ title: 'No Items Left', description: `You don't have enough ${itemDefinition.name}. You have ${currentItemCount}, but tried to use ${amountToUse}.`, variant: 'destructive'}); return;
         }
 
-        // Optimistically decrement the item count
-        if (itemIdToConsume === '3') {
-            setSpeedyPawsTreatCount(prev => prev - amountToUse);
-        } else if (itemIdToConsume === '2') {
-            setGuardianShieldCount(prev => prev - amountToUse);
-        } else if (itemIdToConsume === '4') {
-            setCoinMagnetTreatCount(prev => prev - amountToUse);
+        let rollbackEffect: (() => void) | undefined;
+
+        // Optimistically activate the effect and get its rollback function
+        if (activationFunction) {
+            rollbackEffect = activationFunction(amountToUse);
         }
 
+        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        setOptimisticUpdates(prev => [...prev, {
+            id: updateId,
+            type: 'useItem',
+            itemId: itemIdToConsume,
+            amount: amountToUse,
+            timestamp: Date.now(),
+            status: 'pending',
+            rollbackEffect: rollbackEffect // Store the rollback function
+        }]);
+
         try {
-            const response = await fetchWithCsrf('/api/game/useItem', { // استخدام fetchWithCsrf
+            const response = await fetchWithCsrf('/api/game/useItem', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
-                body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse }) // Pass amount
+                body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse })
             });
             const data = await response.json();
 
             if (response.ok) {
-                if(activationFunction) activationFunction(amountToUse); // Pass amount to activation function
                 toast({ title: 'Item Used!', description: `${amountToUse} ${itemDefinition.name}(s) consumed.`, variant: 'default' });
-                fetchPlayerData(); // Re-fetch inventory to ensure sync
+                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
+                fetchPlayerData();
             } else {
-                // If backend fails, rollback the local count
-                if (itemIdToConsume === '3') {
-                    setSpeedyPawsTreatCount(prev => prev + amountToUse);
-                } else if (itemIdToConsume === '2') {
-                    setGuardianShieldCount(prev => prev + amountToUse);
-                } else if (itemIdToConsume === '4') {
-                    setCoinMagnetTreatCount(prev => prev + amountToUse);
-                }
-                throw new Error(data.error || `Failed to use ${itemDefinition.name}.`);
+                // If backend fails, rollback the local count and the effect
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                if (rollbackEffect) rollbackEffect(); // Call rollback effect
+                console.error("Backend error using item:", data.error || `Failed to use ${itemDefinition.name}.`); // Log error instead of throwing
             }
         } catch (error: any) {
-            console.error("Error using item via backend:", error);
+            console.error("Network or unexpected error using item via backend:", error);
             let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error.message || String(error)}`;
             if (error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
             toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
-            // Ensure rollback if an error occurs
-            if (itemIdToConsume === '3') {
-                setSpeedyPawsTreatCount(prev => prev + amountToUse);
-            } else if (itemIdToConsume === '2') {
-                setGuardianShieldCount(prev => prev + amountToUse);
-            } else if (itemIdToConsume === '4') {
-                setCoinMagnetTreatCount(prev => prev + amountToUse);
-            }
+            setOptimisticUpdates(prev => prev.map(update =>
+                update.id === updateId ? { ...update, status: 'failed' } : update
+            ));
+            if (rollbackEffect) rollbackEffect(); // Call rollback effect
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, speedyPawsTreatCount, guardianShieldCount, coinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData]);
 
     /**
      * Handles the withdrawal of USDT from the player's game balance via backend API.
      */
     const handleWithdrawUSDT = useCallback(async () => {
-        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || playerGameUSDT < MIN_WITHDRAWAL_USDT) {
-            toast({ title: "Withdrawal Unavailable", description: `Please connect and authenticate your wallet, and ensure you have at least ${MIN_WITHDRAWAL_USDT} USDT. Your balance: ${playerGameUSDT.toFixed(4)} USDT`, variant: "destructive" }); return;
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedPlayerGameUSDT < MIN_WITHDRAWAL_USDT) { // Use displayed value for check
+            toast({ title: "Withdrawal Unavailable", description: `Please connect and authenticate your wallet, and ensure you have at least ${MIN_WITHDRAWAL_USDT} USDT. Your balance: ${displayedPlayerGameUSDT.toFixed(4)} USDT`, variant: "destructive" }); return;
         }
-
 
         setIsWithdrawing(true);
         toast({ title: "Initiating Withdrawal...", description: "Processing your request." });
 
-        // Optimistically decrement the player's game USDT balance
-        const oldBalance = playerGameUSDT;
-        setPlayerGameUSDT(prev => Math.max(0, prev - MIN_WITHDRAWAL_USDT));
+        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        setOptimisticUpdates(prev => [...prev, {
+            id: updateId,
+            type: 'withdraw',
+            amount: MIN_WITHDRAWAL_USDT,
+            timestamp: Date.now(),
+            status: 'pending'
+        }]);
 
         try {
-            const response = await fetchWithCsrf('/api/game/withdrawUSDT', { // استخدام fetchWithCsrf
+            const response = await fetchWithCsrf('/api/game/withdrawUSDT', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ amount: MIN_WITHDRAWAL_USDT })
             });
             const data = await response.json();
 
             if (response.ok) {
-                // Backend confirmed, no need to update again unless there's a slight discrepancy
-                // For simplicity, we trust the optimistic update here. If backend returns a different value,
-                // fetchPlayerData will eventually sync it.
+                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
                 toast({ title: "Withdrawal Successful", description: `${MIN_WITHDRAWAL_USDT} USDT withdrawn.`, duration: 7000 });
+                fetchPlayerData();
             } else {
-                // If backend fails, rollback the local balance
-                setPlayerGameUSDT(oldBalance);
-                throw new Error(data.error || 'Withdrawal failed.');
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                console.error("Backend error withdrawing USDT:", data.error || 'Withdrawal failed.'); // Log error instead of throwing
             }
         } catch (error: any) {
-            console.error("Error withdrawing USDT via backend:", error);
+            console.error("Network or unexpected error withdrawing USDT via backend:", error);
             let errorMessage = `Withdrawal failed: ${error.message || String(error)}`;
             if (error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
             toast({ title: "Withdrawal Error", description: errorMessage, variant: "destructive" });
-            // Ensure rollback if an error occurs
-            setPlayerGameUSDT(oldBalance);
+            setOptimisticUpdates(prev => prev.map(update =>
+                update.id === updateId ? { ...update, status: 'failed' } : update
+            ));
         } finally {
             setIsWithdrawing(false);
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, playerGameUSDT, toast]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedPlayerGameUSDT, toast, fetchPlayerData]);
 
     /**
      * Handles the consumption of a Protection Bone via backend API.
      */
     const handleConsumeProtectionBone = useCallback(async () => {
-        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || protectionBoneCount <= 0) {
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBoneCount <= 0) { // Use displayed value for check
             toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet, or you have no bones left.', variant: 'destructive' });
             return;
         }
 
-        // Optimistically decrement the count
-        setProtectionBoneCount(prev => prev - 1);
+        // Prevent multiple bone consumption requests if one is already pending
+        const isBoneConsumptionPending = optimisticUpdates.some(
+            update => update.type === 'consumeBone' && update.status === 'pending'
+        );
+        if (isBoneConsumptionPending) {
+            console.warn("Attempted to consume bone while another bone consumption is pending. Ignoring.");
+            return; // Prevent duplicate requests
+        }
+
+        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        setOptimisticUpdates(prev => [...prev, {
+            id: updateId,
+            type: 'consumeBone',
+            amount: 1, // Consuming 1 bone
+            timestamp: Date.now(),
+            status: 'pending'
+        }]);
 
         try {
-            const response = await fetchWithCsrf('/api/game/consumeProtectionBone', { // استخدام fetchWithCsrf
+            const response = await fetchWithCsrf('/api/game/consumeProtectionBone', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 }
             });
             const data = await response.json();
 
             if (response.ok) {
                 toast({ title: 'Protected!', description: 'A Protection Bone was used!', variant: 'default' });
-                fetchPlayerData(); // Re-fetch inventory to ensure sync
+                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
+                fetchPlayerData();
             } else {
-                // If backend fails, rollback the local count
-                setProtectionBoneCount(prev => prev + 1);
-                throw new Error(data.error || 'Failed to consume protection bone.');
+                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId)); // REMOVE optimistic update as if it succeeded
+                console.error("Backend error consuming protection bone:", data.error || 'Failed to consume protection bone.');
+                toast({ title: 'Failed to Use Bone', description: `Could not consume Protection Bone. Backend error: ${data.error || 'Unknown error'}`, variant: 'destructive' });
+                // DO NOT CALL fetchPlayerData() here, to prevent UI "increase"
             }
         } catch (error: any) {
-            console.error("Error consuming protection bone via backend:", error);
-            let errorMessage = `Could not consume Protection Bone. Error: ${error.message || String(error)}`;
-            if (error.message && error.message.includes('CSRF token missing')) {
+            // Network or unexpected error: Treat as consumed from UI perspective, but log error
+            setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId)); // REMOVE optimistic update as if it succeeded
+            console.error("Network or unexpected error consuming protection bone via backend:", error);
+            let errorMessage = `Could not consume Protection Bone. Network error: ${error.message || String(error)}`;
+            if (error.message && errorMessage.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
             toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
+            // DO NOT CALL fetchPlayerData() here, to prevent UI "increase"
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, protectionBoneCount, toast, fetchPlayerData]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBoneCount, toast, fetchPlayerData, optimisticUpdates]);
 
     /**
      * Applies a penalty to the player's game USDT balance upon enemy collision via backend API.
@@ -588,42 +724,49 @@ const GameUI: React.FC = () => {
             return;
         }
 
-        // Optimistically decrement the player's game USDT balance
-        setPlayerGameUSDT(prev => Math.max(0, prev - ENEMY_COLLISION_PENALTY_USDT));
         toast({ title: 'Ouch!', description: `Lost ${ENEMY_COLLISION_PENALTY_USDT.toFixed(4)} USDT from enemy collision!`, variant: 'destructive' });
 
+        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        setOptimisticUpdates(prev => [...prev, {
+            id: updateId,
+            type: 'penalty',
+            amount: ENEMY_COLLISION_PENALTY_USDT,
+            timestamp: Date.now(),
+            status: 'pending'
+        }]);
+
         try {
-            const response = await fetchWithCsrf('/api/game/applyPenalty', { // استخدام fetchWithCsrf
+            const response = await fetchWithCsrf('/api/game/applyPenalty', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${authUser.publicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
                 },
                 body: JSON.stringify({ amount: ENEMY_COLLISION_PENALTY_USDT })
             });
             const data = await response.json();
 
             if (response.ok) {
-                // Backend confirmed, no need to update again unless there's a slight discrepancy
-                // For simplicity, we trust the optimistic update here. If backend returns a different value,
-                // fetchPlayerData will eventually sync it.
+                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
+                fetchPlayerData();
             } else {
-                // If backend fails, rollback the local balance
-                setPlayerGameUSDT(prev => prev + ENEMY_COLLISION_PENALTY_USDT);
-                throw new Error(data.error || 'Failed to apply penalty.');
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                console.error("Backend error applying enemy collision penalty:", data.error || 'Failed to apply penalty.'); // Log error instead of throwing
             }
 
         } catch (error: any) {
-            console.error("Error applying enemy collision penalty via backend:", error);
+            console.error("Network or unexpected error applying enemy collision penalty via backend:", error);
             let errorMessage = `Could not apply penalty. Error: ${error.message || String(error)}`;
             if (error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
             toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
-            // Ensure rollback if an error occurs
-            setPlayerGameUSDT(prev => prev + ENEMY_COLLISION_PENALTY_USDT);
+            setOptimisticUpdates(prev => prev.map(update =>
+                update.id === updateId ? { ...update, status: 'failed' } : update
+            ));
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData]);
 
 
     return (
@@ -643,7 +786,7 @@ const GameUI: React.FC = () => {
                     onCanvasTouchStart={handleCanvasTouchStart}
                     onCanvasTouchMove={handleCanvasTouchMove}
                     onCanvasTouchEnd={handleCanvasTouchEnd}
-                    protectionBoneCount={protectionBoneCount}
+                    protectionBoneCount={displayedProtectionBoneCount}
                     onConsumeProtectionBone={handleConsumeProtectionBone}
                     onEnemyCollisionPenalty={handleEnemyCollisionPenalty}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
@@ -654,7 +797,7 @@ const GameUI: React.FC = () => {
                     sessionCollectedUSDT={sessionCollectedUSDT}
                     remainingCoinsOnMap={remainingCoinsOnMap}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
-                    protectionBoneCount={protectionBoneCount}
+                    protectionBoneCount={displayedProtectionBoneCount}
                     protectionBoneDef={protectionBoneDef}
                     isSpeedBoostActive={isSpeedBoostActive}
                     speedBoostTimeLeft={speedBoostTimeLeft}
@@ -665,9 +808,9 @@ const GameUI: React.FC = () => {
                     speedyPawsTreatDef={speedyPawsTreatDef}
                     guardianShieldDef={guardianShieldDef}
                     coinMagnetTreatDef={coinMagnetTreatDef}
-                    speedyPawsTreatCount={speedyPawsTreatCount}
-                    guardianShieldCount={guardianShieldCount}
-                    coinMagnetTreatCount={coinMagnetTreatCount}
+                    speedyPawsTreatCount={displayedSpeedyPawsTreatCount}
+                    guardianShieldCount={displayedGuardianShieldCount}
+                    coinMagnetTreatCount={displayedCoinMagnetTreatCount}
                     onUseConsumableItem={handleUseConsumableItem}
                     isGameEffectivelyPaused={isGameEffectivelyPaused}
                     isWalletMismatch={isWalletMismatch}
@@ -742,7 +885,7 @@ const GameUI: React.FC = () => {
                                 sessionPublicKey={sessionPublicKey}
                                 adapterPublicKey={adapterPublicKey}
                                 isFetchingPlayerUSDT={isFetchingPlayerUSDT}
-                                playerGameUSDT={playerGameUSDT}
+                                playerGameUSDT={displayedPlayerGameUSDT}
                                 MIN_WITHDRAWAL_USDT={MIN_WITHDRAWAL_USDT}
                                 isWithdrawing={isWithdrawing}
                                 onWithdrawUSDT={handleWithdrawUSDT}
@@ -763,6 +906,10 @@ const GameUI: React.FC = () => {
                         <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
                            <PlayerInventory
                                 onUseConsumableItem={handleUseConsumableItem}
+                                speedyPawsTreatCount={displayedSpeedyPawsTreatCount}
+                                guardianShieldCount={displayedGuardianShieldCount}
+                                protectionBoneCount={displayedProtectionBoneCount}
+                                coinMagnetTreatCount={displayedCoinMagnetTreatCount}
                            />
                         </SheetContent>
                     </Sheet>

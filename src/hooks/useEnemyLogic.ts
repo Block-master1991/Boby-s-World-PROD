@@ -24,12 +24,19 @@ export const useEnemyLogic = ({
   sceneRef,
   dogModelRef,
   isShieldActiveRef,
-  protectionBoneCountRef, // Changed back to ref
+  protectionBoneCountRef,
   onConsumeProtectionBone,
   onEnemyCollisionPenalty,
   isPausedRef,
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<THREE.Mesh[]>([]);
+  // Internal optimistic bone count for immediate game logic within a single frame
+  const internalOptimisticProtectionBoneCountRef = React.useRef(protectionBoneCountRef.current);
+
+  // Sync internal optimistic count with the prop's current value on each render
+  React.useEffect(() => {
+    internalOptimisticProtectionBoneCountRef.current = protectionBoneCountRef.current;
+  }, [protectionBoneCountRef.current]);
 
   const initializeEnemies = React.useCallback(() => {
     if (!sceneRef.current) return;
@@ -94,8 +101,9 @@ export const useEnemyLogic = ({
 
           if (isShieldActiveRef.current) {
             // Shield active: enemy "dies", no penalty to player
-          } else if (protectionBoneCountRef.current > 0) { // Use ref's current value
-            onConsumeProtectionBone(); // Consume a bone
+          } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
+            internalOptimisticProtectionBoneCountRef.current--; // Optimistically decrement locally for immediate game logic
+            onConsumeProtectionBone(); // Call UI to update its optimistic state and backend
           } else {
             onEnemyCollisionPenalty(); // Apply penalty to player
           }

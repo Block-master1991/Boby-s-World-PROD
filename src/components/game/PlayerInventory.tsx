@@ -19,101 +19,67 @@ interface AggregatedInventoryItem {
 }
 
 interface PlayerInventoryProps {
-    onUseConsumableItem: (itemId: string, amount: number) => Promise<void>; // Updated to accept amount
+    onUseConsumableItem: (itemId: string, amount: number) => Promise<void>;
+    speedyPawsTreatCount: number;
+    guardianShieldCount: number;
+    protectionBoneCount: number;
+    coinMagnetTreatCount: number;
 }
 
 const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     onUseConsumableItem,
+    speedyPawsTreatCount,
+    guardianShieldCount,
+    protectionBoneCount,
+    coinMagnetTreatCount,
 }) => {
     const { toast } = useToast();
-    const [aggregatedInventory, setAggregatedInventory] = useState<AggregatedInventoryItem[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
-    const [playerData, setPlayerData] = useState<{ inventory: any[]; gameUSDTBalance: number } | null>(null);
+    const [isLoading, setIsLoading] = useState(false); // Inventory counts are now passed as props, no need to fetch here
     const [error, setError] = useState<string | null>(null);
     // New state to manage quantity to use for each item
     const [quantitiesToUse, setQuantitiesToUse] = useState<Record<string, number>>({});
 
+    // Aggregate inventory items based on passed counts
+    const aggregatedInventory = React.useMemo(() => {
+        const items: AggregatedInventoryItem[] = [];
+        if (protectionBoneCount > 0) {
+            const def = storeItems.find(item => item.id === '1');
+            if (def) items.push({ definition: def, count: protectionBoneCount });
+        }
+        if (guardianShieldCount > 0) {
+            const def = storeItems.find(item => item.id === '2');
+            if (def) items.push({ definition: def, count: guardianShieldCount });
+        }
+        if (speedyPawsTreatCount > 0) {
+            const def = storeItems.find(item => item.id === '3');
+            if (def) items.push({ definition: def, count: speedyPawsTreatCount });
+        }
+        if (coinMagnetTreatCount > 0) {
+            const def = storeItems.find(item => item.id === '4');
+            if (def) items.push({ definition: def, count: coinMagnetTreatCount });
+        }
+        return items;
+    }, [protectionBoneCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
+
+    // Initialize quantitiesToUse when aggregatedInventory changes
     useEffect(() => {
-        const fetchInventory = async () => {
-            setIsLoading(true);
-            setError(null);
-            try {
-                const response = await fetch('/api/game/fetchPlayerData');
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to fetch player data.');
-                }
-                const data = await response.json();
-                setPlayerData(data);
-
-                const currentRawInventory: any[] = Array.isArray(data.inventory) ? data.inventory : [];
-                
-                const itemCounts: Record<string, { definition: StoreItemDefinition, count: number }> = {};
-
-                currentRawInventory.forEach((entry: any) => {
-                    let itemId: string | undefined;
-                    let itemDefinition: StoreItemDefinition | undefined;
-
-                    if (typeof entry === 'string') {
-                        itemDefinition = storeItems.find(si => si.name === entry);
-                        itemId = itemDefinition?.id;
-                    } else if (typeof entry === 'object' && entry !== null && typeof entry.id === 'string') {
-                        itemId = entry.id;
-                        itemDefinition = storeItems.find(si => si.id === itemId);
-                    }
-
-                    if (itemId && itemDefinition) {
-                        if (itemCounts[itemId]) {
-                            itemCounts[itemId].count++;
-                        } else {
-                            itemCounts[itemId] = { definition: itemDefinition, count: 1 };
-                        }
-                    } else {
-                        console.warn(`[PlayerInventory] Unrecognized item or definition not found in storeItems for inventory entry:`, entry);
-                    }
-                });
-
-                const processedItems: AggregatedInventoryItem[] = Object.values(itemCounts)
-                    .filter((item): item is { definition: StoreItemDefinition, count: number } => item.definition !== undefined)
-                    .map(item => ({ definition: item.definition, count: item.count }));
-
-                setAggregatedInventory(processedItems);
-
-                // Initialize quantitiesToUse for each item to 1 or 0 if not available
-                const initialQuantities: Record<string, number> = {};
-                processedItems.forEach(item => {
-                    initialQuantities[item.definition.id] = item.count > 0 ? 1 : 0;
-                });
-                setQuantitiesToUse(initialQuantities);
-
-            } catch (err: any) {
-                console.error("[PlayerInventory] Error fetching inventory:", err);
-                setError(err.message);
-                toast({ title: 'Inventory Error', description: err.message, variant: 'destructive' });
-                setAggregatedInventory([]);
-            } finally {
-                setIsLoading(false);
-            }
-        };
-
-        fetchInventory();
-    }, [toast]);
+        const initialQuantities: Record<string, number> = {};
+        aggregatedInventory.forEach(item => {
+            initialQuantities[item.definition.id] = item.count > 0 ? 1 : 0;
+        });
+        setQuantitiesToUse(initialQuantities);
+    }, [aggregatedInventory]);
     
-    // Helper to get current count for a specific item ID from fetched playerData
+    // Helper to get current count for a specific item ID from props
     const getItemCount = useCallback((itemId: string) => {
-        if (!playerData || !Array.isArray(playerData.inventory)) return 0;
-        
-        // Count occurrences of the item in the raw inventory array
-        return playerData.inventory.filter(entry => {
-            if (typeof entry === 'string') {
-                const itemDef = storeItems.find(si => si.name === entry);
-                return itemDef?.id === itemId;
-            } else if (typeof entry === 'object' && entry !== null && typeof entry.id === 'string') {
-                return entry.id === itemId;
-            }
-            return false;
-        }).length;
-    }, [playerData]);
+        switch (itemId) {
+            case '1': return protectionBoneCount;
+            case '2': return guardianShieldCount;
+            case '3': return speedyPawsTreatCount;
+            case '4': return coinMagnetTreatCount;
+            default: return 0;
+        }
+    }, [protectionBoneCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
 
     // Handlers for quantity input
     const handleQuantityChange = useCallback((itemId: string, value: number) => {
