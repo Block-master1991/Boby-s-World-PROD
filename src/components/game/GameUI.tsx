@@ -66,6 +66,9 @@ const GameUI: React.FC = () => {
 
     // New State for pending optimistic updates
     const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate[]>([]);
+    // Queue for bone consumption requests
+    const boneConsumptionQueueRef = useRef<Array<{ id: string; resolve: (success: boolean) => void; reject: (error: any) => void }>>([]);
+    const isProcessingBoneQueueRef = useRef(false);
 
     // Game Effect States
     const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -660,60 +663,94 @@ const GameUI: React.FC = () => {
      * Handles the consumption of a Protection Bone via backend API.
      */
     const handleConsumeProtectionBone = useCallback(async () => {
-        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBoneCount <= 0) { // Use displayed value for check
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBoneCount <= 0) {
             toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet, or you have no bones left.', variant: 'destructive' });
             return;
         }
 
-        // Prevent multiple bone consumption requests if one is already pending
-        const isBoneConsumptionPending = optimisticUpdates.some(
-            update => update.type === 'consumeBone' && update.status === 'pending'
-        );
-        if (isBoneConsumptionPending) {
-            console.warn("Attempted to consume bone while another bone consumption is pending. Ignoring.");
-            return; // Prevent duplicate requests
-        }
-
         const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+
+        // Add optimistic update immediately
         setOptimisticUpdates(prev => [...prev, {
             id: updateId,
             type: 'consumeBone',
-            amount: 1, // Consuming 1 bone
+            amount: 1,
             timestamp: Date.now(),
             status: 'pending'
         }]);
 
-        try {
-            const response = await fetchWithCsrf('/api/game/consumeProtectionBone', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
+        // Enqueue the request
+        boneConsumptionQueueRef.current.push({
+            id: updateId,
+            resolve: (success) => {
+                if (success) {
+                    toast({ title: 'Protected!', description: 'A Protection Bone was used!', variant: 'default' });
+                } else {
+                    // Error toast is handled by processBoneConsumptionQueue
                 }
-            });
-            const data = await response.json();
+            },
+            reject: (error) => {
+                // Error toast is handled by processBoneConsumptionQueue
+            }
+        });
 
-            if (response.ok) {
-                toast({ title: 'Protected!', description: 'A Protection Bone was used!', variant: 'default' });
-                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
-                fetchPlayerData();
-            } else {
-                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId)); // REMOVE optimistic update as if it succeeded
-                console.error("Backend error consuming protection bone:", data.error || 'Failed to consume protection bone.');
-                toast({ title: 'Failed to Use Bone', description: `Could not consume Protection Bone. Backend error: ${data.error || 'Unknown error'}`, variant: 'destructive' });
-                // DO NOT CALL fetchPlayerData() here, to prevent UI "increase"
-            }
-        } catch (error: any) {
-            // Network or unexpected error: Treat as consumed from UI perspective, but log error
-            setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId)); // REMOVE optimistic update as if it succeeded
-            console.error("Network or unexpected error consuming protection bone via backend:", error);
-            let errorMessage = `Could not consume Protection Bone. Network error: ${error.message || String(error)}`;
-            if (error.message && errorMessage.includes('CSRF token missing')) {
-                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-            }
-            toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
-            // DO NOT CALL fetchPlayerData() here, to prevent UI "increase"
+        // Trigger queue processing if not already running
+        if (!isProcessingBoneQueueRef.current) {
+            processBoneConsumptionQueue();
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBoneCount, toast, fetchPlayerData, optimisticUpdates]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBoneCount, toast, optimisticUpdates]);
+
+    // New function to process the bone consumption queue
+    const processBoneConsumptionQueue = useCallback(async () => {
+        if (isProcessingBoneQueueRef.current || boneConsumptionQueueRef.current.length === 0) {
+            return;
+        }
+
+        isProcessingBoneQueueRef.current = true;
+
+        while (boneConsumptionQueueRef.current.length > 0) {
+            const { id: updateId, resolve, reject } = boneConsumptionQueueRef.current[0]; // Peek at the first item
+
+            try {
+                const response = await fetchWithCsrf('/api/game/consumeProtectionBone', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+                const data = await response.json();
+
+                if (response.ok) {
+                    setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId)); // Remove on success
+                    resolve(true);
+                } else {
+                    setOptimisticUpdates(prev => prev.map(update =>
+                        update.id === updateId ? { ...update, status: 'failed' } : update
+                    ));
+                    console.error("Backend error consuming protection bone:", data.error || 'Failed to consume protection bone.');
+                    let errorMessage = `Could not consume Protection Bone. Backend error: ${data.error || 'Unknown error'}`;
+                    toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
+                    resolve(false); // Indicate failure
+                }
+            } catch (error: any) {
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                console.error("Network or unexpected error consuming protection bone via backend:", error);
+                let errorMessage = `Could not consume Protection Bone. Network error: ${error.message || String(error)}`;
+                if (error.message && errorMessage.includes('CSRF token missing')) {
+                    errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                }
+                toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
+                reject(error); // Indicate failure
+            } finally {
+                boneConsumptionQueueRef.current.shift(); // Remove the processed item from queue
+                fetchPlayerData(); // Always re-sync after each request in the queue
+            }
+        }
+
+        isProcessingBoneQueueRef.current = false;
+    }, [isAuthenticated, authUser?.publicKey, toast, fetchPlayerData, optimisticUpdates]);
 
     /**
      * Applies a penalty to the player's game USDT balance upon enemy collision via backend API.
