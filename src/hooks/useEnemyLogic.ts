@@ -1,23 +1,64 @@
-
 'use client';
 
 import * as React from 'react';
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 
-const ENEMY_COUNT = 500;
 const ENEMY_SPEED = 0.03;
-const ENEMY_COLLISION_THRESHOLD = 0.8; // Distance for collision
-const OBJECT_DISTRIBUTION_AREA = 590; // Same as coins for consistency
+const ENEMY_ATTACK_DISTANCE = 1.5; // Distance for enemy to stop and attack
+const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5; // Distance at which enemy dies after attack
+const ENEMY_DEATH_DURATION = 5.0; // Duration for death animation
+const ENEMY_PROTECTION_RADIUS = 10; // Radius around the coin where enemies patrol
+const ENEMY_CHASE_RADIUS = 15; // Radius around the coin where enemies start chasing the player
+const CROSSFADE_DURATION = 0.2;
+
+const ENEMY_ANIMATION_NAMES = {
+  CARNIVORE: {
+    IDLE: ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'],
+    WALK: 'Walk',
+    GALLOP: 'Gallop',
+    ATTACK: 'Attack',
+    DEATH: 'Death',
+  },
+  HERBIVORE: {
+    IDLE: ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'],
+    WALK: 'Walk',
+    GALLOP: 'Gallop',
+    ATTACK: 'Attack_Kick',
+    DEATH: 'Death',
+  },
+};
+
+interface EnemyData extends THREE.Group {
+  targetCoinPosition: THREE.Vector3;
+  patrolCenter: THREE.Vector3;
+  patrolTarget: THREE.Vector3;
+  isIdling: boolean;
+  idleTimer: number;
+  idleDuration: number;
+  isAttacking: boolean;
+  isDying: boolean;
+  deathTimer: number;
+  mixer: THREE.AnimationMixer;
+  animations: THREE.AnimationClip[];
+  enemyType: 'carnivore' | 'herbivore';
+  currentAction: THREE.AnimationAction | null;
+  actions: { [key: string]: THREE.AnimationAction };
+}
 
 interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   dogModelRef: MutableRefObject<THREE.Group | null>;
   isShieldActiveRef: MutableRefObject<boolean>;
-  protectionBoneCountRef: MutableRefObject<number>; // Changed back to ref
+  protectionBoneCountRef: MutableRefObject<number>;
   onConsumeProtectionBone: () => void;
   onEnemyCollisionPenalty: () => void;
   isPausedRef: MutableRefObject<boolean>;
+  coinMeshesRef: MutableRefObject<THREE.Mesh[]>; // Added coinMeshesRef
+  onCoinCollected: () => void; // Added onCoinCollected to kill enemies
+  onAttackAnimationFinished: (event: THREE.Event) => void; // Add onAttackAnimationFinished prop
 }
 
 export const useEnemyLogic = ({
@@ -28,41 +69,147 @@ export const useEnemyLogic = ({
   onConsumeProtectionBone,
   onEnemyCollisionPenalty,
   isPausedRef,
+  coinMeshesRef, // Destructure new prop
+  onCoinCollected, // Destructure new prop
+  onAttackAnimationFinished, // Destructure new prop
 }: UseEnemyLogicProps) => {
-  const enemyMeshesRef = React.useRef<THREE.Mesh[]>([]);
-  // Internal optimistic bone count for immediate game logic within a single frame
+  const enemyMeshesRef = React.useRef<EnemyData[]>([]);
   const internalOptimisticProtectionBoneCountRef = React.useRef(protectionBoneCountRef.current);
+  const gltfLoader = React.useRef<GLTFLoader | null>(null);
+  const clock = React.useRef(new THREE.Clock()); // Add clock
 
-  // Sync internal optimistic count with the prop's current value on each render
   React.useEffect(() => {
     internalOptimisticProtectionBoneCountRef.current = protectionBoneCountRef.current;
   }, [protectionBoneCountRef.current]);
 
-  const initializeEnemies = React.useCallback(() => {
-    if (!sceneRef.current) return;
+  React.useEffect(() => {
+    const dracoLoader = new DRACOLoader();
+    dracoLoader.setDecoderPath('/libs/draco/gltf/');
+    gltfLoader.current = new GLTFLoader();
+    gltfLoader.current.setDRACOLoader(dracoLoader);
+  }, []);
+
+  const loadEnemyModel = React.useCallback(async (type: 'carnivore' | 'herbivore') => {
+    if (!gltfLoader.current) return null;
+
+    const models = type === 'carnivore'
+      ? ['Fox.glb', 'Husky.glb', 'ShibaInu.glb', 'Wolf.glb']
+      : ['Alpaca.glb', 'Bull.glb', 'Cow.glb', 'Deer.glb', 'Donkey.glb', 'Horse_White.glb', 'Horse.glb', 'Stag.glb'];
+
+    const randomModel = models[Math.floor(Math.random() * models.length)];
+    const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${randomModel}`;
+
+    return new Promise<THREE.Group>((resolve, reject) => {
+      gltfLoader.current?.load(modelPath, (gltf: { scene: THREE.Group; animations: THREE.AnimationClip[] }) => {
+        const model = gltf.scene;
+        // Ensure animations are directly accessible on the model object
+        (model as any).animations = gltf.animations;
+        model.traverse((child: THREE.Object3D) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+        resolve(model);
+      }, undefined, reject);
+    });
+  }, []);
+
+  const initializeEnemies = React.useCallback(async () => {
+    if (!sceneRef.current || !coinMeshesRef.current || !gltfLoader.current) return;
     const scene = sceneRef.current;
 
-    // Clear previous enemies if any
-    enemyMeshesRef.current.forEach(enemy => scene.remove(enemy));
+    enemyMeshesRef.current.forEach(enemy => {
+      enemy.mixer.stopAllAction();
+      scene.remove(enemy);
+    });
     enemyMeshesRef.current = [];
 
-    const enemyGeometry = new THREE.BoxGeometry(1, 2, 1); // Simple cube for enemy
-    const enemyMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 }); // Red color
+    for (const coin of coinMeshesRef.current) {
+      if (coin.visible) {
+        const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
+        const enemyModels: THREE.Group[] = [];
 
-    for (let i = 0; i < ENEMY_COUNT; i++) {
-      const enemyMesh = new THREE.Mesh(enemyGeometry, enemyMaterial);
-      const enemyX = (Math.random() - 0.5) * (OBJECT_DISTRIBUTION_AREA * 0.8); // Slightly smaller area than coins
-      const enemyZ = (Math.random() - 0.5) * (OBJECT_DISTRIBUTION_AREA * 0.8);
-      const enemyY = 1; // Height of the enemy (center point)
-      enemyMesh.position.set(enemyX, enemyY, enemyZ);
-      enemyMesh.castShadow = true;
-      enemyMesh.receiveShadow = true;
-      enemyMeshesRef.current.push(enemyMesh);
-      scene.add(enemyMesh);
+        for (let i = 0; i < 2; i++) { // Two enemies per coin
+          const model = await loadEnemyModel(enemyType);
+          if (model) {
+            enemyModels.push(model);
+            const mixer = new THREE.AnimationMixer(model);
+            const animations: THREE.AnimationClip[] = model.animations;
+
+            const actions: { [key: string]: THREE.AnimationAction } = {};
+            animations.forEach((clip: THREE.AnimationClip) => {
+              const action = mixer.clipAction(clip);
+              actions[clip.name] = action;
+
+              const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
+              if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
+                  clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
+                  isIdleAnimation) {
+                action.setLoop(THREE.LoopRepeat, Infinity);
+              } else {
+                action.setLoop(THREE.LoopOnce, 1);
+                action.clampWhenFinished = true;
+              }
+            });
+            // Ensure all actions are stopped initially
+            Object.values(actions).forEach(action => action.stop());
+
+            const enemyData: EnemyData = Object.assign(model, {
+              targetCoinPosition: coin.position.clone(),
+              patrolCenter: coin.position.clone(),
+              patrolTarget: new THREE.Vector3(),
+              isIdling: false,
+              idleTimer: 0,
+              idleDuration: 0,
+              isAttacking: false,
+              isDying: false,
+              deathTimer: 0,
+              mixer,
+              animations,
+              enemyType,
+              currentAction: null,
+              actions,
+            });
+
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
+            const enemyX = coin.position.x + Math.cos(angle) * radius;
+            const enemyZ = coin.position.z + Math.sin(angle) * radius;
+            const enemyY = 0;
+            enemyData.position.set(enemyX, enemyY, enemyZ);
+            enemyData.scale.set(0.5, 0.5, 0.5);
+            enemyMeshesRef.current.push(enemyData);
+            scene.add(enemyData);
+
+            // Play initial idle animation
+            const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+            const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+            if (enemyData.actions[initialIdleActionName]) {
+              enemyData.currentAction = enemyData.actions[initialIdleActionName];
+              enemyData.currentAction.play();
+            }
+          }
+        }
+      }
     }
-  }, [sceneRef]);
+  }, [sceneRef, coinMeshesRef, loadEnemyModel]);
 
-  const updateEnemies = React.useCallback(() => {
+  const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
+    const newAction = enemy.actions[newActionName];
+    const oldAction = enemy.currentAction;
+
+    if (newAction && oldAction !== newAction) {
+      if (oldAction) oldAction.fadeOut(CROSSFADE_DURATION);
+      newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(CROSSFADE_DURATION).play();
+      enemy.currentAction = newAction;
+    } else if (newAction && !oldAction) {
+      newAction.reset().play();
+      enemy.currentAction = newAction;
+    }
+  }, []);
+
+  const updateEnemies = React.useCallback((delta: number) => {
     if (isPausedRef.current || !dogModelRef.current || !sceneRef.current) return;
 
     const dog = dogModelRef.current;
@@ -70,42 +217,195 @@ export const useEnemyLogic = ({
 
     enemyMeshesRef.current.forEach(enemy => {
       if (enemy.visible) {
-        const directionToDog = new THREE.Vector3().subVectors(dogPosition, enemy.position);
-        const enemyY = enemy.position.y; // Preserve original Y to prevent flying/sinking
-        directionToDog.y = 0; // Move on XZ plane only
+        enemy.mixer.update(delta); // Update mixer
+        const enemyY = enemy.position.y; // Define enemyY here to be accessible everywhere
 
-        if (directionToDog.lengthSq() > 0.001) { // Avoid normalizing zero vector
-          directionToDog.normalize();
-          enemy.position.addScaledVector(directionToDog, ENEMY_SPEED);
-          
-          // Make enemy look at dog (on XZ plane)
-          const lookAtTarget = new THREE.Vector3(dogPosition.x, enemyY, dogPosition.z);
-          enemy.lookAt(lookAtTarget);
+        const distanceToDog = dogPosition.distanceTo(enemy.position);
+        const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
+
+        let targetPosition = new THREE.Vector3();
+        let isChasing = false;
+        let currentAnimation = ''; // Initialize currentAnimation
+
+        // Check if the coin this enemy is protecting is collected
+        const protectedCoin = coinMeshesRef.current.find(coin => coin.position.equals(enemy.targetCoinPosition));
+        if (protectedCoin && !protectedCoin.visible) {
+          // If coin is collected, enemy dies (if not already dying)
+          if (!enemy.isDying) {
+            enemy.isDying = true;
+            enemy.deathTimer = ENEMY_DEATH_DURATION;
+            currentAnimation = 'Death';
+            if (enemy.actions[currentAnimation]) {
+              playAnimation(enemy, currentAnimation);
+            }
+          }
         }
-        enemy.position.y = enemyY; // Restore Y position
 
-        // Collision detection (XZ plane check)
+        if (enemy.isDying) {
+          enemy.deathTimer -= delta;
+          if (enemy.deathTimer <= 0) {
+            enemy.visible = false; // Hide after death animation
+          }
+          // Do nothing else if dying, but allow mixer.update to continue
+        }
+
+        if (enemy.isAttacking) {
+          // Stay in attack animation until finished
+          currentAnimation = enemy.currentAction?.getClip().name || (enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick');
+          // Do NOT return here.
+        }
+
+        // Only run movement/attack/patrol logic if not dying and not attacking
+        if (!enemy.isDying && !enemy.isAttacking) {
+          // Determine target position and animation based on distance to dog and coin
+          targetPosition = new THREE.Vector3(); // Keep only one declaration
+          let isMoving = false; // Flag to indicate if enemy should be moving
+
+          if (distanceToDog < ENEMY_ATTACK_DISTANCE) {
+            // Player is within attack distance, stop and attack
+            targetPosition.copy(enemy.position); // Stop moving
+            currentAnimation = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick'; // Attack animation
+            enemy.isAttacking = true;
+            enemy.isIdling = false; // Stop idling if attacking
+          } else if (distanceToCoin < ENEMY_CHASE_RADIUS) {
+            // Player is within the coin's protection radius, chase the player
+            targetPosition.copy(dogPosition);
+            isMoving = true;
+            currentAnimation = 'Gallop'; // Chase animation
+            enemy.isIdling = false; // Stop idling if chasing
+          } else {
+            // Player is outside, patrol around the coin
+            if (enemy.isIdling) {
+              enemy.idleTimer -= delta;
+              if (enemy.idleTimer <= 0) {
+                enemy.isIdling = false;
+                // Pick a new patrol target after idling
+                const angle = Math.random() * Math.PI * 2;
+                const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
+                const newPatrolX = enemy.patrolCenter.x + Math.cos(angle) * radius;
+                const newPatrolZ = enemy.patrolCenter.z + Math.sin(angle) * radius;
+                enemy.patrolTarget.set(newPatrolX, enemy.position.y, newPatrolZ);
+                isMoving = true; // Will start moving towards new patrol target
+                currentAnimation = 'Walk';
+              } else {
+                // Continue current idle animation
+                currentAnimation = enemy.currentAction?.getClip().name || 'Idle';
+              }
+            } else if (enemy.position.distanceTo(enemy.patrolTarget) < 1.0 || enemy.patrolTarget.lengthSq() === 0) {
+              // Reached patrol target, start idling
+              enemy.isIdling = true;
+              enemy.idleDuration = Math.random() * 5 + 3;
+              enemy.idleTimer = enemy.idleDuration;
+              const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+              currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+              isMoving = false; // Stop moving to idle
+            } else {
+              // Move towards patrol target
+              targetPosition.copy(enemy.patrolTarget);
+              isMoving = true;
+              currentAnimation = 'Walk'; // Patrol animation
+            }
+          }
+
+          const direction = new THREE.Vector3().subVectors(targetPosition, enemy.position);
+          direction.y = 0;
+          const movementThreshold = 0.001; // Define a threshold for actual movement
+
+          if (isMoving && direction.lengthSq() > movementThreshold) {
+            direction.normalize();
+            enemy.position.addScaledVector(direction, ENEMY_SPEED);
+            const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
+            enemy.lookAt(lookAtTarget);
+          } else if (isMoving && direction.lengthSq() <= movementThreshold) {
+            // If supposed to be moving but stopped, transition to idle
+            enemy.isIdling = true;
+            enemy.idleDuration = Math.random() * 5 + 3;
+            enemy.idleTimer = enemy.idleDuration;
+            const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+            currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+          } else if (!isMoving) { // Simplified this condition
+            // If not supposed to be moving, and not attacking/dying, ensure idle animation
+            const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+            // Ensure currentAnimation is an idle animation if not already
+            if (!idleAnimations.includes(currentAnimation)) {
+                currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+            }
+          }
+        }
+
+        // Play animation
+        if (enemy.currentAction?.getClip().name !== currentAnimation && enemy.actions[currentAnimation]) {
+          playAnimation(enemy, currentAnimation);
+        }
+
+        enemy.position.y = enemyY;
+
+        // Check for attack condition (distance to dog)
         const dogXZ = new THREE.Vector3(dog.position.x, 0, dog.position.z);
         const enemyXZ = new THREE.Vector3(enemy.position.x, 0, enemy.position.z);
+        const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
 
-        if (dogXZ.distanceTo(enemyXZ) < ENEMY_COLLISION_THRESHOLD) {
-          enemy.visible = false; // "Kill" enemy temporarily
-          // Respawn logic
-          const newEnemyX = (Math.random() - 0.5) * OBJECT_DISTRIBUTION_AREA;
-          const newEnemyZ = (Math.random() - 0.5) * OBJECT_DISTRIBUTION_AREA;
-          const newEnemyY = 1; // Respawn height
-          setTimeout(() => {
-            enemy.position.set(newEnemyX, newEnemyY, newEnemyZ);
-            enemy.visible = true;
-          }, 5000); // Respawn after 5 seconds
-
+        // Check for collision and trigger appropriate actions
+        if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !enemy.isDying) {
+          // Player is within death trigger distance, enemy dies immediately
+          enemy.isDying = true;
+          enemy.deathTimer = ENEMY_DEATH_DURATION;
+          currentAnimation = 'Death';
+          if (enemy.actions[currentAnimation]) {
+            playAnimation(enemy, currentAnimation);
+          }
+          // Apply penalty/death logic immediately
           if (isShieldActiveRef.current) {
-            // Shield active: enemy "dies", no penalty to player
+            // No penalty, just death
           } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
-            internalOptimisticProtectionBoneCountRef.current--; // Optimistically decrement locally for immediate game logic
-            onConsumeProtectionBone(); // Call UI to update its optimistic state and backend
+            internalOptimisticProtectionBoneCountRef.current--;
+            onConsumeProtectionBone();
           } else {
-            onEnemyCollisionPenalty(); // Apply penalty to player
+            onEnemyCollisionPenalty();
+          }
+        } else if (distanceXZToDog < ENEMY_ATTACK_DISTANCE && !enemy.isAttacking && !enemy.isDying) {
+          // Player is within attack distance, stop and attack
+          targetPosition.copy(enemy.position); // Stop moving
+          enemy.isAttacking = true;
+          enemy.isIdling = false;
+
+          if (enemy.enemyType === 'herbivore') {
+            // Herbivore: Rotate 180 degrees then attack
+            const lookAtTarget = new THREE.Vector3(dogPosition.x, enemyY, dogPosition.z);
+            enemy.lookAt(lookAtTarget);
+            enemy.rotation.y += Math.PI; // Rotate 180 degrees for back attack
+            currentAnimation = 'Attack_Kick';
+          } else {
+            // Carnivore: Attack directly
+            currentAnimation = 'Attack';
+          }
+
+          if (enemy.actions[currentAnimation]) {
+            playAnimation(enemy, currentAnimation);
+
+            // Listen for attack animation finish to trigger death or penalty
+            enemy.mixer.removeEventListener('finished', onAttackAnimationFinished); // Remove previous listeners
+            enemy.mixer.addEventListener('finished', (e) => {
+              const finishedClipName = e.action.getClip().name;
+              const attackAnimationName = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
+
+              if (finishedClipName === attackAnimationName) {
+                // After attack animation, trigger death animation and apply penalty/bone consumption
+                enemy.isDying = true;
+                enemy.deathTimer = ENEMY_DEATH_DURATION;
+                playAnimation(enemy, 'Death');
+                enemy.isAttacking = false; // Reset attack state
+
+                if (isShieldActiveRef.current) {
+                  // No penalty, shield absorbed attack
+                } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
+                  internalOptimisticProtectionBoneCountRef.current--;
+                  onConsumeProtectionBone();
+                } else {
+                  onEnemyCollisionPenalty();
+                }
+              }
+            });
           }
         }
       }
@@ -113,11 +413,14 @@ export const useEnemyLogic = ({
   }, [
     dogModelRef,
     isShieldActiveRef,
-    protectionBoneCountRef, // Changed dependency back to ref
+    protectionBoneCountRef,
     onConsumeProtectionBone,
     onEnemyCollisionPenalty,
     isPausedRef,
-    sceneRef,
+    coinMeshesRef,
+    onCoinCollected,
+    onAttackAnimationFinished,
+    playAnimation, // Add playAnimation to dependencies
   ]);
   
   const resetEnemies = React.useCallback(() => {
@@ -128,6 +431,6 @@ export const useEnemyLogic = ({
     initializeEnemies,
     updateEnemies,
     resetEnemies,
-    enemyMeshesRef, // if needed
+    enemyMeshesRef,
   };
 };

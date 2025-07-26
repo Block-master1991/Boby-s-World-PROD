@@ -145,10 +145,9 @@ export const useDogLogic = ({
     }, [sceneRef]);
     
 
-    const updateDog = useCallback(() => {
+    const updateDog = useCallback((delta: number) => { // Accept delta as argument
         if (!dogModelRef.current || !animationMixerRef.current) return { isDogActuallyMoving: false, rotationAppliedThisFrame: false };
         
-        const delta = clockRef.current.getDelta();
         const dog = dogModelRef.current;
         let isDogActuallyMoving = false;
         let rotationAppliedThisFrame = false;

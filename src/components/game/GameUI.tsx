@@ -827,6 +827,9 @@ const GameUI: React.FC = () => {
                     onConsumeProtectionBone={handleConsumeProtectionBone}
                     onEnemyCollisionPenalty={handleEnemyCollisionPenalty}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
+                    // New props for enemy logic
+                    // coinMeshesRef will be passed from GameCanvas itself after useCoinLogic
+                    // onCoinCollected is already passed
                 />
 
                 <GameOverlayUI

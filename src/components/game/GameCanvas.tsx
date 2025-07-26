@@ -56,8 +56,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
-    // controlsRef is removed
-    // const controlsRef = useRef<OrbitControls | null>(null);
+    // controlsRef is no longer needed
+    // import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
     
     const clockRef = useRef(new THREE.Clock());
     const keysPressedRef = useRef<{ [key: string]: boolean }>({});
@@ -97,6 +97,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const onRemainingCoinsUpdateCallbackRef = useRef(onRemainingCoinsUpdateProp);
     const onConsumeProtectionBoneCallbackRef = useRef(onConsumeProtectionBoneProp);
     const onEnemyCollisionPenaltyCallbackRef = useRef(onEnemyCollisionPenaltyProp);
+    const onAttackAnimationFinishedCallbackRef = useRef((event: THREE.Event) => {
+        // This function will be called when an enemy's attack animation finishes
+        // You can add any specific logic here if needed, e.g., triggering enemy death
+        // For now, it just logs the event.
+        console.log("Enemy attack animation finished:", event);
+    });
 
     useEffect(() => { onCoinCollectedCallbackRef.current = onCoinCollectedProp; }, [onCoinCollectedProp]);
     useEffect(() => { onRemainingCoinsUpdateCallbackRef.current = onRemainingCoinsUpdateProp; }, [onRemainingCoinsUpdateProp]);
@@ -110,7 +116,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         isSpeedBoostActiveRef, isShieldActiveRef, isJoystickInteractionActiveRef,
     });
 
-    const { initializeCoins, updateCoins, resetCoins, remainingCoinsRef } = useCoinLogic({
+    const { initializeCoins, updateCoins, resetCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), 
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
@@ -118,10 +124,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     });
 
     const { initializeEnemies, updateEnemies, resetEnemies } = useEnemyLogic({
-        sceneRef, dogModelRef, isShieldActiveRef, protectionBoneCountRef, // Pass protectionBoneCount directly
+        sceneRef, dogModelRef, isShieldActiveRef, protectionBoneCountRef,
         onConsumeProtectionBone: () => onConsumeProtectionBoneCallbackRef.current(),
         onEnemyCollisionPenalty: () => onEnemyCollisionPenaltyCallbackRef.current(),
         isPausedRef,
+        coinMeshesRef, // Pass coinMeshesRef to useEnemyLogic
+        onCoinCollected: () => onCoinCollectedCallbackRef.current(), // Pass onCoinCollected to useEnemyLogic
+        onAttackAnimationFinished: onAttackAnimationFinishedCallbackRef.current, // Pass the new callback
     });
     
     const { initializeCamera, setupInitialCameraPosition, updateCamera, resetCamera } = useCameraLogic({
@@ -152,10 +161,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
         // updateControlsState(); // Removed as OrbitControls are removed
 
+        const delta = clockRef.current.getDelta(); // Get delta time
         if (dogModelRef.current && !isPausedRef.current) { 
-            updateDog();
+            updateDog(delta); // Pass delta
             updateCoins();
-            updateEnemies();
+            updateEnemies(delta); // Pass delta
             updateCamera();
         }
         
