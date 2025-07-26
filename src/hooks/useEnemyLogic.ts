@@ -7,10 +7,11 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 
 const ENEMY_SPEED = 0.03;
+const ENEMY_GALLOP_SPEED_MULTIPLIER = 1.5; // Multiplier for GALLOP speed
 const ENEMY_ATTACK_DISTANCE = 1.5; // Distance for enemy to stop and attack
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5; // Distance at which enemy dies after attack
 const ENEMY_DEATH_DURATION = 5.0; // Duration for death animation
-const ENEMY_PROTECTION_RADIUS = 10; // Radius around the coin where enemies patrol
+const ENEMY_PROTECTION_RADIUS = 5; // Radius around the coin where enemies patrol
 const ENEMY_CHASE_RADIUS = 15; // Radius around the coin where enemies start chasing the player
 const CROSSFADE_DURATION = 0.2;
 
@@ -31,7 +32,7 @@ const ENEMY_ANIMATION_NAMES = {
   },
 };
 
-interface EnemyData extends THREE.Group {
+interface EnemyCustomData {
   targetCoinPosition: THREE.Vector3;
   patrolCenter: THREE.Vector3;
   patrolTarget: THREE.Vector3;
@@ -47,6 +48,8 @@ interface EnemyData extends THREE.Group {
   currentAction: THREE.AnimationAction | null;
   actions: { [key: string]: THREE.AnimationAction };
 }
+
+type EnemyData = THREE.Group & EnemyCustomData;
 
 interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -90,8 +93,6 @@ export const useEnemyLogic = ({
   }, []);
 
   const loadEnemyModel = React.useCallback(async (type: 'carnivore' | 'herbivore') => {
-    if (!gltfLoader.current) return null;
-
     const models = type === 'carnivore'
       ? ['Fox.glb', 'Husky.glb', 'ShibaInu.glb', 'Wolf.glb']
       : ['Alpaca.glb', 'Bull.glb', 'Cow.glb', 'Deer.glb', 'Donkey.glb', 'Horse_White.glb', 'Horse.glb', 'Stag.glb'];
@@ -99,24 +100,25 @@ export const useEnemyLogic = ({
     const randomModel = models[Math.floor(Math.random() * models.length)];
     const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${randomModel}`;
 
-    return new Promise<THREE.Group>((resolve, reject) => {
-      gltfLoader.current?.load(modelPath, (gltf: { scene: THREE.Group; animations: THREE.AnimationClip[] }) => {
+    return new Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] }>((resolve, reject) => {
+      if (!gltfLoader.current) {
+        return reject(new Error('GLTFLoader not initialized.'));
+      }
+      gltfLoader.current.load(modelPath, (gltf: { scene: THREE.Group; animations: THREE.AnimationClip[] }) => {
         const model = gltf.scene;
-        // Ensure animations are directly accessible on the model object
-        (model as any).animations = gltf.animations;
         model.traverse((child: THREE.Object3D) => {
           if ((child as THREE.Mesh).isMesh) {
             child.castShadow = true;
             child.receiveShadow = true;
           }
         });
-        resolve(model);
+        resolve({ model, animations: gltf.animations });
       }, undefined, reject);
     });
   }, []);
 
   const initializeEnemies = React.useCallback(async () => {
-    if (!sceneRef.current || !coinMeshesRef.current || !gltfLoader.current) return;
+    if (!sceneRef.current || !coinMeshesRef.current) return;
     const scene = sceneRef.current;
 
     enemyMeshesRef.current.forEach(enemy => {
@@ -128,67 +130,67 @@ export const useEnemyLogic = ({
     for (const coin of coinMeshesRef.current) {
       if (coin.visible) {
         const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
-        const enemyModels: THREE.Group[] = [];
+        const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
+        if (loadedModel) {
+          const mixer = new THREE.AnimationMixer(loadedModel);
 
-        for (let i = 0; i < 2; i++) { // Two enemies per coin
-          const model = await loadEnemyModel(enemyType);
-          if (model) {
-            enemyModels.push(model);
-            const mixer = new THREE.AnimationMixer(model);
-            const animations: THREE.AnimationClip[] = model.animations;
+          const actions: { [key: string]: THREE.AnimationAction } = {};
+          loadedAnimations.forEach((clip: THREE.AnimationClip) => {
+            const action = mixer.clipAction(clip);
+            actions[clip.name] = action;
 
-            const actions: { [key: string]: THREE.AnimationAction } = {};
-            animations.forEach((clip: THREE.AnimationClip) => {
-              const action = mixer.clipAction(clip);
-              actions[clip.name] = action;
-
-              const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
-              if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
-                  clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
-                  isIdleAnimation) {
-                action.setLoop(THREE.LoopRepeat, Infinity);
-              } else {
-                action.setLoop(THREE.LoopOnce, 1);
-                action.clampWhenFinished = true;
-              }
-            });
-            // Ensure all actions are stopped initially
-            Object.values(actions).forEach(action => action.stop());
-
-            const enemyData: EnemyData = Object.assign(model, {
-              targetCoinPosition: coin.position.clone(),
-              patrolCenter: coin.position.clone(),
-              patrolTarget: new THREE.Vector3(),
-              isIdling: false,
-              idleTimer: 0,
-              idleDuration: 0,
-              isAttacking: false,
-              isDying: false,
-              deathTimer: 0,
-              mixer,
-              animations,
-              enemyType,
-              currentAction: null,
-              actions,
-            });
-
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
-            const enemyX = coin.position.x + Math.cos(angle) * radius;
-            const enemyZ = coin.position.z + Math.sin(angle) * radius;
-            const enemyY = 0;
-            enemyData.position.set(enemyX, enemyY, enemyZ);
-            enemyData.scale.set(0.5, 0.5, 0.5);
-            enemyMeshesRef.current.push(enemyData);
-            scene.add(enemyData);
-
-            // Play initial idle animation
-            const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-            const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-            if (enemyData.actions[initialIdleActionName]) {
-              enemyData.currentAction = enemyData.actions[initialIdleActionName];
-              enemyData.currentAction.play();
+            const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
+            if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
+                clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
+                isIdleAnimation) {
+              action.setLoop(THREE.LoopRepeat, Infinity);
+            } else {
+              action.setLoop(THREE.LoopOnce, 1);
+              action.clampWhenFinished = true;
             }
+          });
+          // Ensure all actions are stopped initially
+          Object.values(actions).forEach(action => action.stop());
+
+          const enemyData: EnemyData = loadedModel as EnemyData;
+          enemyData.targetCoinPosition = coin.position.clone();
+          enemyData.patrolCenter = coin.position.clone();
+          enemyData.patrolTarget = new THREE.Vector3(); // Will be set below
+          enemyData.isIdling = false;
+          enemyData.idleTimer = 0;
+          enemyData.idleDuration = 0;
+          enemyData.isAttacking = false;
+          enemyData.isDying = false;
+          enemyData.deathTimer = 0;
+          enemyData.mixer = mixer;
+          enemyData.animations = loadedAnimations;
+          enemyData.enemyType = enemyType;
+          enemyData.currentAction = null;
+          enemyData.actions = actions;
+          
+          // Set initial patrol target within the protection radius
+          const angle = Math.random() * Math.PI * 2;
+          const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
+          const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
+          const initialPatrolZ = coin.position.z + Math.sin(angle) * radius;
+          enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
+
+          const spawnAngle = Math.random() * Math.PI * 2;
+          const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8; // Spawn within protection radius
+          const enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
+          const enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
+          const enemyY = 0;
+          enemyData.position.set(enemyX, enemyY, enemyZ);
+          enemyData.scale.set(0.5, 0.5, 0.5);
+          enemyMeshesRef.current.push(enemyData);
+          scene.add(enemyData);
+
+          // Play initial idle animation
+          const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+          const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+          if (enemyData.actions[initialIdleActionName]) {
+            enemyData.currentAction = enemyData.actions[initialIdleActionName];
+            enemyData.currentAction.play();
           }
         }
       }
@@ -246,13 +248,13 @@ export const useEnemyLogic = ({
           if (enemy.deathTimer <= 0) {
             enemy.visible = false; // Hide after death animation
           }
-          // Do nothing else if dying, but allow mixer.update to continue
+          // Allow mixer.update to continue, DO NOT return
         }
 
         if (enemy.isAttacking) {
           // Stay in attack animation until finished
           currentAnimation = enemy.currentAction?.getClip().name || (enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick');
-          // Do NOT return here.
+          // Allow mixer.update to continue, DO NOT return
         }
 
         // Only run movement/attack/patrol logic if not dying and not attacking
@@ -283,7 +285,7 @@ export const useEnemyLogic = ({
                 const angle = Math.random() * Math.PI * 2;
                 const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
                 const newPatrolX = enemy.patrolCenter.x + Math.cos(angle) * radius;
-                const newPatrolZ = enemy.patrolCenter.z + Math.sin(angle) * radius;
+                const newPatrolZ = enemy.patrolTarget.z + Math.sin(angle) * radius;
                 enemy.patrolTarget.set(newPatrolX, enemy.position.y, newPatrolZ);
                 isMoving = true; // Will start moving towards new patrol target
                 currentAnimation = 'Walk';
@@ -313,7 +315,8 @@ export const useEnemyLogic = ({
 
           if (isMoving && direction.lengthSq() > movementThreshold) {
             direction.normalize();
-            enemy.position.addScaledVector(direction, ENEMY_SPEED);
+            const currentSpeed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
+            enemy.position.addScaledVector(direction, currentSpeed);
             const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
             enemy.lookAt(lookAtTarget);
           } else if (isMoving && direction.lengthSq() <= movementThreshold) {
