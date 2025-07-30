@@ -8,7 +8,7 @@ import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCo
 import { storeItems } from '@/lib/items'; // To validate item existence
 import { Connection, PublicKey, TransactionResponse, ParsedTransactionWithMeta } from '@solana/web3.js';
 import { clusterApiUrl } from '@solana/web3.js';
-import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
+import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS, DEDICATED_RPC_ENDPOINT } from '@/lib/constants'; // إضافة DEDICATED_RPC_ENDPOINT
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   console.log("[API] /api/game/purchaseItem called");
@@ -17,6 +17,14 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
   if (!userPublicKey) {
     return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
+  }
+
+  // التحقق من أن userPublicKey هو مفتاح عام صالح لـ Solana
+  try {
+    new PublicKey(userPublicKey);
+  } catch (e) {
+    console.error(`[API] Invalid user public key format: ${userPublicKey}`, e);
+    return NextResponse.json({ error: 'Invalid user public key format.' }, { status: 400 });
   }
 
   try {
@@ -47,7 +55,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     const playerDocRef = db.collection('players').doc(userPublicKey);
 
     // Verify the transactionSignature on the backend
-    const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed'); // يمكنك تغيير 'mainnet-beta' إلى 'devnet' أو 'testnet' حسب الحاجة
+    const connection = new Connection(DEDICATED_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed'); // استخدام نقطة نهاية مخصصة إذا كانت متاحة
 
     console.log(`[API] Verifying transaction signature: ${transactionSignature}`);
 
@@ -162,18 +170,49 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     return response;
   } catch (error: any) {
     console.error("Error processing item purchase:", error);
-    let errorMessage = error.message || 'Failed to process item purchase.';
+    let errorMessage = 'Failed to process item purchase. Please try again.'; // رسالة عامة للمستخدم
     let statusCode = 500;
 
-    if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {
-      errorMessage = "Server configuration error: Firebase Admin SDK not properly set up.";
-      statusCode = 500;
-    } else if (errorMessage.includes("Authentication required")) {
+    // يمكن الاحتفاظ برسائل خطأ محددة إذا كانت لا تكشف معلومات حساسة
+    if (error.message.includes("Authentication required")) {
+      errorMessage = "Authentication required.";
       statusCode = 401;
-    } else if (errorMessage.includes("Invalid request parameters")) {
+    } else if (error.message.includes("Invalid request parameters")) {
+      errorMessage = "Invalid request parameters.";
       statusCode = 400;
-    } else if (errorMessage.includes("Invalid item ID")) {
+    } else if (error.message.includes("Invalid item ID")) {
+      errorMessage = "Invalid item ID.";
       statusCode = 400;
+    } else if (error.message.includes("This transaction signature has already been used.")) {
+      errorMessage = "This transaction has already been processed.";
+      statusCode = 409;
+    } else if (error.message.includes("Transaction not found or not confirmed.")) {
+      errorMessage = "Solana transaction not found or not confirmed.";
+      statusCode = 404;
+    } else if (error.message.includes("Transaction failed on Solana blockchain.")) {
+      errorMessage = "Solana transaction failed.";
+      statusCode = 400;
+    } else if (error.message.includes("Transaction sender does not match authenticated user.")) {
+      errorMessage = "Transaction sender mismatch.";
+      statusCode = 400;
+    } else if (error.message.includes("Invalid token used for purchase. Expected BOBY token.")) {
+      errorMessage = "Invalid token used for purchase. Expected BOBY token.";
+      statusCode = 400;
+    } else if (error.message.includes("Insufficient amount paid for the item.")) {
+      errorMessage = "Insufficient amount paid for the item.";
+      statusCode = 400;
+    } else if (error.message.includes("Invalid user public key format.")) {
+      errorMessage = "Invalid user public key format.";
+      statusCode = 400;
+    } else if (error.message.includes("Missing required environment variables for Solana verification.")) {
+      errorMessage = "Server configuration error. Please contact support.";
+      statusCode = 500;
+    } else if (error.message.includes("Server busy, try again later.")) { // من rateLimit
+      errorMessage = "Server busy, please try again later.";
+      statusCode = 503;
+    } else if (error.message.includes("Too many requests. Please try again later.")) { // من rateLimit
+      errorMessage = "Too many requests. Please try again later.";
+      statusCode = 429;
     }
 
     return NextResponse.json({ error: errorMessage }, { status: statusCode });
