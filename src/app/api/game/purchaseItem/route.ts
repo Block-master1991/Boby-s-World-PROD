@@ -6,6 +6,9 @@ import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CS
 import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
 import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
 import { storeItems } from '@/lib/items'; // To validate item existence
+import { Connection, PublicKey, TransactionResponse, ParsedTransactionWithMeta } from '@solana/web3.js';
+import { clusterApiUrl } from '@solana/web3.js';
+import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   console.log("[API] /api/game/purchaseItem called");
@@ -33,12 +36,93 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     const db = getFirestore();
     const playerDocRef = db.collection('players').doc(userPublicKey);
 
-    // Optional: Verify the transactionSignature on the backend
-    // This would involve using Solana web3.js to fetch the transaction
-    // and verify its details (sender, receiver, amount, token mint).
-    // For now, we'll trust the frontend's successful sendTransaction call.
-    console.log(`[API] Verifying transaction signature (placeholder): ${transactionSignature}`);
-    // In a real application, you'd add robust Solana transaction verification here.
+    // Verify the transactionSignature on the backend
+    const connection = new Connection(clusterApiUrl('mainnet-beta'), 'confirmed'); // يمكنك تغيير 'mainnet-beta' إلى 'devnet' أو 'testnet' حسب الحاجة
+
+    console.log(`[API] Verifying transaction signature: ${transactionSignature}`);
+
+    const transaction = await connection.getParsedTransaction(transactionSignature, {
+      maxSupportedTransactionVersion: 0, // أو 0 إذا كنت تستخدم معاملات الإصدار القديم
+      commitment: 'confirmed'
+    });
+
+    if (!transaction) {
+      console.error(`[API] Transaction not found or not confirmed: ${transactionSignature}`);
+      return NextResponse.json({ error: 'Transaction not found or not confirmed.' }, { status: 404 });
+    }
+
+    // تحقق من حالة المعاملة
+    if (transaction.meta?.err) {
+      console.error(`[API] Transaction failed: ${transactionSignature}, Error: ${transaction.meta.err}`);
+      return NextResponse.json({ error: 'Transaction failed on Solana blockchain.' }, { status: 400 });
+    }
+
+    // استخراج تفاصيل المعاملة
+    const sender = transaction.transaction.message.accountKeys[0].pubkey.toBase58(); // عادةً ما يكون أول مفتاح حساب هو المرسل
+    // ستحتاج إلى تحديد عنوان المستلم الفعلي (مثل عنوان محفظة المتجر أو برنامج العقد الذكي)
+    // وسعر العنصر والرمز المميز المتوقعين.
+    // هذه القيم يجب أن تأتي من مكان آمن (مثل متغيرات البيئة أو قاعدة البيانات)
+    // وليس من طلب الواجهة الأمامية.
+
+    // مثال على التحقق
+    if (!STORE_TREASURY_WALLET_ADDRESS || !BOBY_TOKEN_MINT_ADDRESS) {
+      console.error("[API] Missing required environment variables for Solana verification.");
+      return NextResponse.json({ error: 'Server configuration error: Missing Solana wallet or token mint addresses.' }, { status: 500 });
+    }
+    const expectedReceiverPublicKey = new PublicKey(STORE_TREASURY_WALLET_ADDRESS);
+    const expectedTokenMintPublicKey = new PublicKey(BOBY_TOKEN_MINT_ADDRESS);
+    const expectedAmount = itemDefinition.price * quantity; // افترض أن itemDefinition.price موجود
+
+    let amountTransferred = 0;
+    let tokenMint = '';
+
+    // البحث عن تحويلات SPL Token أو SOL
+    if (transaction.meta?.postTokenBalances && transaction.meta.preTokenBalances) {
+      // تحقق من تحويلات SPL Token
+      for (const postBalance of transaction.meta.postTokenBalances) {
+        const preBalance = transaction.meta.preTokenBalances.find(pb => pb.accountIndex === postBalance.accountIndex);
+        if (preBalance && postBalance.uiTokenAmount && preBalance.uiTokenAmount) {
+          if (postBalance.uiTokenAmount.uiAmount !== null && preBalance.uiTokenAmount.uiAmount !== null) {
+            const diff = postBalance.uiTokenAmount.uiAmount - preBalance.uiTokenAmount.uiAmount;
+            if (diff > 0 && postBalance.owner === expectedReceiverPublicKey.toBase58()) {
+              amountTransferred = diff;
+              tokenMint = postBalance.mint;
+              break;
+            }
+          }
+        }
+      }
+    } else if (transaction.meta?.postBalances && transaction.meta.preBalances) {
+      // تحقق من تحويلات SOL (إذا كان العنصر يتم شراؤه بـ SOL)
+      // هذا الجزء أكثر تعقيدًا ويتطلب تحليل تغييرات الرصيد لكل حساب
+      // للحصول على مثال بسيط، يمكننا التحقق من تغيير رصيد المستلم
+      const receiverAccountIndex = transaction.transaction.message.accountKeys.findIndex(
+        (key) => key.pubkey.toBase58() === expectedReceiverPublicKey.toBase58()
+      );
+      if (receiverAccountIndex !== -1) {
+        const preSolBalance = transaction.meta.preBalances[receiverAccountIndex];
+        const postSolBalance = transaction.meta.postBalances[receiverAccountIndex];
+        amountTransferred = (postSolBalance - preSolBalance) / 1_000_000_000; // تحويل لامبورت إلى SOL
+        tokenMint = 'SOL'; // أو أي معرف لـ SOL
+      }
+    }
+
+    if (sender !== userPublicKey) {
+      console.error(`[API] Transaction sender mismatch. Expected: ${userPublicKey}, Got: ${sender}`);
+      return NextResponse.json({ error: 'Transaction sender does not match authenticated user.' }, { status: 400 });
+    }
+
+    if (tokenMint !== expectedTokenMintPublicKey.toBase58()) { // لا نحتاج للتحقق من SOL إذا كنا نستخدم BOBY فقط
+      console.error(`[API] Token mint mismatch. Expected: ${expectedTokenMintPublicKey.toBase58()}, Got: ${tokenMint}`);
+      return NextResponse.json({ error: 'Invalid token used for purchase. Expected BOBY token.' }, { status: 400 });
+    }
+
+    if (amountTransferred < expectedAmount) {
+      console.error(`[API] Insufficient amount transferred. Expected: ${expectedAmount}, Got: ${amountTransferred}`);
+      return NextResponse.json({ error: 'Insufficient amount paid for the item.' }, { status: 400 });
+    }
+
+    console.log(`[API] Transaction ${transactionSignature} successfully verified.`);
 
     const itemsToAdd = Array(quantity).fill(null).map(() => ({
       id: itemDefinition.id,
