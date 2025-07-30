@@ -102,19 +102,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
           }
         }
       }
-    } else if (transaction.meta?.postBalances && transaction.meta.preBalances) {
-      // تحقق من تحويلات SOL (إذا كان العنصر يتم شراؤه بـ SOL)
-      // هذا الجزء أكثر تعقيدًا ويتطلب تحليل تغييرات الرصيد لكل حساب
-      // للحصول على مثال بسيط، يمكننا التحقق من تغيير رصيد المستلم
-      const receiverAccountIndex = transaction.transaction.message.accountKeys.findIndex(
-        (key) => key.pubkey.toBase58() === expectedReceiverPublicKey.toBase58()
-      );
-      if (receiverAccountIndex !== -1) {
-        const preSolBalance = transaction.meta.preBalances[receiverAccountIndex];
-        const postSolBalance = transaction.meta.postBalances[receiverAccountIndex];
-        amountTransferred = (postSolBalance - preSolBalance) / 1_000_000_000; // تحويل لامبورت إلى SOL
-        tokenMint = 'SOL'; // أو أي معرف لـ SOL
-      }
+
     }
 
     if (sender !== userPublicKey) {
