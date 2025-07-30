@@ -34,6 +34,16 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     await initializeAdminApp();
     const db = getFirestore();
+
+    // التحقق مما إذا كان توقيع المعاملة قد تم استخدامه بالفعل
+    const usedSignatureDocRef = db.collection('usedTransactionSignatures').doc(transactionSignature);
+    const usedSignatureDoc = await usedSignatureDocRef.get();
+
+    if (usedSignatureDoc.exists) {
+      console.error(`[API] Duplicate transaction signature detected: ${transactionSignature}`);
+      return NextResponse.json({ error: 'This transaction signature has already been used.' }, { status: 409 }); // 409 Conflict
+    }
+
     const playerDocRef = db.collection('players').doc(userPublicKey);
 
     // Verify the transactionSignature on the backend
@@ -123,6 +133,15 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     }
 
     console.log(`[API] Transaction ${transactionSignature} successfully verified.`);
+
+    // تسجيل توقيع المعاملة لمنع التكرار
+    await usedSignatureDocRef.set({
+      userId: userPublicKey,
+      timestamp: FieldValue.serverTimestamp(),
+      itemId: itemId,
+      quantity: quantity,
+    });
+    console.log(`[API] Transaction signature ${transactionSignature} recorded as used.`);
 
     const itemsToAdd = Array(quantity).fill(null).map(() => ({
       id: itemDefinition.id,
