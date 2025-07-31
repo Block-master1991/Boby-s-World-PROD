@@ -42,6 +42,7 @@ interface EnemyCustomData {
   isAttacking: boolean;
   isDying: boolean;
   deathTimer: number;
+  hasAppliedDeathEffect: boolean; // Added to track if death effect has been applied
   mixer: THREE.AnimationMixer;
   animations: THREE.AnimationClip[];
   enemyType: 'carnivore' | 'herbivore';
@@ -162,6 +163,7 @@ export const useEnemyLogic = ({
           enemyData.isAttacking = false;
           enemyData.isDying = false;
           enemyData.deathTimer = 0;
+          enemyData.hasAppliedDeathEffect = false; // Initialize to false
           enemyData.mixer = mixer;
           enemyData.animations = loadedAnimations;
           enemyData.enemyType = enemyType;
@@ -218,146 +220,156 @@ export const useEnemyLogic = ({
     const dogPosition = dog.position;
 
     enemyMeshesRef.current.forEach(enemy => {
-      if (enemy.visible) {
-        enemy.mixer.update(delta); // Update mixer
-        const enemyY = enemy.position.y; // Define enemyY here to be accessible everywhere
+      enemy.mixer.update(delta); // Update mixer
+      const enemyY = enemy.position.y; // Define enemyY here to be accessible everywhere
 
-        const distanceToDog = dogPosition.distanceTo(enemy.position);
-        const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
+      // If enemy is dying and death timer is still running, only update mixer and skip other logic
+      if (enemy.isDying && enemy.deathTimer > 0) {
+        enemy.deathTimer -= delta;
+        if (enemy.deathTimer <= 0) {
+          enemy.visible = false; // Hide after death animation
+        }
+        // Ensure death animation is playing
+        const deathAnimationName = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
+        if (enemy.currentAction?.getClip().name !== deathAnimationName && enemy.actions[deathAnimationName]) {
+          playAnimation(enemy, deathAnimationName);
+        }
+        return; // Skip all other logic for dying enemies
+      }
 
-        let targetPosition = new THREE.Vector3();
-        let isChasing = false;
-        let currentAnimation = ''; // Initialize currentAnimation
+      // If enemy is not visible (already died and hidden), skip all logic
+      if (!enemy.visible) {
+        return;
+      }
 
-        // Check if the coin this enemy is protecting is collected
-        const protectedCoin = coinMeshesRef.current.find(coin => coin.position.equals(enemy.targetCoinPosition));
-        if (protectedCoin && !protectedCoin.visible) {
-          // If coin is collected, enemy dies (if not already dying)
-          if (!enemy.isDying) {
-            enemy.isDying = true;
-            enemy.deathTimer = ENEMY_DEATH_DURATION;
-            currentAnimation = 'Death';
-            if (enemy.actions[currentAnimation]) {
-              playAnimation(enemy, currentAnimation);
-            }
+      const distanceToDog = dogPosition.distanceTo(enemy.position);
+      const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
+
+      let targetPosition = new THREE.Vector3();
+      let currentAnimation = ''; // Initialize currentAnimation
+
+      // Check if the coin this enemy is protecting is collected
+      const protectedCoin = coinMeshesRef.current.find(coin => coin.position.equals(enemy.targetCoinPosition));
+      if (protectedCoin && !protectedCoin.visible) {
+        // If coin is collected, enemy dies (if not already dying)
+        if (!enemy.isDying) {
+          enemy.isDying = true;
+          enemy.deathTimer = ENEMY_DEATH_DURATION;
+          currentAnimation = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
+          if (enemy.actions[currentAnimation]) {
+            playAnimation(enemy, currentAnimation);
           }
         }
+      }
 
-        if (enemy.isDying) {
-          enemy.deathTimer -= delta;
-          if (enemy.deathTimer <= 0) {
-            enemy.visible = false; // Hide after death animation
-          }
-          // Allow mixer.update to continue, DO NOT return
-        }
+      if (enemy.isAttacking) {
+        // Stay in attack animation until finished
+        currentAnimation = enemy.currentAction?.getClip().name || (enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick');
+        // Allow mixer.update to continue, DO NOT return
+      }
 
-        if (enemy.isAttacking) {
-          // Stay in attack animation until finished
-          currentAnimation = enemy.currentAction?.getClip().name || (enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick');
-          // Allow mixer.update to continue, DO NOT return
-        }
+      // Only run movement/attack/patrol logic if not dying and not attacking
+      if (!enemy.isDying && !enemy.isAttacking) {
+        // Determine target position and animation based on distance to dog and coin
+        targetPosition = new THREE.Vector3(); // Keep only one declaration
+        let isMoving = false; // Flag to indicate if enemy should be moving
 
-        // Only run movement/attack/patrol logic if not dying and not attacking
-        if (!enemy.isDying && !enemy.isAttacking) {
-          // Determine target position and animation based on distance to dog and coin
-          targetPosition = new THREE.Vector3(); // Keep only one declaration
-          let isMoving = false; // Flag to indicate if enemy should be moving
-
-          if (distanceToDog < ENEMY_ATTACK_DISTANCE) {
-            // Player is within attack distance, stop and attack
-            targetPosition.copy(enemy.position); // Stop moving
-            currentAnimation = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick'; // Attack animation
-            enemy.isAttacking = true;
-            enemy.isIdling = false; // Stop idling if attacking
-          } else if (distanceToCoin < ENEMY_CHASE_RADIUS) {
-            // Player is within the coin's protection radius, chase the player
-            targetPosition.copy(dogPosition);
-            isMoving = true;
-            currentAnimation = 'Gallop'; // Chase animation
-            enemy.isIdling = false; // Stop idling if chasing
-          } else {
-            // Player is outside, patrol around the coin
-            if (enemy.isIdling) {
-              enemy.idleTimer -= delta;
-              if (enemy.idleTimer <= 0) {
-                enemy.isIdling = false;
-                // Pick a new patrol target after idling
-                const angle = Math.random() * Math.PI * 2;
-                const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
-                const newPatrolX = enemy.patrolCenter.x + Math.cos(angle) * radius;
-                const newPatrolZ = enemy.patrolTarget.z + Math.sin(angle) * radius;
-                enemy.patrolTarget.set(newPatrolX, enemy.position.y, newPatrolZ);
-                isMoving = true; // Will start moving towards new patrol target
-                currentAnimation = 'Walk';
-              } else {
-                // Continue current idle animation
-                currentAnimation = enemy.currentAction?.getClip().name || 'Idle';
-              }
-            } else if (enemy.position.distanceTo(enemy.patrolTarget) < 1.0 || enemy.patrolTarget.lengthSq() === 0) {
-              // Reached patrol target, start idling
-              enemy.isIdling = true;
-              enemy.idleDuration = Math.random() * 5 + 3;
-              enemy.idleTimer = enemy.idleDuration;
-              const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-              currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-              isMoving = false; // Stop moving to idle
+        if (distanceToDog < ENEMY_ATTACK_DISTANCE) {
+          // Player is within attack distance, stop and attack
+          targetPosition.copy(enemy.position); // Stop moving
+          currentAnimation = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick'; // Attack animation
+          enemy.isAttacking = true;
+          enemy.isIdling = false; // Stop idling if attacking
+        } else if (distanceToCoin < ENEMY_CHASE_RADIUS) {
+          // Player is within the coin's protection radius, chase the player
+          targetPosition.copy(dogPosition);
+          isMoving = true;
+          currentAnimation = 'Gallop'; // Chase animation
+          enemy.isIdling = false; // Stop idling if chasing
+        } else {
+          // Player is outside, patrol around the coin
+          if (enemy.isIdling) {
+            enemy.idleTimer -= delta;
+            if (enemy.idleTimer <= 0) {
+              enemy.isIdling = false;
+              // Pick a new patrol target after idling
+              const angle = Math.random() * Math.PI * 2;
+              const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
+              const newPatrolX = enemy.patrolCenter.x + Math.cos(angle) * radius;
+              const newPatrolZ = enemy.patrolTarget.z + Math.sin(angle) * radius;
+              enemy.patrolTarget.set(newPatrolX, enemy.position.y, newPatrolZ);
+              isMoving = true; // Will start moving towards new patrol target
+              currentAnimation = 'Walk';
             } else {
-              // Move towards patrol target
-              targetPosition.copy(enemy.patrolTarget);
-              isMoving = true;
-              currentAnimation = 'Walk'; // Patrol animation
+              // Continue current idle animation
+              currentAnimation = enemy.currentAction?.getClip().name || 'Idle';
             }
-          }
-
-          const direction = new THREE.Vector3().subVectors(targetPosition, enemy.position);
-          direction.y = 0;
-          const movementThreshold = 0.001; // Define a threshold for actual movement
-
-          if (isMoving && direction.lengthSq() > movementThreshold) {
-            direction.normalize();
-            const currentSpeed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
-            enemy.position.addScaledVector(direction, currentSpeed);
-            const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
-            enemy.lookAt(lookAtTarget);
-          } else if (isMoving && direction.lengthSq() <= movementThreshold) {
-            // If supposed to be moving but stopped, transition to idle
+          } else if (enemy.position.distanceTo(enemy.patrolTarget) < 1.0 || enemy.patrolTarget.lengthSq() === 0) {
+            // Reached patrol target, start idling
             enemy.isIdling = true;
             enemy.idleDuration = Math.random() * 5 + 3;
             enemy.idleTimer = enemy.idleDuration;
             const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
             currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-          } else if (!isMoving) { // Simplified this condition
-            // If not supposed to be moving, and not attacking/dying, ensure idle animation
-            const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-            // Ensure currentAnimation is an idle animation if not already
-            if (!idleAnimations.includes(currentAnimation)) {
-                currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-            }
+            isMoving = false; // Stop moving to idle
+          } else {
+            // Move towards patrol target
+            targetPosition.copy(enemy.patrolTarget);
+            isMoving = true;
+            currentAnimation = 'Walk'; // Patrol animation
           }
         }
 
-        // Play animation
-        if (enemy.currentAction?.getClip().name !== currentAnimation && enemy.actions[currentAnimation]) {
+        const direction = new THREE.Vector3().subVectors(targetPosition, enemy.position);
+        direction.y = 0;
+        const movementThreshold = 0.001; // Define a threshold for actual movement
+
+        if (isMoving && direction.lengthSq() > movementThreshold) {
+          direction.normalize();
+          const currentSpeed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
+          enemy.position.addScaledVector(direction, currentSpeed);
+          const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
+          enemy.lookAt(lookAtTarget);
+        } else if (isMoving && direction.lengthSq() <= movementThreshold) {
+          // If supposed to be moving but stopped, transition to idle
+          enemy.isIdling = true;
+          enemy.idleDuration = Math.random() * 5 + 3;
+          enemy.idleTimer = enemy.idleDuration;
+          const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+          currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+        } else if (!isMoving) { // Simplified this condition
+          // If not supposed to be moving, and not attacking/dying, ensure idle animation
+          const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+          // Ensure currentAnimation is an idle animation if not already
+          if (!idleAnimations.includes(currentAnimation)) {
+              currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+          }
+        }
+      }
+
+      // Play animation
+      if (enemy.currentAction?.getClip().name !== currentAnimation && enemy.actions[currentAnimation]) {
+        playAnimation(enemy, currentAnimation);
+      }
+
+      enemy.position.y = enemyY;
+
+      // Check for attack condition (distance to dog)
+      const dogXZ = new THREE.Vector3(dog.position.x, 0, dog.position.z);
+      const enemyXZ = new THREE.Vector3(enemy.position.x, 0, enemy.position.z);
+      const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
+
+      // Check for collision and trigger appropriate actions
+      if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !enemy.isDying) {
+        // Player is within death trigger distance, enemy dies immediately
+        enemy.isDying = true;
+        enemy.deathTimer = ENEMY_DEATH_DURATION;
+        currentAnimation = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
+        if (enemy.actions[currentAnimation]) {
           playAnimation(enemy, currentAnimation);
         }
-
-        enemy.position.y = enemyY;
-
-        // Check for attack condition (distance to dog)
-        const dogXZ = new THREE.Vector3(dog.position.x, 0, dog.position.z);
-        const enemyXZ = new THREE.Vector3(enemy.position.x, 0, enemy.position.z);
-        const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
-
-        // Check for collision and trigger appropriate actions
-        if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !enemy.isDying) {
-          // Player is within death trigger distance, enemy dies immediately
-          enemy.isDying = true;
-          enemy.deathTimer = ENEMY_DEATH_DURATION;
-          currentAnimation = 'Death';
-          if (enemy.actions[currentAnimation]) {
-            playAnimation(enemy, currentAnimation);
-          }
-          // Apply penalty/death logic immediately
+        // Apply penalty/death logic immediately, only if not already applied
+        if (!enemy.hasAppliedDeathEffect) {
           if (isShieldActiveRef.current) {
             // No penalty, just death
           } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
@@ -366,39 +378,43 @@ export const useEnemyLogic = ({
           } else {
             onEnemyCollisionPenalty();
           }
-        } else if (distanceXZToDog < ENEMY_ATTACK_DISTANCE && !enemy.isAttacking && !enemy.isDying) {
-          // Player is within attack distance, stop and attack
-          targetPosition.copy(enemy.position); // Stop moving
-          enemy.isAttacking = true;
-          enemy.isIdling = false;
+          enemy.hasAppliedDeathEffect = true; // Mark as applied
+        }
+      } else if (distanceXZToDog < ENEMY_ATTACK_DISTANCE && !enemy.isAttacking && !enemy.isDying) {
+        // Player is within attack distance, stop and attack
+        targetPosition.copy(enemy.position); // Stop moving
+        enemy.isAttacking = true;
+        enemy.isIdling = false;
 
-          if (enemy.enemyType === 'herbivore') {
-            // Herbivore: Rotate 180 degrees then attack
-            const lookAtTarget = new THREE.Vector3(dogPosition.x, enemyY, dogPosition.z);
-            enemy.lookAt(lookAtTarget);
-            enemy.rotation.y += Math.PI; // Rotate 180 degrees for back attack
-            currentAnimation = 'Attack_Kick';
-          } else {
-            // Carnivore: Attack directly
-            currentAnimation = 'Attack';
-          }
+        if (enemy.enemyType === 'herbivore') {
+          // Herbivore: Rotate 180 degrees then attack
+          const lookAtTarget = new THREE.Vector3(dogPosition.x, enemyY, dogPosition.z);
+          enemy.lookAt(lookAtTarget);
+          enemy.rotation.y += Math.PI; // Rotate 180 degrees for back attack
+          currentAnimation = 'Attack_Kick';
+        } else {
+          // Carnivore: Attack directly
+          currentAnimation = 'Attack';
+        }
 
-          if (enemy.actions[currentAnimation]) {
-            playAnimation(enemy, currentAnimation);
+        if (enemy.actions[currentAnimation]) {
+          playAnimation(enemy, currentAnimation);
 
-            // Listen for attack animation finish to trigger death or penalty
-            enemy.mixer.removeEventListener('finished', onAttackAnimationFinished); // Remove previous listeners
-            enemy.mixer.addEventListener('finished', (e) => {
-              const finishedClipName = e.action.getClip().name;
-              const attackAnimationName = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
+          // Listen for attack animation finish to trigger death or penalty
+          enemy.mixer.removeEventListener('finished', onAttackAnimationFinished); // Remove previous listeners
+          enemy.mixer.addEventListener('finished', (e) => {
+            const finishedClipName = e.action.getClip().name;
+            const attackAnimationName = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
 
-              if (finishedClipName === attackAnimationName) {
-                // After attack animation, trigger death animation and apply penalty/bone consumption
-                enemy.isDying = true;
-                enemy.deathTimer = ENEMY_DEATH_DURATION;
-                playAnimation(enemy, 'Death');
-                enemy.isAttacking = false; // Reset attack state
+            if (finishedClipName === attackAnimationName) {
+              // After attack animation, trigger death animation and apply penalty/bone consumption
+              enemy.isDying = true;
+              enemy.deathTimer = ENEMY_DEATH_DURATION;
+              playAnimation(enemy, ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH);
+              enemy.isAttacking = false; // Reset attack state
 
+              // Apply penalty/death logic, only if not already applied
+              if (!enemy.hasAppliedDeathEffect) {
                 if (isShieldActiveRef.current) {
                   // No penalty, shield absorbed attack
                 } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
@@ -407,9 +423,10 @@ export const useEnemyLogic = ({
                 } else {
                   onEnemyCollisionPenalty();
                 }
+                enemy.hasAppliedDeathEffect = true; // Mark as applied
               }
-            });
-          }
+            }
+          });
         }
       }
     });
