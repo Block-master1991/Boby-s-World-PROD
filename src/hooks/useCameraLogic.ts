@@ -5,7 +5,7 @@ import * as React from 'react';
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 
-const CAMERA_FOLLOW_OFFSET = new THREE.Vector3(0, 2, -5.0);
+const CAMERA_FOLLOW_OFFSET = new THREE.Vector3(0, 2, -4);
 const CAMERA_LERP_FACTOR = 0.15;
 const POSITION_THRESHOLD_SQUARED = 0.0001;
 
@@ -65,7 +65,7 @@ export const useCameraLogic = ({
         camera.position.copy(cameraTargetPosition);
     }
     
-    camera.lookAt(dog.position);
+camera.lookAt(dog.position.clone().add(new THREE.Vector3(0, 2.5, 0)));
 
   }, [cameraRef, dogModelRef]);
 

@@ -8,13 +8,13 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree, OctreeObject } from '@/lib/Octree';
 
 const ENEMY_SPEED = 0.03;
-const ENEMY_GALLOP_SPEED_MULTIPLIER = 1.5; // Multiplier for GALLOP speed
+const ENEMY_GALLOP_SPEED_MULTIPLIER = 3; // Multiplier for GALLOP speed
 const ENEMY_ATTACK_DISTANCE = 1.5; // Distance for enemy to stop and attack
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5; // Distance at which enemy dies after attack
 const ENEMY_DEATH_DURATION = 5.0; // Duration for death animation
-const ENEMY_PROTECTION_RADIUS = 5; // Radius around the coin where enemies patrol
+const ENEMY_PROTECTION_RADIUS = 7; // Radius around the coin where enemies patrol
 const ENEMY_CHASE_RADIUS = 15; // Radius around the coin where enemies start chasing the player
-const CROSSFADE_DURATION = 0.2;
+const CROSSFADE_DURATION = 0.2; // Duration for crossfade between animations
 
 const ENEMY_ANIMATION_NAMES = {
   CARNIVORE: {

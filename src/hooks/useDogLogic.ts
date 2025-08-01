@@ -8,12 +8,12 @@ import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
 import { Octree, OctreeObject } from '../lib/Octree'; // Import Octree
 
-const NORMAL_DOG_SPEED = 0.09;
-const SPRINT_DOG_SPEED = 0.20;
-const BOOSTED_DOG_SPEED = 0.30;
-const KEYBOARD_ROTATION_SPEED = 0.0175;
-const JOYSTICK_ROTATION_SPEED = 0.013;
-const JOYSTICK_ROTATION_THRESHOLD = 0.2;
+const NORMAL_DOG_SPEED = 0.09; // Normal walking speed
+const SPRINT_DOG_SPEED = 0.20; // Sprinting speed
+const BOOSTED_DOG_SPEED = 0.30; // Speed when boosted
+const KEYBOARD_ROTATION_SPEED = 0.0175; // Rotation speed for keyboard input
+const JOYSTICK_ROTATION_SPEED = 0.013; // Rotation speed for joystick input
+const JOYSTICK_ROTATION_THRESHOLD = 0.2; // Threshold for joystick rotation
 const DOG_MODEL_SCALE = 1.5; // Adjusted for better visibility
 const SHIELD_EMISSIVE_COLOR = 0x0077ff;
 const NORMAL_EMISSIVE_COLOR = 0x000000;
