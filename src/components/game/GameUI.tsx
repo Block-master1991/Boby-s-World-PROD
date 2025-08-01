@@ -212,7 +212,6 @@ const GameUI: React.FC = () => {
                 setGuardianShieldCount(shieldCount);
                 setSpeedyPawsTreatCount(speedyCount);
                 setCoinMagnetTreatCount(magnetCount);
-                setOptimisticUpdates([]); // Clear optimistic updates on successful fetch
             } else {
                 console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.'); // Log error instead of throwing
             }
@@ -221,7 +220,6 @@ const GameUI: React.FC = () => {
             toast({ title: 'Data Sync Error', description: `Could not fetch player data: ${error}`, variant: 'destructive' });
             // Reset counts and balance on error or if not authenticated
             setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
-            setOptimisticUpdates(prev => prev.map(update => ({ ...update, status: 'failed' }))); // Mark pending as failed
         } finally {
             setIsFetchingPlayerUSDT(false);
         }
@@ -324,9 +322,9 @@ const GameUI: React.FC = () => {
             const data = await response.json();
 
             if (response.ok) {
-                // On success, remove the optimistic update and re-fetch data to sync
+                // On success, re-fetch data to sync, then remove the optimistic update
+                await fetchPlayerData();
                 setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
-                fetchPlayerData();
             } else {
                 // On failure, mark as failed or remove and show error
                 setOptimisticUpdates(prev => prev.map(update =>
@@ -579,9 +577,9 @@ const GameUI: React.FC = () => {
             const data = await response.json();
 
             if (response.ok) {
-                toast({ title: 'Item Used!', description: `${amountToUse} ${itemDefinition.name}(s) consumed.`, variant: 'default' });
+                //toast({ title: 'Item Used!', description: `${amountToUse} ${itemDefinition.name}(s) consumed.`, variant: 'default' });
+                await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
                 setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
-                fetchPlayerData();
             } else {
                 // If backend fails, rollback the local count and the effect
                 setOptimisticUpdates(prev => prev.map(update =>
@@ -635,9 +633,9 @@ const GameUI: React.FC = () => {
             const data = await response.json();
 
             if (response.ok) {
+                await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
                 setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
                 toast({ title: "Withdrawal Successful", description: `${MIN_WITHDRAWAL_USDT} USDT withdrawn.`, duration: 7000 });
-                fetchPlayerData();
             } else {
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
@@ -684,7 +682,7 @@ const GameUI: React.FC = () => {
             id: updateId,
             resolve: (success) => {
                 if (success) {
-                    toast({ title: 'Protected!', description: 'A Protection Bone was used!', variant: 'default' });
+                    //toast({ title: 'Protected!', description: 'A Protection Bone was used!', variant: 'default' });
                 } else {
                     // Error toast is handled by processBoneConsumptionQueue
                 }
@@ -721,6 +719,7 @@ const GameUI: React.FC = () => {
                 const data = await response.json();
 
                 if (response.ok) {
+                    await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
                     setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId)); // Remove on success
                     resolve(true);
                 } else {
@@ -745,7 +744,6 @@ const GameUI: React.FC = () => {
                 reject(error); // Indicate failure
             } finally {
                 boneConsumptionQueueRef.current.shift(); // Remove the processed item from queue
-                fetchPlayerData(); // Always re-sync after each request in the queue
             }
         }
 
@@ -783,8 +781,8 @@ const GameUI: React.FC = () => {
             const data = await response.json();
 
             if (response.ok) {
+                await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
                 setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
-                fetchPlayerData();
             } else {
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
@@ -795,7 +793,7 @@ const GameUI: React.FC = () => {
         } catch (error: any) {
             console.error("Network or unexpected error applying enemy collision penalty via backend:", error);
             let errorMessage = `Could not apply penalty. Error: ${error.message || String(error)}`;
-            if (error.message && error.message.includes('CSRF token missing')) {
+            if (error.message && errorMessage.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
             toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
