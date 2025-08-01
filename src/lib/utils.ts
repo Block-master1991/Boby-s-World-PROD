@@ -46,6 +46,7 @@ export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit
     return fetch(input, {
       ...init,
       headers,
+      signal: init?.signal,
     });
   }
 

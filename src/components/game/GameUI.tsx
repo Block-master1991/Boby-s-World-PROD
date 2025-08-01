@@ -20,6 +20,7 @@ import { fetchWithCsrf } from '@/lib/utils'; // استيراد fetchWithCsrf
 
 // Game Constants
 const USDT_PER_COIN = 0.001;
+
 const MIN_WITHDRAWAL_USDT = 0.5;
 const SPEED_BOOST_DURATION = 30;
 const SHIELD_DURATION = 30;
@@ -100,6 +101,7 @@ const GameUI: React.FC = () => {
 
     // Game World State
     const [remainingCoinsOnMap, setRemainingCoinsOnMap] = useState<number>(COIN_COUNT_FOR_GAME_LOGIC);
+
 
     // Joystick State
     const [joystickMovement, setJoystickMovement] = useState<{x: number, y: number} | null>(null);
@@ -182,27 +184,30 @@ const GameUI: React.FC = () => {
     const fetchPlayerData = useCallback(async () => {
         if (!isAuthenticated || !authUser?.publicKey) {
             setIsFetchingPlayerUSDT(false);
-            return;
+            return null; // Return null if not authenticated
         }
 
         setIsFetchingPlayerUSDT(true);
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         try {
-            const response = await fetch('/api/game/fetchPlayerData', { // Updated path
+            const response = await fetch('/api/game/fetchPlayerData', {
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}` // Send public key for auth
-                }
+                    'Authorization': `Bearer ${authUser.publicKey}`
+                },
+                signal: signal
             });
             const data = await response.json();
 
             if (response.ok) {
                 setPlayerGameUSDT(data.gameUSDTBalance || 0);
-                // Assume backend sends inventory as an array of item IDs or similar for counts
                 const rawInventory = data.inventory || [];
                 let speedyCount = 0, shieldCount = 0, pBoneCount = 0, magnetCount = 0;
                 rawInventory.forEach((item: any) => {
-                    const itemId = typeof item === 'object' && item.id ? item.id : item; // Handle object or just ID
+                    const itemId = typeof item === 'object' && item.id ? item.id : item;
                     if (itemId === '1') pBoneCount++;
                     if (itemId === '2') shieldCount++;
                     if (itemId === '3') speedyCount++;
@@ -213,16 +218,20 @@ const GameUI: React.FC = () => {
                 setSpeedyPawsTreatCount(speedyCount);
                 setCoinMagnetTreatCount(magnetCount);
             } else {
-                console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.'); // Log error instead of throwing
+                console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.');
             }
         } catch (error) {
             console.error("Network or unexpected error fetching player data from backend:", error);
-            toast({ title: 'Data Sync Error', description: `Could not fetch player data: ${error}`, variant: 'destructive' });
-            // Reset counts and balance on error or if not authenticated
-            setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
+            if ((error as any).name === 'AbortError') {
+                console.log('[GameUI] fetchPlayerData aborted.');
+            } else {
+                toast({ title: 'Data Sync Error', description: `Could not fetch player data: ${(error as Error).message || String(error)}`, variant: 'destructive' });
+                setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
+            }
         } finally {
             setIsFetchingPlayerUSDT(false);
         }
+        return controller; // Return the controller
     }, [isAuthenticated, authUser?.publicKey, toast]);
 
     /**
@@ -311,13 +320,17 @@ const GameUI: React.FC = () => {
             status: 'pending'
         }]);
 
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         try {
             const response = await fetchWithCsrf('/api/game/addCoin', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ amount: USDT_PER_COIN })
+                body: JSON.stringify({ amount: USDT_PER_COIN }),
+                signal: signal
             });
             const data = await response.json();
 
@@ -338,11 +351,15 @@ const GameUI: React.FC = () => {
             if (error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
             }
-            toast({ title: 'Sync Error', description: errorMessage, variant: 'destructive' });
-            // Ensure rollback by marking as failed if an error occurs
-            setOptimisticUpdates(prev => prev.map(update =>
-                update.id === updateId ? { ...update, status: 'failed' } : update
-            ));
+            if ((error as any).name === 'AbortError') {
+                console.log('[GameUI] handleCoinCollected aborted.');
+            } else {
+                toast({ title: 'Sync Error', description: errorMessage, variant: 'destructive' });
+                // Ensure rollback by marking as failed if an error occurs
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+            }
         }
     }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData]);
 
@@ -359,15 +376,34 @@ const GameUI: React.FC = () => {
      * This runs on component mount and when authentication or user public key changes.
      */
     useEffect(() => {
-        fetchPlayerData();
-        // Clear any active intervals for game effects on unmount
-        
-    return () => {
+        let currentFetchController: AbortController | null = null;
+
+        const cleanup = () => {
             if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);
             if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
             if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
+            
+            if (currentFetchController) {
+                console.log('[GameUI useEffect Cleanup] Aborting ongoing fetchPlayerData request.');
+                currentFetchController.abort();
+            }
+            setOptimisticUpdates([]);
+            boneConsumptionQueueRef.current = [];
+            isProcessingBoneQueueRef.current = false;
         };
-    }, [isAuthenticated, authUser?.publicKey, fetchPlayerData]); // Dependencies: isAuthenticated and authUser.publicKey
+
+        // Only fetch player data if authenticated
+        if (isAuthenticated) {
+            fetchPlayerData().then(controller => {
+                currentFetchController = controller;
+            });
+        } else if (!isAuthenticated) {
+            // If not authenticated and auth loading is complete, clear game data
+            cleanup();
+        }
+
+        return cleanup;
+    }, [isAuthenticated, authUser?.publicKey, fetchPlayerData]);
 
     // Effect to show toast when Speed Boost wears off
     useEffect(() => {
@@ -566,13 +602,17 @@ const GameUI: React.FC = () => {
             rollbackEffect: rollbackEffect // Store the rollback function
         }]);
 
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         try {
             const response = await fetchWithCsrf('/api/game/useItem', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse })
+                body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse }),
+                signal: signal
             });
             const data = await response.json();
 
@@ -591,14 +631,18 @@ const GameUI: React.FC = () => {
         } catch (error: any) {
             console.error("Network or unexpected error using item via backend:", error);
             let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error.message || String(error)}`;
-            if (error.message && error.message.includes('CSRF token missing')) {
-                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            if ((error as any).name === 'AbortError') {
+                console.log('[GameUI] handleUseConsumableItem aborted.');
+            } else {
+                if (error.message && error.message.includes('CSRF token missing')) {
+                    errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                }
+                toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                if (rollbackEffect) rollbackEffect(); // Call rollback effect
             }
-            toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
-            setOptimisticUpdates(prev => prev.map(update =>
-                update.id === updateId ? { ...update, status: 'failed' } : update
-            ));
-            if (rollbackEffect) rollbackEffect(); // Call rollback effect
         }
     }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData]);
 
@@ -622,13 +666,17 @@ const GameUI: React.FC = () => {
             status: 'pending'
         }]);
 
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         try {
             const response = await fetchWithCsrf('/api/game/withdrawUSDT', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ amount: MIN_WITHDRAWAL_USDT })
+                body: JSON.stringify({ amount: MIN_WITHDRAWAL_USDT }),
+                signal: signal
             });
             const data = await response.json();
 
@@ -645,13 +693,17 @@ const GameUI: React.FC = () => {
         } catch (error: any) {
             console.error("Network or unexpected error withdrawing USDT via backend:", error);
             let errorMessage = `Withdrawal failed: ${error.message || String(error)}`;
-            if (error.message && error.message.includes('CSRF token missing')) {
-                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            if ((error as any).name === 'AbortError') {
+                console.log('[GameUI] handleWithdrawUSDT aborted.');
+            } else {
+                if (error.message && error.message.includes('CSRF token missing')) {
+                    errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                }
+                toast({ title: "Withdrawal Error", description: errorMessage, variant: "destructive" });
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
             }
-            toast({ title: "Withdrawal Error", description: errorMessage, variant: "destructive" });
-            setOptimisticUpdates(prev => prev.map(update =>
-                update.id === updateId ? { ...update, status: 'failed' } : update
-            ));
         } finally {
             setIsWithdrawing(false);
         }
@@ -709,12 +761,16 @@ const GameUI: React.FC = () => {
         while (boneConsumptionQueueRef.current.length > 0) {
             const { id: updateId, resolve, reject } = boneConsumptionQueueRef.current[0]; // Peek at the first item
 
+            const controller = new AbortController();
+            const signal = controller.signal;
+
             try {
                 const response = await fetchWithCsrf('/api/game/consumeProtectionBone', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                    }
+                    },
+                    signal: signal
                 });
                 const data = await response.json();
 
@@ -741,7 +797,7 @@ const GameUI: React.FC = () => {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
                 }
                 toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
-                reject(error); // Indicate failure
+                resolve(false); // Indicate failure
             } finally {
                 boneConsumptionQueueRef.current.shift(); // Remove the processed item from queue
             }
@@ -770,13 +826,17 @@ const GameUI: React.FC = () => {
             status: 'pending'
         }]);
 
+        const controller = new AbortController();
+        const signal = controller.signal;
+
         try {
             const response = await fetchWithCsrf('/api/game/applyPenalty', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ amount: ENEMY_COLLISION_PENALTY_USDT })
+                body: JSON.stringify({ amount: ENEMY_COLLISION_PENALTY_USDT }),
+                signal: signal
             });
             const data = await response.json();
 
@@ -793,13 +853,17 @@ const GameUI: React.FC = () => {
         } catch (error: any) {
             console.error("Network or unexpected error applying enemy collision penalty via backend:", error);
             let errorMessage = `Could not apply penalty. Error: ${error.message || String(error)}`;
-            if (error.message && errorMessage.includes('CSRF token missing')) {
-                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            if ((error as any).name === 'AbortError') {
+                console.log('[GameUI] handleEnemyCollisionPenalty aborted.');
+            } else {
+                if (error.message && errorMessage.includes('CSRF token missing')) {
+                    errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                }
+                toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
             }
-            toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
-            setOptimisticUpdates(prev => prev.map(update =>
-                update.id === updateId ? { ...update, status: 'failed' } : update
-            ));
         }
     }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData]);
 
@@ -900,7 +964,9 @@ const GameUI: React.FC = () => {
                                 isAuthenticated={isAuthenticated}
                                 authUserPublicKey={authUser?.publicKey}
                                 isWalletConnectedAndMatching={isWalletConnectedAndMatching}
-                                onPurchaseSuccess={fetchPlayerData} // Add a callback to re-fetch player data after purchase
+                                onPurchaseSuccess={async () => {
+                                await fetchPlayerData();
+                                }}
                             />
                         </SheetContent>
                     </Sheet>

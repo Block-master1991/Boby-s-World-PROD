@@ -91,6 +91,13 @@ export const useEnemyLogic = ({
     dracoLoader.setDecoderPath('/libs/draco/gltf/');
     gltfLoader.current = new GLTFLoader();
     gltfLoader.current.setDRACOLoader(dracoLoader);
+
+    return () => {
+      // Dispose of the DRACOLoader instance
+      dracoLoader.dispose();
+      // Nullify the GLTFLoader reference
+      gltfLoader.current = null;
+    };
   }, []);
 
   const loadEnemyModel = React.useCallback(async (type: 'carnivore' | 'herbivore') => {
@@ -101,9 +108,10 @@ export const useEnemyLogic = ({
     const randomModel = models[Math.floor(Math.random() * models.length)];
     const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${randomModel}`;
 
-    return new Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] }>((resolve, reject) => {
+    return new Promise<{ model: THREE.Group | null; animations: THREE.AnimationClip[] }>((resolve) => {
       if (!gltfLoader.current) {
-        return reject(new Error('GLTFLoader not initialized.'));
+        console.warn('GLTFLoader not initialized. Skipping model load.');
+        return resolve({ model: null, animations: [] });
       }
       gltfLoader.current.load(modelPath, (gltf: { scene: THREE.Group; animations: THREE.AnimationClip[] }) => {
         const model = gltf.scene;
@@ -114,7 +122,10 @@ export const useEnemyLogic = ({
           }
         });
         resolve({ model, animations: gltf.animations });
-      }, undefined, reject);
+      }, undefined, (error) => {
+        console.error('Error loading GLTF model:', error);
+        resolve({ model: null, animations: [] }); // Resolve with null on error
+      });
     });
   }, []);
 
@@ -131,69 +142,74 @@ export const useEnemyLogic = ({
     for (const coin of coinMeshesRef.current) {
       if (coin.visible) {
         const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
-        const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
-        if (loadedModel) {
-          const mixer = new THREE.AnimationMixer(loadedModel);
+        try {
+          const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
+          if (loadedModel) {
+            const mixer = new THREE.AnimationMixer(loadedModel);
 
-          const actions: { [key: string]: THREE.AnimationAction } = {};
-          loadedAnimations.forEach((clip: THREE.AnimationClip) => {
-            const action = mixer.clipAction(clip);
-            actions[clip.name] = action;
+            const actions: { [key: string]: THREE.AnimationAction } = {};
+            loadedAnimations.forEach((clip: THREE.AnimationClip) => {
+              const action = mixer.clipAction(clip);
+              actions[clip.name] = action;
 
-            const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
-            if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
-                clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
-                isIdleAnimation) {
-              action.setLoop(THREE.LoopRepeat, Infinity);
-            } else {
-              action.setLoop(THREE.LoopOnce, 1);
-              action.clampWhenFinished = true;
+              const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
+              if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
+                  clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
+                  isIdleAnimation) {
+                action.setLoop(THREE.LoopRepeat, Infinity);
+              } else {
+                action.setLoop(THREE.LoopOnce, 1);
+                action.clampWhenFinished = true;
+              }
+            });
+            // Ensure all actions are stopped initially
+            Object.values(actions).forEach(action => action.stop());
+
+            const enemyData: EnemyData = loadedModel as EnemyData;
+            enemyData.targetCoinPosition = coin.position.clone();
+            enemyData.patrolCenter = coin.position.clone();
+            enemyData.patrolTarget = new THREE.Vector3(); // Will be set below
+            enemyData.isIdling = false;
+            enemyData.idleTimer = 0;
+            enemyData.idleDuration = 0;
+            enemyData.isAttacking = false;
+            enemyData.isDying = false;
+            enemyData.deathTimer = 0;
+            enemyData.hasAppliedDeathEffect = false; // Initialize to false
+            enemyData.mixer = mixer;
+            enemyData.animations = loadedAnimations;
+            enemyData.enemyType = enemyType;
+            enemyData.currentAction = null;
+            enemyData.actions = actions;
+            
+            // Set initial patrol target within the protection radius
+            const angle = Math.random() * Math.PI * 2;
+            const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
+            const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
+            const initialPatrolZ = coin.position.z + Math.sin(angle) * radius;
+            enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
+
+            const spawnAngle = Math.random() * Math.PI * 2;
+            const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8; // Spawn within protection radius
+            const enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
+            const enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
+            const enemyY = 0;
+            enemyData.position.set(enemyX, enemyY, enemyZ);
+            enemyData.scale.set(0.5, 0.5, 0.5);
+            enemyMeshesRef.current.push(enemyData);
+            scene.add(enemyData);
+
+            // Play initial idle animation
+            const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+            const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+            if (enemyData.actions[initialIdleActionName]) {
+              enemyData.currentAction = enemyData.actions[initialIdleActionName];
+              enemyData.currentAction.play();
             }
-          });
-          // Ensure all actions are stopped initially
-          Object.values(actions).forEach(action => action.stop());
-
-          const enemyData: EnemyData = loadedModel as EnemyData;
-          enemyData.targetCoinPosition = coin.position.clone();
-          enemyData.patrolCenter = coin.position.clone();
-          enemyData.patrolTarget = new THREE.Vector3(); // Will be set below
-          enemyData.isIdling = false;
-          enemyData.idleTimer = 0;
-          enemyData.idleDuration = 0;
-          enemyData.isAttacking = false;
-          enemyData.isDying = false;
-          enemyData.deathTimer = 0;
-          enemyData.hasAppliedDeathEffect = false; // Initialize to false
-          enemyData.mixer = mixer;
-          enemyData.animations = loadedAnimations;
-          enemyData.enemyType = enemyType;
-          enemyData.currentAction = null;
-          enemyData.actions = actions;
-          
-          // Set initial patrol target within the protection radius
-          const angle = Math.random() * Math.PI * 2;
-          const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
-          const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
-          const initialPatrolZ = coin.position.z + Math.sin(angle) * radius;
-          enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
-
-          const spawnAngle = Math.random() * Math.PI * 2;
-          const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8; // Spawn within protection radius
-          const enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
-          const enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
-          const enemyY = 0;
-          enemyData.position.set(enemyX, enemyY, enemyZ);
-          enemyData.scale.set(0.5, 0.5, 0.5);
-          enemyMeshesRef.current.push(enemyData);
-          scene.add(enemyData);
-
-          // Play initial idle animation
-          const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-          const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-          if (enemyData.actions[initialIdleActionName]) {
-            enemyData.currentAction = enemyData.actions[initialIdleActionName];
-            enemyData.currentAction.play();
           }
+        } catch (error) {
+          console.error('Error loading enemy model:', error);
+          continue; // Skip to the next coin if model loading fails
         }
       }
     }
