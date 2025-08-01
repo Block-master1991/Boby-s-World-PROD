@@ -6,6 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
+import { Octree, OctreeObject } from '../lib/Octree'; // Import Octree
 
 const NORMAL_DOG_SPEED = 0.09;
 const SPRINT_DOG_SPEED = 0.20;
@@ -37,6 +38,7 @@ interface UseDogLogicProps {
     isSpeedBoostActiveRef: MutableRefObject<boolean>;
     isShieldActiveRef: MutableRefObject<boolean>;
     isJoystickInteractionActiveRef: MutableRefObject<boolean>;
+    octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
 }
 
 export const useDogLogic = ({
@@ -48,6 +50,7 @@ export const useDogLogic = ({
     isSpeedBoostActiveRef,
     isShieldActiveRef,
     isJoystickInteractionActiveRef,
+    octreeRef, // Destructure octreeRef
 }: UseDogLogicProps) => {
     const dogModelRef = useRef<THREE.Group | null>(null);
     const animationMixerRef = useRef<THREE.AnimationMixer | null>(null);
@@ -253,9 +256,29 @@ export const useDogLogic = ({
                 };
             }
         }
+        // Collision Detection using Octree
+        if (octreeRef.current && dogModelRef.current) {
+            const dogBoundingBox = new THREE.Box3().setFromObject(dogModelRef.current);
+            const nearbyObjects = octreeRef.current.query(dogBoundingBox);
+
+            for (const obj of nearbyObjects) {
+                if (obj.id === 'ground') {
+                    // Handle ground collision (e.g., keep dog on ground)
+                    dogModelRef.current.position.y = 0;
+                    continue;
+                }
+                // Handle other object collisions
+                if (obj.id.startsWith('coin_')) {
+                    // Handle coin collision
+                } else if (obj.id.startsWith('enemy_')) {
+                    // Handle enemy collision
+                }
+            }
+        }
+
         return { isDogActuallyMoving, rotationAppliedThisFrame };
 
-    }, [ clockRef, keysPressedRef, joystickInputRef, isPausedRef, isSpeedBoostActiveRef, isJoystickInteractionActiveRef]);
+    }, [ clockRef, keysPressedRef, joystickInputRef, isPausedRef, isSpeedBoostActiveRef, isJoystickInteractionActiveRef, octreeRef]);
 
     useEffect(() => {
         const dog = dogModelRef.current;

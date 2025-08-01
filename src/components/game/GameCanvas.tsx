@@ -7,6 +7,8 @@ import * as THREE from 'three';
 // import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import type { PublicKey } from '@solana/web3.js';
 
+import { Octree } from '@/lib/Octree'; // Import Octree
+
 import { useDogLogic } from '@/hooks/useDogLogic';
 import { useCoinLogic } from '@/hooks/useCoinLogic';
 import { useEnemyLogic } from '@/hooks/useEnemyLogic';
@@ -30,6 +32,7 @@ interface GameCanvasProps {
     onConsumeProtectionBone: () => void;
     onEnemyCollisionPenalty: () => void;
     COIN_COUNT: number;
+    octreeRef: React.MutableRefObject<Octree | null>; // Added Octree ref
 }
 
 const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -49,6 +52,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     onConsumeProtectionBone: onConsumeProtectionBoneProp,
     onEnemyCollisionPenalty: onEnemyCollisionPenaltyProp,
     COIN_COUNT,
+    octreeRef, // Destructure octreeRef
 }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     const animationFrameId = useRef<number | null>(null);
@@ -114,13 +118,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const { dogModelRef, lastDogTransformRef, initializeDog, updateDog, resetDogState } = useDogLogic({
         sceneRef, clockRef, keysPressedRef, joystickInputRef, isPausedRef,
         isSpeedBoostActiveRef, isShieldActiveRef, isJoystickInteractionActiveRef,
+        octreeRef, // Pass octreeRef
     });
 
     const { initializeCoins, updateCoins, resetCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), 
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
-        isPausedRef,
+        isPausedRef, octreeRef,
     });
 
     const { initializeEnemies, updateEnemies, resetEnemies } = useEnemyLogic({
@@ -131,6 +136,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         coinMeshesRef, // Pass coinMeshesRef to useEnemyLogic
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), // Pass onCoinCollected to useEnemyLogic
         onAttackAnimationFinished: onAttackAnimationFinishedCallbackRef.current, // Pass the new callback
+        octreeRef,
     });
     
     const { initializeCamera, setupInitialCameraPosition, updateCamera, resetCamera } = useCameraLogic({
@@ -145,6 +151,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         sceneRef, 
         cameraRef, 
         rendererRef, 
+        octreeRef, // Pass octreeRef
         // controlsRef, // Removed
         isPausedRef, 
         isJoystickInteractionActiveRef,

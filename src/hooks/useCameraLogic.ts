@@ -5,7 +5,7 @@ import * as React from 'react';
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 
-const CAMERA_FOLLOW_OFFSET = new THREE.Vector3(0, 1.5, -2.0);
+const CAMERA_FOLLOW_OFFSET = new THREE.Vector3(0, 2, -5.0);
 const CAMERA_LERP_FACTOR = 0.15;
 const POSITION_THRESHOLD_SQUARED = 0.0001;
 
@@ -31,7 +31,7 @@ export const useCameraLogic = ({
       75,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.1,
-      2000
+      50
     );
     cameraRef.current = camera;
     camera.position.set(0, 5, 5);

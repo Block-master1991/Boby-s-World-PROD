@@ -45,7 +45,13 @@ const JOYSTICK_KNOB_SIZE = 40;
 const MAX_JOYSTICK_TRAVEL = (JOYSTICK_BASE_SIZE / 2) - (JOYSTICK_KNOB_SIZE / 2);
 
 
-const GameUI: React.FC = () => {
+import { Octree } from '@/lib/Octree'; // Import Octree
+
+interface GameUIProps {
+    octreeRef: React.MutableRefObject<Octree | null>;
+}
+
+const GameUI: React.FC<GameUIProps> = ({ octreeRef }) => {
     const isMobile = useIsMobile();
     const {
         sessionPublicKey,
@@ -890,6 +896,7 @@ const GameUI: React.FC = () => {
                     onConsumeProtectionBone={handleConsumeProtectionBone}
                     onEnemyCollisionPenalty={handleEnemyCollisionPenalty}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
+                    octreeRef={octreeRef} // Pass octreeRef
                     // New props for enemy logic
                     // coinMeshesRef will be passed from GameCanvas itself after useCoinLogic
                     // onCoinCollected is already passed

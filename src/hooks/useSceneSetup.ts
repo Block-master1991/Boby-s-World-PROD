@@ -5,12 +5,14 @@ import * as React from 'react';
 import * as THREE from 'three';
 
 import type { MutableRefObject } from 'react';
+import { Octree, OctreeObject } from '../lib/Octree';
 
 interface UseSceneSetupProps {
   mountRef: MutableRefObject<HTMLDivElement | null>;
   sceneRef: MutableRefObject<THREE.Scene | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   rendererRef: MutableRefObject<THREE.WebGLRenderer | null>;
+  octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
 
   isPausedRef: MutableRefObject<boolean>;
   isJoystickInteractionActiveRef: MutableRefObject<boolean>; // Kept for other potential uses, though not for controls here
@@ -21,6 +23,7 @@ export const useSceneSetup = ({
   sceneRef,
   cameraRef,
   rendererRef,
+  octreeRef, // Added Octree ref
 
   isPausedRef,
   isJoystickInteractionActiveRef,
@@ -45,7 +48,10 @@ export const useSceneSetup = ({
     currentMount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-
+    // Initialize Octree
+    const worldBounds = new THREE.Box3(new THREE.Vector3(-300, -10, -300), new THREE.Vector3(300, 300, 300));
+    const octree = new Octree(worldBounds);
+    octreeRef.current = octree;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
     scene.add(ambientLight);
@@ -69,9 +75,13 @@ export const useSceneSetup = ({
     groundPlane.rotation.x = -Math.PI / 2;
     groundPlane.receiveShadow = true;
     scene.add(groundPlane);
+
+    // Add ground plane to Octree
+    const groundBox = new THREE.Box3().setFromObject(groundPlane);
+    octree.insert({ id: 'ground', bounds: groundBox, data: groundPlane });
     
     return true;
-  }, [mountRef, sceneRef, cameraRef, rendererRef]); // controlsRef removed from dependencies
+  }, [mountRef, sceneRef, cameraRef, rendererRef, octreeRef]); // controlsRef removed from dependencies, octreeRef added
 
   const handleResize = React.useCallback(() => {
     if (cameraRef.current && rendererRef.current && mountRef.current) {
@@ -101,9 +111,13 @@ export const useSceneSetup = ({
         });
         sceneRef.current.clear(); sceneRef.current = null;
     }
+    // Clear Octree reference on cleanup
+    if (octreeRef.current) {
+        octreeRef.current = null;
+    }
    
     console.log("[useSceneSetup] Cleanup complete.");
-  }, [rendererRef, sceneRef, mountRef]); 
+  }, [rendererRef, sceneRef, mountRef, octreeRef]); // octreeRef added to dependencies
 
 
   return {

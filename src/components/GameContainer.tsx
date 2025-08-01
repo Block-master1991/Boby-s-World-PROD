@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameUI from '@/components/game/GameUI';
 import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
 import AuthenticationScreen from '@/components/game-bootstrap/AuthenticationScreen';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
+import { Octree } from '@/lib/Octree';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
@@ -33,6 +34,8 @@ const GameContainer: React.FC = () => {
     const router = useRouter();
     const pathname = usePathname(); // Get current path for potential redirects
     const { toast } = useToast();
+
+    const octreeRef = useRef<Octree | null>(null); // Octree ref
 
     const [captchaVerified, setCaptchaVerified] = useState(false);
     const [isRequestingNonce, setIsRequestingNonce] = useState(false); 
@@ -229,7 +232,7 @@ const GameContainer: React.FC = () => {
     // If all conditions met, show GameUI
     if (isGameUIVisible()) {
         console.log("[GameContainer] Displaying: GameUI for regular user.");
-        return <GameUI />;
+        return <GameUI octreeRef={octreeRef} />;
     }
 
     console.log("[GameContainer] Fallback: Showing default loading screen (should not be reached often).");

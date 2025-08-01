@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
+import { Octree, OctreeObject } from '@/lib/Octree';
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 1.5; // Multiplier for GALLOP speed
@@ -63,6 +64,8 @@ interface UseEnemyLogicProps {
   coinMeshesRef: MutableRefObject<THREE.Mesh[]>; // Added coinMeshesRef
   onCoinCollected: () => void; // Added onCoinCollected to kill enemies
   onAttackAnimationFinished: (event: THREE.Event) => void; // Add onAttackAnimationFinished prop
+  octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
+
 }
 
 export const useEnemyLogic = ({
@@ -74,8 +77,10 @@ export const useEnemyLogic = ({
   onEnemyCollisionPenalty,
   isPausedRef,
   coinMeshesRef, // Destructure new prop
+  octreeRef,
   onCoinCollected, // Destructure new prop
   onAttackAnimationFinished, // Destructure new prop
+
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
   const internalOptimisticProtectionBoneCountRef = React.useRef(protectionBoneCountRef.current);
@@ -139,6 +144,14 @@ export const useEnemyLogic = ({
     const scene = sceneRef.current;
 
     enemyMeshesRef.current.forEach(enemy => {
+      if (octreeRef.current) {
+        const enemyBox = new THREE.Box3().setFromObject(enemy);
+        octreeRef.current.remove({ 
+            id: `enemy_${enemy.id}`, 
+            bounds: enemyBox,
+            data: enemy
+        });
+    }
       enemy.mixer.stopAllAction();
       scene.remove(enemy);
     });
@@ -201,6 +214,15 @@ export const useEnemyLogic = ({
             const enemyY = 0;
             enemyData.position.set(enemyX, enemyY, enemyZ);
             enemyData.scale.set(0.5, 0.5, 0.5);
+                      // Add to Octree
+              if (octreeRef.current) {
+                const enemyBox = new THREE.Box3().setFromObject(enemyData);
+                octreeRef.current.insert({
+                  id: `enemy_${enemyData.id}`,
+                  bounds: enemyBox,
+                  data: enemyData
+                });
+              }
             enemyMeshesRef.current.push(enemyData);
             scene.add(enemyData);
 
@@ -218,7 +240,7 @@ export const useEnemyLogic = ({
         }
       }
     }
-  }, [sceneRef, coinMeshesRef, loadEnemyModel]);
+  }, [sceneRef, coinMeshesRef, loadEnemyModel, octreeRef]);
 
   const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
     const newAction = enemy.actions[newActionName];

@@ -4,6 +4,8 @@
 import React, { useCallback, useRef } from 'react'; // Ensured React is imported
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
+import { Octree, OctreeObject } from '../lib/Octree'; // Import Octree
+
 
 const COIN_RADIUS = 0.4;
 const COIN_HEIGHT = 0.08;
@@ -24,6 +26,8 @@ interface UseCoinLogicProps {
   onCoinCollected: () => void; // Expect this to be stable (useCallback in parent)
   onRemainingCoinsUpdate: (remaining: number) => void; // Expect this to be stable
   isPausedRef: MutableRefObject<boolean>;
+  octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
+
 }
 
 export const useCoinLogic = ({
@@ -35,6 +39,8 @@ export const useCoinLogic = ({
   onCoinCollected, // Directly use the stable prop
   onRemainingCoinsUpdate, // Directly use the stable prop
   isPausedRef,
+  octreeRef, // Destructure octreeRef
+
 }: UseCoinLogicProps) => {
   const coinMeshesRef = useRef<THREE.Mesh[]>([]);
   const remainingCoinsRef = useRef<number>(COIN_COUNT);
@@ -65,9 +71,18 @@ export const useCoinLogic = ({
       coinMesh.castShadow = true;
       coinMeshesRef.current.push(coinMesh);
       scene.add(coinMesh);
+      // Add to Octree
+      if (octreeRef.current) {
+        const coinBox = new THREE.Box3().setFromObject(coinMesh);
+        octreeRef.current.insert({
+          id: `coin_${i}`,
+          bounds: coinBox,
+          data: coinMesh
+        });
+      }
     }
     onRemainingCoinsUpdate(remainingCoinsRef.current); // Use the stable prop directly
-  }, [sceneRef, COIN_COUNT, onRemainingCoinsUpdate]); // Added onRemainingCoinsUpdate
+  }, [sceneRef, COIN_COUNT, onRemainingCoinsUpdate, octreeRef]); // Added onRemainingCoinsUpdate
 
   const updateCoins = useCallback(() => { // Removed updaterFunc parameter
     if (isPausedRef.current || !dogModelRef.current) return;
