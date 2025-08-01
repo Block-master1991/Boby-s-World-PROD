@@ -137,6 +137,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), // Pass onCoinCollected to useEnemyLogic
         onAttackAnimationFinished: onAttackAnimationFinishedCallbackRef.current, // Pass the new callback
         octreeRef,
+        cameraRef,
     });
     
     const { initializeCamera, setupInitialCameraPosition, updateCamera, resetCamera } = useCameraLogic({

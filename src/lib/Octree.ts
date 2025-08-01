@@ -190,8 +190,51 @@ class Octree {
 clear(): void {
     this.root = new OctreeNode(this.root.bounds, 0);
   }
-    // TODO: Implement raycast method
-    // TODO: Implement frustumCulling method
+
+  raycast(ray: THREE.Ray): OctreeObject[] {
+    const results: OctreeObject[] = [];
+    this.raycastNode(this.root, ray, results);
+    return results;
+}
+
+private raycastNode(node: OctreeNode, ray: THREE.Ray, results: OctreeObject[]) {
+    if (!ray.intersectsBox(node.bounds)) return;
+
+    for (const obj of node.objects) {
+        if (ray.intersectsBox(obj.bounds)) {
+            results.push(obj);
+        }
+    }
+
+    for (let i = 0; i < 8; i++) {
+        if (node.children[i]) {
+            this.raycastNode(node.children[i]!, ray, results);
+        }
+    }
+}
+
+
+frustumCulling(frustum: THREE.Frustum): OctreeObject[] {
+    const results: OctreeObject[] = [];
+    this.frustumCullingNode(this.root, frustum, results);
+    return results;
+}
+
+private frustumCullingNode(node: OctreeNode, frustum: THREE.Frustum, results: OctreeObject[]) {
+    if (!frustum.intersectsBox(node.bounds)) return;
+
+    for (const obj of node.objects) {
+        if (frustum.intersectsBox(obj.bounds)) {
+            results.push(obj);
+        }
+    }
+
+    for (let i = 0; i < 8; i++) {
+        if (node.children[i]) {
+            this.frustumCullingNode(node.children[i]!, frustum, results);
+        }
+    }
+}
 }
 
 export { Octree };

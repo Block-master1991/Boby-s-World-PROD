@@ -65,6 +65,7 @@ interface UseEnemyLogicProps {
   onCoinCollected: () => void; // Added onCoinCollected to kill enemies
   onAttackAnimationFinished: (event: THREE.Event) => void; // Add onAttackAnimationFinished prop
   octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
+  cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>; // ✅ NEW
 
 }
 
@@ -80,6 +81,8 @@ export const useEnemyLogic = ({
   octreeRef,
   onCoinCollected, // Destructure new prop
   onAttackAnimationFinished, // Destructure new prop
+  cameraRef, // ✅ NEW
+
 
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
@@ -257,10 +260,33 @@ export const useEnemyLogic = ({
   }, []);
 
   const updateEnemies = React.useCallback((delta: number) => {
-    if (isPausedRef.current || !dogModelRef.current || !sceneRef.current) return;
+    if (isPausedRef.current || !dogModelRef.current || !sceneRef.current || !cameraRef.current) return;
 
     const dog = dogModelRef.current;
     const dogPosition = dog.position;
+    const camera = cameraRef.current;
+
+    // ✅ Frustum Culling setup
+    camera.updateMatrixWorld();
+    const frustum = new THREE.Frustum();
+    const viewProjection = new THREE.Matrix4().multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse
+    );
+    frustum.setFromProjectionMatrix(viewProjection);
+
+    // ✅ Use octree to get nearby enemies
+    let visibleEnemies = enemyMeshesRef.current;
+    if (octreeRef.current) {
+      const cameraBox = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(50, 50, 50));
+      visibleEnemies = octreeRef.current.query(cameraBox).map(obj => obj.data as EnemyData);
+    }
+
+    // ✅ Filter enemies that are visible in frustum
+    visibleEnemies = visibleEnemies.filter(enemy => {
+      const boundingBox = new THREE.Box3().setFromObject(enemy);
+      return frustum.intersectsBox(boundingBox);
+    });
 
     enemyMeshesRef.current.forEach(enemy => {
       enemy.mixer.update(delta); // Update mixer
@@ -484,6 +510,8 @@ export const useEnemyLogic = ({
     onCoinCollected,
     onAttackAnimationFinished,
     playAnimation, // Add playAnimation to dependencies
+    cameraRef,
+    octreeRef,
   ]);
   
   const resetEnemies = React.useCallback(() => {
