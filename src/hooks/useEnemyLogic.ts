@@ -123,7 +123,12 @@ export const useEnemyLogic = ({
         });
         resolve({ model, animations: gltf.animations });
       }, undefined, (error) => {
-        console.error('Error loading GLTF model:', error);
+        console.debug('Error loading GLTF model:', error); // Changed to console.debug
+        // Add a toast notification for the user about the network error
+        // This assumes a toast function is available, similar to GameUI.tsx
+        // For now, I'll just log it, as there's no direct toast context here.
+        // If a global toast context or similar mechanism is available, it should be used.
+        console.debug('Failed to load enemy model due to a network error. Please check your internet connection.'); // Changed to console.debug
         resolve({ model: null, animations: [] }); // Resolve with null on error
       });
     });

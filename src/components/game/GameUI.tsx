@@ -223,9 +223,10 @@ const GameUI: React.FC = () => {
         } catch (error) {
             console.error("Network or unexpected error fetching player data from backend:", error);
             if ((error as any).name === 'AbortError') {
-                console.log('[GameUI] fetchPlayerData aborted.');
+                console.debug('[GameUI] fetchPlayerData aborted.'); // Changed to console.debug
             } else {
-                toast({ title: 'Data Sync Error', description: `Could not fetch player data: ${(error as Error).message || String(error)}`, variant: 'destructive' });
+                console.debug("Network or unexpected error fetching player data from backend:", error); // Changed to console.debug
+                toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
                 setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
             }
         } finally {
