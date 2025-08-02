@@ -3,19 +3,23 @@
 import * as React from 'react';
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader'; // Import GLTF type
+import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree, OctreeObject } from '@/lib/Octree';
-import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
+import { getModel, putModel } from '../lib/indexedDB';
+import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 
 const ENEMY_SPEED = 0.03;
-const ENEMY_GALLOP_SPEED_MULTIPLIER = 3; // Multiplier for GALLOP speed
-const ENEMY_ATTACK_DISTANCE = 1.5; // Distance for enemy to stop and attack
-const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5; // Distance at which enemy dies after attack
-const ENEMY_DEATH_DURATION = 5.0; // Duration for death animation
-const ENEMY_PROTECTION_RADIUS = 7; // Radius around the coin where enemies patrol
-const ENEMY_CHASE_RADIUS = 15; // Radius around the coin where enemies start chasing the player
-const CROSSFADE_DURATION = 0.2; // Duration for crossfade between animations
+const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
+const ENEMY_ATTACK_DISTANCE = 1.5;
+const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5;
+const ENEMY_DEATH_DURATION = 5.0;
+const ENEMY_PROTECTION_RADIUS = 7;
+const ENEMY_CHASE_RADIUS = 15;
+const CROSSFADE_DURATION = 0.2;
+const VISIBLE_ENEMY_DISTANCE = 20;
+const ENEMIES_PER_COIN_CHUNK = 1;
+
 
 const ENEMY_ANIMATION_NAMES = {
   CARNIVORE: {
@@ -44,12 +48,13 @@ interface EnemyCustomData {
   isAttacking: boolean;
   isDying: boolean;
   deathTimer: number;
-  hasAppliedDeathEffect: boolean; // Added to track if death effect has been applied
+  hasAppliedDeathEffect: boolean;
   mixer: THREE.AnimationMixer;
   animations: THREE.AnimationClip[];
   enemyType: 'carnivore' | 'herbivore';
   currentAction: THREE.AnimationAction | null;
   actions: { [key: string]: THREE.AnimationAction };
+  chunkKey: string;
 }
 
 type EnemyData = THREE.Group & EnemyCustomData;
@@ -62,12 +67,11 @@ interface UseEnemyLogicProps {
   onConsumeProtectionBone: () => void;
   onEnemyCollisionPenalty: () => void;
   isPausedRef: MutableRefObject<boolean>;
-  coinMeshesRef: MutableRefObject<THREE.Mesh[]>; // Added coinMeshesRef
-  onCoinCollected: () => void; // Added onCoinCollected to kill enemies
-  onAttackAnimationFinished: (event: THREE.Event) => void; // Add onAttackAnimationFinished prop
-  octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
-  cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>; // ✅ NEW
-
+  coinMeshesRef: MutableRefObject<THREE.Mesh[]>;
+  onCoinCollected: () => void;
+  onAttackAnimationFinished: (event: THREE.Event) => void;
+  octreeRef: MutableRefObject<Octree | null>;
+  cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
 }
 
 export const useEnemyLogic = ({
@@ -78,18 +82,18 @@ export const useEnemyLogic = ({
   onConsumeProtectionBone,
   onEnemyCollisionPenalty,
   isPausedRef,
-  coinMeshesRef, // Destructure new prop
+  coinMeshesRef,
   octreeRef,
-  onCoinCollected, // Destructure new prop
-  onAttackAnimationFinished, // Destructure new prop
-  cameraRef, // ✅ NEW
-
-
+  onCoinCollected,
+  onAttackAnimationFinished,
+  cameraRef,
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
   const internalOptimisticProtectionBoneCountRef = React.useRef(protectionBoneCountRef.current);
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
-  const clock = React.useRef(new THREE.Clock()); // Add clock
+  const clock = React.useRef(new THREE.Clock());
+  const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
+  const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
 
   React.useEffect(() => {
     internalOptimisticProtectionBoneCountRef.current = protectionBoneCountRef.current;
@@ -102,9 +106,7 @@ export const useEnemyLogic = ({
     gltfLoader.current.setDRACOLoader(dracoLoader);
 
     return () => {
-      // Dispose of the DRACOLoader instance
       dracoLoader.dispose();
-      // Nullify the GLTFLoader reference
       gltfLoader.current = null;
     };
   }, []);
@@ -116,34 +118,32 @@ export const useEnemyLogic = ({
 
     const randomModel = models[Math.floor(Math.random() * models.length)];
     const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${randomModel}`;
-    const modelName = `enemy_${randomModel}`; // Unique name for IndexedDB
+    const modelName = `enemy_${randomModel}`;
 
     try {
-      // Try to load from IndexedDB first
       const cachedData = await getModel(modelName);
       if (cachedData) {
         console.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
-        const gltf = await gltfLoader.current!.parseAsync(cachedData, modelPath); // Pass modelPath for base path
+        const gltf = await gltfLoader.current!.parseAsync(cachedData, modelPath);
         return { model: gltf.scene, animations: gltf.animations };
       } else {
         console.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
         const response = await fetch(modelPath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
-        await putModel(modelName, arrayBuffer); // Store in IndexedDB
-        const gltf = await gltfLoader.current!.parseAsync(arrayBuffer, ''); // Pass empty string for path
+        await putModel(modelName, arrayBuffer);
+        const gltf = await gltfLoader.current!.parseAsync(arrayBuffer, '');
         return { model: gltf.scene, animations: gltf.animations };
       }
     } catch (error) {
       console.error(`[useEnemyLogic] Error loading or caching model ${modelName}:`, error);
-      // Fallback to direct network load if IndexedDB fails or model is not found
       console.log(`[useEnemyLogic] Falling back to direct network load for: ${modelPath}`);
       return new Promise<{ model: THREE.Group | null; animations: THREE.AnimationClip[] }>((resolve) => {
         if (!gltfLoader.current) {
           console.warn('GLTFLoader not initialized. Skipping model load.');
           return resolve({ model: null, animations: [] });
         }
-        gltfLoader.current.load(modelPath, (gltf: GLTF) => { // Use GLTF type
+        gltfLoader.current.load(modelPath, (gltf: GLTF) => {
           const model = gltf.scene;
           model.traverse((child: THREE.Object3D) => {
             if ((child as THREE.Mesh).isMesh) {
@@ -152,44 +152,48 @@ export const useEnemyLogic = ({
             }
           });
           resolve({ model, animations: gltf.animations });
-        }, undefined, (loadError) => { // Use loadError for clarity
+        }, undefined, (loadError) => {
           console.debug('Error loading GLTF model (fallback):', loadError);
           console.debug('Failed to load enemy model due to a network error. Please check your internet connection.');
-          resolve({ model: null, animations: [] }); // Resolve with null on error
+          resolve({ model: null, animations: [] });
         });
       });
     }
   }, []);
 
-  const initializeEnemies = React.useCallback(async () => {
-    if (!sceneRef.current || !coinMeshesRef.current) return;
+  const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
+    const newAction = enemy.actions[newActionName];
+    const oldAction = enemy.currentAction;
+
+    if (newAction && oldAction !== newAction) {
+      if (oldAction) oldAction.fadeOut(CROSSFADE_DURATION);
+      newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(CROSSFADE_DURATION).play();
+      enemy.currentAction = newAction;
+    } else if (newAction && !oldAction) {
+      newAction.reset().play();
+      enemy.currentAction = newAction;
+    }
+  }, []);
+
+  const loadEnemiesForChunk = React.useCallback(async (chunkX: number, chunkZ: number) => {
+    if (!sceneRef.current || loadedEnemyChunks.current.has(getChunkKey(chunkX, chunkZ))) {
+      return;
+    }
+
     const scene = sceneRef.current;
+    const chunkMinX = chunkX * CHUNK_SIZE;
+    const chunkMinZ = chunkZ * CHUNK_SIZE;
+    const chunkMaxX = chunkMinX + CHUNK_SIZE;
+    const chunkMaxZ = chunkMinZ + CHUNK_SIZE;
 
-    enemyMeshesRef.current.forEach(enemy => {
-      if (octreeRef.current) {
-        const enemyBox = new THREE.Box3().setFromObject(enemy);
-        octreeRef.current.remove({ 
-            id: `enemy_${enemy.id}`, 
-            bounds: enemyBox,
-            data: enemy
-        });
-      }
-      enemy.mixer.stopAllAction();
-      scene.remove(enemy);
-      // Dispose of enemy's Three.js resources
-      enemy.traverse((child) => {
-        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
-        if ((child as THREE.Mesh).material) {
-          const material = (child as THREE.Mesh).material;
-          if (Array.isArray(material)) material.forEach(m => m.dispose());
-          else (material as THREE.Material).dispose();
-        }
-      });
+    const coinsInChunk = coinMeshesRef.current.filter(coin => {
+      const coinX = coin.position.x;
+      const coinZ = coin.position.z;
+      return coinX >= chunkMinX && coinX < chunkMaxX && coinZ >= chunkMinZ && coinZ < chunkMaxZ && coin.visible;
     });
-    enemyMeshesRef.current = [];
 
-    for (const coin of coinMeshesRef.current) {
-      if (coin.visible) {
+    for (const coin of coinsInChunk) {
+      for (let i = 0; i < ENEMIES_PER_COIN_CHUNK; i++) {
         const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
         try {
           const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
@@ -211,27 +215,26 @@ export const useEnemyLogic = ({
                 action.clampWhenFinished = true;
               }
             });
-            // Ensure all actions are stopped initially
             Object.values(actions).forEach(action => action.stop());
 
             const enemyData: EnemyData = loadedModel as EnemyData;
             enemyData.targetCoinPosition = coin.position.clone();
             enemyData.patrolCenter = coin.position.clone();
-            enemyData.patrolTarget = new THREE.Vector3(); // Will be set below
+            enemyData.patrolTarget = new THREE.Vector3();
             enemyData.isIdling = false;
             enemyData.idleTimer = 0;
             enemyData.idleDuration = 0;
             enemyData.isAttacking = false;
             enemyData.isDying = false;
             enemyData.deathTimer = 0;
-            enemyData.hasAppliedDeathEffect = false; // Initialize to false
+            enemyData.hasAppliedDeathEffect = false;
             enemyData.mixer = mixer;
             enemyData.animations = loadedAnimations;
             enemyData.enemyType = enemyType;
             enemyData.currentAction = null;
             enemyData.actions = actions;
-            
-            // Set initial patrol target within the protection radius
+            enemyData.chunkKey = getChunkKey(chunkX, chunkZ);
+
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
             const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
@@ -239,25 +242,24 @@ export const useEnemyLogic = ({
             enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
 
             const spawnAngle = Math.random() * Math.PI * 2;
-            const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8; // Spawn within protection radius
+            const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8;
             const enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
             const enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
             const enemyY = 0;
             enemyData.position.set(enemyX, enemyY, enemyZ);
             enemyData.scale.set(0.5, 0.5, 0.5);
-                      // Add to Octree
-              if (octreeRef.current) {
-                const enemyBox = new THREE.Box3().setFromObject(enemyData);
-                octreeRef.current.insert({
-                  id: `enemy_${enemyData.id}`,
-                  bounds: enemyBox,
-                  data: enemyData
-                });
-              }
+
+            if (octreeRef.current) {
+              const enemyBox = new THREE.Box3().setFromObject(enemyData);
+              octreeRef.current.insert({
+                id: `enemy_${enemyData.id}`,
+                bounds: enemyBox,
+                data: enemyData
+              });
+            }
             enemyMeshesRef.current.push(enemyData);
             scene.add(enemyData);
 
-            // Play initial idle animation
             const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
             const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
             if (enemyData.actions[initialIdleActionName]) {
@@ -267,25 +269,89 @@ export const useEnemyLogic = ({
           }
         } catch (error) {
           console.error('Error loading enemy model:', error);
-          continue; // Skip to the next coin if model loading fails
+          continue;
         }
       }
     }
+    loadedEnemyChunks.current.add(getChunkKey(chunkX, chunkZ));
   }, [sceneRef, coinMeshesRef, loadEnemyModel, octreeRef]);
 
-  const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
-    const newAction = enemy.actions[newActionName];
-    const oldAction = enemy.currentAction;
-
-    if (newAction && oldAction !== newAction) {
-      if (oldAction) oldAction.fadeOut(CROSSFADE_DURATION);
-      newAction.reset().setEffectiveTimeScale(1).setEffectiveWeight(1).fadeIn(CROSSFADE_DURATION).play();
-      enemy.currentAction = newAction;
-    } else if (newAction && !oldAction) {
-      newAction.reset().play();
-      enemy.currentAction = newAction;
+  const unloadEnemiesFromChunk = React.useCallback((chunkX: number, chunkZ: number) => {
+    if (!sceneRef.current || !loadedEnemyChunks.current.has(getChunkKey(chunkX, chunkZ))) {
+      return;
     }
-  }, []);
+
+    const scene = sceneRef.current;
+    const chunkMinX = chunkX * CHUNK_SIZE;
+    const chunkMinZ = chunkZ * CHUNK_SIZE;
+    const chunkMaxX = chunkMinX + CHUNK_SIZE;
+    const chunkMaxZ = chunkMinZ + CHUNK_SIZE;
+
+    enemyMeshesRef.current = enemyMeshesRef.current.filter(enemy => {
+      const enemyX = enemy.position.x;
+      const enemyZ = enemy.position.z;
+
+      if (enemyX >= chunkMinX && enemyX < chunkMaxX && enemyZ >= chunkMinZ && enemyZ < chunkMaxZ) {
+        if (octreeRef.current) {
+          const enemyBox = new THREE.Box3().setFromObject(enemy);
+          octreeRef.current.remove({
+              id: `enemy_${enemy.id}`,
+              bounds: enemyBox,
+              data: enemy
+          });
+        }
+        enemy.mixer.stopAllAction();
+        scene.remove(enemy);
+        enemy.traverse((child) => {
+          if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+          if ((child as THREE.Mesh).material) {
+            const material = (child as THREE.Mesh).material;
+            if (Array.isArray(material)) material.forEach(m => m.dispose());
+            else (material as THREE.Material).dispose();
+          }
+        });
+        return false;
+      }
+      return true;
+    });
+    loadedEnemyChunks.current.delete(getChunkKey(chunkX, chunkZ));
+  }, [sceneRef, octreeRef]);
+
+
+  const initializeEnemies = React.useCallback(async () => {
+    if (!sceneRef.current || !dogModelRef.current) return;
+    const scene = sceneRef.current;
+
+    enemyMeshesRef.current.forEach(enemy => {
+      if (octreeRef.current) {
+        const enemyBox = new THREE.Box3().setFromObject(enemy);
+        octreeRef.current.remove({ id: `enemy_${enemy.id}`, bounds: enemyBox, data: enemy });
+      }
+      enemy.mixer.stopAllAction();
+      scene.remove(enemy);
+      enemy.traverse((child) => {
+        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+        if ((child as THREE.Mesh).material) {
+          const material = (child as THREE.Mesh).material;
+          if (Array.isArray(material)) material.forEach(m => m.dispose());
+          else (material as THREE.Material).dispose();
+        }
+      });
+    });
+    enemyMeshesRef.current = [];
+    loadedEnemyChunks.current.clear();
+
+    const dogPosition = dogModelRef.current.position;
+    const { chunkX: initialChunkX, chunkZ: initialChunkZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
+    currentDogChunk.current = { chunkX: initialChunkX, chunkZ: initialChunkZ };
+
+    for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
+      for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+        await loadEnemiesForChunk(initialChunkX + x, initialChunkZ + z);
+      }
+    }
+  }, [sceneRef, dogModelRef, octreeRef, loadEnemiesForChunk]);
+
 
   const updateEnemies = React.useCallback((delta: number) => {
     if (isPausedRef.current || !dogModelRef.current || !sceneRef.current || !cameraRef.current) return;
@@ -294,7 +360,33 @@ export const useEnemyLogic = ({
     const dogPosition = dog.position;
     const camera = cameraRef.current;
 
-    // ✅ Frustum Culling setup
+    const { chunkX: currentX, chunkZ: currentZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
+
+    if (!currentDogChunk.current || currentX !== currentDogChunk.current.chunkX || currentZ !== currentDogChunk.current.chunkZ) {
+      currentDogChunk.current = { chunkX: currentX, chunkZ: currentZ };
+
+      const chunksToLoad = new Set<string>();
+      for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
+        for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+          chunksToLoad.add(getChunkKey(currentX + x, currentZ + z));
+        }
+      }
+
+      loadedEnemyChunks.current.forEach(chunkKey => {
+        if (!chunksToLoad.has(chunkKey)) {
+          const [cx, cz] = chunkKey.split(',').map(Number);
+          unloadEnemiesFromChunk(cx, cz);
+        }
+      });
+
+      chunksToLoad.forEach(chunkKey => {
+        if (!loadedEnemyChunks.current.has(chunkKey)) {
+          const [cx, cz] = chunkKey.split(',').map(Number);
+          loadEnemiesForChunk(cx, cz);
+        }
+      });
+    }
+
     camera.updateMatrixWorld();
     const frustum = new THREE.Frustum();
     const viewProjection = new THREE.Matrix4().multiplyMatrices(
@@ -303,38 +395,35 @@ export const useEnemyLogic = ({
     );
     frustum.setFromProjectionMatrix(viewProjection);
 
-    // ✅ Use octree to get nearby enemies
     let visibleEnemies = enemyMeshesRef.current;
     if (octreeRef.current) {
       const cameraBox = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(50, 50, 50));
       visibleEnemies = octreeRef.current.query(cameraBox).map(obj => obj.data as EnemyData);
     }
 
-    // ✅ Filter enemies that are visible in frustum
     visibleEnemies = visibleEnemies.filter(enemy => {
       const boundingBox = new THREE.Box3().setFromObject(enemy);
       return frustum.intersectsBox(boundingBox);
     });
 
     enemyMeshesRef.current.forEach(enemy => {
-      enemy.mixer.update(delta); // Update mixer
-      const enemyY = enemy.position.y; // Define enemyY here to be accessible everywhere
+      enemy.mixer.update(delta);
+      const enemyY = enemy.position.y;
 
-      // If enemy is dying and death timer is still running, only update mixer and skip other logic
+      enemy.visible = dogPosition.distanceTo(enemy.position) < VISIBLE_ENEMY_DISTANCE;
+
       if (enemy.isDying && enemy.deathTimer > 0) {
         enemy.deathTimer -= delta;
         if (enemy.deathTimer <= 0) {
-          enemy.visible = false; // Hide after death animation
+          enemy.visible = false;
         }
-        // Ensure death animation is playing
         const deathAnimationName = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
         if (enemy.currentAction?.getClip().name !== deathAnimationName && enemy.actions[deathAnimationName]) {
           playAnimation(enemy, deathAnimationName);
         }
-        return; // Skip all other logic for dying enemies
+        return;
       }
 
-      // If enemy is not visible (already died and hidden), skip all logic
       if (!enemy.visible) {
         return;
       }
@@ -343,12 +432,10 @@ export const useEnemyLogic = ({
       const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
 
       let targetPosition = new THREE.Vector3();
-      let currentAnimation = ''; // Initialize currentAnimation
+      let currentAnimation = '';
 
-      // Check if the coin this enemy is protecting is collected
       const protectedCoin = coinMeshesRef.current.find(coin => coin.position.equals(enemy.targetCoinPosition));
       if (protectedCoin && !protectedCoin.visible) {
-        // If coin is collected, enemy dies (if not already dying)
         if (!enemy.isDying) {
           enemy.isDying = true;
           enemy.deathTimer = ENEMY_DEATH_DURATION;
@@ -360,66 +447,55 @@ export const useEnemyLogic = ({
       }
 
       if (enemy.isAttacking) {
-        // Stay in attack animation until finished
         currentAnimation = enemy.currentAction?.getClip().name || (enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick');
-        // Allow mixer.update to continue, DO NOT return
       }
 
-      // Only run movement/attack/patrol logic if not dying and not attacking
       if (!enemy.isDying && !enemy.isAttacking) {
-        // Determine target position and animation based on distance to dog and coin
-        targetPosition = new THREE.Vector3(); // Keep only one declaration
-        let isMoving = false; // Flag to indicate if enemy should be moving
+        targetPosition = new THREE.Vector3();
+        let isMoving = false;
 
         if (distanceToDog < ENEMY_ATTACK_DISTANCE) {
-          // Player is within attack distance, stop and attack
-          targetPosition.copy(enemy.position); // Stop moving
-          currentAnimation = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick'; // Attack animation
+          targetPosition.copy(enemy.position);
+          currentAnimation = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
           enemy.isAttacking = true;
-          enemy.isIdling = false; // Stop idling if attacking
+          enemy.isIdling = false;
         } else if (distanceToCoin < ENEMY_CHASE_RADIUS) {
-          // Player is within the coin's protection radius, chase the player
           targetPosition.copy(dogPosition);
           isMoving = true;
-          currentAnimation = 'Gallop'; // Chase animation
-          enemy.isIdling = false; // Stop idling if chasing
+          currentAnimation = 'Gallop';
+          enemy.isIdling = false;
         } else {
-          // Player is outside, patrol around the coin
           if (enemy.isIdling) {
             enemy.idleTimer -= delta;
             if (enemy.idleTimer <= 0) {
               enemy.isIdling = false;
-              // Pick a new patrol target after idling
               const angle = Math.random() * Math.PI * 2;
               const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
               const newPatrolX = enemy.patrolCenter.x + Math.cos(angle) * radius;
               const newPatrolZ = enemy.patrolTarget.z + Math.sin(angle) * radius;
               enemy.patrolTarget.set(newPatrolX, enemy.position.y, newPatrolZ);
-              isMoving = true; // Will start moving towards new patrol target
+              isMoving = true;
               currentAnimation = 'Walk';
             } else {
-              // Continue current idle animation
               currentAnimation = enemy.currentAction?.getClip().name || 'Idle';
             }
           } else if (enemy.position.distanceTo(enemy.patrolTarget) < 1.0 || enemy.patrolTarget.lengthSq() === 0) {
-            // Reached patrol target, start idling
             enemy.isIdling = true;
             enemy.idleDuration = Math.random() * 5 + 3;
             enemy.idleTimer = enemy.idleDuration;
             const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
             currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-            isMoving = false; // Stop moving to idle
+            isMoving = false;
           } else {
-            // Move towards patrol target
             targetPosition.copy(enemy.patrolTarget);
             isMoving = true;
-            currentAnimation = 'Walk'; // Patrol animation
+            currentAnimation = 'Walk';
           }
         }
 
         const direction = new THREE.Vector3().subVectors(targetPosition, enemy.position);
         direction.y = 0;
-        const movementThreshold = 0.001; // Define a threshold for actual movement
+        const movementThreshold = 0.001;
 
         if (isMoving && direction.lengthSq() > movementThreshold) {
           direction.normalize();
@@ -428,99 +504,83 @@ export const useEnemyLogic = ({
           const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
           enemy.lookAt(lookAtTarget);
         } else if (isMoving && direction.lengthSq() <= movementThreshold) {
-          // If supposed to be moving but stopped, transition to idle
           enemy.isIdling = true;
           enemy.idleDuration = Math.random() * 5 + 3;
           enemy.idleTimer = enemy.idleDuration;
           const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
           currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-        } else if (!isMoving) { // Simplified this condition
-          // If not supposed to be moving, and not attacking/dying, ensure idle animation
+        } else if (!isMoving) {
           const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-          // Ensure currentAnimation is an idle animation if not already
           if (!idleAnimations.includes(currentAnimation)) {
               currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
           }
         }
       }
 
-      // Play animation
       if (enemy.currentAction?.getClip().name !== currentAnimation && enemy.actions[currentAnimation]) {
         playAnimation(enemy, currentAnimation);
       }
 
       enemy.position.y = enemyY;
 
-      // Check for attack condition (distance to dog)
       const dogXZ = new THREE.Vector3(dog.position.x, 0, dog.position.z);
       const enemyXZ = new THREE.Vector3(enemy.position.x, 0, enemy.position.z);
       const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
 
-      // Check for collision and trigger appropriate actions
       if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !enemy.isDying) {
-        // Player is within death trigger distance, enemy dies immediately
         enemy.isDying = true;
         enemy.deathTimer = ENEMY_DEATH_DURATION;
         currentAnimation = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
         if (enemy.actions[currentAnimation]) {
           playAnimation(enemy, currentAnimation);
         }
-        // Apply penalty/death logic immediately, only if not already applied
         if (!enemy.hasAppliedDeathEffect) {
           if (isShieldActiveRef.current) {
-            // No penalty, just death
           } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
             internalOptimisticProtectionBoneCountRef.current--;
             onConsumeProtectionBone();
           } else {
             onEnemyCollisionPenalty();
           }
-          enemy.hasAppliedDeathEffect = true; // Mark as applied
+          enemy.hasAppliedDeathEffect = true;
         }
       } else if (distanceXZToDog < ENEMY_ATTACK_DISTANCE && !enemy.isAttacking && !enemy.isDying) {
-        // Player is within attack distance, stop and attack
-        targetPosition.copy(enemy.position); // Stop moving
+        targetPosition.copy(enemy.position);
         enemy.isAttacking = true;
         enemy.isIdling = false;
 
         if (enemy.enemyType === 'herbivore') {
-          // Herbivore: Rotate 180 degrees then attack
           const lookAtTarget = new THREE.Vector3(dogPosition.x, enemyY, dogPosition.z);
           enemy.lookAt(lookAtTarget);
-          enemy.rotation.y += Math.PI; // Rotate 180 degrees for back attack
+          enemy.rotation.y += Math.PI;
           currentAnimation = 'Attack_Kick';
         } else {
-          // Carnivore: Attack directly
           currentAnimation = 'Attack';
         }
 
         if (enemy.actions[currentAnimation]) {
           playAnimation(enemy, currentAnimation);
 
-          // Listen for attack animation finish to trigger death or penalty
-          enemy.mixer.removeEventListener('finished', onAttackAnimationFinished); // Remove previous listeners
+          enemy.mixer.removeEventListener('finished', onAttackAnimationFinished);
           enemy.mixer.addEventListener('finished', (e) => {
             const finishedClipName = e.action.getClip().name;
             const attackAnimationName = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
 
             if (finishedClipName === attackAnimationName) {
-              // After attack animation, trigger death animation and apply penalty/bone consumption
               enemy.isDying = true;
               enemy.deathTimer = ENEMY_DEATH_DURATION;
               playAnimation(enemy, ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH);
-              enemy.isAttacking = false; // Reset attack state
+              enemy.isAttacking = false;
 
-              // Apply penalty/death logic, only if not already applied
               if (!enemy.hasAppliedDeathEffect) {
                 if (isShieldActiveRef.current) {
-                  // No penalty, shield absorbed attack
                 } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
                   internalOptimisticProtectionBoneCountRef.current--;
                   onConsumeProtectionBone();
                 } else {
                   onEnemyCollisionPenalty();
                 }
-                enemy.hasAppliedDeathEffect = true; // Mark as applied
+                enemy.hasAppliedDeathEffect = true;
               }
             }
           });
@@ -537,9 +597,11 @@ export const useEnemyLogic = ({
     coinMeshesRef,
     onCoinCollected,
     onAttackAnimationFinished,
-    playAnimation, // Add playAnimation to dependencies
+    playAnimation,
     cameraRef,
     octreeRef,
+    loadEnemiesForChunk, // Added to dependencies
+    unloadEnemiesFromChunk, // Added to dependencies
   ]);
   
   const resetEnemies = React.useCallback(() => {
