@@ -58,15 +58,26 @@ export const useDogLogic = ({
     const animationActionsRef = useRef<Record<string, THREE.AnimationAction>>({});
     const currentActionRef = useRef<THREE.AnimationAction | null>(null);
     const lastDogTransformRef = useRef<{ position: THREE.Vector3; rotationY: number } | null>(null);
+    const gltfLoaderRef = useRef<GLTFLoader | null>(null);
+    const dracoLoaderRef = useRef<DRACOLoader | null>(null);
+
+    useEffect(() => {
+        dracoLoaderRef.current = new DRACOLoader();
+        dracoLoaderRef.current.setDecoderPath('/libs/draco/gltf/');
+        gltfLoaderRef.current = new GLTFLoader();
+        gltfLoaderRef.current.setDRACOLoader(dracoLoaderRef.current);
+
+        return () => {
+            dracoLoaderRef.current?.dispose();
+            gltfLoaderRef.current = null;
+            dracoLoaderRef.current = null;
+        };
+    }, []);
 
     const initializeDog = useCallback(() => {
-        if (!sceneRef.current) return;
+        if (!sceneRef.current || !gltfLoaderRef.current) return;
         const scene = sceneRef.current;
-
-        const dracoLoader = new DRACOLoader();
-        dracoLoader.setDecoderPath('/libs/draco/gltf/');
-        const gltfLoader = new GLTFLoader();
-        gltfLoader.setDRACOLoader(dracoLoader);
+        const gltfLoader = gltfLoaderRef.current;
 
         const modelPath = '/models/dog.glb';
         const modelName = 'dog_model'; // A unique name for IndexedDB

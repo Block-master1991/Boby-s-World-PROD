@@ -173,9 +173,18 @@ export const useEnemyLogic = ({
             bounds: enemyBox,
             data: enemy
         });
-    }
+      }
       enemy.mixer.stopAllAction();
       scene.remove(enemy);
+      // Dispose of enemy's Three.js resources
+      enemy.traverse((child) => {
+        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
+        if ((child as THREE.Mesh).material) {
+          const material = (child as THREE.Mesh).material;
+          if (Array.isArray(material)) material.forEach(m => m.dispose());
+          else (material as THREE.Material).dispose();
+        }
+      });
     });
     enemyMeshesRef.current = [];
 
