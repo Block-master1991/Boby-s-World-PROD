@@ -49,7 +49,18 @@ export const useCoinLogic = ({
     if (!sceneRef.current) return;
     const scene = sceneRef.current;
 
-    coinMeshesRef.current.forEach(coin => scene.remove(coin));
+    coinMeshesRef.current.forEach(coin => {
+      scene.remove(coin);
+      // Remove from Octree
+      if (octreeRef.current) {
+        const coinBox = new THREE.Box3().setFromObject(coin);
+        octreeRef.current.remove({
+          id: `coin_${coin.id}`, // Assuming coin.id is unique or can be derived
+          bounds: coinBox,
+          data: coin
+        });
+      }
+    });
     coinMeshesRef.current = [];
 
     const coinGeometry = new THREE.CylinderGeometry(COIN_RADIUS, COIN_RADIUS, COIN_HEIGHT, 32);

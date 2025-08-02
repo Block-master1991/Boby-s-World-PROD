@@ -2,11 +2,12 @@
 'use client';
 
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'; // Import GLTF type
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
 import { Octree, OctreeObject } from '../lib/Octree'; // Import Octree
+import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 
 const NORMAL_DOG_SPEED = 0.09; // Normal walking speed
 const SPRINT_DOG_SPEED = 0.20; // Sprinting speed
@@ -64,64 +65,91 @@ export const useDogLogic = ({
 
         const dracoLoader = new DRACOLoader();
         dracoLoader.setDecoderPath('/libs/draco/gltf/');
-        const loader = new GLTFLoader();
-        loader.setDRACOLoader(dracoLoader);
+        const gltfLoader = new GLTFLoader();
+        gltfLoader.setDRACOLoader(dracoLoader);
 
-        loader.load(
-            '/models/dog.glb',
-            (gltf) => {
-                dogModelRef.current = gltf.scene;
-                dogModelRef.current.scale.set(DOG_MODEL_SCALE, DOG_MODEL_SCALE, DOG_MODEL_SCALE);
-                dogModelRef.current.position.set(0, 0, 0);
-                dogModelRef.current.rotation.y = Math.PI;
+        const modelPath = '/models/dog.glb';
+        const modelName = 'dog_model'; // A unique name for IndexedDB
 
-                dogModelRef.current.traverse((child) => {
-                    if ((child as THREE.Mesh).isMesh) {
-                        child.castShadow = true;
-                        child.receiveShadow = true;
+        const loadModel = async (): Promise<GLTF> => {
+            try {
+                // Try to load from IndexedDB first
+                const cachedData = await getModel(modelName);
+                if (cachedData) {
+                    console.log(`[useDogLogic] Loading dog model from IndexedDB: ${modelName}`);
+                    const gltf = await gltfLoader.parseAsync(cachedData, ''); // Pass empty string for path
+                    return gltf;
+                } else {
+                    console.log(`[useDogLogic] Fetching dog model from network: ${modelPath}`);
+                    const response = await fetch(modelPath);
+                    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+                    const arrayBuffer = await response.arrayBuffer();
+                    await putModel(modelName, arrayBuffer); // Store in IndexedDB
+                    const gltf = await gltfLoader.parseAsync(arrayBuffer, ''); // Pass empty string for path
+                    return gltf;
+                }
+            } catch (error) {
+                console.error(`[useDogLogic] Error loading or caching model ${modelName}:`, error);
+                // Fallback to direct network load if IndexedDB fails or model is not found
+                console.log(`[useDogLogic] Falling back to direct network load for: ${modelPath}`);
+                return new Promise((resolve, reject) => {
+                    gltfLoader.load(modelPath, resolve, undefined, reject);
+                });
+            }
+        };
+
+        loadModel().then((gltf: GLTF) => {
+            dogModelRef.current = gltf.scene;
+            dogModelRef.current.scale.set(DOG_MODEL_SCALE, DOG_MODEL_SCALE, DOG_MODEL_SCALE);
+            dogModelRef.current.position.set(0, 0, 0);
+            dogModelRef.current.rotation.y = Math.PI;
+
+            dogModelRef.current.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh) {
+                    child.castShadow = true;
+                    child.receiveShadow = true;
+                }
+            });
+            scene.add(dogModelRef.current);
+
+            if (gltf.animations && gltf.animations.length && dogModelRef.current) {
+                animationMixerRef.current = new THREE.AnimationMixer(dogModelRef.current);
+                animationActionsRef.current = {};
+                gltf.animations.forEach((clip: THREE.AnimationClip) => {
+                    const action = animationMixerRef.current!.clipAction(clip);
+                    animationActionsRef.current[clip.name] = action;
+                    if (clip.name === ANIMATION_NAMES.IDLE || clip.name === ANIMATION_NAMES.WALK || clip.name === ANIMATION_NAMES.RUN || clip.name === ANIMATION_NAMES.SPRINT_JUMP) {
+                        action.setLoop(THREE.LoopRepeat, Infinity);
                     }
                 });
-                scene.add(dogModelRef.current);
 
-                if (gltf.animations && gltf.animations.length) {
-                    animationMixerRef.current = new THREE.AnimationMixer(dogModelRef.current);
-                    animationActionsRef.current = {};
-                    gltf.animations.forEach((clip) => {
-                        const action = animationMixerRef.current!.clipAction(clip);
-                        animationActionsRef.current[clip.name] = action;
-                        if (clip.name === ANIMATION_NAMES.IDLE || clip.name === ANIMATION_NAMES.WALK || clip.name === ANIMATION_NAMES.RUN || clip.name === ANIMATION_NAMES.SPRINT_JUMP) {
-                            action.setLoop(THREE.LoopRepeat, Infinity);
-                        }
-                    });
-
-                    const idleAction = animationActionsRef.current[ANIMATION_NAMES.IDLE];
-                    if (idleAction) {
-                        idleAction.play();
-                        currentActionRef.current = idleAction;
-                    } else if (gltf.animations.length > 0 && animationActionsRef.current[gltf.animations[0].name]) {
-                        const firstClipAction = animationActionsRef.current[gltf.animations[0].name];
-                        firstClipAction.play();
-                        currentActionRef.current = firstClipAction;
-                    }
+                const idleAction = animationActionsRef.current[ANIMATION_NAMES.IDLE];
+                if (idleAction) {
+                    idleAction.play();
+                    currentActionRef.current = idleAction;
+                } else if (gltf.animations.length > 0 && animationActionsRef.current[gltf.animations[0].name]) {
+                    const firstClipAction = animationActionsRef.current[gltf.animations[0].name];
+                    firstClipAction.play();
+                    currentActionRef.current = firstClipAction;
                 }
+            }
 
+            if (dogModelRef.current) {
                 lastDogTransformRef.current = {
                     position: dogModelRef.current.position.clone(),
                     rotationY: dogModelRef.current.rotation.y
                 };
-            },
-            undefined,
-            (error) => {
-                console.error('Error loading dog GLB model:', error);
-                const dogGeometry = new THREE.BoxGeometry(DOG_MODEL_SCALE, DOG_MODEL_SCALE, DOG_MODEL_SCALE);
-                const dogMaterial = new THREE.MeshStandardMaterial({ color: 0xA0522D });
-                const fallbackDogMesh = new THREE.Mesh(dogGeometry, dogMaterial);
-                fallbackDogMesh.position.set(0, DOG_MODEL_SCALE / 2, 0);
-                dogModelRef.current = fallbackDogMesh as unknown as THREE.Group; // Cast for simplicity
-                scene.add(dogModelRef.current);
-                lastDogTransformRef.current = { position: dogModelRef.current.position.clone(), rotationY: dogModelRef.current.rotation.y };
             }
-        );
+        }).catch((error: any) => { // Catch errors from loadModel promise
+            console.error('Error loading dog GLB model (final catch):', error);
+            const dogGeometry = new THREE.BoxGeometry(DOG_MODEL_SCALE, DOG_MODEL_SCALE, DOG_MODEL_SCALE);
+            const dogMaterial = new THREE.MeshStandardMaterial({ color: 0xA0522D });
+            const fallbackDogMesh = new THREE.Mesh(dogGeometry, dogMaterial);
+            fallbackDogMesh.position.set(0, DOG_MODEL_SCALE / 2, 0);
+            dogModelRef.current = fallbackDogMesh as unknown as THREE.Group; // Cast for simplicity
+            scene.add(dogModelRef.current);
+            lastDogTransformRef.current = { position: dogModelRef.current.position.clone(), rotationY: dogModelRef.current.rotation.y };
+        });
     }, [sceneRef]);
 
     const resetDogState = useCallback(() => {

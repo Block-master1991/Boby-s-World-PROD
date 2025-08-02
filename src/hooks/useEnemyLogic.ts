@@ -3,9 +3,10 @@
 import * as React from 'react';
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader'; // Import GLTF type
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree, OctreeObject } from '@/lib/Octree';
+import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3; // Multiplier for GALLOP speed
@@ -115,31 +116,49 @@ export const useEnemyLogic = ({
 
     const randomModel = models[Math.floor(Math.random() * models.length)];
     const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${randomModel}`;
+    const modelName = `enemy_${randomModel}`; // Unique name for IndexedDB
 
-    return new Promise<{ model: THREE.Group | null; animations: THREE.AnimationClip[] }>((resolve) => {
-      if (!gltfLoader.current) {
-        console.warn('GLTFLoader not initialized. Skipping model load.');
-        return resolve({ model: null, animations: [] });
+    try {
+      // Try to load from IndexedDB first
+      const cachedData = await getModel(modelName);
+      if (cachedData) {
+        console.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
+        const gltf = await gltfLoader.current!.parseAsync(cachedData, ''); // Pass empty string for path
+        return { model: gltf.scene, animations: gltf.animations };
+      } else {
+        console.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
+        const response = await fetch(modelPath);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        await putModel(modelName, arrayBuffer); // Store in IndexedDB
+        const gltf = await gltfLoader.current!.parseAsync(arrayBuffer, ''); // Pass empty string for path
+        return { model: gltf.scene, animations: gltf.animations };
       }
-      gltfLoader.current.load(modelPath, (gltf: { scene: THREE.Group; animations: THREE.AnimationClip[] }) => {
-        const model = gltf.scene;
-        model.traverse((child: THREE.Object3D) => {
-          if ((child as THREE.Mesh).isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
+    } catch (error) {
+      console.error(`[useEnemyLogic] Error loading or caching model ${modelName}:`, error);
+      // Fallback to direct network load if IndexedDB fails or model is not found
+      console.log(`[useEnemyLogic] Falling back to direct network load for: ${modelPath}`);
+      return new Promise<{ model: THREE.Group | null; animations: THREE.AnimationClip[] }>((resolve) => {
+        if (!gltfLoader.current) {
+          console.warn('GLTFLoader not initialized. Skipping model load.');
+          return resolve({ model: null, animations: [] });
+        }
+        gltfLoader.current.load(modelPath, (gltf: GLTF) => { // Use GLTF type
+          const model = gltf.scene;
+          model.traverse((child: THREE.Object3D) => {
+            if ((child as THREE.Mesh).isMesh) {
+              child.castShadow = true;
+              child.receiveShadow = true;
+            }
+          });
+          resolve({ model, animations: gltf.animations });
+        }, undefined, (loadError) => { // Use loadError for clarity
+          console.debug('Error loading GLTF model (fallback):', loadError);
+          console.debug('Failed to load enemy model due to a network error. Please check your internet connection.');
+          resolve({ model: null, animations: [] }); // Resolve with null on error
         });
-        resolve({ model, animations: gltf.animations });
-      }, undefined, (error) => {
-        console.debug('Error loading GLTF model:', error); // Changed to console.debug
-        // Add a toast notification for the user about the network error
-        // This assumes a toast function is available, similar to GameUI.tsx
-        // For now, I'll just log it, as there's no direct toast context here.
-        // If a global toast context or similar mechanism is available, it should be used.
-        console.debug('Failed to load enemy model due to a network error. Please check your internet connection.'); // Changed to console.debug
-        resolve({ model: null, animations: [] }); // Resolve with null on error
       });
-    });
+    }
   }, []);
 
   const initializeEnemies = React.useCallback(async () => {
