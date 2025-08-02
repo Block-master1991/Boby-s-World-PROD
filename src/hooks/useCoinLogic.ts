@@ -82,7 +82,6 @@ export const useCoinLogic = ({
           data: coinMesh
         });
       }
-      remainingCoinsRef.current++;
     }
     loadedCoinChunks.current.add(getChunkKey(chunkX, chunkZ));
     onRemainingCoinsUpdate(remainingCoinsRef.current);
@@ -109,14 +108,14 @@ export const useCoinLogic = ({
           const coinBox = new THREE.Box3().setFromObject(coin);
           octreeRef.current.remove({ id: `coin_${coin.id}`, bounds: coinBox, data: coin });
         }
-        remainingCoinsRef.current--;
+        // Do NOT decrement remainingCoinsRef.current here, as these coins are not "collected"
         return false;
       }
       return true;
     });
     loadedCoinChunks.current.delete(getChunkKey(chunkX, chunkZ));
-    onRemainingCoinsUpdate(remainingCoinsRef.current);
-  }, [sceneRef, octreeRef, onRemainingCoinsUpdate]);
+    // No need to call onRemainingCoinsUpdate here, as the total count doesn't change when coins are unloaded
+  }, [sceneRef, octreeRef]); // Removed onRemainingCoinsUpdate from dependencies as it's not called
 
 
   const initializeCoins = useCallback(() => {
@@ -132,7 +131,7 @@ export const useCoinLogic = ({
     });
     coinMeshesRef.current = [];
     loadedCoinChunks.current.clear();
-    remainingCoinsRef.current = 0;
+    remainingCoinsRef.current = COIN_COUNT; // Initialize with the total coin count
 
     const dogPosition = dogModelRef.current.position;
     const { chunkX: initialChunkX, chunkZ: initialChunkZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
@@ -180,9 +179,12 @@ export const useCoinLogic = ({
       });
     }
 
-    coinMeshesRef.current.forEach(coin => {
+    const coinsToKeep: THREE.Mesh[] = []; // Array to hold coins that are not collected this frame
+
+    for (const coin of coinMeshesRef.current) {
+      let collectedThisFrame = false;
+      // Only check for collection if the coin is currently visible
       if (coin.visible) {
-        let collectedThisFrame = false;
         const distanceToDog = dogPosition.distanceTo(coin.position);
 
         if (distanceToDog < COLLECTION_THRESHOLD) {
@@ -190,28 +192,34 @@ export const useCoinLogic = ({
         } else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS) {
           collectedThisFrame = true;
         }
+      }
 
-        if (collectedThisFrame) {
-          coin.visible = false;
-          onCoinCollected();
-          remainingCoinsRef.current--;
-          onRemainingCoinsUpdate(remainingCoinsRef.current);
-          sceneRef.current?.remove(coin);
-          if (octreeRef.current) {
-            const coinBox = new THREE.Box3().setFromObject(coin);
-            octreeRef.current.remove({ id: `coin_${coin.id}`, bounds: coinBox, data: coin });
-          }
-          coinMeshesRef.current = coinMeshesRef.current.filter(m => m.id !== coin.id);
-        } else {
-          coin.visible = distanceToDog < VISIBLE_COIN_DISTANCE;
-
+      if (collectedThisFrame) {
+        // Coin collected, perform actions
+        coin.visible = false; // Mark as invisible
+        onCoinCollected(); // Trigger the collection callback
+        remainingCoinsRef.current--; // Decrement the remaining count
+        onRemainingCoinsUpdate(remainingCoinsRef.current); // Update UI
+        sceneRef.current?.remove(coin); // Remove from Three.js scene
+        if (octreeRef.current) {
+          const coinBox = new THREE.Box3().setFromObject(coin);
+          octreeRef.current.remove({ id: `coin_${coin.id}`, bounds: coinBox, data: coin });
+        }
+        // Do NOT add this coin to coinsToKeep, effectively removing it
+      } else {
+        // This coin was NOT collected this frame
+        // Update its visibility based on distance if it's not already collected
+        if (coin.visible) { // Only update rotation if it's still visible and not collected
+          coin.visible = dogPosition.distanceTo(coin.position) < VISIBLE_COIN_DISTANCE;
           if (coin.visible) {
             const worldYAxis = new THREE.Vector3(0, 1, 0);
             coin.rotateOnWorldAxis(worldYAxis, COIN_ROTATION_SPEED);
           }
         }
+        coinsToKeep.push(coin); // Add to the list of coins to keep
       }
-    });
+    }
+    coinMeshesRef.current = coinsToKeep; // Update the ref with only the coins that were not collected
   }, [
     dogModelRef,
     isCoinMagnetActiveRef,
