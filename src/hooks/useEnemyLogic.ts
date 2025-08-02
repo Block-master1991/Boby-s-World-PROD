@@ -123,7 +123,7 @@ export const useEnemyLogic = ({
       const cachedData = await getModel(modelName);
       if (cachedData) {
         console.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
-        const gltf = await gltfLoader.current!.parseAsync(cachedData, ''); // Pass empty string for path
+        const gltf = await gltfLoader.current!.parseAsync(cachedData, modelPath); // Pass modelPath for base path
         return { model: gltf.scene, animations: gltf.animations };
       } else {
         console.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
