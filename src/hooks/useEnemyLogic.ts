@@ -9,12 +9,15 @@ import { Octree, OctreeObject } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL } from '../lib/constants';
+import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
 const ENEMY_ATTACK_DISTANCE = 1.5;
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5;
 const ENEMY_DEATH_DURATION = 5.0;
+const ENEMY_SINKING_DELAY = 15.0; // 15 seconds delay before sinking starts
+const ENEMY_SINKING_DURATION = 3.0; // 3 seconds for the sinking animation
 const ENEMY_PROTECTION_RADIUS = 15;
 const ENEMY_CHASE_RADIUS = 15;
 const CROSSFADE_DURATION = 0.2;
@@ -50,6 +53,9 @@ interface EnemyCustomData {
   isDying: boolean;
   deathTimer: number;
   hasAppliedDeathEffect: boolean;
+  isSinking: boolean; // New: Flag for sinking animation
+  sinkingTimer: number; // New: Timer for sinking delay
+  initialDeathY: number; // New: Initial Y position when death animation finishes
   mixer: THREE.AnimationMixer;
   animations: THREE.AnimationClip[];
   enemyType: 'carnivore' | 'herbivore';
@@ -95,6 +101,34 @@ export const useEnemyLogic = ({
   const clock = React.useRef(new THREE.Clock());
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
+
+  // Get disposeModelResources from useDynamicModelLoader
+  const { cleanupModelPool } = useDynamicModelLoader({
+    cameraRef,
+    sceneRef,
+    octreeRef,
+    objectsToManage: [], // Not managing objects here, just need the dispose function
+  });
+
+  // Helper to dispose of a single model's resources (re-defined for direct use in this hook)
+  const disposeEnemyModelResources = React.useCallback((model: THREE.Group) => {
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        if ((child as THREE.Mesh).geometry) {
+          (child as THREE.Mesh).geometry.dispose();
+        }
+        if ((child as THREE.Mesh).material) {
+          const material = (child as THREE.Mesh).material;
+          if (Array.isArray(material)) {
+            material.forEach(m => m.dispose());
+          } else {
+            (material as THREE.Material).dispose();
+          }
+        }
+      }
+    });
+    console.log(`[useEnemyLogic] Disposed of enemy model resources.`);
+  }, []);
 
   React.useEffect(() => {
     internalOptimisticProtectionBoneCountRef.current = protectionBoneCountRef.current;
@@ -229,6 +263,9 @@ export const useEnemyLogic = ({
             enemyData.isDying = false;
             enemyData.deathTimer = 0;
             enemyData.hasAppliedDeathEffect = false;
+            enemyData.isSinking = false; // Initialize new property
+            enemyData.sinkingTimer = 0; // Initialize new property
+            enemyData.initialDeathY = 0; // Initialize new property
             enemyData.mixer = mixer;
             enemyData.animations = loadedAnimations;
             enemyData.enemyType = enemyType;
@@ -318,20 +355,13 @@ export const useEnemyLogic = ({
         }
         enemy.mixer.stopAllAction();
         scene.remove(enemy);
-        enemy.traverse((child) => {
-          if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
-          if ((child as THREE.Mesh).material) {
-            const material = (child as THREE.Mesh).material;
-            if (Array.isArray(material)) material.forEach(m => m.dispose());
-            else (material as THREE.Material).dispose();
-          }
-        });
+        disposeEnemyModelResources(enemy); // Use the new helper function
         return false;
       }
       return true;
     });
     loadedEnemyChunks.current.delete(getChunkKey(chunkX, chunkZ));
-  }, [sceneRef, octreeRef]);
+  }, [sceneRef, octreeRef, disposeEnemyModelResources]); // Add disposeEnemyModelResources to dependencies
 
 
   const initializeEnemies = React.useCallback(async () => {
@@ -345,14 +375,7 @@ export const useEnemyLogic = ({
       }
       enemy.mixer.stopAllAction();
       scene.remove(enemy);
-      enemy.traverse((child) => {
-        if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
-        if ((child as THREE.Mesh).material) {
-          const material = (child as THREE.Mesh).material;
-          if (Array.isArray(material)) material.forEach(m => m.dispose());
-          else (material as THREE.Material).dispose();
-        }
-      });
+      disposeEnemyModelResources(enemy); // Use the new helper function
     });
     enemyMeshesRef.current = [];
     loadedEnemyChunks.current.clear();
@@ -428,16 +451,51 @@ export const useEnemyLogic = ({
 
       enemy.visible = dogPosition.distanceTo(enemy.position) < VISIBLE_ENEMY_DISTANCE;
 
-      if (enemy.isDying && enemy.deathTimer > 0) {
-        enemy.deathTimer -= delta;
-        if (enemy.deathTimer <= 0) {
-          enemy.visible = false;
+      // Handle sinking animation
+      if (enemy.isSinking) {
+        enemy.sinkingTimer -= delta;
+        if (enemy.sinkingTimer <= 0) {
+          // Start sinking animation
+          const sinkSpeed = 0.5; // Units per second
+          enemy.position.y -= sinkSpeed * delta;
+
+          // If sunk far enough, remove and dispose
+          if (enemy.position.y < enemy.initialDeathY - 5) { // Sink 5 units below initial death Y
+            if (octreeRef.current) {
+              const enemyBox = new THREE.Box3().setFromObject(enemy);
+              octreeRef.current.remove({
+                  id: `enemy_${enemy.id}`,
+                  bounds: enemyBox,
+                  data: enemy
+              });
+            }
+            enemy.mixer.stopAllAction();
+            if (sceneRef.current) { // Add null check for sceneRef.current
+              sceneRef.current.remove(enemy);
+            }
+            disposeEnemyModelResources(enemy); // Dispose of resources
+            // Remove from enemyMeshesRef.current by filtering in the next update cycle
+            // Or, if we want immediate removal, we'd need to manage the array differently.
+            // For now, let's rely on the filter in the next update.
+          }
         }
+        return; // Do not process other logic if sinking
+      }
+
+      if (enemy.isDying) {
+        enemy.deathTimer -= delta;
         const deathAnimationName = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
         if (enemy.currentAction?.getClip().name !== deathAnimationName && enemy.actions[deathAnimationName]) {
           playAnimation(enemy, deathAnimationName);
         }
-        return;
+        if (enemy.deathTimer <= 0 && !enemy.isSinking) {
+          // Death animation finished, start sinking delay
+          enemy.isSinking = true;
+          enemy.sinkingTimer = ENEMY_SINKING_DELAY;
+          enemy.initialDeathY = enemy.position.y;
+          enemy.visible = true; // Keep visible during sinking delay
+        }
+        return; // Do not process other logic if dying
       }
 
       if (!enemy.visible) {
@@ -588,6 +646,9 @@ export const useEnemyLogic = ({
               enemy.deathTimer = ENEMY_DEATH_DURATION;
               playAnimation(enemy, ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH);
               enemy.isAttacking = false;
+              enemy.isSinking = false; // Ensure sinking is false when death animation starts
+              enemy.sinkingTimer = 0; // Reset sinking timer
+              enemy.initialDeathY = 0; // Reset initial death Y
 
               if (!enemy.hasAppliedDeathEffect) {
                 if (isShieldActiveRef.current) {
@@ -617,8 +678,9 @@ export const useEnemyLogic = ({
     playAnimation,
     cameraRef,
     octreeRef,
-    loadEnemiesForChunk, // Added to dependencies
-    unloadEnemiesFromChunk, // Added to dependencies
+    loadEnemiesForChunk,
+    unloadEnemiesFromChunk,
+    disposeEnemyModelResources, // Add disposeEnemyModelResources to dependencies
   ]);
   
   const resetEnemies = React.useCallback(() => {
