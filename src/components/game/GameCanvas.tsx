@@ -14,6 +14,7 @@ import { useCoinLogic } from '@/hooks/useCoinLogic';
 import { useEnemyLogic } from '@/hooks/useEnemyLogic';
 import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
+import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader'; // Import useDynamicModelLoader
 
 interface GameCanvasProps {
     sessionPublicKey: PublicKey | null;
@@ -139,6 +140,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         octreeRef,
         cameraRef,
     });
+
+    // Destructure updateDynamicModels and cleanupModelPool from useDynamicModelLoader
+    const { updateDynamicModels, cleanupModelPool } = useDynamicModelLoader({
+        cameraRef,
+        sceneRef,
+        octreeRef,
+        objectsToManage: [], // This hook is used for dynamic loading, but we'll use cleanupModelPool directly
+    });
     
     const { initializeCamera, setupInitialCameraPosition, updateCamera, resetCamera } = useCameraLogic({
       cameraRef, 
@@ -175,12 +184,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             updateCoins();
             updateEnemies(delta); // Pass delta
             updateCamera();
+            // Call cleanupModelPool periodically
+            cleanupModelPool(60000, 5); // Clean up models idle for 60s or if pool size > 5
         }
         
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateCamera, dogModelRef ]);
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateCamera, dogModelRef, cleanupModelPool ]); // Add cleanupModelPool to dependencies
 
 
     // Main useEffect for initialization and re-initialization on session change

@@ -25,6 +25,7 @@ export interface DynamicLoadableObject { // Export the interface
   enemyType?: 'carnivore' | 'herbivore'; // Specific to enemies
   // New property for pooling
   isPooled?: boolean;
+  lastPooledTime?: number; // New: Timestamp when the model was last pooled
 }
 
 // Define a type for the model pool
@@ -33,7 +34,7 @@ type ModelPool = {
     geometry: THREE.BufferGeometry | null;
     materials: THREE.Material[];
     animations: THREE.AnimationClip[];
-    instances: THREE.Group[];
+    instances: (THREE.Group & { lastPooledTime?: number })[]; // Add lastPooledTime to instances
   };
 };
 
@@ -62,6 +63,26 @@ export const useDynamicModelLoader = ({
   const dracoLoaderRef = useRef<DRACOLoader | null>(null);
   const modelPoolRef = useRef<ModelPool>({}); // Object pool for models
 
+  // Helper to dispose of a single model's resources
+  const disposeModelResources = useCallback((model: THREE.Group) => {
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        if ((child as THREE.Mesh).geometry) {
+          (child as THREE.Mesh).geometry.dispose();
+        }
+        if ((child as THREE.Mesh).material) {
+          const material = (child as THREE.Mesh).material;
+          if (Array.isArray(material)) {
+            material.forEach(m => m.dispose());
+          } else {
+            (material as THREE.Material).dispose();
+          }
+        }
+      }
+    });
+    console.log(`[useDynamicModelLoader] Disposed of model resources.`);
+  }, []);
+
   // Initialize loaders once
   useEffect(() => {
     dracoLoaderRef.current = new DRACOLoader();
@@ -77,21 +98,18 @@ export const useDynamicModelLoader = ({
       for (const modelPath in modelPoolRef.current) {
         const poolEntry = modelPoolRef.current[modelPath];
         poolEntry.instances.forEach(instance => {
-          instance.traverse((child) => {
-            if ((child as THREE.Mesh).geometry) (child as THREE.Mesh).geometry.dispose();
-            if ((child as THREE.Mesh).material) {
-              const material = (child as THREE.Mesh).material;
-              if (Array.isArray(material)) material.forEach(m => m.dispose());
-              else (material as THREE.Material).dispose();
-            }
-          });
+          disposeModelResources(instance); // Use the helper for disposal
         });
-        if (poolEntry.geometry) poolEntry.geometry.dispose();
-        poolEntry.materials.forEach(m => m.dispose());
+        // The geometry and materials stored directly in the poolEntry are likely references
+        // to the first loaded model's resources. If we dispose instances, these might already be disposed.
+        // We should ensure we don't double dispose.
+        // For now, rely on instance disposal. If issues arise, re-evaluate.
+        // if (poolEntry.geometry) poolEntry.geometry.dispose(); // This might be redundant
+        // poolEntry.materials.forEach(m => m.dispose()); // This might be redundant
       }
       modelPoolRef.current = {};
     };
-  }, []);
+  }, [disposeModelResources]); // Add disposeModelResources to dependencies
 
   const loadAndInstantiateModel = useCallback(async (object: DynamicLoadableObject) => {
     if (!gltfLoaderRef.current || !sceneRef.current) return;
@@ -269,7 +287,9 @@ export const useDynamicModelLoader = ({
           geometry: null, materials: [], animations: [], instances: []
         };
       }
-      modelPoolRef.current[object.modelPath].instances.push(modelToUnload);
+      // Mark the instance with a timestamp before pushing to pool
+      (modelToUnload as THREE.Group & { lastPooledTime?: number }).lastPooledTime = Date.now();
+      modelPoolRef.current[object.modelPath].instances.push(modelToUnload as THREE.Group & { lastPooledTime?: number });
       object.isPooled = true; // Mark as pooled
       console.log(`[useDynamicModelLoader] Returned model to pool: ${object.modelPath.split('/').pop()}`);
 
@@ -281,6 +301,42 @@ export const useDynamicModelLoader = ({
       onModelUnloaded?.(object, modelToUnload);
     }
   }, [sceneRef, octreeRef, onModelUnloaded]);
+
+  // New function to clean up the model pool
+  const cleanupModelPool = useCallback((idleTimeThresholdMs: number = 60000, maxPoolSizePerModel: number = 5) => {
+    const now = Date.now();
+    for (const modelPath in modelPoolRef.current) {
+      const poolEntry = modelPoolRef.current[modelPath];
+      const instancesToKeep: (THREE.Group & { lastPooledTime?: number })[] = [];
+      const instancesToDispose: (THREE.Group & { lastPooledTime?: number })[] = [];
+
+      // Separate instances based on idle time
+      poolEntry.instances.forEach(instance => {
+        if (instance.lastPooledTime && (now - instance.lastPooledTime > idleTimeThresholdMs)) {
+          instancesToDispose.push(instance);
+        } else {
+          instancesToKeep.push(instance);
+        }
+      });
+
+      // If there are too many instances, dispose the oldest ones
+      while (instancesToKeep.length > maxPoolSizePerModel) {
+        const oldestInstance = instancesToKeep.shift(); // Remove from the beginning (oldest)
+        if (oldestInstance) {
+          instancesToDispose.push(oldestInstance);
+        }
+      }
+
+      // Dispose of marked instances
+      instancesToDispose.forEach(instance => {
+        disposeModelResources(instance);
+        console.log(`[useDynamicModelLoader] Disposed of idle/excess model from pool: ${modelPath.split('/').pop()}`);
+      });
+
+      // Update the pool with remaining instances
+      poolEntry.instances = instancesToKeep;
+    }
+  }, [disposeModelResources]);
 
   // Main effect to manage model loading/unloading based on frustum
   useEffect(() => {
@@ -347,5 +403,5 @@ export const useDynamicModelLoader = ({
     });
   }, [cameraRef, sceneRef, objectsToManage, loadAndInstantiateModel, unloadModel]);
 
-  return { updateDynamicModels };
+  return { updateDynamicModels, cleanupModelPool };
 };
