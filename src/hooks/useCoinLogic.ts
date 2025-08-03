@@ -86,6 +86,11 @@ export const useCoinLogic = ({
 
       coinX = Math.max(minSpawnX, Math.min(maxSpawnX, coinX));
       coinZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, coinZ));
+      
+      // إضافة انحراف عشوائي صغير بعد التقييد
+      const randomOffset = (Math.random() - 0.5) * 2; // قيمة بين -0.25 و 0.25
+      coinX += randomOffset;
+      coinZ += randomOffset;
 
       let coinY = COIN_RADIUS;
       if (octreeRef.current) {
