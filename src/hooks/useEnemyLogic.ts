@@ -10,14 +10,14 @@ import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL } from '../lib/constants';
 import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
+import { CoinData } from './useCoinLogic'; // Import CoinData
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
 const ENEMY_ATTACK_DISTANCE = 1.5;
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5;
 const ENEMY_DEATH_DURATION = 5.0;
-const ENEMY_SINKING_DELAY = 15.0; // 15 seconds delay before sinking starts
-const ENEMY_SINKING_DURATION = 3.0; // 3 seconds for the sinking animation
+const ENEMY_SINKING_DELAY = 10.0; // 10 seconds delay before sinking starts
 const ENEMY_PROTECTION_RADIUS = 15;
 const ENEMY_CHASE_RADIUS = 15;
 const CROSSFADE_DURATION = 0.2;
@@ -43,7 +43,8 @@ const ENEMY_ANIMATION_NAMES = {
 };
 
 interface EnemyCustomData {
-  targetCoinPosition: THREE.Vector3;
+  targetCoinId: string; // New: Unique ID of the coin this enemy is protecting
+  targetCoinPosition: THREE.Vector3; // Keep for initial positioning and patrol
   patrolCenter: THREE.Vector3;
   patrolTarget: THREE.Vector3;
   isIdling: boolean;
@@ -253,6 +254,7 @@ export const useEnemyLogic = ({
             Object.values(actions).forEach(action => action.stop());
 
             const enemyData: EnemyData = loadedModel as EnemyData;
+            enemyData.targetCoinId = coin.uuid; // Assign unique coin ID
             enemyData.targetCoinPosition = coin.position.clone();
             enemyData.patrolCenter = coin.position.clone();
             enemyData.patrolTarget = new THREE.Vector3();
@@ -445,6 +447,15 @@ export const useEnemyLogic = ({
       return frustum.intersectsBox(boundingBox);
     });
 
+    // Filter out enemies that have sunk and been disposed
+    enemyMeshesRef.current = enemyMeshesRef.current.filter(enemy => {
+      // If sinking and sunk far enough, filter it out
+      if (enemy.isSinking && enemy.sinkingTimer <= 0 && enemy.position.y < enemy.initialDeathY - 5) {
+        return false; // Remove from the active enemy list
+      }
+      return true;
+    });
+
     enemyMeshesRef.current.forEach(enemy => {
       enemy.mixer.update(delta);
       const enemyY = enemy.position.y;
@@ -458,26 +469,6 @@ export const useEnemyLogic = ({
           // Start sinking animation
           const sinkSpeed = 0.5; // Units per second
           enemy.position.y -= sinkSpeed * delta;
-
-          // If sunk far enough, remove and dispose
-          if (enemy.position.y < enemy.initialDeathY - 5) { // Sink 5 units below initial death Y
-            if (octreeRef.current) {
-              const enemyBox = new THREE.Box3().setFromObject(enemy);
-              octreeRef.current.remove({
-                  id: `enemy_${enemy.id}`,
-                  bounds: enemyBox,
-                  data: enemy
-              });
-            }
-            enemy.mixer.stopAllAction();
-            if (sceneRef.current) { // Add null check for sceneRef.current
-              sceneRef.current.remove(enemy);
-            }
-            disposeEnemyModelResources(enemy); // Dispose of resources
-            // Remove from enemyMeshesRef.current by filtering in the next update cycle
-            // Or, if we want immediate removal, we'd need to manage the array differently.
-            // For now, let's rely on the filter in the next update.
-          }
         }
         return; // Do not process other logic if sinking
       }
@@ -503,23 +494,25 @@ export const useEnemyLogic = ({
       }
 
       const distanceToDog = dogPosition.distanceTo(enemy.position);
-      const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
+      const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition); // Re-add this line
 
-      let targetPosition = new THREE.Vector3();
-      let currentAnimation = '';
+      // Find the protected coin by its unique ID
+      const protectedCoin = coinMeshesRef.current.find((coin: CoinData) => coin.uuid === enemy.targetCoinId);
 
-      const protectedCoin = coinMeshesRef.current.find(coin => coin.position.equals(enemy.targetCoinPosition));
       // Enemy dies if its target coin has been collected (i.e., no longer exists in coinMeshesRef)
       if (!protectedCoin) {
         if (!enemy.isDying) {
           enemy.isDying = true;
           enemy.deathTimer = ENEMY_DEATH_DURATION;
-          currentAnimation = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
-          if (enemy.actions[currentAnimation]) {
-            playAnimation(enemy, currentAnimation);
+          const deathAnimationName = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].DEATH;
+          if (enemy.actions[deathAnimationName]) {
+            playAnimation(enemy, deathAnimationName);
           }
         }
       }
+
+      let targetPosition = new THREE.Vector3();
+      let currentAnimation = '';
 
       if (enemy.isAttacking) {
         currentAnimation = enemy.currentAction?.getClip().name || (enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick');
