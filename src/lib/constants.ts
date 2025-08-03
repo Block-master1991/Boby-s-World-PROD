@@ -49,3 +49,4 @@ export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 export const WORLD_MIN_BOUND = -499;
 export const WORLD_MAX_BOUND = 499;
 export const ENEMY_PROTECTION_RADIUS_VAL = 15;
+export const DOG_SPAWN_PROTECTION_RADIUS = 20; // Radius around dog's initial spawn where no coins/enemies should appear

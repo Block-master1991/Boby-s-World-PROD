@@ -8,7 +8,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree, OctreeObject } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
-import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL } from '../lib/constants';
+import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS } from '../lib/constants';
 import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
 import { CoinData } from './useCoinLogic'; // Import CoinData
 
@@ -283,19 +283,33 @@ export const useEnemyLogic = ({
 
             const spawnAngle = Math.random() * Math.PI * 2;
             const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8;
-            let enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
-            let enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
+            let enemyX, enemyZ;
+            let attempts = 0;
+            const MAX_ATTEMPTS = 100; // Prevent infinite loops
 
-            // Clamp enemy positions to world boundaries, accounting for enemy patrol radius
-            // World bounds are +/- 499. ENEMY_PROTECTION_RADIUS is 15.
-            
-            const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-            const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-            const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-            const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+            const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0); // Get dog's initial position
 
-            enemyX = Math.max(minSpawnX, Math.min(maxSpawnX, enemyX));
-            enemyZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, enemyZ));
+            do {
+              enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
+              enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
+
+              // Clamp enemy positions to world boundaries, accounting for enemy patrol radius
+              // World bounds are +/- 499. ENEMY_PROTECTION_RADIUS is 15.
+              
+              const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+              const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+              const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+              const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+
+              enemyX = Math.max(minSpawnX, Math.min(maxSpawnX, enemyX));
+              enemyZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, enemyZ));
+
+              attempts++;
+              if (attempts > MAX_ATTEMPTS) {
+                console.warn("Max attempts reached for enemy spawning, placing enemy without protection.");
+                break;
+              }
+            } while (dogPosition.distanceTo(new THREE.Vector3(enemyX, dogPosition.y, enemyZ)) < DOG_SPAWN_PROTECTION_RADIUS);
 
             let enemyY = 0;
             if (octreeRef.current) {
@@ -329,7 +343,7 @@ export const useEnemyLogic = ({
       }
     }
     loadedEnemyChunks.current.add(getChunkKey(chunkX, chunkZ));
-  }, [sceneRef, coinMeshesRef, loadEnemyModel, octreeRef]);
+  }, [sceneRef, coinMeshesRef, loadEnemyModel, octreeRef, dogModelRef]);
 
   const unloadEnemiesFromChunk = React.useCallback((chunkX: number, chunkZ: number) => {
     if (!sceneRef.current || !loadedEnemyChunks.current.has(getChunkKey(chunkX, chunkZ))) {
