@@ -1,4 +1,3 @@
-
 // User-confirmed Mainnet Boby Token Mint Address
 export const BOBY_TOKEN_MINT_ADDRESS = '9EbJs7KsoWqAoUPTtcYf1kVyvydQgoxcvcitSbcUpump';
 // CoinGecko ID for Boby token
@@ -45,3 +44,8 @@ export const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY;
 export const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
 
 export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
+
+// World boundaries and enemy protection radius
+export const WORLD_MIN_BOUND = -499;
+export const WORLD_MAX_BOUND = 499;
+export const ENEMY_PROTECTION_RADIUS_VAL = 15;

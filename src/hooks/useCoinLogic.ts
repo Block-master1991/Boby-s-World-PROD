@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 import { Octree, OctreeObject } from '../lib/Octree';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
+import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL } from '../lib/constants';
 
 
 const COIN_RADIUS = 0.4;
@@ -66,9 +67,22 @@ export const useCoinLogic = ({
     const numCoinsToGenerate = ((chunkX + chunkZ) % 2 === 0) ? 2 : 3; // Distribute 1000 coins across 400 chunks (200 with 2, 200 with 3)
     for (let i = 0; i < numCoinsToGenerate; i++) {
       const coinMesh = new THREE.Mesh(coinGeometry.current, coinMaterial.current);
-      const coinX = chunkMinX + Math.random() * CHUNK_SIZE;
-      const coinZ = chunkMinZ + Math.random() * CHUNK_SIZE;
-      const coinY = COIN_RADIUS;
+      let coinX = chunkMinX + Math.random() * CHUNK_SIZE;
+      let coinZ = chunkMinZ + Math.random() * CHUNK_SIZE;
+
+      // Clamp coin positions to world boundaries, accounting for enemy patrol radius
+      const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+      const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+      const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+      const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+
+      coinX = Math.max(minSpawnX, Math.min(maxSpawnX, coinX));
+      coinZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, coinZ));
+
+      let coinY = COIN_RADIUS;
+      if (octreeRef.current) {
+        coinY = octreeRef.current.getGroundHeightAt(coinX, coinZ) + COIN_RADIUS;
+      }
       coinMesh.position.set(coinX, coinY, coinZ);
       coinMesh.rotation.x = Math.PI / 2;
       coinMesh.castShadow = true;

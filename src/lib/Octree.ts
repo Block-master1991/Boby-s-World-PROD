@@ -220,21 +220,43 @@ frustumCulling(frustum: THREE.Frustum): OctreeObject[] {
     return results;
 }
 
-private frustumCullingNode(node: OctreeNode, frustum: THREE.Frustum, results: OctreeObject[]) {
-    if (!frustum.intersectsBox(node.bounds)) return;
+    private frustumCullingNode(node: OctreeNode, frustum: THREE.Frustum, results: OctreeObject[]) {
+        if (!frustum.intersectsBox(node.bounds)) return;
 
-    for (const obj of node.objects) {
-        if (frustum.intersectsBox(obj.bounds)) {
-            results.push(obj);
+        for (const obj of node.objects) {
+            if (frustum.intersectsBox(obj.bounds)) {
+                results.push(obj);
+            }
+        }
+
+        for (let i = 0; i < 8; i++) {
+            if (node.children[i]) {
+                this.frustumCullingNode(node.children[i]!, frustum, results);
+            }
         }
     }
 
-    for (let i = 0; i < 8; i++) {
-        if (node.children[i]) {
-            this.frustumCullingNode(node.children[i]!, frustum, results);
+    // Method to find the highest Y position for a given X, Z coordinate
+    // This is a simplified raycast-like approach for a flat ground plane or simple obstacles
+    getGroundHeightAt(x: number, z: number): number {
+        // Create a small bounding box (like a ray) extending downwards from a high point
+        const rayOrigin = new THREE.Vector3(x, this.root.bounds.max.y, z);
+        const rayEnd = new THREE.Vector3(x, this.root.bounds.min.y, z);
+        const rayBox = new THREE.Box3().setFromPoints([rayOrigin, rayEnd]);
+
+        const intersectingObjects = this.query(rayBox);
+        let highestY = this.root.bounds.min.y; // Start from the lowest possible ground
+
+        for (const obj of intersectingObjects) {
+            // Assuming 'ground' objects are the ones we care about for height
+            // Or any object that the dog can stand on
+            if (obj.id === 'ground' || obj.id.startsWith('obstacle_')) { // Extend to other relevant objects
+                // Find the highest point of the object's bounds that is below or at the ray's origin
+                highestY = Math.max(highestY, obj.bounds.max.y);
+            }
         }
+        return highestY;
     }
-}
 }
 
 export { Octree };

@@ -8,6 +8,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree, OctreeObject } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
+import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL } from '../lib/constants';
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
@@ -237,15 +238,30 @@ export const useEnemyLogic = ({
 
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
-            const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
+            let initialPatrolX = coin.position.x + Math.cos(angle) * radius;
             const initialPatrolZ = coin.position.z + Math.sin(angle) * radius;
             enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
 
             const spawnAngle = Math.random() * Math.PI * 2;
             const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8;
-            const enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
-            const enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
-            const enemyY = 0;
+            let enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
+            let enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
+
+            // Clamp enemy positions to world boundaries, accounting for enemy patrol radius
+            // World bounds are +/- 499. ENEMY_PROTECTION_RADIUS is 15.
+            
+            const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+            const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+            const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+            const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+
+            enemyX = Math.max(minSpawnX, Math.min(maxSpawnX, enemyX));
+            enemyZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, enemyZ));
+
+            let enemyY = 0;
+            if (octreeRef.current) {
+              enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
+            }
             enemyData.position.set(enemyX, enemyY, enemyZ);
             enemyData.scale.set(0.5, 0.5, 0.5);
 
