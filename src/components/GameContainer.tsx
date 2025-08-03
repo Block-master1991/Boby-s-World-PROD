@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameUI from '@/components/game/GameUI';
+import GameMainMenu from '@/components/game/GameMainMenu'; // New import
+import RunningGameUI from '@/components/game/RunningGameUI'; // New import
 import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
 import AuthenticationScreen from '@/components/game-bootstrap/AuthenticationScreen';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
@@ -42,6 +44,7 @@ const GameContainer: React.FC = () => {
     const [isLoadingGameResources, setIsLoadingGameResources] = useState(false);
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
+    const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none'); // New state for game mode selection
 
     const siteKey = RECAPTCHA_SITE_KEY;
 
@@ -162,28 +165,48 @@ const GameContainer: React.FC = () => {
                     router.push('/admin');
                 }
             } else { 
-                // Regular user authenticated
-                if (!isLoadingGameResources && !isGameUIVisible()) { 
-                    console.log("[GameContainer] Authenticated as regular user. Loading game resources...");
-                    setIsLoadingGameResources(true);
-                    const timer = setTimeout(() => {
-                        setIsLoadingGameResources(false);
-                        console.log("[GameContainer] Finished loading game resources (simulated).");
-                    }, 1500);
-                    return () => clearTimeout(timer);
-                }
+                // Regular user authenticated - no direct loading logic here anymore
+                console.log("[GameContainer] Authenticated as regular user. State will be managed by selectedGameMode effect.");
             }
         } else { 
             // Not authenticated or authUser is null
             if (isLoadingGameResources) setIsLoadingGameResources(false);
             if (isRedirectingToAdmin) setIsRedirectingToAdmin(false);
+            setSelectedGameMode('none'); // Reset game mode selection on logout/unauthenticated
             // captchaVerified is reset by handleDisconnect or if checkSession fails
         }
-    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, isLoadingGameResources, ADMIN_WALLET_ADDRESS]);
+    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, ADMIN_WALLET_ADDRESS]); // Removed isLoadingGameResources, selectedGameMode from deps
+
+    // New useEffect to manage game resource loading based on selectedGameMode
+    useEffect(() => {
+        let timer: NodeJS.Timeout | null = null;
+        if (isAuthenticated && authUser?.publicKey && authUser.publicKey !== ADMIN_WALLET_ADDRESS && selectedGameMode !== 'none') {
+            console.log(`[GameContainer] Authenticated as regular user. Loading resources for ${selectedGameMode} mode...`);
+            setIsLoadingGameResources(true);
+            timer = setTimeout(() => {
+                setIsLoadingGameResources(false);
+                console.log(`[GameContainer] Finished loading resources for ${selectedGameMode} mode (simulated).`);
+            }, 1500);
+        } else if (selectedGameMode === 'none' && isLoadingGameResources) {
+            // If mode is reset to none while loading, stop loading
+            setIsLoadingGameResources(false);
+            if (timer) clearTimeout(timer);
+        }
+
+        return () => {
+            if (timer) clearTimeout(timer);
+        };
+    }, [selectedGameMode, isAuthenticated, authUser, ADMIN_WALLET_ADDRESS]); // Added isAuthenticated, authUser, ADMIN_WALLET_ADDRESS to deps for completeness
 
 
-    // Determine if GameUI should be visible
-    const isGameUIVisible = () => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin;
+    // Determine if GameUI or RunningGameUI should be visible
+    const isGameUIVisible = () => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin && selectedGameMode !== 'none';
+
+    const handleGameModeSelected = useCallback((mode: 'boby-world' | 'running-game') => {
+        console.log(`[GameContainer] Game mode selected: ${mode}`);
+        setSelectedGameMode(mode);
+        // isLoadingGameResources will be set by the new useEffect
+    }, []);
 
     // Effect to handle wallet mismatch and force logout
     useEffect(() => {
@@ -207,7 +230,6 @@ const GameContainer: React.FC = () => {
         return <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
     }
     
-    // If not authenticated at all, show AuthenticationScreen
     if (!isAuthenticated) {
         console.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");
         return <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
@@ -223,16 +245,27 @@ const GameContainer: React.FC = () => {
         return <LoadingScreen message="Redirecting to admin panel..." showLogo />;
     }
 
+    // If authenticated as regular user but game mode not selected, show main menu
+    if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && selectedGameMode === 'none') {
+        console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
+        return <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
+    }
+
     // If authenticated as regular user and game resources are loading
     if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && isLoadingGameResources) {
         console.log("[GameContainer] Displaying: Loading game resources for regular user.");
         return <LoadingScreen message="Loading game resources..." showLogo />;
     }
 
-    // If all conditions met, show GameUI
+    // If all conditions met, show the selected game UI
     if (isGameUIVisible()) {
-        console.log("[GameContainer] Displaying: GameUI for regular user.");
-        return <GameUI octreeRef={octreeRef} />;
+        if (selectedGameMode === 'boby-world') {
+            console.log("[GameContainer] Displaying: Boby's World GameUI for regular user.");
+            return <GameUI octreeRef={octreeRef} />;
+        } else if (selectedGameMode === 'running-game') {
+            console.log("[GameContainer] Displaying: Running Game UI for regular user.");
+            return <RunningGameUI />;
+        }
     }
 
     console.log("[GameContainer] Fallback: Showing default loading screen (should not be reached often).");
