@@ -14,7 +14,7 @@ const COIN_EMISSIVE_COLOR = 0xccac00;
 const COIN_ROTATION_SPEED = 0.02;
 const COLLECTION_THRESHOLD_BASE = 0.5;
 const COLLECTION_THRESHOLD = COLLECTION_THRESHOLD_BASE + COIN_RADIUS;
-const VISIBLE_COIN_DISTANCE = 75;
+const VISIBLE_COIN_DISTANCE = 150; // Increased to ensure coins are visible in new chunks
 const COINS_PER_CHUNK = 10;
 
 
@@ -63,7 +63,8 @@ export const useCoinLogic = ({
     const chunkMinX = chunkX * CHUNK_SIZE;
     const chunkMinZ = chunkZ * CHUNK_SIZE;
 
-    for (let i = 0; i < COINS_PER_CHUNK; i++) {
+    const numCoinsToGenerate = ((chunkX + chunkZ) % 2 === 0) ? 2 : 3; // Distribute 1000 coins across 400 chunks (200 with 2, 200 with 3)
+    for (let i = 0; i < numCoinsToGenerate; i++) {
       const coinMesh = new THREE.Mesh(coinGeometry.current, coinMaterial.current);
       const coinX = chunkMinX + Math.random() * CHUNK_SIZE;
       const coinZ = chunkMinZ + Math.random() * CHUNK_SIZE;

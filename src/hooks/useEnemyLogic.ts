@@ -189,7 +189,7 @@ export const useEnemyLogic = ({
     const coinsInChunk = coinMeshesRef.current.filter(coin => {
       const coinX = coin.position.x;
       const coinZ = coin.position.z;
-      return coinX >= chunkMinX && coinX < chunkMaxX && coinZ >= chunkMinZ && coinZ < chunkMaxZ && coin.visible;
+      return coinX >= chunkMinX && coinX < chunkMaxX && coinZ >= chunkMinZ && coinZ < chunkMaxZ;
     });
 
     for (const coin of coinsInChunk) {
@@ -435,7 +435,8 @@ export const useEnemyLogic = ({
       let currentAnimation = '';
 
       const protectedCoin = coinMeshesRef.current.find(coin => coin.position.equals(enemy.targetCoinPosition));
-      if (protectedCoin && !protectedCoin.visible) {
+      // Enemy dies if its target coin has been collected (i.e., no longer exists in coinMeshesRef)
+      if (!protectedCoin) {
         if (!enemy.isDying) {
           enemy.isDying = true;
           enemy.deathTimer = ENEMY_DEATH_DURATION;
