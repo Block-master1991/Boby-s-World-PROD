@@ -1,10 +1,11 @@
 'use client';
 
+'use client';
+
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameUI from '@/components/game/GameUI';
 import GameMainMenu from '@/components/game/GameMainMenu';
 import RunningGameUI from '@/components/game/RunningGameUI';
-import SoundManager, { SoundManagerProps, SoundManagerRef } from '@/components/game/SoundManager';
 import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
 import AuthenticationScreen from '@/components/game-bootstrap/AuthenticationScreen';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
@@ -17,6 +18,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { ADMIN_WALLET_ADDRESS, RECAPTCHA_SITE_KEY } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Volume2, VolumeX } from 'lucide-react';
+import { useAudio } from '@/contexts/AudioContext'; // Import useAudio
 
 const GameContainer: React.FC = () => {
     const { 
@@ -48,8 +50,9 @@ const GameContainer: React.FC = () => {
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
     const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
-    const [isMuted, setIsMuted] = useState(false);
-    const soundManagerRef = useRef<SoundManagerRef | null>(null);
+    const [showEnableSoundButton, setShowEnableSoundButton] = useState(false); // New state for fallback UI
+
+    const { soundManagerRef, isMuted, toggleMute, hasUserInteracted, setHasUserInteracted, setCurrentScreen } = useAudio(); // Use AudioContext
 
     const siteKey = RECAPTCHA_SITE_KEY;
 
@@ -95,8 +98,10 @@ const GameContainer: React.FC = () => {
     const handleCaptchaSuccess = useCallback(() => {
         console.log("[GameContainer] Captcha verified successfully.");
         setCaptchaVerified(true);
+        setHasUserInteracted(true); // User interaction point
+        soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
         toast({ title: 'Verification Successful', description: 'You can now connect your wallet.', duration: 3000 });
-    }, [toast]);
+    }, [toast, setHasUserInteracted, soundManagerRef]);
 
     const handleLoginAttempt = useCallback(async () => {
         if (!captchaVerified || isRequestingNonce) return;
@@ -106,6 +111,8 @@ const GameContainer: React.FC = () => {
             const loginSuccess = await loginAuthHook(); 
             if (loginSuccess) {
                 console.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
+                setHasUserInteracted(true); // User interaction point
+                soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
                 toast({ title: "Login Successful", description: "Welcome to Boby's World!", duration: 3000 });
             } else {
                  console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
@@ -121,7 +128,7 @@ const GameContainer: React.FC = () => {
         } finally {
         setIsRequestingNonce(false);
     }
-}, [loginAuthHook, toast, captchaVerified, isRequestingNonce]);
+}, [loginAuthHook, toast, captchaVerified, isRequestingNonce, setHasUserInteracted, soundManagerRef]);
     
     const handleDisconnect = useCallback(async () => {
         toast({ title: "Disconnecting...", description: "Attempting to end your session." });
@@ -138,6 +145,8 @@ const GameContainer: React.FC = () => {
             setIsLoadingGameResources(false); 
             setIsRedirectingToAdmin(false); 
             setIsRequestingNonce(false); 
+            setHasUserInteracted(false); // Reset user interaction state on disconnect
+            setShowEnableSoundButton(false); // Reset sound button state
 
 
             toast({ title: "Disconnected", description: "Session ended. Please re-verify CAPTCHA to connect again.", duration: 3000 });
@@ -150,7 +159,7 @@ const GameContainer: React.FC = () => {
                 duration: 5000,
             });
         }
-    }, [logoutAuthSessionHook, disconnectWalletAdapterSession, toast]);
+    }, [logoutAuthSessionHook, disconnectWalletAdapterSession, toast, setHasUserInteracted]);
 
     useEffect(() => {
         if (isLoadingAuth) {
@@ -201,7 +210,9 @@ const GameContainer: React.FC = () => {
     const handleGameModeSelected = useCallback((mode: 'boby-world' | 'running-game') => {
         console.log(`[GameContainer] Game mode selected: ${mode}`);
         setSelectedGameMode(mode);
-    }, []);
+        setHasUserInteracted(true); // User interaction point
+        soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
+    }, [setHasUserInteracted, soundManagerRef]);
 
     useEffect(() => {
         if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
@@ -210,55 +221,65 @@ const GameContainer: React.FC = () => {
         }
     }, [isAuthenticated, authUser, isWalletConnectedAndMatching, logoutAndRedirect]);
 
-    const toggleMute = useCallback(() => {
-        setIsMuted(prev => {
-            const newState = !prev;
-            if (soundManagerRef.current) {
-                soundManagerRef.current.toggleMute();
-            }
-            return newState;
-        });
-    }, []);
-
+    // This useEffect now primarily sets hasUserInteracted on any initial click/keydown
     useEffect(() => {
-        const handleFirstInteraction = () => {
-            if (soundManagerRef.current) {
-                soundManagerRef.current.playCurrentTrack();
-            }
-            window.removeEventListener('click', handleFirstInteraction);
-            window.removeEventListener('keydown', handleFirstInteraction);
+        const handleInitialInteraction = () => {
+            setHasUserInteracted(true);
+            window.removeEventListener('click', handleInitialInteraction);
+            window.removeEventListener('keydown', handleInitialInteraction);
         };
 
-        window.addEventListener('click', handleFirstInteraction);
-        window.addEventListener('keydown', handleFirstInteraction);
+        window.addEventListener('click', handleInitialInteraction);
+        window.addEventListener('keydown', handleInitialInteraction);
 
         return () => {
-            window.removeEventListener('click', handleFirstInteraction);
-            window.removeEventListener('keydown', handleFirstInteraction);
+            window.removeEventListener('click', handleInitialInteraction);
+            window.removeEventListener('keydown', handleInitialInteraction);
         };
-    }, []);
+    }, [setHasUserInteracted]);
 
-    // Determine the current screen for SoundManager
-    let currentScreenForSound: SoundManagerProps['currentScreen'];
-    if (isCheckingSession || !siteKey) {
-        currentScreenForSound = 'loading';
-    } else if (!captchaVerified) {
-        currentScreenForSound = 'captcha';
-    } else if (!isAuthenticated) {
-        currentScreenForSound = 'authentication';
-    } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
-        currentScreenForSound = 'admin';
-    } else if (selectedGameMode === 'none') {
-        currentScreenForSound = 'mainMenu';
-    } else if (isLoadingGameResources) {
-        currentScreenForSound = 'loading';
-    } else if (selectedGameMode === 'boby-world') {
-        currentScreenForSound = 'boby-world';
-    } else if (selectedGameMode === 'running-game') {
-        currentScreenForSound = 'running-game';
-    } else {
-        currentScreenForSound = 'loading'; // Fallback
-    }
+    const handlePlaybackBlocked = useCallback(() => {
+        setShowEnableSoundButton(true);
+        toast({
+            title: "Sound Blocked",
+            description: "Your browser prevented audio from playing automatically. Click 'Enable Sound' to hear the game.",
+            variant: "default", // Use default or info variant
+            duration: 5000,
+        });
+    }, [toast]);
+
+    const handleEnableSoundClick = useCallback(() => {
+        if (soundManagerRef.current) {
+            soundManagerRef.current.playCurrentTrack();
+            setShowEnableSoundButton(false); // Hide button after attempting to play
+        }
+    }, [soundManagerRef]);
+
+    // Determine the current screen for SoundManager and update context
+    useEffect(() => {
+        let screen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin';
+        if (isCheckingSession || !siteKey) {
+            screen = 'loading';
+        } else if (!captchaVerified) {
+            screen = 'captcha';
+        } else if (!isAuthenticated) {
+            screen = 'authentication';
+        } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
+            screen = 'admin';
+        } else if (selectedGameMode === 'none') {
+            screen = 'mainMenu';
+        } else if (isLoadingGameResources) {
+            screen = 'loading';
+        } else if (selectedGameMode === 'boby-world') {
+            screen = 'boby-world';
+        } else if (selectedGameMode === 'running-game') {
+            screen = 'running-game';
+        } else {
+            screen = 'loading'; // Fallback
+        }
+        setCurrentScreen(screen);
+    }, [isCheckingSession, siteKey, captchaVerified, isAuthenticated, authUser, ADMIN_WALLET_ADDRESS, selectedGameMode, isLoadingGameResources, setCurrentScreen]);
+
 
     // Main content rendering logic
     let mainContent;
@@ -303,7 +324,6 @@ const GameContainer: React.FC = () => {
 
     return (
         <>
-            <SoundManager currentScreen={currentScreenForSound} isMuted={isMuted} ref={soundManagerRef} />
             {/* Mute/Unmute Button */}
             <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
                 <Button 
@@ -315,6 +335,13 @@ const GameContainer: React.FC = () => {
                     {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
                 </Button>
             </div>
+            {showEnableSoundButton && (
+                <div style={{ position: 'fixed', bottom: '80px', right: '20px', zIndex: 1000 }}>
+                    <Button onClick={handleEnableSoundClick}>
+                        Enable Sound
+                    </Button>
+                </div>
+            )}
             {mainContent}
         </>
     );

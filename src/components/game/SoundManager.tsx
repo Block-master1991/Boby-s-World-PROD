@@ -6,17 +6,22 @@ export interface SoundManagerRef {
   toggleMute: () => void;
   setVolume: (volume: number) => void;
   playCurrentTrack: () => void;
+  setTrack: (screen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin') => void;
 }
 
 export interface SoundManagerProps {
-  currentScreen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin';
   isMuted: boolean;
+  hasUserInteracted: boolean; // New prop to indicate user interaction
+  onPlaybackBlocked?: () => void; // Callback for when playback is blocked
+  currentScreen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin'; // Added for internal use
 }
 
-const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ currentScreen, isMuted }, ref) => {
+const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, hasUserInteracted, onPlaybackBlocked }, ref) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentTrackSrc = useRef<string | null>(null);
   const [volume, setVolumeState] = useState(0.5); // Internal volume state
+  const [isAudioReady, setIsAudioReady] = useState(false); // Track if audio element is ready to play
+  const [internalCurrentScreen, setInternalCurrentScreen] = useState<SoundManagerProps['currentScreen'] | null>(null); // Internal state for currentScreen
 
   // Initialize audio element
   useEffect(() => {
@@ -25,33 +30,55 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ currentSc
       audioRef.current.preload = 'auto';
       audioRef.current.volume = volume;
       audioRef.current.loop = true; // Default to loop
+      audioRef.current.oncanplaythrough = () => setIsAudioReady(true);
+      audioRef.current.onerror = (e) => console.error("Audio error:", e);
     }
   }, [volume]);
 
-  const playAudio = useCallback((src: string, loop: boolean = true) => {
+  const setAudioSource = useCallback((src: string, loop: boolean = true) => {
     if (audioRef.current) {
       if (currentTrackSrc.current === src) {
-        // Already playing the correct track, do nothing
+        console.log(`[SoundManager] Track already set to: ${src}. No change needed.`);
         return;
       }
       audioRef.current.pause();
       audioRef.current.src = src;
       audioRef.current.loop = loop;
-      audioRef.current.volume = isMuted ? 0 : volume; // Respect mute state
-      audioRef.current.play().catch(e => console.error("Error playing audio:", e));
       currentTrackSrc.current = src;
-      console.log(`[SoundManager] Playing: ${src}`);
+      setIsAudioReady(false); // Reset ready state when source changes
+      console.log(`[SoundManager] Setting audio source to: ${src}`);
     }
-  }, [isMuted, volume]);
+  }, []);
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
       currentTrackSrc.current = null;
+      setIsAudioReady(false);
       console.log("[SoundManager] Audio stopped.");
     }
   }, []);
+
+  const tryPlayAudio = useCallback(async () => {
+    if (audioRef.current && currentTrackSrc.current && !isMuted && isAudioReady) {
+      try {
+        if (audioRef.current.readyState >= 2 && audioRef.current.paused) {
+          await audioRef.current.play();
+          console.log(`[SoundManager] Playing: ${currentTrackSrc.current}`);
+        }
+      } catch (e: any) {
+        if (e.name === 'NotAllowedError' || e.name === 'AbortError') {
+          console.warn("[SoundManager] Audio playback blocked by browser autoplay policy or aborted:", e.message);
+          if (onPlaybackBlocked) {
+            onPlaybackBlocked();
+          }
+        } else {
+          console.error("Error playing audio:", e);
+        }
+      }
+    }
+  }, [isMuted, isAudioReady, onPlaybackBlocked]);
 
   // Expose functions via ref
   useImperativeHandle(ref, () => ({
@@ -69,49 +96,53 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ currentSc
       }
     },
     playCurrentTrack: () => {
-      if (audioRef.current && currentTrackSrc.current && !isMuted) {
-        audioRef.current.play().catch(e => console.error("Error playing audio on user interaction:", e));
-      }
+      tryPlayAudio();
+    },
+    setTrack: (screen: SoundManagerProps['currentScreen']) => {
+      setInternalCurrentScreen(screen);
     }
   }));
 
+  // Effect to set audio source based on internalCurrentScreen
   useEffect(() => {
-    let audioToPlay: string | null = null;
+    let audioToSet: string | null = null;
 
-    switch (currentScreen) {
+    switch (internalCurrentScreen) {
       case 'captcha':
       case 'authentication':
       case 'mainMenu':
-        audioToPlay = '/audio/Run_Bobby_start _to_main_menu.mp3';
+        audioToSet = '/audio/Run_Bobby_start _to_main_menu.mp3';
         break;
       case 'boby-world':
-        audioToPlay = '/audio/Boby_On_the_Run_open_world_bg_sound.mp3';
+        audioToSet = '/audio/Boby_On_the_Run_open_world_bg_sound.mp3';
         break;
       case 'running-game':
-        audioToPlay = '/audio/Boby_On_the_Run_road_run_bg_sound.mp3';
+        audioToSet = '/audio/Boby_On_the_Run_road_run_bg_sound.mp3';
         break;
       case 'loading':
       case 'admin':
-        stopAudio(); // No music for loading or admin screens
+        stopAudio();
         break;
       default:
         stopAudio();
         break;
     }
 
-    if (audioToPlay) {
-      playAudio(audioToPlay);
+    if (audioToSet) {
+      setAudioSource(audioToSet);
     } else {
       stopAudio();
     }
+  }, [internalCurrentScreen, setAudioSource, stopAudio]);
 
-    // Cleanup on unmount
-    return () => {
-      stopAudio();
-    };
-  }, [currentScreen, playAudio, stopAudio]);
+  // Effect to attempt playback when user interacts and audio is ready
+  useEffect(() => {
+    if (hasUserInteracted && isAudioReady) {
+      tryPlayAudio();
+    }
+  }, [hasUserInteracted, isAudioReady, tryPlayAudio]);
 
-  // Update audio element's muted state when isMuted prop changes
+  // Update audio element's muted state and volume when props change
   useEffect(() => {
     if (audioRef.current) {
       audioRef.current.muted = isMuted;
@@ -120,7 +151,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ currentSc
   }, [isMuted, volume]);
 
 
-  return null; // This component doesn't render anything visible
+  return null;
 });
 
 export default SoundManager;
