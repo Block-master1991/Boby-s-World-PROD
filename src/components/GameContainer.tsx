@@ -2,8 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import GameUI from '@/components/game/GameUI';
-import GameMainMenu from '@/components/game/GameMainMenu'; // New import
-import RunningGameUI from '@/components/game/RunningGameUI'; // New import
+import GameMainMenu from '@/components/game/GameMainMenu';
+import RunningGameUI from '@/components/game/RunningGameUI';
+import SoundManager, { SoundManagerProps, SoundManagerRef } from '@/components/game/SoundManager';
 import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
 import AuthenticationScreen from '@/components/game-bootstrap/AuthenticationScreen';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
@@ -14,6 +15,8 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, usePathname } from 'next/navigation';
 import { ADMIN_WALLET_ADDRESS, RECAPTCHA_SITE_KEY } from '@/lib/constants';
+import { Button } from '@/components/ui/button';
+import { Volume2, VolumeX } from 'lucide-react';
 
 const GameContainer: React.FC = () => {
     const { 
@@ -34,21 +37,23 @@ const GameContainer: React.FC = () => {
     } = useSessionWallet();
     
     const router = useRouter();
-    const pathname = usePathname(); // Get current path for potential redirects
+    const pathname = usePathname();
     const { toast } = useToast();
 
-    const octreeRef = useRef<Octree | null>(null); // Octree ref
+    const octreeRef = useRef<Octree | null>(null);
 
     const [captchaVerified, setCaptchaVerified] = useState(false);
     const [isRequestingNonce, setIsRequestingNonce] = useState(false); 
     const [isLoadingGameResources, setIsLoadingGameResources] = useState(false);
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
-    const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none'); // New state for game mode selection
+    const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
+    const [isMuted, setIsMuted] = useState(false);
+    const soundManagerRef = useRef<SoundManagerRef | null>(null);
 
     const siteKey = RECAPTCHA_SITE_KEY;
 
-
+    // All useEffects and Callbacks are declared at the top level
     useEffect(() => {
         const runSessionCheck = async () => {
             setIsCheckingSession(true);
@@ -147,8 +152,6 @@ const GameContainer: React.FC = () => {
         }
     }, [logoutAuthSessionHook, disconnectWalletAdapterSession, toast]);
 
-
-    // Check session on initial load
     useEffect(() => {
         if (isLoadingAuth) {
             console.log("[GameContainer] AuthContext is loading, deferring admin/game resource decisions.");
@@ -165,19 +168,15 @@ const GameContainer: React.FC = () => {
                     router.push('/admin');
                 }
             } else { 
-                // Regular user authenticated - no direct loading logic here anymore
                 console.log("[GameContainer] Authenticated as regular user. State will be managed by selectedGameMode effect.");
             }
         } else { 
-            // Not authenticated or authUser is null
             if (isLoadingGameResources) setIsLoadingGameResources(false);
             if (isRedirectingToAdmin) setIsRedirectingToAdmin(false);
-            setSelectedGameMode('none'); // Reset game mode selection on logout/unauthenticated
-            // captchaVerified is reset by handleDisconnect or if checkSession fails
+            setSelectedGameMode('none');
         }
-    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, ADMIN_WALLET_ADDRESS]); // Removed isLoadingGameResources, selectedGameMode from deps
+    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, ADMIN_WALLET_ADDRESS]);
 
-    // New useEffect to manage game resource loading based on selectedGameMode
     useEffect(() => {
         let timer: NodeJS.Timeout | null = null;
         if (isAuthenticated && authUser?.publicKey && authUser.publicKey !== ADMIN_WALLET_ADDRESS && selectedGameMode !== 'none') {
@@ -188,7 +187,6 @@ const GameContainer: React.FC = () => {
                 console.log(`[GameContainer] Finished loading resources for ${selectedGameMode} mode (simulated).`);
             }, 1500);
         } else if (selectedGameMode === 'none' && isLoadingGameResources) {
-            // If mode is reset to none while loading, stop loading
             setIsLoadingGameResources(false);
             if (timer) clearTimeout(timer);
         }
@@ -196,19 +194,15 @@ const GameContainer: React.FC = () => {
         return () => {
             if (timer) clearTimeout(timer);
         };
-    }, [selectedGameMode, isAuthenticated, authUser, ADMIN_WALLET_ADDRESS]); // Added isAuthenticated, authUser, ADMIN_WALLET_ADDRESS to deps for completeness
+    }, [selectedGameMode, isAuthenticated, authUser, ADMIN_WALLET_ADDRESS]);
 
-
-    // Determine if GameUI or RunningGameUI should be visible
-    const isGameUIVisible = () => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin && selectedGameMode !== 'none';
+    const isGameUIVisible = useCallback(() => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin && selectedGameMode !== 'none', [isAuthenticated, authUser, isLoadingGameResources, isRedirectingToAdmin, selectedGameMode]);
 
     const handleGameModeSelected = useCallback((mode: 'boby-world' | 'running-game') => {
         console.log(`[GameContainer] Game mode selected: ${mode}`);
         setSelectedGameMode(mode);
-        // isLoadingGameResources will be set by the new useEffect
     }, []);
 
-    // Effect to handle wallet mismatch and force logout
     useEffect(() => {
         if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
             console.warn("[GameContainer] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout and redirect.");
@@ -216,60 +210,114 @@ const GameContainer: React.FC = () => {
         }
     }, [isAuthenticated, authUser, isWalletConnectedAndMatching, logoutAndRedirect]);
 
-    // Render logic based on authentication and loading states
+    const toggleMute = useCallback(() => {
+        setIsMuted(prev => {
+            const newState = !prev;
+            if (soundManagerRef.current) {
+                soundManagerRef.current.toggleMute();
+            }
+            return newState;
+        });
+    }, []);
+
+    useEffect(() => {
+        const handleFirstInteraction = () => {
+            if (soundManagerRef.current) {
+                soundManagerRef.current.playCurrentTrack();
+            }
+            window.removeEventListener('click', handleFirstInteraction);
+            window.removeEventListener('keydown', handleFirstInteraction);
+        };
+
+        window.addEventListener('click', handleFirstInteraction);
+        window.addEventListener('keydown', handleFirstInteraction);
+
+        return () => {
+            window.removeEventListener('click', handleFirstInteraction);
+            window.removeEventListener('keydown', handleFirstInteraction);
+        };
+    }, []);
+
+    // Determine the current screen for SoundManager
+    let currentScreenForSound: SoundManagerProps['currentScreen'];
+    if (isCheckingSession || !siteKey) {
+        currentScreenForSound = 'loading';
+    } else if (!captchaVerified) {
+        currentScreenForSound = 'captcha';
+    } else if (!isAuthenticated) {
+        currentScreenForSound = 'authentication';
+    } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
+        currentScreenForSound = 'admin';
+    } else if (selectedGameMode === 'none') {
+        currentScreenForSound = 'mainMenu';
+    } else if (isLoadingGameResources) {
+        currentScreenForSound = 'loading';
+    } else if (selectedGameMode === 'boby-world') {
+        currentScreenForSound = 'boby-world';
+    } else if (selectedGameMode === 'running-game') {
+        currentScreenForSound = 'running-game';
+    } else {
+        currentScreenForSound = 'loading'; // Fallback
+    }
+
+    // Main content rendering logic
+    let mainContent;
     if (isCheckingSession) {
         console.log("[GameContainer] Displaying: Checking session...");
-        return <LoadingScreen message="" showLogo />;
-    }
-    if (!siteKey) {
+        mainContent = <LoadingScreen message="" showLogo />;
+    } else if (!siteKey) {
         console.log("[GameContainer] Displaying: Preparing verification (no CAPTCHA site key).");
-        return <LoadingScreen message="Preparing verification..." showLogo />;
-    }
-    if (!captchaVerified) {
+        mainContent = <LoadingScreen message="Preparing verification..." showLogo />;
+    } else if (!captchaVerified) {
         console.log("[GameContainer] Displaying: Awaiting captcha verification.");
-        return <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
-    }
-    
-    if (!isAuthenticated) {
+        mainContent = <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
+    } else if (!isAuthenticated) {
         console.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");
-        return <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
-    }
-
-    // If authenticated as admin, redirect
-    if (isAuthenticated && authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
-        if (!isRedirectingToAdmin) { // This state should trigger the useEffect above
+        mainContent = <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
+    } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
+        if (!isRedirectingToAdmin) {
             console.log("[GameContainer] Admin user authenticated, initiating redirect.");
-            return <LoadingScreen message="Redirecting to admin panel..." showLogo />;
+            mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo />;
+        } else {
+            console.log("[GameContainer] Displaying: Redirecting to admin panel...");
+            mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo />;
         }
-        console.log("[GameContainer] Displaying: Redirecting to admin panel...");
-        return <LoadingScreen message="Redirecting to admin panel..." showLogo />;
-    }
-
-    // If authenticated as regular user but game mode not selected, show main menu
-    if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && selectedGameMode === 'none') {
+    } else if (selectedGameMode === 'none') {
         console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
-        return <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
-    }
-
-    // If authenticated as regular user and game resources are loading
-    if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && isLoadingGameResources) {
+        mainContent = <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
+    } else if (isLoadingGameResources) {
         console.log("[GameContainer] Displaying: Loading game resources for regular user.");
-        return <LoadingScreen message="Loading game resources..." showLogo />;
-    }
-
-    // If all conditions met, show the selected game UI
-    if (isGameUIVisible()) {
+        mainContent = <LoadingScreen message="Loading game resources..." showLogo />;
+    } else if (isGameUIVisible()) {
         if (selectedGameMode === 'boby-world') {
             console.log("[GameContainer] Displaying: Boby's World GameUI for regular user.");
-            return <GameUI octreeRef={octreeRef} />;
+            mainContent = <GameUI octreeRef={octreeRef} />;
         } else if (selectedGameMode === 'running-game') {
             console.log("[GameContainer] Displaying: Running Game UI for regular user.");
-            return <RunningGameUI />;
+            mainContent = <RunningGameUI />;
         }
+    } else {
+        console.log("[GameContainer] Fallback: Showing default loading screen (should not be reached often).");
+        mainContent = <LoadingScreen message="Finalizing setup..." showLogo />;
     }
 
-    console.log("[GameContainer] Fallback: Showing default loading screen (should not be reached often).");
-    return <LoadingScreen message="Finalizing setup..." showLogo />;
+    return (
+        <>
+            <SoundManager currentScreen={currentScreenForSound} isMuted={isMuted} ref={soundManagerRef} />
+            {/* Mute/Unmute Button */}
+            <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
+                <Button 
+                    variant="outline" 
+                    size="icon" 
+                    onClick={toggleMute}
+                    aria-label={isMuted ? "Unmute" : "Mute"}
+                >
+                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                </Button>
+            </div>
+            {mainContent}
+        </>
+    );
 };
 
 export default GameContainer;
