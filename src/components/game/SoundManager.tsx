@@ -106,12 +106,13 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
   // Effect to set audio source based on internalCurrentScreen
   useEffect(() => {
     let audioToSet: string | null = null;
+    const preGameTrack = '/audio/Run_Bobby_start _to_main_menu.mp3';
 
     switch (internalCurrentScreen) {
       case 'captcha':
       case 'authentication':
       case 'mainMenu':
-        audioToSet = '/audio/Run_Bobby_start _to_main_menu.mp3';
+        audioToSet = preGameTrack;
         break;
       case 'boby-world':
         audioToSet = '/audio/Boby_On_the_Run_open_world_bg_sound.mp3';
@@ -121,7 +122,14 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
         break;
       case 'loading':
       case 'admin':
-        stopAudio();
+        // If current track is the pre-game track, don't stop it.
+        // Otherwise, stop if it's a screen that should have no music.
+        if (currentTrackSrc.current === preGameTrack) {
+          console.log(`[SoundManager] On ${internalCurrentScreen} screen, keeping pre-game track playing.`);
+          // Do nothing, let it continue
+        } else {
+          stopAudio();
+        }
         break;
       default:
         stopAudio();
@@ -130,7 +138,8 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
 
     if (audioToSet) {
       setAudioSource(audioToSet);
-    } else {
+    } else if (internalCurrentScreen !== 'loading' && internalCurrentScreen !== 'admin') {
+      // Only stop if no audio is set AND it's not a loading/admin screen that might transition back to pre-game music
       stopAudio();
     }
   }, [internalCurrentScreen, setAudioSource, stopAudio]);
