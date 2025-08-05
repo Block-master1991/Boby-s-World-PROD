@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useEffect, useRef, useCallback } from 'react';
@@ -15,7 +14,8 @@ import { useEnemyLogic } from '@/hooks/useEnemyLogic';
 import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
 import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
-import { useTreeLogic } from '@/hooks/useTreeLogic'; // Import useTreeLogic
+import { useTreeLogic } from '@/hooks/useTreeLogic';
+import { getChunkCoordinates, getChunkKey, RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '@/lib/chunkUtils'; // Import chunk utilities
 interface GameCanvasProps {
     sessionPublicKey: PublicKey | null;
     isSpeedBoostActive: boolean;
@@ -141,10 +141,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         cameraRef,
     });
 
-    const { initializeTrees, updateTreeAnimations } = useTreeLogic({
+    const { addTreesForChunk, removeTreesForChunk, updateTreeAnimations } = useTreeLogic({
         sceneRef,
         octreeRef,
     });
+
+    // Ref to store currently loaded tree chunks
+    const loadedTreeChunksRef = useRef<Map<string, any[]>>(new Map()); // Map<chunkKey, TreeInstance[]>
+    const currentDogChunkRef = useRef<{ chunkX: number; chunkZ: number } | null>(null);
 
     // Destructure updateDynamicModels and cleanupModelPool from useDynamicModelLoader
     const { updateDynamicModels, cleanupModelPool } = useDynamicModelLoader({
@@ -172,6 +176,44 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         isJoystickInteractionActiveRef,
     });
 
+    // Function to manage loading/unloading of tree chunks
+    const manageTreeChunks = useCallback(async (playerChunkX: number, playerChunkZ: number) => {
+        const activeChunkKeys = new Set<string>();
+
+        // Determine chunks to load (current + render distance)
+        for (let xOffset = -RENDER_DISTANCE_CHUNKS; xOffset <= RENDER_DISTANCE_CHUNKS; xOffset++) {
+            for (let zOffset = -RENDER_DISTANCE_CHUNKS; zOffset <= RENDER_DISTANCE_CHUNKS; zOffset++) {
+                const chunkX = playerChunkX + xOffset;
+                const chunkZ = playerChunkZ + zOffset;
+                const chunkKey = getChunkKey(chunkX, chunkZ);
+                activeChunkKeys.add(chunkKey);
+
+                if (!loadedTreeChunksRef.current.has(chunkKey)) {
+                    console.log(`[GameCanvas] Loading trees for chunk: [${chunkX}, ${chunkZ}]`);
+                    const newTrees = await addTreesForChunk(chunkX, chunkZ);
+                    loadedTreeChunksRef.current.set(chunkKey, newTrees);
+                }
+            }
+        }
+
+        // Unload chunks that are no longer active
+        const chunksToUnload: string[] = [];
+        loadedTreeChunksRef.current.forEach((trees, chunkKey) => {
+            if (!activeChunkKeys.has(chunkKey)) {
+                chunksToUnload.push(chunkKey);
+            }
+        });
+
+        chunksToUnload.forEach(chunkKey => {
+            console.log(`[GameCanvas] Unloading trees for chunk: ${chunkKey}`);
+            const trees = loadedTreeChunksRef.current.get(chunkKey);
+            if (trees) {
+                removeTreesForChunk(trees);
+            }
+            loadedTreeChunksRef.current.delete(chunkKey);
+        });
+    }, [addTreesForChunk, removeTreesForChunk]);
+
 
     const animate = useCallback(() => {
         if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !sessionPublicKey) {
@@ -190,6 +232,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             updateEnemies(delta); // Pass delta
             updateTreeAnimations(delta); // Update tree animations
             updateCamera();
+
+            // Chunk management for trees
+            const dogPos = dogModelRef.current.position;
+            const { chunkX: newChunkX, chunkZ: newChunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
+
+            if (!currentDogChunkRef.current || newChunkX !== currentDogChunkRef.current.chunkX || newChunkZ !== currentDogChunkRef.current.chunkZ) {
+                console.log(`[GameCanvas] Dog moved to new chunk: [${newChunkX}, ${newChunkZ}]`);
+                currentDogChunkRef.current = { chunkX: newChunkX, chunkZ: newChunkZ };
+                manageTreeChunks(newChunkX, newChunkZ);
+            }
+
             // Call cleanupModelPool periodically
             cleanupModelPool(60000, 5); // Clean up models idle for 60s or if pool size > 5
         }
@@ -197,7 +250,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool ]); // Add updateTreeAnimations to dependencies
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks ]); // Add manageTreeChunks to dependencies
 
 
     // Main useEffect for initialization and re-initialization on session change
@@ -218,6 +271,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             
             resetDogState();
             resetCamera(); 
+            loadedTreeChunksRef.current.clear(); // Clear loaded chunks on new session
 
             initializeCamera(); 
             const sceneInitialized = initializeScene(); 
@@ -226,16 +280,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 initializeDog(); 
                 initializeCoins(); 
                 initializeEnemies();
-                initializeTrees(); // Initialize trees
                 
-                const checkDogAndSetupCamera = () => {
+                const checkDogAndSetupCameraAndChunks = () => {
                     if (dogModelRef.current) {
                         setupInitialCameraPosition();
+                        // Initial chunk loading
+                        const dogPos = dogModelRef.current.position;
+                        const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
+                        currentDogChunkRef.current = { chunkX, chunkZ };
+                        manageTreeChunks(chunkX, chunkZ); // Load initial chunks
                     } else {
-                        setTimeout(checkDogAndSetupCamera, 100); 
+                        setTimeout(checkDogAndSetupCameraAndChunks, 100); 
                     }
                 };
-                checkDogAndSetupCamera();
+                checkDogAndSetupCameraAndChunks();
 
             } else {
                 console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.");
@@ -262,10 +320,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         // Callbacks from custom hooks are stable and don't need to be in dependency array
         // Animate is also stable due to useCallback
         // Removing individual hook functions to prevent re-runs unless sessionPublicKey changes.
-        // initializeDog, resetDogState, initializeCoins, initializeEnemies, initializeCamera, setupInitialCameraPosition, resetCamera,
-        // initializeScene, cleanupScene, 
-        // dogModelRef, lastDogTransformRef, 
-        // cameraRef, rendererRef, controlsRef, mountRef 
+        initializeDog, resetDogState, initializeCoins, initializeEnemies, initializeCamera, setupInitialCameraPosition, resetCamera,
+        initializeScene, cleanupScene, 
+        dogModelRef, lastDogTransformRef, 
+        cameraRef, rendererRef, // controlsRef, mountRef 
+        manageTreeChunks, // Add manageTreeChunks to dependencies
     ]);
 
     // Effect for handling resize

@@ -1,24 +1,49 @@
-import { useCallback, MutableRefObject } from 'react';
+import { useCallback, MutableRefObject, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree } from '@/lib/Octree';
 import { getModel, putModel } from '@/lib/indexedDB';
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils'; // Corrected: Import as namespace
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils';
+import { CHUNK_SIZE } from '@/lib/chunkUtils'; // Import CHUNK_SIZE
+
+interface TreeInstance {
+  model: THREE.Group;
+  mixer: THREE.AnimationMixer;
+}
 
 interface UseTreeLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   octreeRef: MutableRefObject<Octree | null>;
 }
 
-import { useRef } from 'react'; // Import useRef
 export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
-  const mixersRef = useRef<THREE.AnimationMixer[]>([]); // Ref to store animation mixers
+  const treeInstancesRef = useRef<TreeInstance[]>([]); // Ref to store all active tree instances
 
-  const initializeTrees = useCallback(async (onProgress?: (url: string, loaded: number, total: number) => void) => {
+  // Helper to dispose of a single model's resources
+  const disposeModelResources = useCallback((model: THREE.Group) => {
+    model.traverse((child) => {
+      if ((child as THREE.Mesh).isMesh) {
+        if ((child as THREE.Mesh).geometry) {
+          (child as THREE.Mesh).geometry.dispose();
+        }
+        if ((child as THREE.Mesh).material) {
+          const material = (child as THREE.Mesh).material;
+          if (Array.isArray(material)) {
+            material.forEach(m => m.dispose());
+          } else {
+            (material as THREE.Material).dispose();
+          }
+        }
+      }
+    });
+    console.log(`[useTreeLogic] Disposed of tree model resources.`);
+  }, []);
+
+  const addTreesForChunk = useCallback(async (chunkX: number, chunkZ: number, onProgress?: (url: string, loaded: number, total: number) => void): Promise<TreeInstance[]> => {
     if (!sceneRef.current) {
       console.error("Scene is not initialized for tree loading.");
-      return;
+      return [];
     }
 
     const loader = new GLTFLoader();
@@ -26,16 +51,16 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
     dracoLoader.setDecoderPath('/libs/draco/gltf/');
     loader.setDRACOLoader(dracoLoader);
 
-    const modelPath = '/models/lands/Tree1.glb'; // Corrected path
+    const modelPath = '/models/lands/Tree1.glb';
     const modelName = 'Tree1';
-    const numberOfTrees = 5; // Number of trees to generate
-    const spawnRange = 100; // Range for random X and Z positions
+    const numberOfTreesPerChunk = 1; // Number of trees to generate per chunk
+
+    const newTreeInstances: TreeInstance[] = [];
 
     try {
       let gltf: any;
       let modelData: ArrayBuffer | undefined;
 
-      // Try to load from IndexedDB first
       console.log(`Attempting to load ${modelName} from IndexedDB...`);
       modelData = await getModel(modelName);
 
@@ -46,15 +71,13 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
         gltf = await new Promise<any>((resolve, reject) => {
           loader.load(url, resolve, undefined, reject);
         });
-        URL.revokeObjectURL(url); // Clean up the object URL
+        URL.revokeObjectURL(url);
       } else {
-        // If not in IndexedDB, load from network
         console.log(`${modelName} not found in IndexedDB. Loading from network...`);
         gltf = await new Promise<any>((resolve, reject) => {
           loader.load(
             modelPath,
             (gltf) => {
-              // After successful network load, save to IndexedDB
               fetch(modelPath)
                 .then(response => response.arrayBuffer())
                 .then(buffer => putModel(modelName, buffer))
@@ -75,93 +98,98 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
         });
       }
 
-      // Clear previous mixers
-      mixersRef.current = [];
+      const chunkMinX = chunkX * CHUNK_SIZE;
+      const chunkMaxX = (chunkX + 1) * CHUNK_SIZE;
+      const chunkMinZ = chunkZ * CHUNK_SIZE;
+      const chunkMaxZ = (chunkZ + 1) * CHUNK_SIZE;
 
-      // Log available animations for debugging
-      if (gltf.animations && gltf.animations.length > 0) {
-        console.log(`[${modelName}] Available animations:`, gltf.animations.map((clip: THREE.AnimationClip) => clip.name));
-      } else {
-        console.log(`[${modelName}] No animations found in the model.`);
-      }
+      for (let i = 0; i < numberOfTreesPerChunk; i++) {
+        const treeInstanceModel = SkeletonUtils.clone(gltf.scene);
 
-      // Log the structure of the loaded GLTF scene for debugging missing branches
-      console.log(`[${modelName}] GLTF Scene structure:`, gltf.scene);
-      gltf.scene.traverse((child: THREE.Object3D) => {
-        if (child instanceof THREE.Mesh) {
-          console.log(`  Mesh: ${child.name || 'Unnamed Mesh'}, Geometry: ${child.geometry.type}, Material: ${child.material.type}`);
-        }
-      });
-
-      for (let i = 0; i < numberOfTrees; i++) {
-        const treeInstance = SkeletonUtils.clone(gltf.scene); // Use SkeletonUtils.clone for proper animation cloning
-
-        // Ensure materials are unique for each instance to prevent rendering issues
-        treeInstance.traverse((child: THREE.Object3D) => {
+        treeInstanceModel.traverse((child: THREE.Object3D) => {
           if (child instanceof THREE.Mesh) {
-            child.material = child.material.clone();
+            child.material = (child.material as THREE.Material).clone();
           }
         });
 
-        treeInstance.scale.set(5, 5, 5); // Increase scale to 5
+        treeInstanceModel.scale.set(3, 3, 3);
 
-        // Random position within a range
-        const x = (Math.random() - 0.5) * spawnRange * 2;
-        const z = (Math.random() - 0.5) * spawnRange * 2;
+        // Random position within the current chunk
+        const x = chunkMinX + Math.random() * CHUNK_SIZE;
+        const z = chunkMinZ + Math.random() * CHUNK_SIZE;
         
-        // Get ground height from Octree for correct Y position
         let y = 0;
         if (octreeRef.current) {
           y = octreeRef.current.getGroundHeightAt(x, z);
         }
-        treeInstance.position.set(x, y, z); // Set Y position based on ground height
+        treeInstanceModel.position.set(x, y, z);
+        treeInstanceModel.name = `${modelName}_chunk_${chunkX}_${chunkZ}_${i}`;
 
-        treeInstance.name = `${modelName}_${i}`; // Give each instance a unique name
+        sceneRef.current.add(treeInstanceModel);
 
-        sceneRef.current.add(treeInstance);
-
-        // Add tree to Octree for collision detection if needed
         if (octreeRef.current) {
-          octreeRef.current.addThreeMesh(treeInstance, treeInstance.name);
+          octreeRef.current.addThreeMesh(treeInstanceModel, treeInstanceModel.name);
         }
 
-        // Debugging: Inspect the cloned tree instance for animation properties
-        console.log(`[${modelName}] Tree instance ${i} structure for animation:`, treeInstance);
-        treeInstance.traverse((child: THREE.Object3D) => {
-          if ((child as any).isSkinnedMesh) {
-            console.log(`  SkinnedMesh found: ${child.name}`);
-          }
-          if ((child as any).skeleton) {
-            console.log(`  Object with skeleton found: ${child.name}`);
-          }
-        });
-
-        // Setup animation for each tree instance
+        let mixer: THREE.AnimationMixer | null = null;
         if (gltf.animations && gltf.animations.length > 0) {
-          const mixer = new THREE.AnimationMixer(treeInstance); // Use the cloned instance as the root
-          mixersRef.current.push(mixer);
-
+          mixer = new THREE.AnimationMixer(treeInstanceModel);
           const clip = THREE.AnimationClip.findByName(gltf.animations, 'treeArm|Scene');
           if (clip) {
             const action = mixer.clipAction(clip);
             action.play();
-            action.setEffectiveTimeScale(0.5); // Reduce animation speed
+            action.setEffectiveTimeScale(0.5);
           } else {
             console.warn(`Animation clip 'treeArm|Scene' not found for ${modelName}.`);
           }
         }
+
+        if (mixer) {
+          const newTreeInstance: TreeInstance = { model: treeInstanceModel as THREE.Group, mixer: mixer };
+          treeInstancesRef.current.push(newTreeInstance); // Add to global list of all tree instances
+          newTreeInstances.push(newTreeInstance); // Add to list for this chunk
+        }
       }
 
-      console.log(`${numberOfTrees} instances of ${modelName} loaded and added to scene.`);
+      console.log(`${numberOfTreesPerChunk} instances of ${modelName} loaded and added to scene for chunk [${chunkX}, ${chunkZ}].`);
+      return newTreeInstances;
     } catch (error) {
-      console.error(`Failed to load ${modelName}:`, error);
-      throw error;
+      console.error(`Failed to load ${modelName} for chunk [${chunkX}, ${chunkZ}]:`, error);
+      return [];
     }
-  }, [sceneRef, octreeRef]);
+  }, [sceneRef, octreeRef, disposeModelResources]);
+
+  const removeTreesForChunk = useCallback((treesToRemove: TreeInstance[]) => {
+    if (!sceneRef.current || !octreeRef.current) return;
+
+    treesToRemove.forEach(treeInstance => {
+      const { model, mixer } = treeInstance;
+
+      // Remove from scene
+      sceneRef.current!.remove(model as THREE.Object3D); // Re-add explicit cast
+
+      // Remove from Octree
+      const treeBounds = new THREE.Box3().setFromObject(model);
+      octreeRef.current!.remove({ id: model.name, bounds: treeBounds, data: model }); // Add non-null assertion
+
+      // Dispose mixer
+      mixer.stopAllAction();
+      mixer.uncacheRoot(mixer.getRoot());
+
+      // Dispose model resources
+      disposeModelResources(model);
+
+      // Remove from the global list of tree instances
+      treeInstancesRef.current = treeInstancesRef.current.filter(
+        (instance) => instance.model.uuid !== model.uuid
+      );
+    });
+    console.log(`Removed ${treesToRemove.length} tree instances.`);
+  }, [sceneRef, octreeRef, disposeModelResources]);
 
   const updateTreeAnimations = useCallback((delta: number) => {
-    mixersRef.current.forEach(mixer => mixer.update(delta));
+    treeInstancesRef.current.forEach(treeInstance => treeInstance.mixer.update(delta));
   }, []);
 
-  return { initializeTrees, updateTreeAnimations };
+  return { addTreesForChunk, removeTreesForChunk, updateTreeAnimations };
 };
