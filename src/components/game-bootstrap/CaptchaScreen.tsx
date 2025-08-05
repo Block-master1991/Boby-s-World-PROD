@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button'; // Button might still be used i
 import { Loader2, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
-// import { fetchWithCsrf } from '@/lib/utils'; // لم يعد مطلوبًا لهذا الملف
+import { useAudio } from '@/contexts/AudioContext';
 
 interface CaptchaScreenProps {
   siteKey: string;
@@ -21,6 +21,8 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
   const { toast } = useToast();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [captchaTokenForAutoVerify, setCaptchaTokenForAutoVerify] = useState<string | null>(null);
+  const [showOverlay, setShowOverlay] = useState(true); // New state for the overlay
+  const { soundManagerRef, setHasUserInteracted } = useAudio(); // Destructure from useAudio
 
   const detectTheme = () =>
   document.documentElement.classList.contains('dark') ? 'dark' : 'light';
@@ -85,8 +87,23 @@ useEffect(() => {
   }
 }, [verifyToken, captchaTokenForAutoVerify]);
 
+  const handleOverlayClick = useCallback(() => {
+    setShowOverlay(false);
+    setHasUserInteracted(true); // Signal user interaction for audio
+    soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
+  }, [setHasUserInteracted, soundManagerRef]);
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
+    <div className="relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
+      {showOverlay && (
+        <div
+          className="fixed inset-0 flex items-center justify-center bg-white bg-opacity-50 text-black text-5xl font-bold cursor-pointer z-50"
+          onClick={handleOverlayClick}
+          style={{ backdropFilter: 'blur(5px)' }}
+        >
+          Start Boby's World
+        </div>
+      )}
       <Image src="/Boby-logo.png" alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
       <h1 className="text-4xl font-bold mb-4 font-headline">Verification Required</h1>
       <p className="text-xl text-muted-foreground mb-6 max-w-md">
