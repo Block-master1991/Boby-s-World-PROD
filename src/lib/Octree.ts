@@ -257,6 +257,19 @@ frustumCulling(frustum: THREE.Frustum): OctreeObject[] {
         }
         return highestY;
     }
+
+    // New method to add a Three.js Object3D to the Octree
+    addThreeMesh(mesh: THREE.Object3D, id?: string): void {
+        const box = new THREE.Box3().setFromObject(mesh);
+        const objectId = id || mesh.uuid; // Use provided ID or mesh's UUID
+
+        const octreeObject: OctreeObject = {
+            id: objectId,
+            bounds: box,
+            data: mesh, // Store the mesh itself or relevant data
+        };
+        this.insert(octreeObject);
+    }
 }
 
 export { Octree };

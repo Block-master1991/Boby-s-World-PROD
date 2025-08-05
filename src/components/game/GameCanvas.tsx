@@ -14,8 +14,8 @@ import { useCoinLogic } from '@/hooks/useCoinLogic';
 import { useEnemyLogic } from '@/hooks/useEnemyLogic';
 import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
-import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader'; // Import useDynamicModelLoader
-
+import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
+import { useTreeLogic } from '@/hooks/useTreeLogic'; // Import useTreeLogic
 interface GameCanvasProps {
     sessionPublicKey: PublicKey | null;
     isSpeedBoostActive: boolean;
@@ -141,6 +141,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         cameraRef,
     });
 
+    const { initializeTrees, updateTreeAnimations } = useTreeLogic({
+        sceneRef,
+        octreeRef,
+    });
+
     // Destructure updateDynamicModels and cleanupModelPool from useDynamicModelLoader
     const { updateDynamicModels, cleanupModelPool } = useDynamicModelLoader({
         cameraRef,
@@ -183,6 +188,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             updateDog(delta); // Pass delta
             updateCoins();
             updateEnemies(delta); // Pass delta
+            updateTreeAnimations(delta); // Update tree animations
             updateCamera();
             // Call cleanupModelPool periodically
             cleanupModelPool(60000, 5); // Clean up models idle for 60s or if pool size > 5
@@ -191,7 +197,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateCamera, dogModelRef, cleanupModelPool ]); // Add cleanupModelPool to dependencies
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool ]); // Add updateTreeAnimations to dependencies
 
 
     // Main useEffect for initialization and re-initialization on session change
@@ -220,6 +226,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 initializeDog(); 
                 initializeCoins(); 
                 initializeEnemies();
+                initializeTrees(); // Initialize trees
                 
                 const checkDogAndSetupCamera = () => {
                     if (dogModelRef.current) {

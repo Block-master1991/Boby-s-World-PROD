@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, MutableRefObject, useRef } from 'reac
 import * as THREE from 'three';
 import { useDynamicModelLoader, DynamicLoadableObject } from './useDynamicModelLoader';
 import { Octree } from '@/lib/Octree';
+import { useTreeLogic } from './useTreeLogic'; // Import useTreeLogic
 
 interface UseGameAssetLoaderProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -13,6 +14,7 @@ interface UseGameAssetLoaderProps {
   initializeDog: (onProgress?: (url: string, loaded: number, total: number) => void) => Promise<void>;
   initializeCoins: (onProgress?: (url: string, loaded: number, total: number) => void) => Promise<void>;
   initializeEnemies: (onProgress?: (url: string, loaded: number, total: number) => void) => Promise<void>;
+  initializeTrees: (onProgress?: (url: string, loaded: number, total: number) => void) => Promise<void>; // Add initializeTrees
   // New: Callback for loading progress
   onProgress?: (url: string, loaded: number, total: number) => void;
 }
@@ -24,22 +26,23 @@ export const useGameAssetLoader = ({
   initializeDog,
   initializeCoins,
   initializeEnemies,
+  initializeTrees, // Destructure new prop
   onProgress, // Destructure new prop
 }: UseGameAssetLoaderProps) => {
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const totalAssetsToLoad = 3; // Dog, Coins, Enemies
-  const progressRef = useRef({ dog: 0, coins: 0, enemies: 0 });
+  const totalAssetsToLoad = 4; // Dog, Coins, Enemies, Trees
+  const progressRef = useRef({ dog: 0, coins: 0, enemies: 0, trees: 0 }); // Add trees
 
   const updateProgress = useCallback(() => {
-    const totalProgressPercentage = (progressRef.current.dog + progressRef.current.coins + progressRef.current.enemies) / totalAssetsToLoad;
+    const totalProgressPercentage = (progressRef.current.dog + progressRef.current.coins + progressRef.current.enemies + progressRef.current.trees) / totalAssetsToLoad; // Update calculation
     setLoadProgress(totalProgressPercentage);
     console.log(`[GameAssetLoader] Overall Progress: ${totalProgressPercentage.toFixed(2)}%`);
   }, [totalAssetsToLoad]);
 
-  const createProgressCallback = useCallback((assetName: 'dog' | 'coins' | 'enemies') => {
+  const createProgressCallback = useCallback((assetName: 'dog' | 'coins' | 'enemies' | 'trees') => { // Update type
     return (url: string, loaded: number, total: number) => {
       const progressPercentage = total > 0 ? (loaded / total) * 100 : 100;
       progressRef.current[assetName] = progressPercentage;
@@ -52,7 +55,7 @@ export const useGameAssetLoader = ({
     setIsLoadingAssets(true);
     setLoadProgress(0);
     setError(null);
-    progressRef.current = { dog: 0, coins: 0, enemies: 0 };
+    progressRef.current = { dog: 0, coins: 0, enemies: 0, trees: 0 }; // Reset all progress
     console.log("[GameAssetLoader] Starting hybrid asset loading...");
 
     try {
@@ -64,7 +67,7 @@ export const useGameAssetLoader = ({
       updateProgress();
 
       // Step 2: Now that the dog model is loaded, load dependent assets in parallel.
-      console.log("[GameAssetLoader] Loading dependent assets (Coins, Enemies) in parallel...");
+      console.log("[GameAssetLoader] Loading dependent assets (Coins, Enemies, Trees) in parallel...");
       const coinsPromise = initializeCoins(createProgressCallback('coins')).then(() => {
         console.log("[GameAssetLoader] Coins Loaded.");
         progressRef.current.coins = 100;
@@ -77,7 +80,13 @@ export const useGameAssetLoader = ({
         updateProgress();
       });
 
-      await Promise.all([coinsPromise, enemiesPromise]);
+      const treesPromise = initializeTrees(createProgressCallback('trees')).then(() => { // Add trees promise
+        console.log("[GameAssetLoader] Trees Loaded.");
+        progressRef.current.trees = 100;
+        updateProgress();
+      });
+
+      await Promise.all([coinsPromise, enemiesPromise, treesPromise]); // Wait for all promises
 
       setIsLoadingAssets(false);
       setLoadProgress(100);
@@ -91,7 +100,7 @@ export const useGameAssetLoader = ({
       // Re-throw the error to ensure it's caught by the parent component (GameCanvas)
       throw err;
     }
-  }, [initializeDog, initializeCoins, initializeEnemies, createProgressCallback, updateProgress]);
+  }, [initializeDog, initializeCoins, initializeEnemies, initializeTrees, createProgressCallback, updateProgress]); // Add initializeTrees to dependencies
 
   // This effect will trigger the loading process when the component mounts
   // or when dependencies change (though we want it to run once for initial load)
