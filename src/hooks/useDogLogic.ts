@@ -9,9 +9,9 @@ import type { MutableRefObject } from 'react';
 import { Octree, OctreeObject } from '../lib/Octree'; // Import Octree
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 
-const NORMAL_DOG_SPEED = 0.09; // Normal walking speed
-const SPRINT_DOG_SPEED = 0.20; // Sprinting speed
-const BOOSTED_DOG_SPEED = 0.30; // Speed when boosted
+const NORMAL_DOG_SPEED = 0.1; // Normal walking speed
+const SPRINT_DOG_SPEED = 0.3; // Sprinting speed
+const BOOSTED_DOG_SPEED = 0.4; // Speed when boosted
 const KEYBOARD_ROTATION_SPEED = 0.0175; // Rotation speed for keyboard input
 const JOYSTICK_ROTATION_SPEED = 0.013; // Rotation speed for joystick input
 const JOYSTICK_ROTATION_THRESHOLD = 0.2; // Threshold for joystick rotation

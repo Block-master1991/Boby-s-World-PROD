@@ -247,11 +247,11 @@ export const useEnemyLogic = ({
             });
 
             enemyInstanceModel.scale.set(0.5, 0.5, 0.5); // Apply initial scale to the high-detail model
-            lod.addLevel(enemyInstanceModel, 0); // Add high-detail model at distance 0
+            lod.addLevel(enemyInstanceModel, 25); // Add high-detail model at distance 25
 
             // Placeholder for a lower detail model (e.g., a simple box or sphere)
             const lowDetailModel = new THREE.Mesh(
-              new THREE.BoxGeometry(0.5, 0.5, 0.5),
+              new THREE.BoxGeometry(0.0001, 0.0001, 0.0001),
               new THREE.MeshBasicMaterial({ color: 0xff0000 })
             );
             lowDetailModel.scale.set(0.5, 0.5, 0.5); // Match scale
