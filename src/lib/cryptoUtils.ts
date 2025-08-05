@@ -7,16 +7,6 @@
 // For frontend use, NEXT_PUBLIC_ prefix is needed, but master key should ideally not be exposed to the client.
 // We will assume the master key is loaded server-side by the API route.
 
-const MASTER_KEY_ENV_VAR = 'NEXT_PUBLIC_MASTER_ENCRYPTION_KEY'; // Using NEXT_PUBLIC_ for potential frontend access if needed, but primarily for backend.
-
-// Function to get the master key (intended for server-side use in API routes)
-export const getMasterKeyEnv = (): string | null => {
-  // In a real application, you'd want more robust handling for missing keys.
-  // For API routes, process.env is available.
-  // For frontend, NEXT_PUBLIC_ makes it available, but this is NOT secure for a master key.
-  // We'll assume this is primarily used server-side.
-  return process.env[MASTER_KEY_ENV_VAR] || null;
-};
 
 // --- Key Generation and Management ---
 
@@ -220,19 +210,16 @@ export const decryptData = async (encryptedDataWithIv: ArrayBuffer, key: CryptoK
 // --- Helper to get master key for API routes ---
 // This function is intended to be used within API routes (server-side)
 // It assumes the master key is stored as a JWK string in the environment variable.
+import { MASTER_ENCRYPTION_KEY } from '@/lib/server-constants'; // Import master key from server-side constants
+
 export const getMasterKeyForApi = async (): Promise<CryptoKey | null> => {
-  const masterKeyEnvValue = getMasterKeyEnv(); // Get from env var
-  if (!masterKeyEnvValue) {
-    console.error('Master encryption key not found in environment variables.');
+  if (!MASTER_ENCRYPTION_KEY) {
+    console.error('Master encryption key not found in server-side constants.');
     return null;
   }
 
   try {
-    const jwkKey = JSON.parse(masterKeyEnvValue);
-    // Import the key. Note: The key must be extractable and suitable for AES-GCM.
-    // This assumes the master key itself was generated and exported as JWK.
-    // For simplicity, we'll assume it's directly importable.
-    // In a real scenario, you might need to handle key derivation for the master key itself.
+    const jwkKey = JSON.parse(MASTER_ENCRYPTION_KEY);
     return importKey(jwkKey);
   } catch (error) {
     console.error('Failed to import master key:', error);

@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import {FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY} from './constants';
+import {FIREBASE_PROJECT_ID} from './constants';
+import {FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY} from './server-constants';
 
 let app: admin.app.App;
 export let db: admin.firestore.Firestore;

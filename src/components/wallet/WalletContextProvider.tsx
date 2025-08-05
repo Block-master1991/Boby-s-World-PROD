@@ -22,7 +22,7 @@ import {
     SolflareWalletAdapter,
 } from '@solana/wallet-adapter-solflare';
 
-import { SOL_NETWORK, DEDICATED_RPC_ENDPOINT } from '@/lib/constants';
+import { SOL_NETWORK } from '@/lib/constants';
 
 // ✅ تسجيل الـ MWA خارج React
 if (typeof window !== 'undefined') {
@@ -50,12 +50,7 @@ interface WalletContextProps {
 const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
     const network = WalletAdapterNetwork.Mainnet; 
     
-    const endpoint = useMemo(() => {
-        if (DEDICATED_RPC_ENDPOINT && DEDICATED_RPC_ENDPOINT !== 'YOUR_DEDICATED_RPC_ENDPOINT_HERE' && DEDICATED_RPC_ENDPOINT.startsWith('https://')) {
-            return DEDICATED_RPC_ENDPOINT;
-        }
-        return SOL_NETWORK;
-    }, []);
+    const endpoint = useMemo(() => SOL_NETWORK, []);
 
     const wallets = useMemo(
         () => [

@@ -2,7 +2,7 @@
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
 import { TokenBlacklistManager } from './token-blacklist'; 
-import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './constants'; // Adjust the import path as needed
+import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './server-constants'; // Moved to server-side constants
 import { createHash } from 'crypto';
 
 export interface JWTPayload {

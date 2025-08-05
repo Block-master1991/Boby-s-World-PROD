@@ -8,7 +8,8 @@ import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCo
 import { storeItems } from '@/lib/items'; // To validate item existence
 import { Connection, PublicKey, TransactionResponse, ParsedTransactionWithMeta } from '@solana/web3.js';
 import { clusterApiUrl } from '@solana/web3.js';
-import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS, DEDICATED_RPC_ENDPOINT } from '@/lib/constants'; // إضافة DEDICATED_RPC_ENDPOINT
+import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
+import { DEDICATED_RPC_ENDPOINT } from '@/lib/server-constants'; // Moved to server-side constants
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   console.log("[API] /api/game/purchaseItem called");

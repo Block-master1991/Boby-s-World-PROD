@@ -15,15 +15,11 @@ export const SOL_NETWORK = 'https://api.mainnet-beta.solana.com';
 
 export const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
-export const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY;
-
-export const DEDICATED_RPC_ENDPOINT = process.env.NEXT_PUBLIC_DEDICATED_RPC_ENDPOINT;
 
 export const STORE_TREASURY_WALLET_ADDRESS = process.env.NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS;
 
 export const ADMIN_WALLET_ADDRESS = process.env.NEXT_PUBLIC_ADMIN_WALLET_ADDRESS;
 
-export const FIREBASE_SERVICE_ACCOUNT_KEY = process.env.NEXT_PUBLIC_FIREBASE_SERVICE_ACCOUNT_KEY;
 
 export const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
@@ -37,13 +33,6 @@ export const FIREBASE_MESSAGING_SENDER_ID = process.env.NEXT_PUBLIC_FIREBASE_MES
 
 export const FIREBASE_APP_ID = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 
-export const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL;
-
-export const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY;
-
-export const JWT_ACCESS_SECRET = process.env.JWT_ACCESS_SECRET;
-
-export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 
 // World boundaries and enemy protection radius
 export const WORLD_MIN_BOUND = -999;
