@@ -11,10 +11,9 @@ export const SOL_TOKEN_MINT_ADDRESS = 'So111111111111111111111111111111111111111
 // 1 Billion Lamports per SOL
 export const LAMPORTS_PER_SOL = 1_000_000_000;
 // Default Public Mainnet-beta RPC
-export const SOL_NETWORK = 'https://api.mainnet-beta.solana.com';
+export const SOL_NETWORK = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
 
 export const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
-
 
 export const STORE_TREASURY_WALLET_ADDRESS = process.env.NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS;
 
