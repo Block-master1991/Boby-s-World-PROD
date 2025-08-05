@@ -49,7 +49,7 @@ export const useSceneSetup = ({
     rendererRef.current = renderer;
 
     // Initialize Octree
-    const worldBounds = new THREE.Box3(new THREE.Vector3(-500, -10, -500), new THREE.Vector3(500, 300, 500));
+    const worldBounds = new THREE.Box3(new THREE.Vector3(-1000, -10, -1000), new THREE.Vector3(1000, 300, 1000));
     const octree = new Octree(worldBounds);
     octreeRef.current = octree;
 
@@ -69,7 +69,7 @@ export const useSceneSetup = ({
     directionalLight.shadow.camera.bottom = -250;
     scene.add(directionalLight);
 
-    const groundGeometry = new THREE.PlaneGeometry(1000, 1000);
+    const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
     const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x556B2F, side: THREE.DoubleSide });
     const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
     groundPlane.rotation.x = -Math.PI / 2;

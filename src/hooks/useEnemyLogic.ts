@@ -63,9 +63,11 @@ interface EnemyCustomData {
   currentAction: THREE.AnimationAction | null;
   actions: { [key: string]: THREE.AnimationAction };
   chunkKey: string;
+  // Add a reference to the high-detail model within the LOD for mixer
+  highDetailModel: THREE.Group; 
 }
 
-type EnemyData = THREE.Group & EnemyCustomData;
+type EnemyData = THREE.LOD & EnemyCustomData; // Change to THREE.LOD
 
 interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -112,7 +114,7 @@ export const useEnemyLogic = ({
   });
 
   // Helper to dispose of a single model's resources (re-defined for direct use in this hook)
-  const disposeEnemyModelResources = React.useCallback((model: THREE.Group) => {
+  const disposeEnemyModelResources = React.useCallback((model: THREE.Object3D) => { // Change type to Object3D
     model.traverse((child) => {
       if ((child as THREE.Mesh).isMesh) {
         if ((child as THREE.Mesh).geometry) {
@@ -234,7 +236,28 @@ export const useEnemyLogic = ({
         try {
           const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
           if (loadedModel) {
-            const mixer = new THREE.AnimationMixer(loadedModel);
+            const lod = new THREE.LOD();
+            const enemyInstanceModel = loadedModel; // Use the loaded model as the high-detail model
+
+            enemyInstanceModel.traverse((child: THREE.Object3D) => {
+              if ((child as THREE.Mesh).isMesh) {
+                child.castShadow = true;
+                child.receiveShadow = true;
+              }
+            });
+
+            enemyInstanceModel.scale.set(0.5, 0.5, 0.5); // Apply initial scale to the high-detail model
+            lod.addLevel(enemyInstanceModel, 0); // Add high-detail model at distance 0
+
+            // Placeholder for a lower detail model (e.g., a simple box or sphere)
+            const lowDetailModel = new THREE.Mesh(
+              new THREE.BoxGeometry(0.5, 0.5, 0.5),
+              new THREE.MeshBasicMaterial({ color: 0xff0000 })
+            );
+            lowDetailModel.scale.set(0.5, 0.5, 0.5); // Match scale
+            lod.addLevel(lowDetailModel, 50); // Add low-detail model at 50 units distance
+
+            const mixer = new THREE.AnimationMixer(enemyInstanceModel); // Mixer is tied to the high-detail model
 
             const actions: { [key: string]: THREE.AnimationAction } = {};
             loadedAnimations.forEach((clip: THREE.AnimationClip) => {
@@ -253,7 +276,7 @@ export const useEnemyLogic = ({
             });
             Object.values(actions).forEach(action => action.stop());
 
-            const enemyData: EnemyData = loadedModel as EnemyData;
+            const enemyData: EnemyData = lod as EnemyData; // Cast LOD to EnemyData
             enemyData.targetCoinId = coin.uuid; // Assign unique coin ID
             enemyData.targetCoinPosition = coin.position.clone();
             enemyData.patrolCenter = coin.position.clone();
@@ -274,6 +297,7 @@ export const useEnemyLogic = ({
             enemyData.currentAction = null;
             enemyData.actions = actions;
             enemyData.chunkKey = getChunkKey(chunkX, chunkZ);
+            enemyData.highDetailModel = enemyInstanceModel; // Store reference to high-detail model
 
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
@@ -316,10 +340,10 @@ export const useEnemyLogic = ({
               enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
             }
             enemyData.position.set(enemyX, enemyY, enemyZ);
-            enemyData.scale.set(0.5, 0.5, 0.5);
+            // enemyData.scale.set(0.5, 0.5, 0.5); // Scale is now applied to the highDetailModel
 
             if (octreeRef.current) {
-              const enemyBox = new THREE.Box3().setFromObject(enemyData);
+              const enemyBox = new THREE.Box3().setFromObject(enemyData); // Use LOD for bounds
               octreeRef.current.insert({
                 id: `enemy_${enemyData.id}`,
                 bounds: enemyBox,
@@ -371,7 +395,8 @@ export const useEnemyLogic = ({
         }
         enemy.mixer.stopAllAction();
         scene.remove(enemy);
-        disposeEnemyModelResources(enemy); // Use the new helper function
+        // Dispose all models within the LOD
+        enemy.children.forEach(child => disposeEnemyModelResources(child));
         return false;
       }
       return true;
@@ -391,7 +416,8 @@ export const useEnemyLogic = ({
       }
       enemy.mixer.stopAllAction();
       scene.remove(enemy);
-      disposeEnemyModelResources(enemy); // Use the new helper function
+      // Dispose all models within the LOD
+      enemy.children.forEach(child => disposeEnemyModelResources(child));
     });
     enemyMeshesRef.current = [];
     loadedEnemyChunks.current.clear();
@@ -457,8 +483,9 @@ export const useEnemyLogic = ({
     }
 
     visibleEnemies = visibleEnemies.filter(enemy => {
-      const boundingBox = new THREE.Box3().setFromObject(enemy);
-      return frustum.intersectsBox(boundingBox);
+      // Frustum culling is handled by THREE.LOD automatically when added to scene
+      // We still need to filter by distance for visibility logic
+      return true; 
     });
 
     // Filter out enemies that have sunk and been disposed
@@ -608,6 +635,9 @@ export const useEnemyLogic = ({
       const dogXZ = new THREE.Vector3(dog.position.x, 0, dog.position.z);
       const enemyXZ = new THREE.Vector3(enemy.position.x, 0, enemy.position.z);
       const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
+
+      // Update LOD levels based on distance to camera
+      enemy.update(camera);
 
       if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !enemy.isDying) {
         enemy.isDying = true;
