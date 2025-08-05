@@ -66,7 +66,7 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
       medium: 'Tree1_medium',
       low: 'Tree1_low',
     };
-    const numberOfTreesPerChunk = 2; // Number of trees to generate per chunk
+    const numberOfTreesPerChunk = 1; // Number of trees to generate per chunk
 
     const newTreeInstances: TreeInstance[] = [];
 

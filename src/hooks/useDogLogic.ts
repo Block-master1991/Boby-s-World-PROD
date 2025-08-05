@@ -27,7 +27,7 @@ const ANIMATION_NAMES = {
     SPRINT_JUMP: 'Run_Jump'
 };
 const CROSSFADE_DURATION = 0.2;
-const MOVEMENT_BOUNDARY = 499;
+const MOVEMENT_BOUNDARY = 999;
 
 
 interface UseDogLogicProps {
