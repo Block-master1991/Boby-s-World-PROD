@@ -15,6 +15,7 @@ import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
 import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
 import { useTreeLogic } from '@/hooks/useTreeLogic';
+import { useStaticObjectLogic } from '@/hooks/useStaticObjectLogic'; // Import useStaticObjectLogic
 import { getChunkCoordinates, getChunkKey, RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '@/lib/chunkUtils'; // Import chunk utilities
 interface GameCanvasProps {
     sessionPublicKey: PublicKey | null;
@@ -146,8 +147,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         octreeRef,
     });
 
+    const { addStaticObjectsForChunk, removeStaticObjectsForChunk } = useStaticObjectLogic({
+        sceneRef,
+        octreeRef,
+    });
+
     // Ref to store currently loaded tree chunks
     const loadedTreeChunksRef = useRef<Map<string, any[]>>(new Map()); // Map<chunkKey, TreeInstance[]>
+    // Ref to store currently loaded static object chunks
+    const loadedStaticObjectChunksRef = useRef<Map<string, any[]>>(new Map()); // Map<chunkKey, StaticObjectInstance[]>
     const currentDogChunkRef = useRef<{ chunkX: number; chunkZ: number } | null>(null);
 
     // Destructure updateDynamicModels and cleanupModelPool from useDynamicModelLoader
@@ -214,6 +222,44 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         });
     }, [addTreesForChunk, removeTreesForChunk]);
 
+    // Function to manage loading/unloading of static object chunks
+    const manageStaticObjectChunks = useCallback(async (playerChunkX: number, playerChunkZ: number) => {
+        const activeChunkKeys = new Set<string>();
+
+        // Determine chunks to load (current + render distance)
+        for (let xOffset = -RENDER_DISTANCE_CHUNKS; xOffset <= RENDER_DISTANCE_CHUNKS; xOffset++) {
+            for (let zOffset = -RENDER_DISTANCE_CHUNKS; zOffset <= RENDER_DISTANCE_CHUNKS; zOffset++) {
+                const chunkX = playerChunkX + xOffset;
+                const chunkZ = playerChunkZ + zOffset;
+                const chunkKey = getChunkKey(chunkX, chunkZ);
+                activeChunkKeys.add(chunkKey);
+
+                if (!loadedStaticObjectChunksRef.current.has(chunkKey)) {
+                    console.log(`[GameCanvas] Loading static objects for chunk: [${chunkX}, ${chunkZ}]`);
+                    const newStaticObjects = await addStaticObjectsForChunk(chunkX, chunkZ);
+                    loadedStaticObjectChunksRef.current.set(chunkKey, newStaticObjects);
+                }
+            }
+        }
+
+        // Unload chunks that are no longer active
+        const chunksToUnload: string[] = [];
+        loadedStaticObjectChunksRef.current.forEach((staticObjects, chunkKey) => {
+            if (!activeChunkKeys.has(chunkKey)) {
+                chunksToUnload.push(chunkKey);
+            }
+        });
+
+        chunksToUnload.forEach(chunkKey => {
+            console.log(`[GameCanvas] Unloading static objects for chunk: ${chunkKey}`);
+            const staticObjects = loadedStaticObjectChunksRef.current.get(chunkKey);
+            if (staticObjects) {
+                removeStaticObjectsForChunk(staticObjects);
+            }
+            loadedStaticObjectChunksRef.current.delete(chunkKey);
+        });
+    }, [addStaticObjectsForChunk, removeStaticObjectsForChunk]);
+
 
     const animate = useCallback(() => {
         if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !sessionPublicKey) {
@@ -241,6 +287,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 console.log(`[GameCanvas] Dog moved to new chunk: [${newChunkX}, ${newChunkZ}]`);
                 currentDogChunkRef.current = { chunkX: newChunkX, chunkZ: newChunkZ };
                 manageTreeChunks(newChunkX, newChunkZ);
+                manageStaticObjectChunks(newChunkX, newChunkZ); // Call for static objects
             }
 
             // Call cleanupModelPool periodically
@@ -250,7 +297,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks ]); // Add manageTreeChunks to dependencies
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks, manageStaticObjectChunks ]); // Add manageStaticObjectChunks to dependencies
 
 
     // Main useEffect for initialization and re-initialization on session change
@@ -272,6 +319,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             resetDogState();
             resetCamera(); 
             loadedTreeChunksRef.current.clear(); // Clear loaded chunks on new session
+            loadedStaticObjectChunksRef.current.clear(); // Clear loaded static object chunks on new session
 
             initializeCamera(); 
             const sceneInitialized = initializeScene(); 
@@ -288,7 +336,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                         const dogPos = dogModelRef.current.position;
                         const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
                         currentDogChunkRef.current = { chunkX, chunkZ };
-                        manageTreeChunks(chunkX, chunkZ); // Load initial chunks
+                        manageTreeChunks(chunkX, chunkZ); // Load initial trees
+                        manageStaticObjectChunks(chunkX, chunkZ); // Load initial static objects
                     } else {
                         setTimeout(checkDogAndSetupCameraAndChunks, 100); 
                     }
@@ -324,7 +373,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         initializeScene, cleanupScene, 
         dogModelRef, lastDogTransformRef, 
         cameraRef, rendererRef, // controlsRef, mountRef 
-        manageTreeChunks, // Add manageTreeChunks to dependencies
+        manageTreeChunks, manageStaticObjectChunks, // Add manageStaticObjectChunks to dependencies
     ]);
 
     // Effect for handling resize
