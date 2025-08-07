@@ -223,41 +223,45 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     }, [addTreesForChunk, removeTreesForChunk]);
 
     // Function to manage loading/unloading of static object chunks
-    const manageStaticObjectChunks = useCallback(async (playerChunkX: number, playerChunkZ: number) => {
+    const manageStaticObjectChunks = useCallback((playerChunkX: number, playerChunkZ: number) => {
         const activeChunkKeys = new Set<string>();
 
-        // Determine chunks to load (current + render distance)
-        for (let xOffset = -RENDER_DISTANCE_CHUNKS; xOffset <= RENDER_DISTANCE_CHUNKS; xOffset++) {
-            for (let zOffset = -RENDER_DISTANCE_CHUNKS; zOffset <= RENDER_DISTANCE_CHUNKS; zOffset++) {
-                const chunkX = playerChunkX + xOffset;
-                const chunkZ = playerChunkZ + zOffset;
-                const chunkKey = getChunkKey(chunkX, chunkZ);
-                activeChunkKeys.add(chunkKey);
+        const loadChunkObjects = async () => {
+            // Determine chunks to load (current + render distance)
+            for (let xOffset = -RENDER_DISTANCE_CHUNKS; xOffset <= RENDER_DISTANCE_CHUNKS; xOffset++) {
+                for (let zOffset = -RENDER_DISTANCE_CHUNKS; zOffset <= RENDER_DISTANCE_CHUNKS; zOffset++) {
+                    const chunkX = playerChunkX + xOffset;
+                    const chunkZ = playerChunkZ + zOffset;
+                    const chunkKey = getChunkKey(chunkX, chunkZ);
+                    activeChunkKeys.add(chunkKey);
 
-                if (!loadedStaticObjectChunksRef.current.has(chunkKey)) {
-                    console.log(`[GameCanvas] Loading static objects for chunk: [${chunkX}, ${chunkZ}]`);
-                    const newStaticObjects = await addStaticObjectsForChunk(chunkX, chunkZ);
-                    loadedStaticObjectChunksRef.current.set(chunkKey, newStaticObjects);
+                    if (!loadedStaticObjectChunksRef.current.has(chunkKey)) {
+                        console.log(`[GameCanvas] Loading static objects for chunk: [${chunkX}, ${chunkZ}]`);
+                        const newStaticObjects = await addStaticObjectsForChunk(chunkX, chunkZ);
+                        loadedStaticObjectChunksRef.current.set(chunkKey, newStaticObjects);
+                    }
                 }
             }
-        }
 
-        // Unload chunks that are no longer active
-        const chunksToUnload: string[] = [];
-        loadedStaticObjectChunksRef.current.forEach((staticObjects, chunkKey) => {
-            if (!activeChunkKeys.has(chunkKey)) {
-                chunksToUnload.push(chunkKey);
-            }
-        });
+            // Unload chunks that are no longer active
+            const chunksToUnload: string[] = [];
+            loadedStaticObjectChunksRef.current.forEach((staticObjects, chunkKey) => {
+                if (!activeChunkKeys.has(chunkKey)) {
+                    chunksToUnload.push(chunkKey);
+                }
+            });
 
-        chunksToUnload.forEach(chunkKey => {
-            console.log(`[GameCanvas] Unloading static objects for chunk: ${chunkKey}`);
-            const staticObjects = loadedStaticObjectChunksRef.current.get(chunkKey);
-            if (staticObjects) {
-                removeStaticObjectsForChunk(staticObjects);
-            }
-            loadedStaticObjectChunksRef.current.delete(chunkKey);
-        });
+            chunksToUnload.forEach(chunkKey => {
+                console.log(`[GameCanvas] Unloading static objects for chunk: ${chunkKey}`);
+                const staticObjects = loadedStaticObjectChunksRef.current.get(chunkKey);
+                if (staticObjects) {
+                    removeStaticObjectsForChunk(staticObjects);
+                }
+                loadedStaticObjectChunksRef.current.delete(chunkKey);
+            });
+        };
+
+        loadChunkObjects();
     }, [addStaticObjectsForChunk, removeStaticObjectsForChunk]);
 
 
