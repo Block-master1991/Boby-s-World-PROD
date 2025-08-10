@@ -9,6 +9,7 @@ import RunningGameUI from '@/components/game/RunningGameUI';
 import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
 import AuthenticationScreen from '@/components/game-bootstrap/AuthenticationScreen';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
+import GameLoadingOverlay from '@/components/game-bootstrap/GameLoadingOverlay';
 import { Octree } from '@/lib/Octree';
 // import { useGameAssetLoader } from '@/hooks/useGameAssetLoader'; // No longer needed here
 
@@ -331,16 +332,7 @@ const GameContainer: React.FC = () => {
                         onLoadProgress={handleLoadProgress}
                         onLoadComplete={handleLoadComplete}
                     />
-                    {isLoadingGameResources && (
-                        <div className="absolute inset-0 z-50">
-                            <LoadingScreen message="Loading game assets..." showLogo progress={loadProgress} />
-                        </div>
-                    )}
-                    {assetLoadError && (
-                         <div className="absolute inset-0 z-50">
-                            <LoadingScreen message={`Error loading assets: ${assetLoadError}. Please refresh.`} showLogo isError />
-                        </div>
-                    )}
+                    <GameLoadingOverlay isLoading={isLoadingGameResources} progress={loadProgress} error={assetLoadError} />
                 </>
             );
         } else if (selectedGameMode === 'running-game') {
