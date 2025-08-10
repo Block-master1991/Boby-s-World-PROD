@@ -5,11 +5,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
+import { useApiFetch } from '@/utils/api';
 
 const BobyPriceDisplay: React.FC = () => {
     const [price, setPrice] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorInfo, setErrorInfo] = useState<{ message: string, details?: string, cause?: any, status?: number } | null>(null);
+    const { apiFetch } = useApiFetch();
 
     const fetchPrice = useCallback(async (isInitialLoad = false) => {
         if (!isInitialLoad) {
@@ -17,7 +19,7 @@ const BobyPriceDisplay: React.FC = () => {
         }
         setErrorInfo(null);
         try {
-            const response = await fetch('/api/boby-price-jup');
+            const response = await apiFetch('/api/boby-price-jup');
 
             if (!response.ok) {
                 let errorFromServer = 'Failed to fetch price from API route.';

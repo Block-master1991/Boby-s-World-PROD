@@ -26,6 +26,7 @@ export interface AuthContextType extends AuthState {
   isWalletConnectedAndMatching: boolean; // Indicates if the connected wallet matches the authenticated user
   logoutAndRedirect: (redirectPath?: string) => Promise<void>; // New: Force logout and redirect
   retrySessionCheck: () => void;
+  triggerSessionRefresh: () => Promise<boolean>; // New: For external components to trigger a session refresh
 
 }
 
@@ -66,6 +67,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
     console.log('[AuthContext checkSession] Starting session check.');
     try {
+      // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
       const response = await fetch('/api/auth/session', { 
         method: 'GET', 
         credentials: 'include' 
@@ -132,6 +134,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setRetryRequested(true);
   }, []);
 
+  const triggerSessionRefresh = useCallback(async (): Promise<boolean> => {
+    console.log('[AuthContext triggerSessionRefresh] External request to refresh session.');
+    return await checkSession();
+  }, [checkSession]);
+
   useEffect(() => {
     if (retryRequested) {
       checkSession();
@@ -150,6 +157,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     try {
       console.log('[AuthContext login] Step 1: Fetching nonce...');
+      // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
       const nonceResponse = await fetch(`/api/auth/login?publicKey=${adapterPublicKey.toString()}`);
       if (!nonceResponse.ok) {
         const errorData = await nonceResponse.json().catch(() => ({ error: 'Nonce fetch failed or non-JSON response' }));
@@ -194,6 +202,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }
 
       console.log('[AuthContext login] Step 3: Sending signature and nonce to /api/auth/login (POST)...');
+      // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
       const loginResponse = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -259,6 +268,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.warn('[FRONTEND] CSRF token not found in cookies for logout request.');
       }
 
+      // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
       await fetch('/api/auth/logout', {
         method: 'POST',
         headers: headers,
@@ -355,7 +365,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     checkSession,
     isWalletConnectedAndMatching, // Include the new derived state
     logoutAndRedirect, // Include the new function
-    retrySessionCheck
+    retrySessionCheck,
+    triggerSessionRefresh // Include the new function
   };
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;

@@ -16,7 +16,7 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 
 import { useToast } from '@/hooks/use-toast';
 import { storeItems, type StoreItemDefinition } from '@/lib/items'; // Assuming '@/lib/items' defines store items
-import { fetchWithCsrf } from '@/lib/utils'; // استيراد fetchWithCsrf
+import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 
 // Game Constants
 const USDT_PER_COIN = 0.001;
@@ -72,6 +72,7 @@ const GameUI: React.FC<GameUIProps> = ({
         isWalletConnectedAndMatching,
     } = useAuth();
     const { toast } = useToast();
+    const { apiFetch } = useApiFetch(); // Moved to top level
 
     // UI State
     const [isStoreOpen, setIsStoreOpen] = useState(false);
@@ -206,7 +207,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await fetch('/api/game/fetchPlayerData', {
+            const response = await apiFetch('/api/game/fetchPlayerData', { // استخدام apiFetch
                 method: 'GET',
                 headers: {
                     'Content-Type': 'application/json',
@@ -247,7 +248,7 @@ const GameUI: React.FC<GameUIProps> = ({
             setIsFetchingPlayerUSDT(false);
         }
         return controller; // Return the controller
-    }, [isAuthenticated, authUser?.publicKey, toast]);
+    }, [isAuthenticated, authUser?.publicKey, toast, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Handles the start of a touch event on the canvas for joystick control.
@@ -339,7 +340,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await fetchWithCsrf('/api/game/addCoin', {
+            const response = await apiFetch('/api/game/addCoin', { // استخدام apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -376,7 +377,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 ));
             }
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Callback function for when the remaining coins on the map update.
@@ -621,7 +622,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await fetchWithCsrf('/api/game/useItem', {
+            const response = await apiFetch('/api/game/useItem', { // استخدام apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -659,7 +660,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 if (rollbackEffect) rollbackEffect(); // Call rollback effect
             }
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Handles the withdrawal of USDT from the player's game balance via backend API.
@@ -685,7 +686,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await fetchWithCsrf('/api/game/withdrawUSDT', {
+            const response = await apiFetch('/api/game/withdrawUSDT', { // استخدام apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -722,7 +723,7 @@ const GameUI: React.FC<GameUIProps> = ({
         } finally {
             setIsWithdrawing(false);
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedPlayerGameUSDT, toast, fetchPlayerData]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedPlayerGameUSDT, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Handles the consumption of a Protection Bone via backend API.
@@ -780,7 +781,7 @@ const GameUI: React.FC<GameUIProps> = ({
             const signal = controller.signal;
 
             try {
-                const response = await fetchWithCsrf('/api/game/consumeProtectionBone', {
+                const response = await apiFetch('/api/game/consumeProtectionBone', { // استخدام apiFetch
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -819,7 +820,7 @@ const GameUI: React.FC<GameUIProps> = ({
         }
 
         isProcessingBoneQueueRef.current = false;
-    }, [isAuthenticated, authUser?.publicKey, toast, fetchPlayerData, optimisticUpdates]);
+    }, [isAuthenticated, authUser?.publicKey, toast, fetchPlayerData, optimisticUpdates, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Applies a penalty to the player's game USDT balance upon enemy collision via backend API.
@@ -845,7 +846,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await fetchWithCsrf('/api/game/applyPenalty', {
+            const response = await apiFetch('/api/game/applyPenalty', { // استخدام apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -880,7 +881,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 ));
             }
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
 
 
     return (

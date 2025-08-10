@@ -17,7 +17,7 @@ import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccou
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
-import { fetchWithCsrf } from '@/lib/utils'; // استيراد fetchWithCsrf
+import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -54,6 +54,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     const [bobyUsdPrice, setBobyUsdPrice] = useState<number | null>(null);
     const [isBobyPriceLoading, setIsBobyPriceLoading] = useState<boolean>(true);
     const [bobyPriceError, setBobyPriceError] = useState<string | null>(null);
+    const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
 
     const fetchBobyUsdPrice = useCallback(async (isInitialLoad = false) => {
         if (!isInitialLoad) {
@@ -62,7 +63,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         setBobyPriceError(null);
         try {
             // Fetch from API endpoint
-            const response = await fetch('/api/boby-price-jup');
+            const response = await apiFetch('/api/boby-price-jup'); // استخدام apiFetch
             if (!response.ok) {
                 let errorMsg = 'Failed to fetch Boby price for store';
                 let errorDetails = `Status: ${response.status}`;
@@ -180,7 +181,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Processing inventory update.` });
 
             // Call backend API to update inventory
-            const inventoryUpdateResponse = await fetchWithCsrf('/api/game/purchaseItem', { // استخدام fetchWithCsrf
+            const inventoryUpdateResponse = await apiFetch('/api/game/purchaseItem', { // استخدام apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

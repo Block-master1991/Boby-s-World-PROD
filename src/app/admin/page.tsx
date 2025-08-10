@@ -7,6 +7,7 @@ import { ADMIN_WALLET_ADDRESS } from '@/lib/constants';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Loader2, LogOut, Trash2, Search } from 'lucide-react';
+import { useApiFetch } from '@/utils/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { db } from '@/lib/firebase';
@@ -93,8 +94,9 @@ export default function AdminPage() {
 
   // Fetch user statistics
   async function fetchUserStats() {
+    const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
     try {
-      const response = await fetch('/api/admin/users');
+      const response = await apiFetch('/api/admin/users'); // Use apiFetch
       if (!response.ok) {
         throw new Error('Failed to fetch user statistics');
       }
