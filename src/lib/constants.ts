@@ -38,3 +38,32 @@ export const WORLD_MIN_BOUND = -999;
 export const WORLD_MAX_BOUND = 999;
 export const ENEMY_PROTECTION_RADIUS_VAL = 15;
 export const DOG_SPAWN_PROTECTION_RADIUS = 40; // Radius around dog's initial spawn where no coins/enemies should appear
+// src/lib/constants.ts
+export const PERFORMANCE_SETTINGS = {
+  // إعدادات LOD
+  LOD_DISTANCES: {
+    HIGH: 50,
+    MEDIUM: 100,
+    LOW: 200
+  },
+  
+  // إعدادات التحميل
+  BATCH_SIZE: 2,
+  MAX_CONCURRENT_LOADS: 3,
+  
+  // إعدادات الذاكرة
+  MAX_MEMORY_USAGE: 500 * 1024 * 1024, // 500MB
+  CLEANUP_THRESHOLD: 0.8, // 80%
+  
+  // إعدادات الجودة
+  TEXTURE_QUALITY: 1.0,
+  SHADOW_QUALITY: 0.5,
+  
+  // إعدادات الأداء
+  TARGET_FPS: 60,
+  MIN_FPS: 30,
+  
+  // إعدادات Occlusion Culling
+  OCCLUSION_CHECK_INTERVAL: 100, // ms
+  MAX_OCCLUSION_OBJECTS: 1000
+};
