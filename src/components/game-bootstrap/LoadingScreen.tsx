@@ -1,17 +1,18 @@
-
 'use client';
 
 import React from 'react';
 import { Loader2, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
+import { Progress } from '@/components/ui/progress'; // Import the Progress component
 
 interface LoadingScreenProps {
   message: string;
   showLogo?: boolean;
   isError?: boolean;
+  progress?: number; // Add progress prop
 }
 
-const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true, isError = false }) => {
+const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true, isError = false, progress }) => {
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
       {showLogo && (
@@ -35,6 +36,12 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true,
       <p className={`text-xl ${isError ? 'text-destructive/80' : 'text-muted-foreground'} max-w-md`}>
         {message}
       </p>
+      {progress !== undefined && !isError && (
+        <div className="w-full max-w-md mt-4">
+          <Progress value={progress} className="w-full" />
+          <p className="text-sm text-muted-foreground mt-2">{Math.round(progress)}%</p>
+        </div>
+      )}
     </div>
   );
 };

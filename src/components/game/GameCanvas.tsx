@@ -33,6 +33,9 @@ interface GameCanvasProps {
     onEnemyCollisionPenalty: () => void;
     COIN_COUNT: number;
     octreeRef: React.MutableRefObject<Octree | null>; // Added Octree ref
+    onLoadStart: () => void;
+    onLoadProgress: (progress: number) => void;
+    onLoadComplete: (success: boolean) => void;
 }
 
 const GameCanvas: React.FC<GameCanvasProps> = ({
@@ -53,6 +56,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     onEnemyCollisionPenalty: onEnemyCollisionPenaltyProp,
     COIN_COUNT,
     octreeRef, // Destructure octreeRef
+    onLoadStart,
+    onLoadProgress,
+    onLoadComplete,
 }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     const animationFrameId = useRef<number | null>(null);
@@ -261,7 +267,55 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
         const isNewSession = !prevSessionPublicKeyRef.current ||
                              (sessionPublicKey && prevSessionPublicKeyRef.current && !sessionPublicKey.equals(prevSessionPublicKeyRef.current)) ||
-                             !rendererRef.current; 
+                             !rendererRef.current;
+
+        const loadAllGameAssets = async () => {
+            onLoadStart();
+            let loadedCount = 0;
+            const totalAssets = 3; // Dog, Coins, Enemies
+
+            const updateProgress = () => {
+                loadedCount++;
+                const progress = (loadedCount / totalAssets) * 100;
+                onLoadProgress(progress);
+            };
+
+            try {
+                console.log("[GameCanvas] Initializing Dog...");
+                await initializeDog();
+                updateProgress();
+                console.log("[GameCanvas] Dog Initialized.");
+
+                console.log("[GameCanvas] Initializing Coins...");
+                await initializeCoins();
+                updateProgress();
+                console.log("[GameCanvas] Coins Initialized.");
+
+                console.log("[GameCanvas] Initializing Enemies...");
+                await initializeEnemies();
+                updateProgress();
+                console.log("[GameCanvas] Enemies Initialized.");
+
+                // After all assets are loaded, set up camera and chunks
+                const checkDogAndSetupCameraAndChunks = () => {
+                    if (dogModelRef.current) {
+                        setupInitialCameraPosition();
+                        const dogPos = dogModelRef.current.position;
+                        const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
+                        currentDogChunkRef.current = { chunkX, chunkZ };
+                        manageTreeChunks(chunkX, chunkZ);
+                        onLoadComplete(true); // Signal completion
+                    } else {
+                        setTimeout(checkDogAndSetupCameraAndChunks, 100);
+                    }
+                };
+                checkDogAndSetupCameraAndChunks();
+
+            } catch (error) {
+                console.error("[GameCanvas] Critical error during asset loading:", error);
+                onLoadComplete(false); // Signal failure
+            }
+        };
 
         if (isNewSession) {
             console.log("[GameCanvas] New session or first load. Initializing scene elements.");
@@ -270,38 +324,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             
             resetDogState();
             resetCamera(); 
-            loadedTreeChunksRef.current.clear(); // Clear loaded chunks on new session
+            loadedTreeChunksRef.current.clear();
 
             initializeCamera(); 
             const sceneInitialized = initializeScene(); 
 
-            if (sceneInitialized && cameraRef.current && rendererRef.current /* && controlsRef.current removed */) {
-                initializeDog(); 
-                initializeCoins(); 
-                initializeEnemies();
-                
-                const checkDogAndSetupCameraAndChunks = () => {
-                    if (dogModelRef.current) {
-                        setupInitialCameraPosition();
-                        // Initial chunk loading
-                        const dogPos = dogModelRef.current.position;
-                        const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
-                        currentDogChunkRef.current = { chunkX, chunkZ };
-                        manageTreeChunks(chunkX, chunkZ); // Load initial trees
-                    } else {
-                        setTimeout(checkDogAndSetupCameraAndChunks, 100); 
-                    }
-                };
-                checkDogAndSetupCameraAndChunks();
-
+            if (sceneInitialized && cameraRef.current && rendererRef.current) {
+                loadAllGameAssets();
             } else {
                 console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.");
+                onLoadComplete(false);
                 return; 
             }
         } else if (dogModelRef.current && lastDogTransformRef.current && sessionPublicKey && !isNewSession) {
             dogModelRef.current.position.copy(lastDogTransformRef.current.position);
             dogModelRef.current.rotation.y = lastDogTransformRef.current.rotationY;
-            if (cameraRef.current /* && controlsRef.current removed */) { 
+            if (cameraRef.current) { 
                 setupInitialCameraPosition(); 
             }
         }
@@ -312,18 +350,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             animate();
         }
         
-        // Cleanup for this effect is not needed here as full cleanup happens on unmount or new session
-        // and animationFrame is managed within animate/this effect.
     }, [ 
         sessionPublicKey, 
-        // Callbacks from custom hooks are stable and don't need to be in dependency array
-        // Animate is also stable due to useCallback
-        // Removing individual hook functions to prevent re-runs unless sessionPublicKey changes.
         initializeDog, resetDogState, initializeCoins, initializeEnemies, initializeCamera, setupInitialCameraPosition, resetCamera,
         initializeScene, cleanupScene, 
         dogModelRef, lastDogTransformRef, 
-        cameraRef, rendererRef, // controlsRef, mountRef 
+        cameraRef, rendererRef,
         manageTreeChunks,
+        onLoadStart, onLoadProgress, onLoadComplete // Add new props to dependency array
     ]);
 
     // Effect for handling resize

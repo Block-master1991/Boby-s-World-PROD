@@ -49,9 +49,17 @@ import { Octree } from '@/lib/Octree'; // Import Octree
 
 interface GameUIProps {
     octreeRef: React.MutableRefObject<Octree | null>;
+    onLoadStart: () => void;
+    onLoadProgress: (progress: number) => void;
+    onLoadComplete: (success: boolean) => void;
 }
 
-const GameUI: React.FC<GameUIProps> = ({ octreeRef }) => {
+const GameUI: React.FC<GameUIProps> = ({ 
+    octreeRef,
+    onLoadStart,
+    onLoadProgress,
+    onLoadComplete,
+}) => {
     const isMobile = useIsMobile();
     const {
         sessionPublicKey,
@@ -897,9 +905,9 @@ const GameUI: React.FC<GameUIProps> = ({ octreeRef }) => {
                     onEnemyCollisionPenalty={handleEnemyCollisionPenalty}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
                     octreeRef={octreeRef} // Pass octreeRef
-                    // New props for enemy logic
-                    // coinMeshesRef will be passed from GameCanvas itself after useCoinLogic
-                    // onCoinCollected is already passed
+                    onLoadStart={onLoadStart}
+                    onLoadProgress={onLoadProgress}
+                    onLoadComplete={onLoadComplete}
                 />
 
                 <GameOverlayUI

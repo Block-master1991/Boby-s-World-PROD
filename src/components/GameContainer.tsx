@@ -10,6 +10,7 @@ import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
 import AuthenticationScreen from '@/components/game-bootstrap/AuthenticationScreen';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
 import { Octree } from '@/lib/Octree';
+// import { useGameAssetLoader } from '@/hooks/useGameAssetLoader'; // No longer needed here
 
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
@@ -46,7 +47,9 @@ const GameContainer: React.FC = () => {
 
     const [captchaVerified, setCaptchaVerified] = useState(false);
     const [isRequestingNonce, setIsRequestingNonce] = useState(false); 
-    const [isLoadingGameResources, setIsLoadingGameResources] = useState(false);
+    const [isLoadingGameResources, setIsLoadingGameResources] = useState(false); // Re-introducing for manual control
+    const [loadProgress, setLoadProgress] = useState(0); // State for progress
+    const [assetLoadError, setAssetLoadError] = useState<string | null>(null); // State for error
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
     const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
@@ -142,7 +145,7 @@ const GameContainer: React.FC = () => {
             console.log("[GameContainer] disconnectWalletAdapter completed.");
             
             setCaptchaVerified(false); 
-            setIsLoadingGameResources(false); 
+            // setIsLoadingGameResources(false); // This is now managed by the asset loader hook
             setIsRedirectingToAdmin(false); 
             setIsRequestingNonce(false); 
             setHasUserInteracted(false); // Reset user interaction state on disconnect
@@ -180,32 +183,16 @@ const GameContainer: React.FC = () => {
                 console.log("[GameContainer] Authenticated as regular user. State will be managed by selectedGameMode effect.");
             }
         } else { 
-            if (isLoadingGameResources) setIsLoadingGameResources(false);
+            // if (isLoadingGameResources) setIsLoadingGameResources(false); // Managed by asset loader
             if (isRedirectingToAdmin) setIsRedirectingToAdmin(false);
             setSelectedGameMode('none');
         }
     }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, ADMIN_WALLET_ADDRESS]);
 
-    useEffect(() => {
-        let timer: NodeJS.Timeout | null = null;
-        if (isAuthenticated && authUser?.publicKey && authUser.publicKey !== ADMIN_WALLET_ADDRESS && selectedGameMode !== 'none') {
-            console.log(`[GameContainer] Authenticated as regular user. Loading resources for ${selectedGameMode} mode...`);
-            setIsLoadingGameResources(true);
-            timer = setTimeout(() => {
-                setIsLoadingGameResources(false);
-                console.log(`[GameContainer] Finished loading resources for ${selectedGameMode} mode (simulated).`);
-            }, 1500);
-        } else if (selectedGameMode === 'none' && isLoadingGameResources) {
-            setIsLoadingGameResources(false);
-            if (timer) clearTimeout(timer);
-        }
+    // The problematic useEffect has been removed.
+    // The loading state will be controlled entirely by the callbacks from the child components.
 
-        return () => {
-            if (timer) clearTimeout(timer);
-        };
-    }, [selectedGameMode, isAuthenticated, authUser, ADMIN_WALLET_ADDRESS]);
-
-    const isGameUIVisible = useCallback(() => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isLoadingGameResources && !isRedirectingToAdmin && selectedGameMode !== 'none', [isAuthenticated, authUser, isLoadingGameResources, isRedirectingToAdmin, selectedGameMode]);
+    const isGameUIVisible = useCallback(() => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin && selectedGameMode !== 'none', [isAuthenticated, authUser, isRedirectingToAdmin, selectedGameMode]);
 
     const handleGameModeSelected = useCallback((mode: 'boby-world' | 'running-game') => {
         console.log(`[GameContainer] Game mode selected: ${mode}`);
@@ -213,6 +200,32 @@ const GameContainer: React.FC = () => {
         setHasUserInteracted(true); // User interaction point
         soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
     }, [setHasUserInteracted, soundManagerRef]);
+
+    // Callbacks to be passed down to the game component
+    const handleLoadStart = useCallback(() => {
+        console.log("[GameContainer] Received load start signal from child.");
+        setIsLoadingGameResources(true);
+        setLoadProgress(0);
+    }, []);
+
+    const handleLoadProgress = useCallback((progress: number) => {
+        // console.log(`[GameContainer] Received progress update: ${progress}%`);
+        setLoadProgress(progress);
+    }, []);
+
+    const handleLoadComplete = useCallback((success: boolean) => {
+        console.log(`[GameContainer] Received load complete signal. Success: ${success}`);
+        if (success) {
+            setLoadProgress(100);
+            // A small delay to show 100% before hiding the screen
+            setTimeout(() => {
+                setIsLoadingGameResources(false);
+            }, 500);
+        } else {
+            setAssetLoadError("Failed to load game assets. Please try refreshing the page.");
+            setIsLoadingGameResources(false); // Stop loading on failure
+        }
+    }, []);
 
     useEffect(() => {
         if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
@@ -306,19 +319,37 @@ const GameContainer: React.FC = () => {
     } else if (selectedGameMode === 'none') {
         console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
         mainContent = <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
-    } else if (isLoadingGameResources) {
-        console.log("[GameContainer] Displaying: Loading game resources for regular user.");
-        mainContent = <LoadingScreen message="Loading game resources..." showLogo />;
     } else if (isGameUIVisible()) {
+        // This is the new logic: Render the game UI, and conditionally render the loading screen as an overlay.
         if (selectedGameMode === 'boby-world') {
             console.log("[GameContainer] Displaying: Boby's World GameUI for regular user.");
-            mainContent = <GameUI octreeRef={octreeRef} />;
+            mainContent = (
+                <>
+                    <GameUI 
+                        octreeRef={octreeRef} 
+                        onLoadStart={handleLoadStart}
+                        onLoadProgress={handleLoadProgress}
+                        onLoadComplete={handleLoadComplete}
+                    />
+                    {isLoadingGameResources && (
+                        <div className="absolute inset-0 z-50">
+                            <LoadingScreen message="Loading game assets..." showLogo progress={loadProgress} />
+                        </div>
+                    )}
+                    {assetLoadError && (
+                         <div className="absolute inset-0 z-50">
+                            <LoadingScreen message={`Error loading assets: ${assetLoadError}. Please refresh.`} showLogo isError />
+                        </div>
+                    )}
+                </>
+            );
         } else if (selectedGameMode === 'running-game') {
             console.log("[GameContainer] Displaying: Running Game UI for regular user.");
-            mainContent = <RunningGameUI />;
+            mainContent = <RunningGameUI />; // Assuming this one doesn't need the loading logic for now
         }
     } else {
-        console.log("[GameContainer] Fallback: Showing default loading screen (should not be reached often).");
+        // Fallback if no other condition is met. This might happen briefly during state transitions.
+        console.log("[GameContainer] Fallback: No specific content to render, showing loading screen.");
         mainContent = <LoadingScreen message="Finalizing setup..." showLogo />;
     }
 
