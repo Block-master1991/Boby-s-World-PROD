@@ -1,4 +1,3 @@
-
 'use client';
 
 import * as THREE from 'three';
@@ -60,6 +59,8 @@ export const useDogLogic = ({
     const lastDogTransformRef = useRef<{ position: THREE.Vector3; rotationY: number } | null>(null);
     const gltfLoaderRef = useRef<GLTFLoader | null>(null);
     const dracoLoaderRef = useRef<DRACOLoader | null>(null);
+    const dogSpeedRef = useRef(0); // New ref for dog's current speed
+    const isRunningRef = useRef(false); // New ref for dog's running state
 
     useEffect(() => {
         dracoLoaderRef.current = new DRACOLoader();
@@ -188,11 +189,16 @@ export const useDogLogic = ({
     
 
     const updateDog = useCallback((delta: number) => { // Accept delta as argument
-        if (!dogModelRef.current || !animationMixerRef.current) return { isDogActuallyMoving: false, rotationAppliedThisFrame: false };
+        if (!dogModelRef.current || !animationMixerRef.current) {
+            dogSpeedRef.current = 0;
+            isRunningRef.current = false;
+            return { isDogActuallyMoving: false, rotationAppliedThisFrame: false };
+        }
         
         const dog = dogModelRef.current;
         let isDogActuallyMoving = false;
         let rotationAppliedThisFrame = false;
+        let currentDogSpeed = 0; // Local variable for current frame's speed
 
         if (!isPausedRef.current) {
             const currentJoystickInput = joystickInputRef.current;
@@ -206,9 +212,9 @@ export const useDogLogic = ({
             const isSprintingByJoystick = joystickIsActive && joystickMagnitude > SPRINT_JOYSTICK_THRESHOLD;
             const isSprinting = isSprintingByKeyboard || isSprintingByJoystick;
 
-            let currentActualSpeed = NORMAL_DOG_SPEED;
-            if (isSprinting) { currentActualSpeed = SPRINT_DOG_SPEED; }
-            if (isSpeedBoostActiveRef.current) { currentActualSpeed = BOOSTED_DOG_SPEED; }
+            currentDogSpeed = NORMAL_DOG_SPEED; // Initialize with normal speed
+            if (isSprinting) { currentDogSpeed = SPRINT_DOG_SPEED; }
+            if (isSpeedBoostActiveRef.current) { currentDogSpeed = BOOSTED_DOG_SPEED; }
 
             const forward = new THREE.Vector3();
             let movementAppliedThisFrame = false;
@@ -220,7 +226,7 @@ export const useDogLogic = ({
                     rotationAppliedThisFrame = true;
                 }
                 dog.getWorldDirection(forward);
-                const appliedMovementSpeed = currentActualSpeed * Math.abs(jY);
+                const appliedMovementSpeed = currentDogSpeed * Math.abs(jY);
                 if (jY < 0) { dog.position.addScaledVector(forward, appliedMovementSpeed); movementAppliedThisFrame = appliedMovementSpeed > 0.001; }
                 else if (jY > 0) { dog.position.addScaledVector(forward, -appliedMovementSpeed); movementAppliedThisFrame = appliedMovementSpeed > 0.001; }
             } else {
@@ -235,11 +241,11 @@ export const useDogLogic = ({
 
                 dog.getWorldDirection(forward);
                 if (keysPressedRef.current['KeyW'] || keysPressedRef.current['ArrowUp']) {
-                    dog.position.addScaledVector(forward, currentActualSpeed);
+                    dog.position.addScaledVector(forward, currentDogSpeed);
                     movementAppliedThisFrame = true;
                 }
                 if (keysPressedRef.current['KeyS'] || keysPressedRef.current['ArrowDown']) {
-                    dog.position.addScaledVector(forward, -currentActualSpeed);
+                    dog.position.addScaledVector(forward, -currentDogSpeed);
                     movementAppliedThisFrame = true;
                 }
             }
@@ -271,6 +277,8 @@ export const useDogLogic = ({
                     currentActionRef.current = newAction;
                 }
             }
+            dogSpeedRef.current = currentDogSpeed;
+            isRunningRef.current = isSprinting || isSpeedBoostActiveRef.current;
         } else { // Paused
             if (animationMixerRef.current && currentActionRef.current && currentActionRef.current.isRunning()) {
                 const idleAction = animationActionsRef.current[ANIMATION_NAMES.IDLE];
@@ -280,6 +288,8 @@ export const useDogLogic = ({
                     currentActionRef.current = idleAction;
                 }
             }
+            dogSpeedRef.current = 0;
+            isRunningRef.current = false;
         }
 
         if (animationMixerRef.current) animationMixerRef.current.update(delta);
@@ -356,5 +366,7 @@ export const useDogLogic = ({
         initializeDog,
         updateDog,
         resetDogState,
+        dogSpeed: dogSpeedRef.current, // Expose current dog speed
+        isRunning: isRunningRef.current, // Expose running state
     };
 };

@@ -13,6 +13,10 @@ import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
 import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
 import { useTreeLogic } from '@/hooks/useTreeLogic';
+import { useFloatingEffects } from '@/hooks/useFloatingEffects'; // New import
+import { useDogParticles } from '@/hooks/useDogParticles'; // New import
+import DogSpeedBeam from '@/components/game/DogSpeedBeam'; // New import
+import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
 import { OptimizedStaticObjectManager } from '@/components/OptimizedStaticObjectManager'; // Import the new optimized manager
 import { getChunkCoordinates, getChunkKey, RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '@/lib/chunkUtils'; // Import chunk utilities
 interface GameCanvasProps {
@@ -71,9 +75,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     
     const clockRef = useRef(new THREE.Clock());
     const keysPressedRef = useRef<{ [key: string]: boolean }>({});
+    const dogMeshRef = useRef<THREE.Object3D | null>(null); // Ref for the dog's 3D model
 
     const handleKeyDownCbRef = useRef<((event: KeyboardEvent) => void) | null>(null);
     const handleKeyUpCbRef = useRef<((event: KeyboardEvent) => void) | null>(null);
+
+    const speedBeamRef = useRef<DogSpeedBeam | null>(null); // Ref for speed beam instance
+    const shieldEffectRef = useRef<DogShieldEffect | null>(null); // Ref for shield effect instance
 
     const isSpeedBoostActiveRef = useRef(isSpeedBoostActive);
     const isShieldActiveRef = useRef(isShieldActive);
@@ -121,10 +129,18 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
 
     // --- Custom Hooks ---
-    const { dogModelRef, lastDogTransformRef, initializeDog, updateDog, resetDogState } = useDogLogic({
+    const { dogModelRef, lastDogTransformRef, initializeDog, updateDog, resetDogState, dogSpeed, isRunning } = useDogLogic({ // Added dogSpeed, isRunning
         sceneRef, clockRef, keysPressedRef, joystickInputRef, isPausedRef,
         isSpeedBoostActiveRef, isShieldActiveRef, isJoystickInteractionActiveRef,
         octreeRef, // Pass octreeRef
+    });
+
+    const { addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects } = useFloatingEffects({ // Added new states
+        sceneRef, cameraRef, dogMeshRef // Pass dogMeshRef
+    });
+
+    const { updateParticles } = useDogParticles({ // New hook for dust particles
+        sceneRef, dogMeshRef, dogSpeed, isRunning // Pass dog's speed and running state
     });
 
     const { initializeCoins, updateCoins, resetCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
@@ -132,6 +148,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), 
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
         isPausedRef, octreeRef,
+        addFloatingEffect, // Pass addFloatingEffect to useCoinLogic
     });
 
     const { initializeEnemies, updateEnemies, resetEnemies } = useEnemyLogic({
@@ -144,6 +161,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         onAttackAnimationFinished: onAttackAnimationFinishedCallbackRef.current, // Pass the new callback
         octreeRef,
         cameraRef,
+        addFloatingEffect, // Pass addFloatingEffect to useEnemyLogic for penalties
     });
 
     const { addTreesForChunk, removeTreesForChunk, updateTreeAnimations } = useTreeLogic({
@@ -232,11 +250,24 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
         const delta = clockRef.current.getDelta(); // Get delta time
         if (dogModelRef.current && !isPausedRef.current) { 
+            // Update dog's mesh ref for other hooks
+            dogMeshRef.current = dogModelRef.current;
+
             updateDog(delta); // Pass delta
             updateCoins();
             updateEnemies(delta); // Pass delta
             updateTreeAnimations(delta); // Update tree animations
             updateCamera();
+            updateFloatingEffects(); // Update floating effects
+            updateParticles(); // Update dust particles
+
+            // Update continuous effects (Speed Beam, Shield)
+            if (speedBeamRef.current) {
+                speedBeamRef.current.update(isSpeedBoostActiveRef.current, dogModelRef.current.position, dogModelRef.current.rotation);
+            }
+            if (shieldEffectRef.current) {
+                shieldEffectRef.current.update(isShieldActiveRef.current, dogModelRef.current.position);
+            }
 
             // Chunk management for trees
             const dogPos = dogModelRef.current.position;
@@ -255,7 +286,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks ]);
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks, updateFloatingEffects, updateParticles, isSpeedBoostActiveRef, isShieldActiveRef]);
 
 
     // Main useEffect for initialization and re-initialization on session change
@@ -268,6 +299,21 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         const isNewSession = !prevSessionPublicKeyRef.current ||
                              (sessionPublicKey && prevSessionPublicKeyRef.current && !sessionPublicKey.equals(prevSessionPublicKeyRef.current)) ||
                              !rendererRef.current;
+        
+        // Initialize continuous effects classes
+        if (sceneRef.current && dogModelRef.current && !speedBeamRef.current) {
+            speedBeamRef.current = new DogSpeedBeam({
+                scene: sceneRef.current,
+                dogPosition: dogModelRef.current.position,
+                dogRotation: dogModelRef.current.rotation,
+            });
+        }
+        if (sceneRef.current && dogModelRef.current && !shieldEffectRef.current) {
+            shieldEffectRef.current = new DogShieldEffect({
+                scene: sceneRef.current,
+                dogPosition: dogModelRef.current.position,
+            });
+        }
 
         const loadAllGameAssets = async () => {
             onLoadStart();
@@ -357,7 +403,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         dogModelRef, lastDogTransformRef, 
         cameraRef, rendererRef,
         manageTreeChunks,
-        onLoadStart, onLoadProgress, onLoadComplete // Add new props to dependency array
+        onLoadStart, onLoadProgress, onLoadComplete, // Add new props to dependency array
+        addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, // Add floating effects hooks
+        updateParticles, // Add dog particles hook
+        isSpeedBoostActive, isShieldActive // Add states for continuous effects
     ]);
 
     // Effect for handling resize
@@ -378,8 +427,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           animationFrameId.current = null;
         }
         cleanupScene(); 
+        cleanupFloatingEffects(); // Cleanup floating effects
+        if (speedBeamRef.current) speedBeamRef.current.dispose(); // Dispose speed beam
+        if (shieldEffectRef.current) shieldEffectRef.current.dispose(); // Dispose shield effect
       };
-    }, [cleanupScene]); // cleanupScene is stable
+    }, [cleanupScene, cleanupFloatingEffects]); // cleanupScene is stable
 
     // Touch handling for joystick
     useEffect(() => {

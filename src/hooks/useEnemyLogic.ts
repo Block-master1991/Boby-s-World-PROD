@@ -82,6 +82,14 @@ interface UseEnemyLogicProps {
   onAttackAnimationFinished: (event: THREE.Event) => void;
   octreeRef: MutableRefObject<Octree | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
+  addFloatingEffect: (
+    position: THREE.Vector3,
+    effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score',
+    value: number,
+    animationType?: 'floatUp' | 'attractToTarget' | 'followTarget',
+    is3DModel?: boolean,
+    targetPosition?: THREE.Vector3,
+  ) => void;
 }
 
 export const useEnemyLogic = ({
@@ -97,6 +105,7 @@ export const useEnemyLogic = ({
   onCoinCollected,
   onAttackAnimationFinished,
   cameraRef,
+  addFloatingEffect, // Destructure addFloatingEffect
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
   const internalOptimisticProtectionBoneCountRef = React.useRef(protectionBoneCountRef.current);
@@ -653,6 +662,16 @@ export const useEnemyLogic = ({
             onConsumeProtectionBone();
           } else {
             onEnemyCollisionPenalty();
+            if (dogModelRef.current) {
+              addFloatingEffect(
+                dogModelRef.current.position.clone(),
+                'bone',
+                -1, // Assuming a penalty of -1 bone
+                'followTarget',
+                true, // Use 3D model for bone
+                dogModelRef.current.position.clone() // Target position is the dog's current position
+              );
+            }
           }
           enemy.hasAppliedDeathEffect = true;
         }
@@ -694,6 +713,16 @@ export const useEnemyLogic = ({
                   onConsumeProtectionBone();
                 } else {
                   onEnemyCollisionPenalty();
+                  if (dogModelRef.current) {
+                    addFloatingEffect(
+                      dogModelRef.current.position.clone(),
+                      'bone',
+                      -1, // Assuming a penalty of -1 bone
+                      'followTarget',
+                      true, // Use 3D model for bone
+                      dogModelRef.current.position.clone() // Target position is the dog's current position
+                    );
+                  }
                 }
                 enemy.hasAppliedDeathEffect = true;
               }
@@ -718,6 +747,7 @@ export const useEnemyLogic = ({
     loadEnemiesForChunk,
     unloadEnemiesFromChunk,
     disposeEnemyModelResources, // Add disposeEnemyModelResources to dependencies
+    addFloatingEffect, // Add addFloatingEffect to dependencies
   ]);
   
   const resetEnemies = React.useCallback(() => {

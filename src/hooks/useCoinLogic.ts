@@ -26,6 +26,9 @@ export interface CoinData extends THREE.Mesh {
   // We can use this directly for unique identification.
 }
 
+import FloatingEffect from '@/components/game/FloatingEffect'; // Import FloatingEffect for type hinting
+import { useFloatingEffects } from './useFloatingEffects'; // Import useFloatingEffects hook
+
 interface UseCoinLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   dogModelRef: MutableRefObject<THREE.Group | null>;
@@ -36,6 +39,14 @@ interface UseCoinLogicProps {
   onRemainingCoinsUpdate: (remaining: number) => void;
   isPausedRef: MutableRefObject<boolean>;
   octreeRef: MutableRefObject<Octree | null>;
+  addFloatingEffect: (
+    position: THREE.Vector3,
+    effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score',
+    value: number,
+    animationType?: 'floatUp' | 'attractToTarget' | 'followTarget',
+    is3DModel?: boolean,
+    targetPosition?: THREE.Vector3,
+  ) => void;
 }
 
 export const useCoinLogic = ({
@@ -48,6 +59,7 @@ export const useCoinLogic = ({
   onRemainingCoinsUpdate,
   isPausedRef,
   octreeRef,
+  addFloatingEffect, // Destructure addFloatingEffect
 }: UseCoinLogicProps) => {
   const coinMeshesRef = useRef<CoinData[]>([]); // Changed to CoinData[]
   const remainingCoinsRef = useRef<number>(COIN_COUNT);
@@ -232,7 +244,16 @@ export const useCoinLogic = ({
         if (distanceToDog < COLLECTION_THRESHOLD) {
           collectedThisFrame = true;
         } else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS) {
-          collectedThisFrame = true;
+          // If magnet is active, trigger attraction animation
+          addFloatingEffect(
+            coin.position.clone(),
+            'coin',
+            1, // Assuming each coin is +1
+            'attractToTarget',
+            true, // Use 3D model for coin
+            dogPosition.clone() // Target position is the dog's current position
+          );
+          collectedThisFrame = true; // Mark as collected to remove from scene
         }
       }
 
@@ -275,6 +296,7 @@ export const useCoinLogic = ({
     unloadCoinsFromChunk,
     sceneRef,
     octreeRef,
+    addFloatingEffect, // Add addFloatingEffect to dependencies
   ]);
 
   const resetCoins = useCallback(() => {
