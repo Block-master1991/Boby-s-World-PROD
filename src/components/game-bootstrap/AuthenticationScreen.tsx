@@ -85,6 +85,19 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
               lineHeight: 'normal'
             }}
           />
+          <Button
+            variant="outline"
+            className="mt-4"
+            onClick={() => {
+              if (typeof window !== 'undefined') {
+                localStorage.removeItem('walletName');
+                console.log("Wallet preference cleared from localStorage.");
+                window.location.reload();
+              }
+            }}
+          >
+            Reset Wallet Selection
+          </Button>
         </>
       )}
 
