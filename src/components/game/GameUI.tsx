@@ -32,7 +32,7 @@ const COIN_COUNT_FOR_GAME_LOGIC = 1000;
 // Define types for optimistic updates
 interface OptimisticUpdate {
     id: string; // Unique ID for the update
-    type: 'coin' | 'penalty' | 'useItem' | 'consumeBone' | 'withdraw';
+    type: 'coin' | 'penalty' | 'useItem' | 'consumeBottle' | 'withdraw';
     amount?: number; // For coin/penalty/withdraw
     itemId?: string; // For useItem
     timestamp: number;
@@ -82,9 +82,9 @@ const GameUI: React.FC<GameUIProps> = ({
 
     // New State for pending optimistic updates
     const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate[]>([]);
-    // Queue for bone consumption requests
-    const boneConsumptionQueueRef = useRef<Array<{ id: string; resolve: (success: boolean) => void; reject: (error: any) => void }>>([]);
-    const isProcessingBoneQueueRef = useRef(false);
+    // Queue for Bottle consumption requests
+    const BottleConsumptionQueueRef = useRef<Array<{ id: string; resolve: (success: boolean) => void; reject: (error: any) => void }>>([]);
+    const isProcessingBottleQueueRef = useRef(false);
 
     // Game Effect States
     const [isSpeedBoostActive, setIsSpeedBoostActive] = useState(false);
@@ -105,7 +105,7 @@ const GameUI: React.FC<GameUIProps> = ({
     // Inventory Item Counts (will be populated from backend data)
     const [speedyPawsTreatCount, setSpeedyPawsTreatCount] = useState(0);
     const [guardianShieldCount, setGuardianShieldCount] = useState(0);
-    const [protectionBoneCount, setProtectionBoneCount] = useState(0);
+    const [protectionBottleCount, setProtectionBottleCount] = useState(0);
     const [coinMagnetTreatCount, setCoinMagnetTreatCount] = useState(0);
 
     // Player Economy State
@@ -131,7 +131,7 @@ const GameUI: React.FC<GameUIProps> = ({
     // Item Definitions (from '@/lib/items')
     const speedyPawsTreatDef = storeItems.find(item => item.id === '3');
     const guardianShieldDef = storeItems.find(item => item.id === '2');
-    const protectionBoneDef = storeItems.find(item => item.id === '1');
+    const protectionBottleDef = storeItems.find(item => item.id === '1');
     const coinMagnetTreatDef = storeItems.find(item => item.id === '4');
 
     // Derived State for game pausing
@@ -152,15 +152,15 @@ const GameUI: React.FC<GameUIProps> = ({
         return currentUSDT;
     }, [playerGameUSDT, optimisticUpdates]);
 
-    const displayedProtectionBoneCount = useMemo(() => {
-        let currentCount = protectionBoneCount;
+    const displayedProtectionBottleCount = useMemo(() => {
+        let currentCount = protectionBottleCount;
         optimisticUpdates.forEach(update => {
-            if (update.status === 'pending' && update.type === 'consumeBone') {
+            if (update.status === 'pending' && update.type === 'consumeBottle') {
                 currentCount -= (update.amount || 1);
             }
         });
         return currentCount;
-    }, [protectionBoneCount, optimisticUpdates]);
+    }, [protectionBottleCount, optimisticUpdates]);
 
     const displayedSpeedyPawsTreatCount = useMemo(() => {
         let currentCount = speedyPawsTreatCount;
@@ -220,15 +220,15 @@ const GameUI: React.FC<GameUIProps> = ({
             if (response.ok) {
                 setPlayerGameUSDT(data.gameUSDTBalance || 0);
                 const rawInventory = data.inventory || [];
-                let speedyCount = 0, shieldCount = 0, pBoneCount = 0, magnetCount = 0;
+                let speedyCount = 0, shieldCount = 0, pBottleCount = 0, magnetCount = 0;
                 rawInventory.forEach((item: any) => {
                     const itemId = typeof item === 'object' && item.id ? item.id : item;
-                    if (itemId === '1') pBoneCount++;
+                    if (itemId === '1') pBottleCount++;
                     if (itemId === '2') shieldCount++;
                     if (itemId === '3') speedyCount++;
                     if (itemId === '4') magnetCount++;
                 });
-                setProtectionBoneCount(pBoneCount);
+                setProtectionBottleCount(pBottleCount);
                 setGuardianShieldCount(shieldCount);
                 setSpeedyPawsTreatCount(speedyCount);
                 setCoinMagnetTreatCount(magnetCount);
@@ -242,7 +242,7 @@ const GameUI: React.FC<GameUIProps> = ({
             } else {
                 console.debug("Network or unexpected error fetching player data from backend:", error); // Changed to console.debug
                 toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
-                setProtectionBoneCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
+                setProtectionBottleCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
             }
         } finally {
             setIsFetchingPlayerUSDT(false);
@@ -404,8 +404,8 @@ const GameUI: React.FC<GameUIProps> = ({
                 currentFetchController.abort();
             }
             setOptimisticUpdates([]);
-            boneConsumptionQueueRef.current = [];
-            isProcessingBoneQueueRef.current = false;
+            BottleConsumptionQueueRef.current = [];
+            isProcessingBottleQueueRef.current = false;
         };
 
         // Only fetch player data if authenticated
@@ -726,11 +726,11 @@ const GameUI: React.FC<GameUIProps> = ({
     }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedPlayerGameUSDT, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
 
     /**
-     * Handles the consumption of a Protection Bone via backend API.
+     * Handles the consumption of a Protection Bottle via backend API.
      */
-    const handleConsumeProtectionBone = useCallback(async () => {
-        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBoneCount <= 0) {
-            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet, or you have no bones left.', variant: 'destructive' });
+    const handleConsumeProtectionBottle = useCallback(async () => {
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBottleCount <= 0) {
+            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet, or you have no Bottles left.', variant: 'destructive' });
             return;
         }
 
@@ -739,49 +739,49 @@ const GameUI: React.FC<GameUIProps> = ({
         // Add optimistic update immediately
         setOptimisticUpdates(prev => [...prev, {
             id: updateId,
-            type: 'consumeBone',
+            type: 'consumeBottle',
             amount: 1,
             timestamp: Date.now(),
             status: 'pending'
         }]);
 
         // Enqueue the request
-        boneConsumptionQueueRef.current.push({
+        BottleConsumptionQueueRef.current.push({
             id: updateId,
             resolve: (success) => {
                 if (success) {
-                    //toast({ title: 'Protected!', description: 'A Protection Bone was used!', variant: 'default' });
+                    //toast({ title: 'Protected!', description: 'A Protection Bottle was used!', variant: 'default' });
                 } else {
-                    // Error toast is handled by processBoneConsumptionQueue
+                    // Error toast is handled by processBottleConsumptionQueue
                 }
             },
             reject: (error) => {
-                // Error toast is handled by processBoneConsumptionQueue
+                // Error toast is handled by processBottleConsumptionQueue
             }
         });
 
         // Trigger queue processing if not already running
-        if (!isProcessingBoneQueueRef.current) {
-            processBoneConsumptionQueue();
+        if (!isProcessingBottleQueueRef.current) {
+            processBottleConsumptionQueue();
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBoneCount, toast, optimisticUpdates]);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBottleCount, toast, optimisticUpdates]);
 
-    // New function to process the bone consumption queue
-    const processBoneConsumptionQueue = useCallback(async () => {
-        if (isProcessingBoneQueueRef.current || boneConsumptionQueueRef.current.length === 0) {
+    // New function to process the Bottle consumption queue
+    const processBottleConsumptionQueue = useCallback(async () => {
+        if (isProcessingBottleQueueRef.current || BottleConsumptionQueueRef.current.length === 0) {
             return;
         }
 
-        isProcessingBoneQueueRef.current = true;
+        isProcessingBottleQueueRef.current = true;
 
-        while (boneConsumptionQueueRef.current.length > 0) {
-            const { id: updateId, resolve, reject } = boneConsumptionQueueRef.current[0]; // Peek at the first item
+        while (BottleConsumptionQueueRef.current.length > 0) {
+            const { id: updateId, resolve, reject } = BottleConsumptionQueueRef.current[0]; // Peek at the first item
 
             const controller = new AbortController();
             const signal = controller.signal;
 
             try {
-                const response = await apiFetch('/api/game/consumeProtectionBone', { // استخدام apiFetch
+                const response = await apiFetch('/api/game/consumeProtectionBottle', { // استخدام apiFetch
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -798,28 +798,28 @@ const GameUI: React.FC<GameUIProps> = ({
                     setOptimisticUpdates(prev => prev.map(update =>
                         update.id === updateId ? { ...update, status: 'failed' } : update
                     ));
-                    console.error("Backend error consuming protection bone:", data.error || 'Failed to consume protection bone.');
-                    let errorMessage = `Could not consume Protection Bone. Backend error: ${data.error || 'Unknown error'}`;
-                    toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
+                    console.error("Backend error consuming protection Bottle:", data.error || 'Failed to consume protection Bottle.');
+                    let errorMessage = `Could not consume Protection Bottle. Backend error: ${data.error || 'Unknown error'}`;
+                    toast({ title: 'Failed to Use Bottle', description: errorMessage, variant: 'destructive' });
                     resolve(false); // Indicate failure
                 }
             } catch (error: any) {
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
-                console.error("Network or unexpected error consuming protection bone via backend:", error);
-                let errorMessage = `Could not consume Protection Bone. Network error: ${error.message || String(error)}`;
+                console.error("Network or unexpected error consuming protection Bottle via backend:", error);
+                let errorMessage = `Could not consume Protection Bottle. Network error: ${error.message || String(error)}`;
                 if (error.message && errorMessage.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
                 }
-                toast({ title: 'Failed to Use Bone', description: errorMessage, variant: 'destructive' });
+                toast({ title: 'Failed to Use Bottle', description: errorMessage, variant: 'destructive' });
                 resolve(false); // Indicate failure
             } finally {
-                boneConsumptionQueueRef.current.shift(); // Remove the processed item from queue
+                BottleConsumptionQueueRef.current.shift(); // Remove the processed item from queue
             }
         }
 
-        isProcessingBoneQueueRef.current = false;
+        isProcessingBottleQueueRef.current = false;
     }, [isAuthenticated, authUser?.publicKey, toast, fetchPlayerData, optimisticUpdates, apiFetch]); // Added apiFetch to dependencies
 
     /**
@@ -901,8 +901,8 @@ const GameUI: React.FC<GameUIProps> = ({
                     onCanvasTouchStart={handleCanvasTouchStart}
                     onCanvasTouchMove={handleCanvasTouchMove}
                     onCanvasTouchEnd={handleCanvasTouchEnd}
-                    protectionBoneCount={displayedProtectionBoneCount}
-                    onConsumeProtectionBone={handleConsumeProtectionBone}
+                    protectionBottleCount={displayedProtectionBottleCount}
+                    onConsumeProtectionBottle={handleConsumeProtectionBottle}
                     onEnemyCollisionPenalty={handleEnemyCollisionPenalty}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
                     octreeRef={octreeRef} // Pass octreeRef
@@ -916,8 +916,8 @@ const GameUI: React.FC<GameUIProps> = ({
                     sessionCollectedUSDT={sessionCollectedUSDT}
                     remainingCoinsOnMap={remainingCoinsOnMap}
                     COIN_COUNT={COIN_COUNT_FOR_GAME_LOGIC}
-                    protectionBoneCount={displayedProtectionBoneCount}
-                    protectionBoneDef={protectionBoneDef}
+                    protectionBottleCount={displayedProtectionBottleCount}
+                    protectionBottleDef={protectionBottleDef}
                     isSpeedBoostActive={isSpeedBoostActive}
                     speedBoostTimeLeft={speedBoostTimeLeft}
                     isShieldActive={isShieldActive}
@@ -1029,7 +1029,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 onUseConsumableItem={handleUseConsumableItem}
                                 speedyPawsTreatCount={displayedSpeedyPawsTreatCount}
                                 guardianShieldCount={displayedGuardianShieldCount}
-                                protectionBoneCount={displayedProtectionBoneCount}
+                                protectionBottleCount={displayedProtectionBottleCount}
                                 coinMagnetTreatCount={displayedCoinMagnetTreatCount}
                            />
                         </SheetContent>

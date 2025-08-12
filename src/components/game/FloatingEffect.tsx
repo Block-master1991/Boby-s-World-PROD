@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
 interface FloatingEffectOptions {
   position: THREE.Vector3;
-  effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score';
+  effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score';
   value: number; // e.g., 1 for +1, -1 for -1
   camera: THREE.Camera; // Pass camera for lookAt
   onComplete: (id: string) => void; // Callback to notify parent when animation is complete
@@ -24,7 +24,7 @@ class FloatingEffect {
   private id: string;
   private iconMesh: THREE.Object3D | null = null;
   private textMesh: THREE.Mesh | null = null;
-  private effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score';
+  private effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score';
   private animationType: 'floatUp' | 'attractToTarget' | 'followTarget';
   private targetMesh: THREE.Object3D | undefined;
   private targetPosition: THREE.Vector3 | undefined;
@@ -51,13 +51,13 @@ class FloatingEffect {
     this.loadAssets(this.effectType, this.value, this.is3DModel);
   }
 
-  private getAssetPath(effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score', is3DModel: boolean): string {
+  private getAssetPath(effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score', is3DModel: boolean): string {
     if (is3DModel) {
       switch (effectType) {
         case 'coin':
           return '/models/coin.glb';
-        case 'bone':
-          return '/models/bone.glb'; // Assuming you have a bone.glb
+        case 'Bottle':
+          return '/models/Bottle.glb'; // Assuming you have a Bottle.glb
         default:
           return '';
       }
@@ -65,8 +65,8 @@ class FloatingEffect {
       switch (effectType) {
         case 'coin':
           return '/coin-front.png';
-        case 'bone':
-          return '/bone.png'; // Placeholder, need to confirm actual bone asset path
+        case 'Bottle':
+          return '/Bottle.png'; // Placeholder, need to confirm actual Bottle asset path
         case 'item':
           return '/item.png'; // Placeholder, need to confirm actual item asset path
         default:
@@ -98,7 +98,7 @@ class FloatingEffect {
     return new THREE.CanvasTexture(canvas);
   }
 
-  private loadAssets(effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score', value: number, is3DModel: boolean) {
+  private loadAssets(effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score', value: number, is3DModel: boolean) {
     const assetPath = this.getAssetPath(effectType, is3DModel);
 
     if (is3DModel && assetPath) {

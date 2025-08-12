@@ -73,8 +73,8 @@ interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   dogModelRef: MutableRefObject<THREE.Group | null>;
   isShieldActiveRef: MutableRefObject<boolean>;
-  protectionBoneCountRef: MutableRefObject<number>;
-  onConsumeProtectionBone: () => void;
+  protectionBottleCountRef: MutableRefObject<number>;
+  onConsumeProtectionBottle: () => void;
   onEnemyCollisionPenalty: () => void;
   isPausedRef: MutableRefObject<boolean>;
   coinMeshesRef: MutableRefObject<THREE.Mesh[]>;
@@ -84,7 +84,7 @@ interface UseEnemyLogicProps {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   addFloatingEffect: (
     position: THREE.Vector3,
-    effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score',
+    effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score',
     value: number,
     animationType?: 'floatUp' | 'attractToTarget' | 'followTarget',
     is3DModel?: boolean,
@@ -96,8 +96,8 @@ export const useEnemyLogic = ({
   sceneRef,
   dogModelRef,
   isShieldActiveRef,
-  protectionBoneCountRef,
-  onConsumeProtectionBone,
+  protectionBottleCountRef,
+  onConsumeProtectionBottle,
   onEnemyCollisionPenalty,
   isPausedRef,
   coinMeshesRef,
@@ -108,7 +108,7 @@ export const useEnemyLogic = ({
   addFloatingEffect, // Destructure addFloatingEffect
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
-  const internalOptimisticProtectionBoneCountRef = React.useRef(protectionBoneCountRef.current);
+  const internalOptimisticProtectionBottleCountRef = React.useRef(protectionBottleCountRef.current);
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
   const clock = React.useRef(new THREE.Clock());
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
@@ -143,8 +143,8 @@ export const useEnemyLogic = ({
   }, []);
 
   React.useEffect(() => {
-    internalOptimisticProtectionBoneCountRef.current = protectionBoneCountRef.current;
-  }, [protectionBoneCountRef.current]);
+    internalOptimisticProtectionBottleCountRef.current = protectionBottleCountRef.current;
+  }, [protectionBottleCountRef.current]);
 
   React.useEffect(() => {
     const dracoLoader = new DRACOLoader();
@@ -657,18 +657,18 @@ export const useEnemyLogic = ({
         }
         if (!enemy.hasAppliedDeathEffect) {
           if (isShieldActiveRef.current) {
-          } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
-            internalOptimisticProtectionBoneCountRef.current--;
-            onConsumeProtectionBone();
+          } else if (internalOptimisticProtectionBottleCountRef.current > 0) {
+            internalOptimisticProtectionBottleCountRef.current--;
+            onConsumeProtectionBottle();
           } else {
             onEnemyCollisionPenalty();
             if (dogModelRef.current) {
               addFloatingEffect(
                 dogModelRef.current.position.clone(),
-                'bone',
-                -1, // Assuming a penalty of -1 bone
+                'Bottle',
+                -1, // Assuming a penalty of -1 Bottle
                 'followTarget',
-                true, // Use 3D model for bone
+                true, // Use 3D model for Bottle
                 dogModelRef.current.position.clone() // Target position is the dog's current position
               );
             }
@@ -708,18 +708,18 @@ export const useEnemyLogic = ({
 
               if (!enemy.hasAppliedDeathEffect) {
                 if (isShieldActiveRef.current) {
-                } else if (internalOptimisticProtectionBoneCountRef.current > 0) {
-                  internalOptimisticProtectionBoneCountRef.current--;
-                  onConsumeProtectionBone();
+                } else if (internalOptimisticProtectionBottleCountRef.current > 0) {
+                  internalOptimisticProtectionBottleCountRef.current--;
+                  onConsumeProtectionBottle();
                 } else {
                   onEnemyCollisionPenalty();
                   if (dogModelRef.current) {
                     addFloatingEffect(
                       dogModelRef.current.position.clone(),
-                      'bone',
-                      -1, // Assuming a penalty of -1 bone
+                      'Bottle',
+                      -1, // Assuming a penalty of -1 Bottle
                       'followTarget',
-                      true, // Use 3D model for bone
+                      true, // Use 3D model for Bottle
                       dogModelRef.current.position.clone() // Target position is the dog's current position
                     );
                   }
@@ -734,8 +734,8 @@ export const useEnemyLogic = ({
   }, [
     dogModelRef,
     isShieldActiveRef,
-    protectionBoneCountRef,
-    onConsumeProtectionBone,
+    protectionBottleCountRef,
+    onConsumeProtectionBottle,
     onEnemyCollisionPenalty,
     isPausedRef,
     coinMeshesRef,

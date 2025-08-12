@@ -7,7 +7,7 @@ import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
 import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
-  console.log("[API] /api/game/consumeProtectionBone called");
+  console.log("[API] /api/game/consumeProtectionBottle called");
 
   // userPublicKey is now available directly from request.user
   const userPublicKey = request.user?.sub;
@@ -29,22 +29,22 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     const playerData = docSnap.data();
     const currentInventory = playerData?.inventory || [];
 
-    const protectionBoneId = '1'; // Assuming '1' is the ID for Protection Bone
-    const boneIndex = currentInventory.findIndex((item: any) => item.id === protectionBoneId);
+    const protectionBottleId = '1'; // Assuming '1' is the ID for Protection Bottle
+    const BottleIndex = currentInventory.findIndex((item: any) => item.id === protectionBottleId);
 
-    if (boneIndex === -1) {
-      return NextResponse.json({ error: 'No Protection Bones available.' }, { status: 400 });
+    if (BottleIndex === -1) {
+      return NextResponse.json({ error: 'No Protection Bottles available.' }, { status: 400 });
     }
 
-    // Remove one protection bone from the inventory
-    currentInventory.splice(boneIndex, 1);
+    // Remove one protection Bottle from the inventory
+    currentInventory.splice(BottleIndex, 1);
 
     await playerDocRef.update({
       inventory: currentInventory,
       updatedAt: FieldValue.serverTimestamp(),
     });
 
-    const response = NextResponse.json({ message: 'Protection Bone consumed successfully.', newInventory: currentInventory });
+    const response = NextResponse.json({ message: 'Protection Bottle consumed successfully.', newInventory: currentInventory });
 
     // إصدار CSRF Token جديد بعد الطلب الناجح
     const requestHost = request.headers.get('host') || undefined;
@@ -56,12 +56,12 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
       maxAge: 30 * 60, // 30 دقيقة
       path: '/',
     });
-    console.log('[consumeProtectionBone] New CSRF token issued and set in cookie.');
+    console.log('[consumeProtectionBottle] New CSRF token issued and set in cookie.');
 
     return response;
   } catch (error: any) {
-    console.error("Error consuming protection bone:", error);
-    let errorMessage = error.message || 'Failed to consume protection bone.';
+    console.error("Error consuming protection Bottle:", error);
+    let errorMessage = error.message || 'Failed to consume protection Bottle.';
     let statusCode = 500;
 
     if (error.message.includes("Firebase Admin SDK environment variables are not set correctly")) {
@@ -71,7 +71,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
       statusCode = 401;
     } else if (errorMessage.includes("Player data not found")) {
       statusCode = 404;
-    } else if (errorMessage.includes("No Protection Bones available")) {
+    } else if (errorMessage.includes("No Protection Bottles available")) {
       statusCode = 400;
     }
 

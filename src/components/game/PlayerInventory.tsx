@@ -22,7 +22,7 @@ interface PlayerInventoryProps {
     onUseConsumableItem: (itemId: string, amount: number) => Promise<void>;
     speedyPawsTreatCount: number;
     guardianShieldCount: number;
-    protectionBoneCount: number;
+    protectionBottleCount: number;
     coinMagnetTreatCount: number;
 }
 
@@ -30,7 +30,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     onUseConsumableItem,
     speedyPawsTreatCount,
     guardianShieldCount,
-    protectionBoneCount,
+    protectionBottleCount,
     coinMagnetTreatCount,
 }) => {
     const { toast } = useToast();
@@ -42,9 +42,9 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     // Aggregate inventory items based on passed counts
     const aggregatedInventory = React.useMemo(() => {
         const items: AggregatedInventoryItem[] = [];
-        if (protectionBoneCount > 0) {
+        if (protectionBottleCount > 0) {
             const def = storeItems.find(item => item.id === '1');
-            if (def) items.push({ definition: def, count: protectionBoneCount });
+            if (def) items.push({ definition: def, count: protectionBottleCount });
         }
         if (guardianShieldCount > 0) {
             const def = storeItems.find(item => item.id === '2');
@@ -59,7 +59,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
             if (def) items.push({ definition: def, count: coinMagnetTreatCount });
         }
         return items;
-    }, [protectionBoneCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
+    }, [protectionBottleCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
 
     // Initialize quantitiesToUse when aggregatedInventory changes
     useEffect(() => {
@@ -73,13 +73,13 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     // Helper to get current count for a specific item ID from props
     const getItemCount = useCallback((itemId: string) => {
         switch (itemId) {
-            case '1': return protectionBoneCount;
+            case '1': return protectionBottleCount;
             case '2': return guardianShieldCount;
             case '3': return speedyPawsTreatCount;
             case '4': return coinMagnetTreatCount;
             default: return 0;
         }
-    }, [protectionBoneCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
+    }, [protectionBottleCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
 
     // Handlers for quantity input
     const handleQuantityChange = useCallback((itemId: string, value: number) => {

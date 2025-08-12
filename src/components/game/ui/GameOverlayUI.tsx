@@ -5,7 +5,7 @@ import React from 'react';
 
 import { Button } from '@/components/ui/button';
 
-import { Target, Bone, AlertCircle } from 'lucide-react';
+import { Target, Droplet, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
 import Joystick from '@/components/shared/Joystick';
 import type { StoreItemDefinition } from '@/lib/items';
@@ -14,8 +14,8 @@ interface GameOverlayUIProps {
   sessionCollectedUSDT: number;
   remainingCoinsOnMap: number;
   COIN_COUNT: number;
-  protectionBoneCount: number;
-  protectionBoneDef?: StoreItemDefinition;
+  protectionBottleCount: number;
+  protectionBottleDef?: StoreItemDefinition;
 
   isSpeedBoostActive: boolean;
   speedBoostTimeLeft: number;
@@ -54,8 +54,8 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
   sessionCollectedUSDT,
   remainingCoinsOnMap,
   COIN_COUNT,
-  protectionBoneCount,
-  protectionBoneDef,
+  protectionBottleCount,
+  protectionBottleDef,
   isSpeedBoostActive,
   speedBoostTimeLeft,
   isShieldActive,
@@ -78,7 +78,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
   JOYSTICK_KNOB_SIZE,
 }) => {
 
-  const ProtectionBoneIcon = protectionBoneDef?.icon || Bone;
+  const ProtectionBottleIcon = protectionBottleDef?.icon || Droplet;
 
 
   return (
@@ -99,10 +99,10 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
           <Target className="h-4 w-4 mr-1.5 rtl:ml-1.5" />
           <span>Coins: {remainingCoinsOnMap} / {COIN_COUNT}</span>
         </div>
-        {protectionBoneDef && (
+        {protectionBottleDef && (
           <div className="flex items-center text-xs opacity-90">
-            <ProtectionBoneIcon className="h-4 w-4 mr-1.5 rtl:ml-1.5" />
-            <span>Bones: {protectionBoneCount}</span>
+            <ProtectionBottleIcon className="h-4 w-4 mr-1.5 rtl:ml-1.5" />
+            <span>Bottles: {protectionBottleCount}</span>
           </div>
         )}
       </div>

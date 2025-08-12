@@ -32,8 +32,8 @@ interface GameCanvasProps {
     onCanvasTouchStart: (screenX: number, screenY: number) => void;
     onCanvasTouchMove: (deltaX: number, deltaY: number) => void;
     onCanvasTouchEnd: () => void;
-    protectionBoneCount: number;
-    onConsumeProtectionBone: () => void;
+    protectionBottleCount: number;
+    onConsumeProtectionBottle: () => void;
     onEnemyCollisionPenalty: () => void;
     COIN_COUNT: number;
     octreeRef: React.MutableRefObject<Octree | null>; // Added Octree ref
@@ -55,8 +55,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     onCanvasTouchStart: onCanvasTouchStartProp,
     onCanvasTouchMove: onCanvasTouchMoveProp,
     onCanvasTouchEnd: onCanvasTouchEndProp,
-    protectionBoneCount,
-    onConsumeProtectionBone: onConsumeProtectionBoneProp,
+    protectionBottleCount,
+    onConsumeProtectionBottle: onConsumeProtectionBottleProp,
     onEnemyCollisionPenalty: onEnemyCollisionPenaltyProp,
     COIN_COUNT,
     octreeRef, // Destructure octreeRef
@@ -88,7 +88,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const isCoinMagnetActiveRef = useRef(isCoinMagnetActive);
     const isPausedRef = useRef(isPaused);
     const joystickInputRef = useRef(joystickInputFromUI);
-    const protectionBoneCountRef = useRef(protectionBoneCount);
+    const protectionBottleCountRef = useRef(protectionBottleCount);
     const isJoystickInteractionActiveRef = useRef(false); 
 
     const prevSessionPublicKeyRef = useRef<PublicKey | null>(null);
@@ -98,7 +98,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     useEffect(() => { isSpeedBoostActiveRef.current = isSpeedBoostActive; }, [isSpeedBoostActive]);
     useEffect(() => { isShieldActiveRef.current = isShieldActive; }, [isShieldActive]);
     useEffect(() => { isCoinMagnetActiveRef.current = isCoinMagnetActive; }, [isCoinMagnetActive]);
-    useEffect(() => { protectionBoneCountRef.current = protectionBoneCount; }, [protectionBoneCount]);
+    useEffect(() => { protectionBottleCountRef.current = protectionBottleCount; }, [protectionBottleCount]);
     useEffect(() => { 
         isPausedRef.current = isPaused;
         if (isPaused && isJoystickInteractionActiveRef.current) {
@@ -113,7 +113,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     // --- Callback Refs for Stable Callbacks from Props ---
     const onCoinCollectedCallbackRef = useRef(onCoinCollectedProp);
     const onRemainingCoinsUpdateCallbackRef = useRef(onRemainingCoinsUpdateProp);
-    const onConsumeProtectionBoneCallbackRef = useRef(onConsumeProtectionBoneProp);
+    const onConsumeProtectionBottleCallbackRef = useRef(onConsumeProtectionBottleProp);
     const onEnemyCollisionPenaltyCallbackRef = useRef(onEnemyCollisionPenaltyProp);
     const onAttackAnimationFinishedCallbackRef = useRef((event: THREE.Event) => {
         // This function will be called when an enemy's attack animation finishes
@@ -124,7 +124,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     useEffect(() => { onCoinCollectedCallbackRef.current = onCoinCollectedProp; }, [onCoinCollectedProp]);
     useEffect(() => { onRemainingCoinsUpdateCallbackRef.current = onRemainingCoinsUpdateProp; }, [onRemainingCoinsUpdateProp]);
-    useEffect(() => { onConsumeProtectionBoneCallbackRef.current = onConsumeProtectionBoneProp; }, [onConsumeProtectionBoneProp]);
+    useEffect(() => { onConsumeProtectionBottleCallbackRef.current = onConsumeProtectionBottleProp; }, [onConsumeProtectionBottleProp]);
     useEffect(() => { onEnemyCollisionPenaltyCallbackRef.current = onEnemyCollisionPenaltyProp; }, [onEnemyCollisionPenaltyProp]);
 
 
@@ -152,8 +152,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     });
 
     const { initializeEnemies, updateEnemies, resetEnemies } = useEnemyLogic({
-        sceneRef, dogModelRef, isShieldActiveRef, protectionBoneCountRef,
-        onConsumeProtectionBone: () => onConsumeProtectionBoneCallbackRef.current(),
+        sceneRef, dogModelRef, isShieldActiveRef, protectionBottleCountRef,
+        onConsumeProtectionBottle: () => onConsumeProtectionBottleCallbackRef.current(),
         onEnemyCollisionPenalty: () => onEnemyCollisionPenaltyCallbackRef.current(),
         isPausedRef,
         coinMeshesRef, // Pass coinMeshesRef to useEnemyLogic

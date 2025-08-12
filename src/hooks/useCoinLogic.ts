@@ -41,7 +41,7 @@ interface UseCoinLogicProps {
   octreeRef: MutableRefObject<Octree | null>;
   addFloatingEffect: (
     position: THREE.Vector3,
-    effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score',
+    effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score',
     value: number,
     animationType?: 'floatUp' | 'attractToTarget' | 'followTarget',
     is3DModel?: boolean,

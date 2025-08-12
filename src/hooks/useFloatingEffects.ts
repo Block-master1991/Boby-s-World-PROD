@@ -6,7 +6,7 @@ import FloatingEffect from '@/components/game/FloatingEffect'; // Import the Flo
 export interface FloatingEffectData {
   id: string;
   position: THREE.Vector3;
-  effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score';
+  effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score';
   value: number;
   animationType: 'floatUp' | 'attractToTarget' | 'followTarget';
   is3DModel?: boolean;
@@ -26,7 +26,7 @@ export const useFloatingEffects = ({ sceneRef, cameraRef, dogMeshRef }: UseFloat
 
   const addFloatingEffect = useCallback((
     position: THREE.Vector3,
-    effectType: 'coin' | 'bone' | 'item' | 'penalty' | 'score',
+    effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score',
     value: number,
     animationType: 'floatUp' | 'attractToTarget' | 'followTarget' = 'floatUp',
     is3DModel: boolean = false,
