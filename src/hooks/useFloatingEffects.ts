@@ -31,6 +31,7 @@ export const useFloatingEffects = ({ sceneRef, cameraRef, dogMeshRef }: UseFloat
     animationType: 'floatUp' | 'attractToTarget' | 'followTarget' = 'floatUp',
     is3DModel: boolean = false,
     targetPosition?: THREE.Vector3,
+    targetMesh?: THREE.Object3D, // Add targetMesh parameter
   ) => {
     if (!sceneRef.current || !cameraRef.current) return;
 
@@ -51,7 +52,7 @@ export const useFloatingEffects = ({ sceneRef, cameraRef, dogMeshRef }: UseFloat
       },
       animationType,
       is3DModel,
-      targetMesh: animationType === 'followTarget' ? dogMeshRef?.current || undefined : undefined,
+      targetMesh, // Pass targetMesh directly
       targetPosition,
     });
 

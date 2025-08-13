@@ -38,6 +38,7 @@ export const WORLD_MIN_BOUND = -999;
 export const WORLD_MAX_BOUND = 999;
 export const ENEMY_PROTECTION_RADIUS_VAL = 15;
 export const DOG_SPAWN_PROTECTION_RADIUS = 40; // Radius around dog's initial spawn where no coins/enemies should appear
+export const ENEMY_COLLISION_PENALTY_USDT = 0.001; // Penalty amount for enemy collision
 // src/lib/constants.ts
 export const PERFORMANCE_SETTINGS = {
   // إعدادات LOD

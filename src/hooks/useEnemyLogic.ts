@@ -8,7 +8,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree, OctreeObject } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
-import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS } from '../lib/constants';
+import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS, ENEMY_COLLISION_PENALTY_USDT } from '../lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
 import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
 import { CoinData } from './useCoinLogic'; // Import CoinData
 
@@ -89,6 +89,7 @@ interface UseEnemyLogicProps {
     animationType?: 'floatUp' | 'attractToTarget' | 'followTarget',
     is3DModel?: boolean,
     targetPosition?: THREE.Vector3,
+    targetMesh?: THREE.Object3D, // Add targetMesh to the type definition
   ) => void;
 }
 
@@ -716,11 +717,12 @@ export const useEnemyLogic = ({
                   if (dogModelRef.current) {
                     addFloatingEffect(
                       dogModelRef.current.position.clone(),
-                      'Bottle',
-                      -1, // Assuming a penalty of -1 Bottle
+                      'penalty', // Change effectType to 'penalty'
+                      -ENEMY_COLLISION_PENALTY_USDT, // Pass the actual penalty amount as negative
                       'followTarget',
-                      true, // Use 3D model for Bottle
-                      dogModelRef.current.position.clone() // Target position is the dog's current position
+                      false, // Use 2D text for penalty, not 3D model
+                      undefined, // targetPosition is not needed for 'followTarget'
+                      dogModelRef.current // Pass the dog's mesh as targetMesh
                     );
                   }
                 }
@@ -745,7 +747,7 @@ export const useEnemyLogic = ({
     cameraRef,
     octreeRef,
     loadEnemiesForChunk,
-    unloadEnemiesFromChunk,
+    unloadEnemiesFromChunk, // Corrected: should be unloadEnemiesFromChunk
     disposeEnemyModelResources, // Add disposeEnemyModelResources to dependencies
     addFloatingEffect, // Add addFloatingEffect to dependencies
   ]);

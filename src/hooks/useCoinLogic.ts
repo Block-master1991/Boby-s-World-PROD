@@ -46,6 +46,7 @@ interface UseCoinLogicProps {
     animationType?: 'floatUp' | 'attractToTarget' | 'followTarget',
     is3DModel?: boolean,
     targetPosition?: THREE.Vector3,
+    targetMesh?: THREE.Object3D, // Add targetMesh to the type definition
   ) => void;
 }
 
@@ -243,6 +244,16 @@ export const useCoinLogic = ({
 
         if (distanceToDog < COLLECTION_THRESHOLD) {
           collectedThisFrame = true;
+          // Add floating effect for normal coin collection
+          addFloatingEffect(
+            coin.position.clone(),
+            'coin',
+            1, // Assuming each coin is +1
+            'followTarget', // Make it follow the dog's head
+            true, // Use 3D model for coin
+            undefined, // targetPosition is not needed for 'followTarget'
+            dogModelRef.current // Pass the dog's mesh as targetMesh
+          );
         } else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS) {
           // If magnet is active, trigger attraction animation
           addFloatingEffect(

@@ -16,6 +16,7 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 
 import { useToast } from '@/hooks/use-toast';
 import { storeItems, type StoreItemDefinition } from '@/lib/items'; // Assuming '@/lib/items' defines store items
+import { ENEMY_COLLISION_PENALTY_USDT } from '@/lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 
 // Game Constants
@@ -26,7 +27,6 @@ const SPEED_BOOST_DURATION = 30;
 const SHIELD_DURATION = 30;
 const COIN_MAGNET_DURATION = 30;
 const COIN_MAGNET_RADIUS = 8;
-const ENEMY_COLLISION_PENALTY_USDT = 0.001;
 const COIN_COUNT_FOR_GAME_LOGIC = 1000;
 
 // Define types for optimistic updates
@@ -898,8 +898,6 @@ const GameUI: React.FC<GameUIProps> = ({
             toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet to apply penalties.', variant: 'destructive' });
             return;
         }
-
-        toast({ title: 'Ouch!', description: `Lost ${ENEMY_COLLISION_PENALTY_USDT.toFixed(4)} USDT from enemy collision!`, variant: 'destructive' });
 
         const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
         setOptimisticUpdates(prev => [...prev, {
