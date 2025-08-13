@@ -107,7 +107,7 @@ class FloatingEffect {
       loader.load(assetPath, (gltf) => {
         this.iconMesh = gltf.scene;
         this.iconMesh.scale.set(1, 1, 1); // Increased scale for visibility
-        this.iconMesh.position.set(0, 0.2, 0); // Adjust position relative to text
+        this.iconMesh.position.set(0.5, 0, 0); // Position to the right of the text
         this.mesh.add(this.iconMesh);
 
         // Make the coin model self-illuminated
@@ -117,8 +117,9 @@ class FloatingEffect {
             if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
               // Copy the material's base color to its emissive property
               material.emissive.copy(material.color);
-              material.emissiveIntensity = 1; // Adjust intensity as needed
+              material.emissiveIntensity = 0.5; // Adjust intensity as needed
               material.needsUpdate = true;
+              material.metalness = 1.0; // Set metalness to 1 for a metallic look
             }
           }
         });
@@ -128,7 +129,7 @@ class FloatingEffect {
       textureLoader.load(assetPath, (texture) => {
         const iconMaterial = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: this.opacity, side: THREE.DoubleSide });
         this.iconMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.5, 0.5), iconMaterial);
-        this.iconMesh.position.set(0, 0.2, 0); // Adjust position relative to text
+        this.iconMesh.position.set(0.2, 0, 0); // Position to the right of the text
         this.mesh.add(this.iconMesh);
       });
     }
@@ -142,6 +143,7 @@ class FloatingEffect {
         new THREE.PlaneGeometry(textTexture.image.width / 200, textTexture.image.height / 200),
         textMaterial
       );
+      this.textMesh.position.set(-0.2, 0, 0); // Position to the left of the coin
       this.mesh.add(this.textMesh);
     }
   }
