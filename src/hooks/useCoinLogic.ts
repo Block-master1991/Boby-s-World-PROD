@@ -248,7 +248,7 @@ export const useCoinLogic = ({
           addFloatingEffect(
             coin.position.clone(),
             'coin',
-            1, // Assuming each coin is +1
+            0.001, // Use the actual coin value
             'followTarget', // Make it follow the dog's head
             true, // Use 3D model for coin
             undefined, // targetPosition is not needed for 'followTarget'
@@ -259,7 +259,7 @@ export const useCoinLogic = ({
           addFloatingEffect(
             coin.position.clone(),
             'coin',
-            1, // Assuming each coin is +1
+            0.001, // Use the actual coin value
             'attractToTarget',
             true, // Use 3D model for coin
             dogPosition.clone() // Target position is the dog's current position

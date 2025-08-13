@@ -30,6 +30,7 @@ class FloatingEffect {
   private targetPosition: THREE.Vector3 | undefined;
   private is3DModel: boolean;
   private value: number;
+  // Removed debugLight property as it's no longer needed for self-illumination
 
   constructor(options: FloatingEffectOptions) {
     this.id = options.id;
@@ -105,9 +106,22 @@ class FloatingEffect {
       const loader = new GLTFLoader();
       loader.load(assetPath, (gltf) => {
         this.iconMesh = gltf.scene;
-        this.iconMesh.scale.set(0.1, 0.1, 0.1); // Adjust scale as needed
+        this.iconMesh.scale.set(1, 1, 1); // Increased scale for visibility
         this.iconMesh.position.set(0, 0.2, 0); // Adjust position relative to text
         this.mesh.add(this.iconMesh);
+
+        // Make the coin model self-illuminated
+        this.iconMesh.traverse((object) => {
+          if (object instanceof THREE.Mesh) {
+            const material = object.material;
+            if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
+              // Copy the material's base color to its emissive property
+              material.emissive.copy(material.color);
+              material.emissiveIntensity = 1; // Adjust intensity as needed
+              material.needsUpdate = true;
+            }
+          }
+        });
       });
     } else if (assetPath) {
       const textureLoader = new THREE.TextureLoader();
@@ -119,7 +133,8 @@ class FloatingEffect {
       });
     }
 
-    const text = value > 0 ? `+${value}` : `${value}`;
+    const formattedValue = value.toFixed(3); // Format to 3 decimal places
+    const text = value > 0 ? `+${formattedValue}` : `${formattedValue}`;
     const textTexture = this.createTextTexture(text, value);
     if (textTexture) {
       const textMaterial = new THREE.MeshBasicMaterial({ map: textTexture, transparent: true, opacity: this.opacity, side: THREE.DoubleSide });
@@ -145,9 +160,17 @@ class FloatingEffect {
       } else if (this.animationType === 'attractToTarget' && this.targetPosition) {
         this.mesh.position.lerp(this.targetPosition, 0.05); // Smoothly move towards target
       } else if (this.animationType === 'followTarget' && this.targetMesh) {
-        // Position relative to the target mesh (e.g., above the dog's head)
+        // Position the coin effect above the dog's head
         const Y_OFFSET = 1.5; // Adjust as needed
         this.mesh.position.copy(this.targetMesh.position).add(new THREE.Vector3(0, Y_OFFSET, 0));
+
+        // Position the light behind the dog, pointing towards the coin
+        const dogForward = new THREE.Vector3();
+        this.targetMesh.getWorldDirection(dogForward); // Get the dog's forward direction
+        dogForward.negate(); // Reverse to get the direction behind the dog
+        dogForward.multiplyScalar(1.0); // Distance behind the dog
+
+        // Removed debugLight positioning as it's no longer needed
       }
 
       if (this.iconMesh) {
