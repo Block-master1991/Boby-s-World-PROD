@@ -20,7 +20,8 @@ export const setGlobalTriggerSessionRefresh = (func: () => Promise<boolean>) => 
  * It relies on a globally set triggerSessionRefresh function from AuthContext.
  */
 export const apiFetch: FetchFunction = async (input, init) => {
-  const MAX_RETRIES = 1; // Only one retry after token refresh
+  const MAX_RETRIES = 2; // Allow up to 2 retries for 503 errors
+  const RETRY_DELAY_MS = 1000; // 1 second delay before retrying
   let retries = 0;
 
   while (retries <= MAX_RETRIES) {
@@ -33,29 +34,52 @@ export const apiFetch: FetchFunction = async (input, init) => {
           const refreshSuccess = await globalTriggerSessionRefresh();
           if (refreshSuccess) {
             console.log('[apiFetch] Session refreshed successfully. Retrying original request.');
-            retries++;
+            retries++; // Increment retries for the 401 retry attempt
             // If refresh was successful, retry the request.
             // We need to clone the request if it's a Request object, as it can only be consumed once.
             const retryInput = input instanceof Request ? input.clone() : input;
             return await fetchWithCsrf(retryInput, init);
           } else {
             console.error('[apiFetch] Session refresh failed. Not retrying.');
-            // If refresh failed, return the original 401 response
-            return response;
+            return response; // If refresh failed, return the original 401 response
           }
         } else {
           console.error('[apiFetch] globalTriggerSessionRefresh not set. Cannot refresh session.');
           return response; // Return original 401 if no refresh mechanism is available
         }
+      } else if (response.status >= 500 && response.status < 600) {
+        console.warn(`[apiFetch] Received ${response.status} (Server Error). Retrying...`);
+        retries++;
+        if (retries <= MAX_RETRIES) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          // Clone the request for retry
+          const retryInput = input instanceof Request ? input.clone() : input;
+          continue; // Continue to the next iteration of the loop to retry
+        } else {
+          console.error(`[apiFetch] Max retries exceeded for ${response.status} error.`);
+          return response; // Return the last 5xx response if max retries exceeded
+        }
       }
-      return response; // Return response if not 401 or if 401 after retry
+
+      // Check if the response is JSON before parsing
+      const contentType = response.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        return response; // Return response if it's JSON and not a 401/5xx error
+      } else {
+        // If not JSON, read as text and throw a custom error
+        const text = await response.text();
+        console.error(`[apiFetch] Non-JSON response received from ${input}:`, text);
+        const error = new Error(`Non-JSON response or unexpected content type: ${contentType || 'none'}. Status: ${response.status}. Response body: ${text.substring(0, 200)}...`);
+        (error as any).response = response; // Attach the original response for more context
+        throw error;
+      }
     } catch (error) {
       console.error('[apiFetch] Error during fetch:', error);
-      throw error; // Re-throw other errors
+      throw error; // Re-throw other errors (e.g., network errors)
     }
   }
-  // Should ideally not reach here if MAX_RETRIES is 1 and logic is sound
-  throw new Error('apiFetch: Max retries exceeded or unexpected error.');
+  // This part should ideally not be reached if MAX_RETRIES is handled correctly within the loop
+  throw new Error('apiFetch: Unexpected error or max retries exceeded without a final response.');
 };
 
 /**

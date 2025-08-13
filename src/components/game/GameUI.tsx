@@ -348,7 +348,20 @@ const GameUI: React.FC<GameUIProps> = ({
                 body: JSON.stringify({ amount: USDT_PER_COIN }),
                 signal: signal
             });
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error("Failed to parse JSON response:", jsonError);
+                // If JSON parsing fails, it means the response was not valid JSON.
+                // The apiFetch utility should ideally catch this and throw a specific error.
+                // For now, we'll treat it as a generic backend error.
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                toast({ title: 'Sync Error', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
+                return;
+            }
 
             if (response.ok) {
                 // On success, re-fetch data to sync, then remove the optimistic update
@@ -360,13 +373,19 @@ const GameUI: React.FC<GameUIProps> = ({
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
                 console.error("Backend error adding coin:", data.error || 'Failed to add coin.'); // Log error instead of throwing
+                toast({ title: 'Sync Error', description: data.error || 'Failed to add coin to your balance.', variant: 'destructive' });
             }
         } catch (error: any) {
             console.error("Network or unexpected error adding coin to backend:", error);
             let errorMessage = `Could not update your total USDT balance: ${error.message || String(error)}`;
             if (error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            } else if (error.message && error.message.includes('Non-JSON response')) {
+                errorMessage = 'Server returned an unexpected response format. Please try again later.';
+            } else if (error.message && error.message.includes('Failed to fetch')) {
+                errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
             }
+            
             if ((error as any).name === 'AbortError') {
                 console.log('[GameUI] handleCoinCollected aborted.');
             } else {
@@ -630,7 +649,18 @@ const GameUI: React.FC<GameUIProps> = ({
                 body: JSON.stringify({ itemId: itemIdToConsume, amount: amountToUse }),
                 signal: signal
             });
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error("Failed to parse JSON response for useItem:", jsonError);
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                if (rollbackEffect) rollbackEffect();
+                toast({ title: 'Failed to Use Item', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
+                return;
+            }
 
             if (response.ok) {
                 //toast({ title: 'Item Used!', description: `${amountToUse} ${itemDefinition.name}(s) consumed.`, variant: 'default' });
@@ -643,16 +673,22 @@ const GameUI: React.FC<GameUIProps> = ({
                 ));
                 if (rollbackEffect) rollbackEffect(); // Call rollback effect
                 console.error("Backend error using item:", data.error || `Failed to use ${itemDefinition.name}.`); // Log error instead of throwing
+                toast({ title: 'Failed to Use Item', description: data.error || `Failed to use ${itemDefinition.name}.`, variant: 'destructive' });
             }
         } catch (error: any) {
             console.error("Network or unexpected error using item via backend:", error);
             let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error.message || String(error)}`;
+            if (error.message && error.message.includes('CSRF token missing')) {
+                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+            } else if (error.message && error.message.includes('Non-JSON response')) {
+                errorMessage = 'Server returned an unexpected response format. Please try again later.';
+            } else if (error.message && error.message.includes('Failed to fetch')) {
+                errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
+            }
+            
             if ((error as any).name === 'AbortError') {
                 console.log('[GameUI] handleUseConsumableItem aborted.');
             } else {
-                if (error.message && error.message.includes('CSRF token missing')) {
-                    errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-                }
                 toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
@@ -694,7 +730,17 @@ const GameUI: React.FC<GameUIProps> = ({
                 body: JSON.stringify({ amount: MIN_WITHDRAWAL_USDT }),
                 signal: signal
             });
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error("Failed to parse JSON response for withdrawUSDT:", jsonError);
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                toast({ title: 'Withdrawal Error', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
+                return;
+            }
 
             if (response.ok) {
                 await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
@@ -705,6 +751,7 @@ const GameUI: React.FC<GameUIProps> = ({
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
                 console.error("Backend error withdrawing USDT:", data.error || 'Withdrawal failed.'); // Log error instead of throwing
+                toast({ title: "Withdrawal Error", description: data.error || 'Withdrawal failed.', variant: "destructive" });
             }
         } catch (error: any) {
             console.error("Network or unexpected error withdrawing USDT via backend:", error);
@@ -714,6 +761,10 @@ const GameUI: React.FC<GameUIProps> = ({
             } else {
                 if (error.message && error.message.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                } else if (error.message && error.message.includes('Non-JSON response')) {
+                    errorMessage = 'Server returned an unexpected response format. Please try again later.';
+                } else if (error.message && error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
                 }
                 toast({ title: "Withdrawal Error", description: errorMessage, variant: "destructive" });
                 setOptimisticUpdates(prev => prev.map(update =>
@@ -788,7 +839,20 @@ const GameUI: React.FC<GameUIProps> = ({
                     },
                     signal: signal
                 });
-                const data = await response.json();
+                let data;
+                try {
+                    data = await response.json();
+                } catch (jsonError) {
+                    console.error("Failed to parse JSON response for consumeProtectionBottle:", jsonError);
+                    setOptimisticUpdates(prev => prev.map(update =>
+                        update.id === updateId ? { ...update, status: 'failed' } : update
+                    ));
+                    toast({ title: 'Failed to Use Bottle', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
+                    resolve(false);
+                    BottleConsumptionQueueRef.current.shift(); // Remove the processed item from queue
+                    isProcessingBottleQueueRef.current = false; // Ensure queue processing stops if an unreadable response breaks the flow
+                    return;
+                }
 
                 if (response.ok) {
                     await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
@@ -808,9 +872,13 @@ const GameUI: React.FC<GameUIProps> = ({
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
                 console.error("Network or unexpected error consuming protection Bottle via backend:", error);
-                let errorMessage = `Could not consume Protection Bottle. Network error: ${error.message || String(error)}`;
+                let errorMessage = `Could not consume Protection Bottle. Error: ${error.message || String(error)}`;
                 if (error.message && errorMessage.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                } else if (error.message && error.message.includes('Non-JSON response')) {
+                    errorMessage = 'Server returned an unexpected response format. Please try again later.';
+                } else if (error.message && error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
                 }
                 toast({ title: 'Failed to Use Bottle', description: errorMessage, variant: 'destructive' });
                 resolve(false); // Indicate failure
@@ -854,7 +922,17 @@ const GameUI: React.FC<GameUIProps> = ({
                 body: JSON.stringify({ amount: ENEMY_COLLISION_PENALTY_USDT }),
                 signal: signal
             });
-            const data = await response.json();
+            let data;
+            try {
+                data = await response.json();
+            } catch (jsonError) {
+                console.error("Failed to parse JSON response for applyPenalty:", jsonError);
+                setOptimisticUpdates(prev => prev.map(update =>
+                    update.id === updateId ? { ...update, status: 'failed' } : update
+                ));
+                toast({ title: 'Penalty Error', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
+                return;
+            }
 
             if (response.ok) {
                 await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
@@ -864,6 +942,7 @@ const GameUI: React.FC<GameUIProps> = ({
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
                 console.error("Backend error applying enemy collision penalty:", data.error || 'Failed to apply penalty.'); // Log error instead of throwing
+                toast({ title: 'Penalty Error', description: data.error || 'Failed to apply penalty.', variant: 'destructive' });
             }
 
         } catch (error: any) {
@@ -874,6 +953,10 @@ const GameUI: React.FC<GameUIProps> = ({
             } else {
                 if (error.message && errorMessage.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
+                } else if (error.message && error.message.includes('Non-JSON response')) {
+                    errorMessage = 'Server returned an unexpected response format. Please try again later.';
+                } else if (error.message && error.message.includes('Failed to fetch')) {
+                    errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
                 }
                 toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
                 setOptimisticUpdates(prev => prev.map(update =>
