@@ -71,7 +71,7 @@ const GameContainer: React.FC = () => {
                 }
                 // إزالة إعادة تعيين captchaVerified عند فشل الجلسة إذا كان المستخدم قد قام بالتحقق بالفعل
             } catch (error) {
-                // Error handling
+                console.error("[GameContainer] Error checking session:", error);
             } finally {
                 setIsCheckingSession(false);
             }
