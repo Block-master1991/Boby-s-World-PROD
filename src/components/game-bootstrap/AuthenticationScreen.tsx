@@ -52,9 +52,9 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-        <Image src="/Boby-logo.png" alt="Boby's World Loading" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
+        <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
-        <h1 className="text-4xl font-bold mb-2 font-headline">Boby's World</h1>
+        <h1 className="text-4xl font-bold mb-2 font-headline">Boby World</h1>
         <p className="text-xl text-muted-foreground">
           Processing authentication...
         </p>
@@ -65,8 +65,8 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
-      <Image src="/Boby-logo.png" alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
-      <h1 className="text-4xl font-bold mb-4 font-headline">Welcome to Boby's World!</h1>
+      <Image src="/Boby-logo.png" alt="Boby World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
+      <h1 className="text-4xl font-bold mb-4 font-headline">Welcome to Boby World!</h1>
 
       {/* State 1: Wallet not connected */}
       {!wallet.connected && (
@@ -139,7 +139,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
             You are logged in as <span className="font-semibold text-primary">{user?.publicKey.substring(0, 4)}...{user?.publicKey.substring(user?.publicKey.length - 4)}</span>.
           </p>
           <p className="text-lg text-muted-foreground mb-8">
-            Ready to enter Boby's World!
+            Ready to enter Boby World!
           </p>
           {/* No explicit button to "enter game" here, as GameContainer handles the transition */}
         </>

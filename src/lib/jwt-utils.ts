@@ -23,6 +23,16 @@ interface CreateTokenParams {
   ipHash?: string;
 }
 
+interface CookieOptions {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'none' | 'lax' | 'strict';
+  maxAge: number;
+  path: string;
+  domain?: string;
+}
+
+
 export class JWTManager {
 
   private static verifyFingerprint(
@@ -124,11 +134,12 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
       if (!this.verifyFingerprint(decoded, userAgent, ip)) return null;
 
       return decoded;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const jti = decodedForLog?.jti || 'unknown_jti_on_error';
-      console.error(`[JWTManager] Access token verification failed. JTI: ${jti}`, error.message);
-      if (error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) 
-        {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[JWTManager] Access token verification failed. JTI: ${jti}`, errorMessage, errorStack);
+      if (error instanceof Error && error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) {
         await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, 'expired');
       }
       return null;
@@ -164,11 +175,12 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
 
       console.log(`[JWTManager] Refresh token ${decoded.jti} verified successfully (not blacklisted, correct type, not expired).`);
       return decoded;
-    } catch (error: any) {
+    } catch (error: unknown) {
       const jti = decodedForLog?.jti || 'unknown_jti_on_error';
-      console.error(`[JWTManager] Refresh token verification failed. JTI: ${jti}`, error.message);
-      if (error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) 
-        {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[JWTManager] Refresh token verification failed. JTI: ${jti}`, errorMessage, errorStack);
+      if (error instanceof Error && error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) {
         await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, 'expired');
       }
       return null;
@@ -187,9 +199,11 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
              if(decodedForLog?.type) { // Only try to verify if we have a hint of the type
                 verifiedDecoded = jwt.verify(token, secretToUse ) as JWTPayload;
              }
-        } catch (e) { 
-            console.warn('[JWTManager] Verification attempt during revocation also failed:', (e as Error).message);
-        }
+       } catch (e: unknown) { 
+            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
+            console.warn('[JWTManager] Verification attempt during revocation also failed:', errorMessage);
+       }
+
 
         if (verifiedDecoded && verifiedDecoded.jti && verifiedDecoded.exp) {
              console.log(`[JWTManager] Token for revocation was verifiable (JTI: ${verifiedDecoded.jti}, Type: ${verifiedDecoded.type}). Adding to blacklist.`);
@@ -203,10 +217,13 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
       console.log(`[JWTManager] Revoking token JTI: ${decodedForLog.jti}, Type: ${decodedForLog.type}, Reason: ${reason}, Original Exp: ${new Date(decodedForLog.exp * 1000).toISOString()}`);
       await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, reason); 
       return true;
-    } catch (error: any) { 
-      console.error('[JWTManager] Unexpected error during token revocation logic:', error.message, error.stack);
-      return false;
+      } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error('[JWTManager] Unexpected error during token revocation logic:', errorMessage, errorStack);
+        return false;
     }
+
   }
 
   static async refreshAccessToken(refreshTokenValue: string, userAgent: string, ip: string): Promise<{ accessToken: string; newRefreshToken: string } | null> {
@@ -284,7 +301,7 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
       }
     }
 
-    const options: any = {
+    const options: CookieOptions = {
       httpOnly: true,
       secure: secureCookie,
       sameSite: sameSiteValue,

@@ -3,8 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { PackageSearch, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
+import { PackageSearch } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
@@ -33,10 +32,6 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     protectionBottleCount,
     coinMagnetTreatCount,
 }) => {
-    const { toast } = useToast();
-    const [isLoading, setIsLoading] = useState(false); // Inventory counts are now passed as props, no need to fetch here
-    const [error, setError] = useState<string | null>(null);
-    // New state to manage quantity to use for each item
     const [quantitiesToUse, setQuantitiesToUse] = useState<Record<string, number>>({});
 
     // Aggregate inventory items based on passed counts
@@ -119,26 +114,14 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
             </SheetHeader>
             <ScrollArea className="flex-grow">
                 <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {isLoading && (
-                        <div className="flex justify-center items-center py-8 sm:col-span-2">
-                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                            <p className="ml-2 rtl:mr-2 text-muted-foreground">Loading inventory...</p>
-                        </div>
-                    )}
-                    {error && (
-                        <div className="text-center py-8 sm:col-span-2 text-red-500">
-                            <p className="text-lg mb-4">Error: {error}</p>
-                            <p className="text-sm">Please ensure you are logged in.</p>
-                        </div>
-                    )}
-                    {!isLoading && !error && aggregatedInventory.length === 0 && (
+                    {aggregatedInventory.length === 0 && (
                         <div className="text-center py-8 sm:col-span-2">
                             <PackageSearch className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
                             <p className="text-muted-foreground">Your inventory is currently empty.</p>
                             <p className="text-xs text-muted-foreground mt-1">Visit the store to buy some items!</p>
                         </div>
                     )}
-                    {!isLoading && !error && aggregatedInventory.length > 0 && (
+                    {aggregatedInventory.length > 0 && (
                         aggregatedInventory.map((itemGroup) => {
                             const currentCount = getItemCount(itemGroup.definition.id);
                             const isConsumable = ['1', '2', '3', '4'].includes(itemGroup.definition.id); // Check if item is consumable

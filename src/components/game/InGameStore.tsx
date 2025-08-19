@@ -74,7 +74,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     if (errorData.statusCode === 429 || response.status === 429) {
                         errorMsg = 'Price API rate limit. Try later.';
                     }
-                } catch (e) {
+                } catch {
                     if (response.status === 429) {
                          errorMsg = 'Price API rate limit. Try later.';
                     }
@@ -87,14 +87,14 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             } else {
                 throw new Error('Invalid price data received for store.');
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error("[InGameStore] Error fetching Boby/USD price for store:", error);
-            setBobyPriceError(error.message || 'Could not load Boby price for store.');
+            setBobyPriceError(error instanceof Error ? error.message : 'Could not load Boby price for store.');
             setBobyUsdPrice(null);
         } finally {
             setIsBobyPriceLoading(false);
         }
-    }, []);
+    }, [apiFetch]);
 
     useEffect(() => {
         fetchBobyUsdPrice(true); // Initial fetch
@@ -166,7 +166,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             const transaction = new Transaction();
             try {
                 await getAccount(connection, toTokenAccountAddress);
-            } catch (error: any) {
+            } catch (error) {
                  if (error instanceof TokenAccountNotFoundError) {
                     transaction.add(createAssociatedTokenAccountInstruction(adapterPublicKey, toTokenAccountAddress, treasuryPublicKey, bobyMintPublicKey));
                 } else { 
@@ -201,9 +201,9 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 throw new Error(inventoryUpdateData.error || 'Failed to update inventory after purchase.');
             }
 
-        } catch (error: any) { 
+        } catch (error) { 
             console.error('Purchase failed:', error);
-            toast({ title: 'Purchase Failed', description: `${error.message || 'Could not complete purchase.'}`, variant: 'destructive' });
+            toast({ title: 'Purchase Failed', description: `${error instanceof Error ? error.message : 'Could not complete purchase.'}`, variant: 'destructive' });
         } finally {
             setIsLoading(null);
         }

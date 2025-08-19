@@ -30,7 +30,7 @@ const Header: React.FC = () => {
             <div className="container mx-auto flex justify-between items-center">
                 <div className="flex items-center gap-2">
                     <Dog className="h-8 w-8" />
-                    <h1 className="text-2xl font-headline font-bold">Boby's World</h1>
+                    <h1 className="text-2xl font-headline font-bold">Boby World</h1>
                 </div>
                 <div className="flex items-center gap-4">
                     {isClient && (

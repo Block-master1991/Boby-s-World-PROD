@@ -25,6 +25,8 @@ export const useDogParticles = ({ sceneRef, dogMeshRef, dogSpeed, isRunning }: U
 
   useEffect(() => {
     if (!sceneRef.current) return;
+    
+    const scene = sceneRef.current;
 
     particlesGeometryRef.current = new THREE.BufferGeometry();
     particlesMaterialRef.current = new THREE.PointsMaterial({
@@ -50,7 +52,7 @@ export const useDogParticles = ({ sceneRef, dogMeshRef, dogSpeed, isRunning }: U
 
     return () => {
       if (particleSystemRef.current) {
-        sceneRef.current?.remove(particleSystemRef.current);
+        scene.remove(particleSystemRef.current);
         particleSystemRef.current.geometry.dispose();
         (particleSystemRef.current.material as THREE.Material).dispose();
       }

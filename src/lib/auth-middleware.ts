@@ -130,8 +130,10 @@ export function withAuth(handler: (req: AuthenticatedRequest) => Promise<NextRes
       (request as AuthenticatedRequest).user = payload;
       return handler(request as AuthenticatedRequest);
 
-    } catch (error: any) {
-      console.error('[AuthMiddleware withAuth] Error in middleware:', error.message, error.stack);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[AuthMiddleware withAuth] Error in middleware:', errorMessage, errorStack);
       return createAuthErrorResponse('Authentication processing error.', 'AUTH_MIDDLEWARE_ERROR', 500);
     }
   };
@@ -149,8 +151,9 @@ export async function extractUserFromToken(request: NextRequest): Promise<JWTPay
     const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
     console.log('[extractUserFromToken] Verified payload:', payload);
     return payload;
-  } catch (error: any) {
-    console.error('[extractUserFromToken] Error during extraction:', error.message);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    console.error('[extractUserFromToken] Error during extraction:', errorMessage);
     return null;
   }
 }
@@ -185,8 +188,10 @@ export async function validateTokenFromRequest(request: Request): Promise<JWTPay
     }
     return payload;
 
-  } catch (error: any) {
-    console.error('[validateTokenFromRequest] Exception during token validation:', error.message, error.stack);
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error('[validateTokenFromRequest] Exception during token validation:', errorMessage, errorStack);
     return null;
   }
 }

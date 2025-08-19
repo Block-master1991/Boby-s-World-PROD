@@ -27,8 +27,10 @@ async function generateNonce(publicKey: string): Promise<string | null> {
     try {
       await db.collection('_internal_check').doc('connectivity_generate_nonce').get();
       console.log("[AuthNonces] Firestore connectivity check successful in generateNonce.");
-    } catch (diagError: any) {
-      console.error("[AuthNonces] Firestore connectivity check FAILED in generateNonce:", diagError.message, diagError.stack);
+    } catch (diagError) {
+      const errorMessage = diagError instanceof Error ? diagError.message : 'An unknown error occurred';
+      const errorStack = diagError instanceof Error ? diagError.stack : '';
+      console.error("[AuthNonces] Firestore connectivity check FAILED in generateNonce:", errorMessage, errorStack);
       return null;
     }
 
@@ -45,8 +47,10 @@ async function generateNonce(publicKey: string): Promise<string | null> {
     });
     console.log(`[AuthNonces] Successfully generated and stored nonce ${newNonce} for publicKey ${publicKey}. Expiry: ${new Date(expiry).toISOString()}`);
     return newNonce;
-  } catch (error: any) {
-    console.error(`[AuthNonces] Error in generateNonce for publicKey ${publicKey}:`, error.message, error.stack);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error(`[AuthNonces] Error in generateNonce for publicKey ${publicKey}:`, errorMessage, errorStack);
     return null;
   }
 }
@@ -61,8 +65,10 @@ async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Pr
     try {
       await db.collection('_internal_check').doc('connectivity_verify_nonce').get();
       console.log("[AuthNonces] Firestore connectivity check successful in verifyAndConsumeNonce.");
-    } catch (diagError: any) {
-      console.error("[AuthNonces] Firestore connectivity check FAILED in verifyAndConsumeNonce:", diagError.message, diagError.stack);
+    } catch (diagError) {
+      const errorMessage = diagError instanceof Error ? diagError.message : 'An unknown error occurred';
+      const errorStack = diagError instanceof Error ? diagError.stack : '';
+      console.error("[AuthNonces] Firestore connectivity check FAILED in verifyAndConsumeNonce:", errorMessage, errorStack);
       return false;
     }
 
@@ -110,8 +116,10 @@ async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Pr
     console.log(`[AuthNonces] Transaction result for ${publicKey}: Success=${result.success}, Reason=${result.reason}`);
     return result.success;
 
-  } catch (error: any) {
-    console.error(`[AuthNonces] Transaction error for publicKey ${publicKey}:`, error.message, error.stack);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error(`[AuthNonces] Transaction error for publicKey ${publicKey}:`, errorMessage, errorStack);
     return false;
   }
 }
@@ -126,8 +134,10 @@ export async function GET(request: Request) {
         try {
             await dbForCheck.collection('_internal_check').doc('init_get_login').get();
             console.log("[GET /api/auth/login] Firestore connectivity check successful after global init.");
-        } catch (diagError: any) {
-            console.error("[GET /api/auth/login] Initial Firestore connectivity check FAILED:", diagError.message, diagError.stack);
+        } catch (diagError) {
+            const errorMessage = diagError instanceof Error ? diagError.message : 'An unknown error occurred';
+            const errorStack = diagError instanceof Error ? diagError.stack : '';
+            console.error("[GET /api/auth/login] Initial Firestore connectivity check FAILED:", errorMessage, errorStack);
             return NextResponse.json({ error: 'Server configuration error with database.', details: 'Connectivity check failed (GET Login).' }, { status: 500 });
         }
 
@@ -142,8 +152,9 @@ export async function GET(request: Request) {
 
         try {
             new PublicKey(publicKey);
-        } catch (pkError: any) {
-            console.warn(`[GET /api/auth/login] Invalid public key format: ${publicKey}`, pkError.message);
+        } catch (pkError) {
+            const errorMessage = pkError instanceof Error ? pkError.message : 'An unknown error occurred';
+            console.warn(`[GET /api/auth/login] Invalid public key format: ${publicKey}`, errorMessage);
             return NextResponse.json({ error: 'Invalid public key format' }, { status: 400 });
         }
         
@@ -156,13 +167,14 @@ export async function GET(request: Request) {
         console.log(`[GET /api/auth/login] Nonce generated successfully for ${publicKey}: ${nonce}.`);
         return NextResponse.json({ nonce });
 
-    } catch (error: any) {
+    } catch (error) {
         console.error('[GET /api/auth/login] Outer error handler:', error);
         let responseError = 'Failed to process nonce request due to server error.';
         let responseDetails = 'Internal server error';
         if (process.env.NODE_ENV === 'development') {
-            responseError = typeof error.message === 'string' ? error.message : responseError;
-            responseDetails = error.stack || String(error);
+            responseError = error instanceof Error ? error.message : responseError;
+            responseDetails = error instanceof Error ? (error.stack || 'No stack trace available') : String(error);
+
         }
         return NextResponse.json({ error: responseError, details: responseDetails }, { status: 500 });
     }
@@ -186,8 +198,9 @@ export async function POST(request: Request) {
     // Firestore connectivity check
     try {
       await db.collection('_internal_check').doc('init_post_login_jwt').get();
-    } catch (diagError: any) {
-      return NextResponse.json({ error: 'Server configuration error with database.', details: 'Connectivity check failed (POST Login JWT).' }, { status: 500 });
+    } catch (diagError) {
+      const errorMessage = diagError instanceof Error ? diagError.message : 'An unknown error occurred';
+      return NextResponse.json({ error: 'Server configuration error with database.', details: `Connectivity check failed (POST Login JWT): ${errorMessage}` }, { status: 500 });
     }
 
     const { publicKey, signature, nonce: clientNonce } = await request.json();
@@ -219,7 +232,7 @@ export async function POST(request: Request) {
 
     // تحقق من التوقيع
     console.log('[LOGIN] Verifying signature...');
-    const messageToVerify = `Sign this message to authenticate with Boby's World.\nNonce: ${clientNonce}`;
+    const messageToVerify = `Sign this message to authenticate with Boby World.\nNonce: ${clientNonce}`;
     const messageBytes = new TextEncoder().encode(messageToVerify);
     const publicKeyBytes = new PublicKey(publicKey).toBytes();
     const signatureBytes = new Uint8Array(Buffer.from(signature, 'hex'));
@@ -248,9 +261,11 @@ export async function POST(request: Request) {
       } else {
         await playerRef.update({ lastLogin: FieldValue.serverTimestamp() });
       }
-    } catch (dbError: any) {
+    } catch (dbError) {
       // لا توقف العملية إذا فشل التحديث
-      console.error('[POST /api/auth/login] JWT FLOW - Error creating/updating player doc:', dbError.message, dbError.stack);
+      const errorMessage = dbError instanceof Error ? dbError.message : 'An unknown error occurred';
+      const errorStack = dbError instanceof Error ? dbError.stack : '';
+      console.error('[POST /api/auth/login] JWT FLOW - Error creating/updating player doc:', errorMessage, errorStack);
     }
 
     // === إصدار JWTs ===
@@ -277,7 +292,7 @@ export async function POST(request: Request) {
       message: 'Signature verified successfully. JWTs issued.',
       publicKey
     });
-    const requestHost = request.headers.get('host') || undefined; // Get the Host header
+    const requestHost = request.headers.get('host') || ''; // Get the Host header
     console.log(`[LOGIN] Request Host: ${requestHost}`); // Add this log
     response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60, requestHost));
     response.cookies.set('refreshToken', refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost));
@@ -298,17 +313,14 @@ export async function POST(request: Request) {
     console.log('[LOGIN] Login process completed successfully');
     return response;
 
-  } catch (error: any) {
+  } catch (error) {
     let responseError = 'Authentication failed (JWT Flow)';
     let responseDetails = 'Internal server error. Check server logs for more details.';
 
     if (process.env.NODE_ENV === 'development') {
-      if (error && typeof error.message === 'string' && error.message.trim() !== '') {
-        responseError = error.message.trim();
-      } else if (typeof error === 'string' && error.trim() !== '') {
-        responseError = error.trim();
-      }
-      responseDetails = error?.stack || String(error);
+        responseError = error instanceof Error ? error.message : String(error);
+        responseDetails = error instanceof Error ? (error.stack || 'No stack trace available') : String(error);
+
     }
 
     return NextResponse.json({

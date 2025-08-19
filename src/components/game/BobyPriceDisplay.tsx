@@ -10,7 +10,7 @@ import { useApiFetch } from '@/utils/api';
 const BobyPriceDisplay: React.FC = () => {
     const [price, setPrice] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
-    const [errorInfo, setErrorInfo] = useState<{ message: string, details?: string, cause?: any, status?: number } | null>(null);
+    const [errorInfo, setErrorInfo] = useState<{ message: string, details?: string, cause?: unknown, status?: number } | null>(null);
     const { apiFetch } = useApiFetch();
 
     const fetchPrice = useCallback(async (isInitialLoad = false) => {
@@ -39,7 +39,7 @@ const BobyPriceDisplay: React.FC = () => {
                         rawErrorDetails = errorData.details || "Too many requests. Please try again later.";
                     }
 
-                } catch (jsonError) {
+                } catch {
                     rawErrorDetails = `${response.statusText || 'Server did not return a valid JSON error response.'}`;
                      if (response.status === 429) {
                         errorFromServer = "Rate limit exceeded with price API.";
@@ -65,14 +65,14 @@ const BobyPriceDisplay: React.FC = () => {
                 setErrorInfo({ message: msg, details: 'API route did not return a valid price number.' });
                 setPrice(null);
             }
-        } catch (e: any) {
+        } catch (e: unknown) {
             console.error("[BobyPriceDisplay] Error fetching/processing Boby token price:", e);
-            setErrorInfo({ message: e.message || 'A client-side error occurred while fetching price.', details: String(e) });
+            setErrorInfo({ message: (e instanceof Error) ? e.message : 'A client-side error occurred while fetching price.', details: String(e) });
             setPrice(null);
         } finally {
             setIsLoading(false);
         }
-    }, []);
+    }, [apiFetch]);
 
     useEffect(() => {
         fetchPrice(true); // Initial load
@@ -85,7 +85,7 @@ const BobyPriceDisplay: React.FC = () => {
     if (errorInfo) {
         if (errorInfo.status === 429) {
             displayErrorMessage = "Rate limit exceeded. Please try again later.";
-        } else if (errorInfo.cause && (errorInfo.cause as any).code === 'ENOTFOUND') {
+        } else if (errorInfo.cause && typeof errorInfo.cause === 'object' && 'code' in errorInfo.cause && errorInfo.cause.code === 'ENOTFOUND') {
             displayErrorMessage = "Network error: Price service unreachable.";
         } else if (errorInfo.status === 404 && (errorInfo.message.includes("Price data unavailable") || (errorInfo.details && errorInfo.details.includes("Price data unavailable")) || errorInfo.message.includes("API"))) {
             displayErrorMessage = "Price data currently unavailable.";

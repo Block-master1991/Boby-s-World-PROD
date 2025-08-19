@@ -45,8 +45,10 @@ export async function POST(request: NextRequest) {
     console.log(`[Refresh CSRF Endpoint] Successfully refreshed CSRF token for session ${sessionId}.`);
     return response;
 
-  } catch (error: any) {
-    console.error('[Refresh CSRF Endpoint] Error refreshing CSRF token:', error.message, error.stack);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error('[Refresh CSRF Endpoint] Error refreshing CSRF token:', errorMessage, errorStack);
     return NextResponse.json({ error: 'Internal server error.' }, { status: 500 });
   }
 }

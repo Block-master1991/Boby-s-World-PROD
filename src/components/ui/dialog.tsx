@@ -42,34 +42,34 @@ const DialogContent = React.forwardRef<
   let hasDescription = false;
   React.Children.forEach(children, child => {
     if (React.isValidElement(child)) {
-      if ((child.type as any).displayName === DialogTitle.displayName) {
-        hasTitle = true;
-      }
-      if ((child.type as any).displayName === DialogDescription.displayName) {
-        hasDescription = true;
-      }
-    }
+          if ((child.type as React.ComponentType).displayName === DialogTitle.displayName) {
+            hasTitle = true;
+          }
+          if ((child.type as React.ComponentType).displayName === DialogDescription.displayName) {
+            hasDescription = true;
+          }
+
+          }
   });
 
   const ariaProps: { 'aria-labelledby'?: string; 'aria-describedby'?: string } = {};
   if (hasTitle) {
-    // If DialogTitle is present, it should ideally have an id, or we assume it's implicitly labelling
+      ariaProps['aria-labelledby'] = titleId;
   } else if (props['aria-label']) {
     // If aria-label is provided, that's sufficient for labelling
   } else {
     // If no explicit label or title, and no DialogTitle, provide a default fallback
-    // This is a basic fallback; ideally, a specific label/title is better.
-    // ariaProps['aria-labelledby'] = titleId; 
+      ariaProps['aria-labelledby'] = titleId; 
   }
 
   if (hasDescription) {
-    // If DialogDescription is present, it should ideally have an id for aria-describedby
+    ariaProps['aria-describedby'] = descriptionId;
   } else if (props['aria-describedby']) {
     // If aria-describedby is already provided, use it
   } else {
     // No explicit description or DialogDescription,
     // if there's no aria-describedby, this is where the warning might come from.
-    // We won't add a default description ID unless there's content for it.
+  ariaProps['aria-describedby'] = descriptionId;
   }
 
 

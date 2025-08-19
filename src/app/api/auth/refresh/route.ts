@@ -107,12 +107,13 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
     
     return response;
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('Token refresh error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     // حذف التوكنات عند الخطأ
     const response = NextResponse.json({
       error: 'Token refresh failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error during token refresh.',
+      details: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error during token refresh.',
       code: 'REFRESH_FAILED_INTERNAL'
     }, { status: 500 });
 

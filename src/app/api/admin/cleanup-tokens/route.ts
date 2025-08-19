@@ -39,8 +39,9 @@ export async function GET(request: NextRequest) {
     const message = `Successfully deleted ${snapshot.size} expired CSRF tokens.`;
     return NextResponse.json({ success: true, message });
 
-  } catch (error: any) {
+  } catch (error) {
     console.error('[Cron Cleanup] Error cleaning up expired tokens:', error);
-    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
   }
 }

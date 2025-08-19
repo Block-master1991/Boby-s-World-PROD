@@ -1,20 +1,21 @@
 import { useCallback, MutableRefObject, useRef } from 'react';
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { Octree } from '@/lib/Octree';
 import { getModel, putModel } from '@/lib/indexedDB';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils';
 import { CHUNK_SIZE } from '@/lib/chunkUtils'; // Import CHUNK_SIZE
+import { GameObject } from '@/types/game';
 
-interface TreeInstance {
+export interface TreeInstance {
   lod: THREE.LOD;
   mixer: THREE.AnimationMixer;
 }
 
 interface UseTreeLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
-  octreeRef: MutableRefObject<Octree | null>;
+  octreeRef: MutableRefObject<Octree<GameObject> | null>;
 }
 
 export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
@@ -72,27 +73,28 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
 
     try {
       // Function to load a model from IndexedDB or network
-      const loadModel = async (path: string, name: string) => {
-        let gltf: any;
-        let modelData: ArrayBuffer | undefined;
-
+      const loadModel = async (path: string, name: string): Promise<GLTF> => {
         console.log(`Attempting to load ${name} from IndexedDB...`);
-        modelData = await getModel(name);
+        const modelData = await getModel(name);
 
         if (modelData) {
           console.log(`${name} loaded from IndexedDB.`);
           const blob = new Blob([modelData], { type: 'model/gltf-binary' });
           const url = URL.createObjectURL(blob);
-          gltf = await new Promise<any>((resolve, reject) => {
-            loader.load(url, resolve, undefined, reject);
-          });
-          URL.revokeObjectURL(url);
+          try {
+            const gltf = await new Promise<GLTF>((resolve, reject) => {
+              loader.load(url, resolve, undefined, reject);
+            });
+            return gltf;
+          } finally {
+            URL.revokeObjectURL(url);
+          }
         } else {
           console.log(`${name} not found in IndexedDB. Loading from network...`);
-          gltf = await new Promise<any>((resolve, reject) => {
+          return new Promise<GLTF>((resolve, reject) => {
             loader.load(
               path,
-              (gltf) => {
+              (gltf: GLTF) => {
                 fetch(path)
                   .then(response => response.arrayBuffer())
                   .then(buffer => putModel(name, buffer))
@@ -112,7 +114,6 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
             );
           });
         }
-        return gltf;
       };
 
       const gltfHigh = await loadModel(modelPaths.high, modelNames.high);
@@ -120,9 +121,7 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
       const gltfLow = await loadModel(modelPaths.low, modelNames.low);
 
       const chunkMinX = chunkX * CHUNK_SIZE;
-      const chunkMaxX = (chunkX + 1) * CHUNK_SIZE;
       const chunkMinZ = chunkZ * CHUNK_SIZE;
-      const chunkMaxZ = (chunkZ + 1) * CHUNK_SIZE;
 
       for (let i = 0; i < numberOfTreesPerChunk; i++) {
         const lod = new THREE.LOD();
@@ -171,7 +170,20 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
         sceneRef.current.add(lod);
 
         if (octreeRef.current) {
-          octreeRef.current.addThreeMesh(lod, lod.name);
+          const treeGameObject: GameObject = {
+            uuid: lod.name,
+            type: 'terrain',
+            position: { x: lod.position.x, y: lod.position.y, z: lod.position.z },
+            rotation: { x: lod.rotation.x, y: lod.rotation.y, z: lod.rotation.z },
+            scale: { x: lod.scale.x, y: lod.scale.y, z: lod.scale.z },
+            visible: true,
+            modelInstance: lod as unknown as THREE.Group,
+          };
+          octreeRef.current.insert({
+            id: treeGameObject.uuid,
+            bounds: new THREE.Box3().setFromObject(lod),
+            data: treeGameObject,
+          });
         }
 
         let mixer: THREE.AnimationMixer | null = null;
@@ -200,7 +212,7 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
       console.error(`Failed to load tree models for chunk [${chunkX}, ${chunkZ}]:`, error);
       return [];
     }
-  }, [sceneRef, octreeRef, disposeModelResources]);
+  }, [sceneRef, octreeRef]);
 
   const removeTreesForChunk = useCallback((treesToRemove: TreeInstance[]) => {
     if (!sceneRef.current || !octreeRef.current) return;
@@ -212,8 +224,11 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
       sceneRef.current!.remove(lod as THREE.Object3D);
 
       // Remove from Octree
-      const treeBounds = new THREE.Box3().setFromObject(lod); // Use LOD for bounds
-      octreeRef.current!.remove({ id: lod.name, bounds: treeBounds, data: lod });
+      octreeRef.current!.remove({
+        id: lod.name,
+        bounds: new THREE.Box3().setFromObject(lod),
+        data: {} as GameObject, // Data is not used for removal, so we can pass a dummy object
+      });
 
       // Dispose mixer
       if (mixer) { // Ensure mixer exists before disposing

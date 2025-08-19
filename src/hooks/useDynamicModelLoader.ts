@@ -6,6 +6,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { useEffect, useRef, useCallback, MutableRefObject } from 'react';
 import { getModel, putModel } from '../lib/indexedDB';
 import { Octree } from '../lib/Octree';
+import { GameObject } from '@/types/game';
 
 // Define a generic interface for objects that need dynamic loading
 export interface DynamicLoadableObject { // Export the interface
@@ -41,7 +42,7 @@ type ModelPool = {
 interface UseDynamicModelLoaderProps {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   sceneRef: MutableRefObject<THREE.Scene | null>;
-  octreeRef: MutableRefObject<Octree | null>;
+  octreeRef: MutableRefObject<Octree<GameObject> | null>;
   objectsToManage: DynamicLoadableObject[]; // Array of objects whose models need to be managed
   // Optional: A callback for when a model is loaded and added to the scene
   onModelLoaded?: (object: DynamicLoadableObject, model: THREE.Group) => void;
@@ -259,7 +260,7 @@ export const useDynamicModelLoader = ({
       octreeRef.current.insert({
         id: `${object.id}`, // Use object's ID directly
         bounds: objectBox,
-        data: object.modelInstance // Store the actual THREE.Group
+        data: object.modelInstance as unknown as GameObject // Store the actual THREE.Group
       });
     }
 
@@ -275,7 +276,7 @@ export const useDynamicModelLoader = ({
         octreeRef.current.remove({
           id: `${object.id}`,
           bounds: objectBox,
-          data: modelToUnload
+          data: modelToUnload as unknown as GameObject // Remove from Octree
         });
       }
       object.mixer?.stopAllAction();
@@ -342,31 +343,31 @@ export const useDynamicModelLoader = ({
   useEffect(() => {
     if (!cameraRef.current || !sceneRef.current) return;
 
-    const camera = cameraRef.current;
-    const frustum = new THREE.Frustum();
-    const viewProjectionMatrix = new THREE.Matrix4();
+    // const camera = cameraRef.current;
+    // const frustum = new THREE.Frustum();
+    // const viewProjectionMatrix = new THREE.Matrix4();
 
-    const updateVisibility = () => {
-      if (!cameraRef.current) return;
-      cameraRef.current.updateMatrixWorld();
-      viewProjectionMatrix.multiplyMatrices(cameraRef.current.projectionMatrix, cameraRef.current.matrixWorldInverse);
-      frustum.setFromProjectionMatrix(viewProjectionMatrix);
+    // const updateVisibility = () => {
+    //   if (!cameraRef.current) return;
+    //   cameraRef.current.updateMatrixWorld();
+    //   viewProjectionMatrix.multiplyMatrices(cameraRef.current.projectionMatrix, cameraRef.current.matrixWorldInverse);
+    //   frustum.setFromProjectionMatrix(viewProjectionMatrix);
 
-      objectsToManage.forEach((object) => {
-        // Use logical position for frustum check if model not yet instantiated
-        const checkPosition = object.modelInstance ? object.modelInstance.position : object.logicalPosition;
-        const boundingSphere = new THREE.Sphere(checkPosition, 1); // Approximate bounding sphere
+    //   objectsToManage.forEach((object) => {
+    //     // Use logical position for frustum check if model not yet instantiated
+    //     const checkPosition = object.modelInstance ? object.modelInstance.position : object.logicalPosition;
+    //     const boundingSphere = new THREE.Sphere(checkPosition, 1); // Approximate bounding sphere
 
-        const isInFrustum = frustum.intersectsSphere(boundingSphere);
+    //     const isInFrustum = frustum.intersectsSphere(boundingSphere);
 
-        if (isInFrustum && !object.isModelInstantiated) {
-          loadAndInstantiateModel(object);
-        } else if (!isInFrustum && object.isModelInstantiated) {
-          // Optional: Unload models that move out of view
-          unloadModel(object);
-        }
-      });
-    };
+    //     if (isInFrustum && !object.isModelInstantiated) {
+    //       loadAndInstantiateModel(object);
+    //     } else if (!isInFrustum && object.isModelInstantiated) {
+    //       // Optional: Unload models that move out of view
+    //       unloadModel(object);
+    //     }
+    //   });
+    // };
 
     // This needs to be called frequently, e.g., in the main animation loop
     // We'll expose a function for the parent component (GameCanvas or useEnemyLogic) to call this.

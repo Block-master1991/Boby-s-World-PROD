@@ -48,9 +48,43 @@ export const useLODSwitching = () => {
     rotation: THREE.Euler,
     scale: THREE.Vector3
   ) => {
-    // This function would be called to add new objects to the world.
-    // It would determine the initial LOD and add it to the correct InstancedMesh.
-    // For this refactor, we'll focus on the switching logic.
+    const modelMeshes = lodMeshesRef.current.get(modelIdentifier);
+    if (!modelMeshes || !modelMeshes.low) {
+      console.error(`LOD meshes for ${modelIdentifier} not initialized.`);
+      return;
+    }
+
+    // Create the transformation matrix for the new instance
+    const transform = new THREE.Matrix4();
+    transform.compose(position, new THREE.Quaternion().setFromEuler(rotation), scale);
+
+    // For simplicity, we'll add new instances to the 'low' LOD by default.
+    // A more robust implementation would calculate distance to camera here.
+    const initialLOD = 'low';
+    const targetMesh = modelMeshes[initialLOD];
+
+    // A real implementation needs a robust way to find the next free instance index.
+    // Here, we'll just assume the count of the mesh is the next available index.
+    const newInstanceIndex = targetMesh.count;
+    if (newInstanceIndex >= targetMesh.instanceMatrix.array.length / 16) {
+      console.warn(`InstancedMesh for ${modelIdentifier} (${initialLOD}) is full.`);
+      return;
+    }
+
+    targetMesh.setMatrixAt(newInstanceIndex, transform);
+    targetMesh.instanceMatrix.needsUpdate = true;
+    targetMesh.count++;
+
+    // Store the instance's state
+    const newInstance: LODInstance = {
+      id: instanceId,
+      modelIdentifier,
+      currentLOD: initialLOD,
+      instanceId: newInstanceIndex,
+      transform,
+    };
+
+    instancesRef.current.set(instanceId, newInstance);
   }, []);
 
   const switchLOD = useCallback((instanceKey: string, newLOD: 'high' | 'medium' | 'low') => {

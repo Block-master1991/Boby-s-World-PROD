@@ -7,6 +7,6 @@ export async function logRateLimitExceeded(ip: string, endpoint: string, userAge
     endpoint,
     userAgent,
     publicKey: publicKey || null,
-    timestamp: Date.now(),
+    timestamp: timestamp || Date.now(),
   });
 }

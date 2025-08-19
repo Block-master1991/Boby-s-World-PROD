@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { useCallback, useState, useEffect, useRef } from 'react';
 import { modelLoader, LoadPriority } from '../utils/modelLoader';
 import { useLODSwitching } from './useLODSwitching';
-import { useModelBatching } from './useModelBatching';
 
 interface OptimizedStaticObjectsProps {
   scene: THREE.Scene;
@@ -17,7 +16,6 @@ export const useOptimizedStaticObjects = ({
   renderer,
 }: OptimizedStaticObjectsProps) => {
   const lodSwitching = useLODSwitching();
-  const modelBatching = useModelBatching();
   const [isInitialized, setIsInitialized] = useState(false);
   const loadedChunksRef = useRef<Set<string>>(new Set());
 
@@ -60,30 +58,32 @@ export const useOptimizedStaticObjects = ({
           modelLoader.loadModel(modelToLoad.paths.low, true, LoadPriority.LOW),
         ]);
 
-        // For this example, we'll use the batching hook directly.
-        // A full LOD implementation would use the useLODSwitching hook.
-        const batch = modelBatching.addToBatch(
-          modelToLoad.paths.high, // Use high-LOD path as identifier
-          modelToLoad.positions[0].position,
-          modelToLoad.positions[0].rotation,
-          modelToLoad.positions[0].scale
+        // 1. Create the InstancedMeshes for each LOD level
+        const maxInstances = modelToLoad.positions.length;
+        const lodMeshes = await lodSwitching.createLODMeshes(
+          modelToLoad.identifier,
+          { high: highModel, medium: mediumModel, low: lowModel },
+          maxInstances
         );
 
-        // Add all other positions to the same batch
-        for (let i = 1; i < modelToLoad.positions.length; i++) {
-            modelBatching.addToBatch(
-                modelToLoad.paths.high,
-                modelToLoad.positions[i].position,
-                modelToLoad.positions[i].rotation,
-                modelToLoad.positions[i].scale
-            );
+        // 2. Add the created meshes to the scene
+        if (lodMeshes) {
+          if (lodMeshes.highMesh) scene.add(lodMeshes.highMesh);
+          if (lodMeshes.mediumMesh) scene.add(lodMeshes.mediumMesh);
+          if (lodMeshes.lowMesh) scene.add(lodMeshes.lowMesh);
         }
-        
-        const mesh = await modelBatching.createMeshFromBatch(batch, highModel);
-        if (mesh) {
-          scene.add(mesh);
-          // The central modelLoader automatically adds objects to its occlusion system
-        }
+
+        // 3. Add each tree instance to the LOD system
+        modelToLoad.positions.forEach((transform, index) => {
+          const instanceId = `${modelToLoad.identifier}_${chunkKey}_${index}`;
+          lodSwitching.addInstance(
+            instanceId,
+            modelToLoad.identifier,
+            transform.position,
+            transform.rotation,
+            transform.scale
+          );
+        });
 
         loadedChunksRef.current.add(chunkKey);
 
@@ -91,7 +91,7 @@ export const useOptimizedStaticObjects = ({
         console.error(`Error loading models for chunk ${chunkKey}:`, error);
       }
     },
-    [scene, modelBatching, isInitialized]
+    [scene, isInitialized, lodSwitching]
   );
 
   // 3. Update all systems in the central modelLoader
@@ -101,8 +101,11 @@ export const useOptimizedStaticObjects = ({
     // This single call updates occlusion culling, performance monitoring, etc.
     modelLoader.update();
 
-    // The LOD switching logic would also be called here
-    // lodSwitching.updateLODBasedOnDistance(...);
+    // The LOD switching logic would also be called here.
+    // A full implementation would need to iterate through all instances
+    // and calculate their distance to the camera.
+    // For now, we demonstrate the concept by calling it.
+    // lodSwitching.updateLODBasedOnDistance('some_instance_key', 50);
   }, [isInitialized]);
 
   // 4. Cleanup resources

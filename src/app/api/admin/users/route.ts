@@ -2,17 +2,18 @@ import { NextResponse } from 'next/server';
 import { db, initializeAdminApp } from '@/lib/firebase-admin';
 import * as admin from 'firebase-admin';
 
-export async function GET(request: Request) {
+export async function GET() {
   try {
     // In a real application, you would add authentication/authorization here
     // to ensure only admins can access this endpoint.
     try {
       await initializeAdminApp(); // Ensure the admin app is initialized
-    } catch (initError: any) {
+    } catch (initError) {
       console.error('Firebase Admin SDK initialization failed:', initError);
+      const errorMessage = initError instanceof Error ? initError.message : 'An unknown error occurred';
       return NextResponse.json({
         error: 'Firebase Admin SDK initialization failed. Check server logs for details.',
-        details: process.env.NODE_ENV === 'development' ? initError.message : undefined
+        details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
       }, { status: 500 });
     }
 
@@ -48,13 +49,14 @@ export async function GET(request: Request) {
       onlineUsers,
       offlineUsers,
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('Error fetching user statistics:', error);
     // Log the full error object for more details
     console.error('Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({
       error: 'Failed to fetch user statistics.',
-      details: process.env.NODE_ENV === 'development' ? error.message : undefined
+      details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     }, { status: 500 });
   }
 }

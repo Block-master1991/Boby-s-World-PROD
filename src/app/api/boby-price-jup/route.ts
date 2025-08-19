@@ -69,10 +69,13 @@ export async function GET(request: NextRequest) {
                 fetchedAt: FieldValue.serverTimestamp()
             });
             console.log('[boby-price-jup] Successfully saved Jupiter price to Firestore using Admin SDK.');
-        } catch (dbError: any) {
+        } catch (dbError: unknown) {
+            const errorMessage = dbError instanceof Error ? dbError.message : 'An unknown error occurred';
+            const errorCode = (dbError instanceof Error && 'code' in dbError) ? (dbError as { code: string }).code : 'UNKNOWN';
+            const errorStack = dbError instanceof Error ? dbError.stack : '';
             console.error('[boby-price-jup] Error during Firestore save operation for Jupiter price (Admin SDK):', dbError);
-            console.error(`[boby-price-jup] Firestore save error Name: ${dbError.name}, Message: ${dbError.message}, Code: ${dbError.code}`);
-            if (dbError.stack) { console.error(`[boby-price-jup] Firestore save error Stack: ${dbError.stack}`); }
+            console.error(`[boby-price-jup] Firestore save error Name: ${dbError instanceof Error ? dbError.name : 'Unknown Error'}, Message: ${errorMessage}, Code: ${errorCode}`);
+            if (errorStack) { console.error(`[boby-price-jup] Firestore save error Stack: ${errorStack}`); }
         }
         return NextResponse.json({ price: currentPrice, source: 'jupiter-api-axios' });
       } else {
@@ -101,8 +104,8 @@ export async function GET(request: NextRequest) {
       }, { status: 404 });
     }
 
-  } catch (error: any) {
-    console.error('[boby-price-jup] Error fetching from Jupiter API using axios:', error.isAxiosError ? error.toJSON() : error);
+  } catch (error: unknown) {
+    console.error('[boby-price-jup] Error fetching from Jupiter API using axios:', axios.isAxiosError(error) ? error.toJSON() : error);
     let errorMessage = 'Internal server error while fetching from Jupiter (axios).';
     let errorDetails = 'Fetch to Jupiter API failed (axios).';
     let statusCode = 500;
@@ -125,8 +128,8 @@ export async function GET(request: NextRequest) {
       if(axiosError.cause) errorCause = (axiosError.cause as Error).message;
 
     } else {
-      if (error.message) errorDetails = error.message;
-      if (error.cause) errorCause = typeof error.cause === 'string' ? { message: error.cause } : error.cause;
+      if (error instanceof Error && error.message) errorDetails = error.message;
+      if (error instanceof Error && error.cause) errorCause = typeof error.cause === 'string' ? { message: error.cause } : error.cause;
     }
     
     return NextResponse.json({
@@ -139,4 +142,3 @@ export async function GET(request: NextRequest) {
 }
 
 export const dynamic = 'force-dynamic';
-

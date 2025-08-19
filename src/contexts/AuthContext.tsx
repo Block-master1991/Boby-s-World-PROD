@@ -39,7 +39,7 @@ interface AuthProviderProps {
 }
 
 function buildSignMessage(nonce: string): string {
-  return `Sign this message to authenticate with Boby's World.\nNonce: ${nonce}`;
+  return `Sign this message to authenticate with Boby World.\nNonce: ${nonce}`;
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
@@ -59,6 +59,58 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Ensure 'connected' is treated as a boolean, as useWallet's 'connected' can sometimes be null/undefined during initial render
     return !!connected && !!adapterPublicKey && authState.user?.publicKey === adapterPublicKey.toBase58();
   }, [connected, adapterPublicKey, authState.user?.publicKey]);
+
+  const logout = useCallback(async (): Promise<void> => {
+    const currentPK = authState.user?.publicKey;
+    console.log(`[AuthContext logout] Logging out user: ${currentPK || 'N/A'}`);
+    setAuthState(prev => ({ ...prev, isLoading: true }));
+    try {
+      console.log('[FRONTEND] Starting logout process');
+
+      // Get CSRF token from cookies
+      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrfToken='))?.split('=')[1];
+
+      const headers: HeadersInit = {
+        'Content-Type': 'application/json',
+      };
+
+      if (csrfToken) {
+        headers['X-CSRF-Token'] = csrfToken;
+        console.log('[FRONTEND] CSRF token found and added to headers.');
+      } else {
+        console.warn('[FRONTEND] CSRF token not found in cookies for logout request.');
+      }
+
+      // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
+      await fetch('/api/auth/logout', {
+        method: 'POST',
+        headers: headers,
+        credentials: 'include',
+        body: JSON.stringify({ publicKey: currentPK })
+      });
+      toast({ variant: 'default', title: 'Logged Out', description: 'You have been logged out successfully.' });
+    } catch {
+      toast({ variant: 'destructive', title: 'Logout Failed', description: 'Failed to contact server during logout.' });
+    } finally {
+      setAuthState({ isAuthenticated: false, isLoading: false, user: null, error: null });
+    }
+  }, [authState.user?.publicKey, toast]);
+
+  const logoutAndRedirect = useCallback(async (redirectPath: string = '/') => {
+    console.log(`[AuthContext logoutAndRedirect] Forcing logout and redirecting to ${redirectPath}`);
+    await logout(); // Perform the regular logout process (clears server-side session)
+    if (connected) {
+      try {
+        await adapterDisconnect(); // Disconnect the wallet adapter
+        console.log("[AuthContext logoutAndRedirect] Wallet adapter disconnected.");
+      } catch (error) {
+        console.error("[AuthContext logoutAndRedirect] Error disconnecting wallet adapter:", error);
+      }
+    }
+    // Use window.location.href for a full page reload to ensure all state is reset
+    // This is more robust for security-critical redirects than Next.js router.push
+    window.location.href = redirectPath;
+  }, [logout, connected, adapterDisconnect]);
 
   const checkSession = useCallback(async (): Promise<boolean> => {
     // Only set loading if not already authenticated, to avoid flickering if session is valid
@@ -128,7 +180,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setRetryRequested(false);
 
     }
-  }, [authState.isAuthenticated]); // Depend on isAuthenticated to avoid unnecessary loading state changes
+  }, [authState.isAuthenticated, logoutAndRedirect, toast]); // Depend on isAuthenticated to avoid unnecessary loading state changes
 
   const retrySessionCheck = useCallback(() => {
     setRetryRequested(true);
@@ -179,14 +231,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const signature = await walletSignMessage(messageBytes);
         signatureHex = Buffer.from(signature).toString('hex');
         console.log('[AuthContext login] Signature received (hex):', signatureHex ? `${signatureHex.substring(0,10)}...` : 'Empty');
-      } catch (signError: any) {
+      
+      } catch (signError:  unknown) {
         let userFacingError = 'Failed to sign message.';
 
-        if (signError?.message?.includes('User rejected')) {
+        if (signError instanceof Error && signError?.message?.includes('User rejected')) {
           userFacingError = 'User rejected the signature request.';
-        } else if (signError?.name === 'WalletSignMessageError') {
+        } else if (signError instanceof Error && signError?.name === 'WalletSignMessageError') {
           userFacingError = `Wallet signing error: ${(signError as WalletSignMessageError).message || 'User rejected or unknown error.'}`;
-        } else if (signError?.message) {
+        } else if (signError instanceof Error && signError?.message) {
           userFacingError = `Signing error: ${signError.message}`;
         }
         
@@ -239,65 +292,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthState(prev => ({ ...prev, isLoading: false, error: fallbackError }));
       toast({ variant: 'destructive', title: 'Login Failed', description: fallbackError });
       throw new Error(fallbackError);
-    } catch (error: any) {
-      const errMsg = error.message || 'Unknown login error';
+    } catch (error: unknown) {
+      const errMsg = error instanceof Error ? error.message : 'Unknown login error';
       setAuthState(prev => ({ ...prev, isAuthenticated: false, isLoading: false, user: null, error: errMsg }));
       toast({ variant: 'destructive', title: 'Login Error', description: errMsg });
       throw error;
     }
-  }, [adapterPublicKey, walletSignMessage, connected, authState.error]);
-  
-  const logout = useCallback(async (): Promise<void> => {
-    const currentPK = authState.user?.publicKey;
-    console.log(`[AuthContext logout] Logging out user: ${currentPK || 'N/A'}`);
-    setAuthState(prev => ({ ...prev, isLoading: true }));
-    try {
-      console.log('[FRONTEND] Starting logout process');
-
-      // Get CSRF token from cookies
-      const csrfToken = document.cookie.split('; ').find(row => row.startsWith('csrfToken='))?.split('=')[1];
-
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
-
-      if (csrfToken) {
-        headers['X-CSRF-Token'] = csrfToken;
-        console.log('[FRONTEND] CSRF token found and added to headers.');
-      } else {
-        console.warn('[FRONTEND] CSRF token not found in cookies for logout request.');
-      }
-
-      // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
-      await fetch('/api/auth/logout', {
-        method: 'POST',
-        headers: headers,
-        credentials: 'include',
-        body: JSON.stringify({ publicKey: currentPK })
-      });
-      toast({ variant: 'default', title: 'Logged Out', description: 'You have been logged out successfully.' });
-    } catch (error) {
-      toast({ variant: 'destructive', title: 'Logout Failed', description: 'Failed to contact server during logout.' });
-    } finally {
-      setAuthState({ isAuthenticated: false, isLoading: false, user: null, error: null });
-    }
-  }, [authState.user?.publicKey]);
-
-  const logoutAndRedirect = useCallback(async (redirectPath: string = '/') => {
-    console.log(`[AuthContext logoutAndRedirect] Forcing logout and redirecting to ${redirectPath}`);
-    await logout(); // Perform the regular logout process (clears server-side session)
-    if (connected) {
-      try {
-        await adapterDisconnect(); // Disconnect the wallet adapter
-        console.log("[AuthContext logoutAndRedirect] Wallet adapter disconnected.");
-      } catch (error) {
-        console.error("[AuthContext logoutAndRedirect] Error disconnecting wallet adapter:", error);
-      }
-    }
-    // Use window.location.href for a full page reload to ensure all state is reset
-    // This is more robust for security-critical redirects than Next.js router.push
-    window.location.href = redirectPath;
-  }, [logout, connected, adapterDisconnect]);
+  }, [adapterPublicKey, walletSignMessage, connected, logoutAndRedirect, toast]);
 
   // Initial session check on mount and periodic refresh
   useEffect(() => {
@@ -356,7 +357,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       toast({ variant: 'destructive', title: 'Wallet Mismatch', description: 'Your connected wallet does not match the session.' });
 
     }
-  }, [connected, authState.isAuthenticated, authState.isLoading, authState.user, isWalletConnectedAndMatching, logoutAndRedirect]);
+  }, [connected, authState.isAuthenticated, authState.isLoading, authState.user, isWalletConnectedAndMatching, logoutAndRedirect, toast]);
 
   const contextValue: AuthContextType = {
     ...authState,

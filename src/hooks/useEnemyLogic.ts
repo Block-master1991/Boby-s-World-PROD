@@ -5,12 +5,13 @@ import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { Octree, OctreeObject } from '@/lib/Octree';
+import { Octree } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS, ENEMY_COLLISION_PENALTY_USDT } from '../lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
 import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
 import { CoinData } from './useCoinLogic'; // Import CoinData
+import { GameObject, BaseGameObject } from '@/types/game';
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
@@ -67,7 +68,7 @@ interface EnemyCustomData {
   highDetailModel: THREE.Group; 
 }
 
-type EnemyData = THREE.LOD & EnemyCustomData; // Change to THREE.LOD
+type EnemyData = THREE.LOD & EnemyCustomData & BaseGameObject; // Change to THREE.LOD
 
 interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -77,10 +78,10 @@ interface UseEnemyLogicProps {
   onConsumeProtectionBottle: () => void;
   onEnemyCollisionPenalty: () => void;
   isPausedRef: MutableRefObject<boolean>;
-  coinMeshesRef: MutableRefObject<THREE.Mesh[]>;
+  coinMeshesRef: MutableRefObject<CoinData[]>;
   onCoinCollected: () => void;
   onAttackAnimationFinished: (event: THREE.Event) => void;
-  octreeRef: MutableRefObject<Octree | null>;
+  octreeRef: MutableRefObject<Octree<GameObject> | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   addFloatingEffect: (
     position: THREE.Vector3,
@@ -111,7 +112,6 @@ export const useEnemyLogic = ({
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
   const internalOptimisticProtectionBottleCountRef = React.useRef(protectionBottleCountRef.current);
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
-  const clock = React.useRef(new THREE.Clock());
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
 
@@ -145,7 +145,7 @@ export const useEnemyLogic = ({
 
   React.useEffect(() => {
     internalOptimisticProtectionBottleCountRef.current = protectionBottleCountRef.current;
-  }, [protectionBottleCountRef.current]);
+  }, [protectionBottleCountRef]);
 
   React.useEffect(() => {
     const dracoLoader = new DRACOLoader();
@@ -311,7 +311,7 @@ export const useEnemyLogic = ({
 
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
-            let initialPatrolX = coin.position.x + Math.cos(angle) * radius;
+            const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
             const initialPatrolZ = coin.position.z + Math.sin(angle) * radius;
             enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
 
@@ -357,7 +357,7 @@ export const useEnemyLogic = ({
               octreeRef.current.insert({
                 id: `enemy_${enemyData.id}`,
                 bounds: enemyBox,
-                data: enemyData
+                data: enemyData as unknown as GameObject
               });
             }
             enemyMeshesRef.current.push(enemyData);
@@ -400,7 +400,7 @@ export const useEnemyLogic = ({
           octreeRef.current.remove({
               id: `enemy_${enemy.id}`,
               bounds: enemyBox,
-              data: enemy
+              data: enemy as unknown as GameObject
           });
         }
         enemy.mixer.stopAllAction();
@@ -412,7 +412,8 @@ export const useEnemyLogic = ({
       return true;
     });
     loadedEnemyChunks.current.delete(getChunkKey(chunkX, chunkZ));
-  }, [sceneRef, octreeRef, disposeEnemyModelResources]); // Add disposeEnemyModelResources to dependencies
+    cleanupModelPool();
+  }, [sceneRef, octreeRef, disposeEnemyModelResources, cleanupModelPool]);
 
 
   const initializeEnemies = React.useCallback(async () => {
@@ -422,7 +423,7 @@ export const useEnemyLogic = ({
     enemyMeshesRef.current.forEach(enemy => {
       if (octreeRef.current) {
         const enemyBox = new THREE.Box3().setFromObject(enemy);
-        octreeRef.current.remove({ id: `enemy_${enemy.id}`, bounds: enemyBox, data: enemy });
+        octreeRef.current.remove({ id: `enemy_${enemy.id}`, bounds: enemyBox, data: enemy as unknown as GameObject });
       }
       enemy.mixer.stopAllAction();
       scene.remove(enemy);
@@ -441,7 +442,7 @@ export const useEnemyLogic = ({
         await loadEnemiesForChunk(initialChunkX + x, initialChunkZ + z);
       }
     }
-  }, [sceneRef, dogModelRef, octreeRef, loadEnemiesForChunk]);
+  }, [sceneRef, dogModelRef, octreeRef, loadEnemiesForChunk, disposeEnemyModelResources]);
 
 
   const updateEnemies = React.useCallback((delta: number) => {
@@ -492,12 +493,6 @@ export const useEnemyLogic = ({
       visibleEnemies = octreeRef.current.query(cameraBox).map(obj => obj.data as EnemyData);
     }
 
-    visibleEnemies = visibleEnemies.filter(enemy => {
-      // Frustum culling is handled by THREE.LOD automatically when added to scene
-      // We still need to filter by distance for visibility logic
-      return true; 
-    });
-
     // Filter out enemies that have sunk and been disposed
     enemyMeshesRef.current = enemyMeshesRef.current.filter(enemy => {
       // If sinking and sunk far enough, filter it out
@@ -507,7 +502,7 @@ export const useEnemyLogic = ({
       return true;
     });
 
-    enemyMeshesRef.current.forEach(enemy => {
+    visibleEnemies.forEach(enemy => {
       enemy.mixer.update(delta);
       const enemyY = enemy.position.y;
 
@@ -559,6 +554,7 @@ export const useEnemyLogic = ({
           if (enemy.actions[deathAnimationName]) {
             playAnimation(enemy, deathAnimationName);
           }
+          onCoinCollected(); // Call the callback when the enemy's coin is collected
         }
       }
 
@@ -736,20 +732,19 @@ export const useEnemyLogic = ({
   }, [
     dogModelRef,
     isShieldActiveRef,
-    protectionBottleCountRef,
     onConsumeProtectionBottle,
     onEnemyCollisionPenalty,
     isPausedRef,
     coinMeshesRef,
-    onCoinCollected,
     onAttackAnimationFinished,
     playAnimation,
     cameraRef,
     octreeRef,
+    sceneRef,
     loadEnemiesForChunk,
-    unloadEnemiesFromChunk, // Corrected: should be unloadEnemiesFromChunk
-    disposeEnemyModelResources, // Add disposeEnemyModelResources to dependencies
-    addFloatingEffect, // Add addFloatingEffect to dependencies
+    unloadEnemiesFromChunk,
+    addFloatingEffect,
+    onCoinCollected,
   ]);
   
   const resetEnemies = React.useCallback(() => {

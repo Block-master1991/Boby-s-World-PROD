@@ -6,8 +6,6 @@
 
 import { useAuthContext, type AuthContextType } from '@/contexts/AuthContext';
 
-export interface AuthHook extends AuthContextType {} // Keep the interface for consistency if used elsewhere
-
-export function useAuth(): AuthHook {
+export function useAuth(): AuthContextType {
   return useAuthContext();
 }

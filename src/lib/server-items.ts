@@ -1,4 +1,3 @@
-import * as admin from 'firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { storeItems, StoreItemDefinition } from './items'; // استيراد storeItems وتعريفات الواجهات

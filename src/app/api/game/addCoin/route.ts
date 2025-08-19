@@ -51,15 +51,15 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     console.log('[addCoin] New CSRF token issued and set in cookie.');
 
     return response;
-  } catch (error: any) {
+  } catch (error) {
     console.error('[addCoin] Error:', error);
-    let errorMessage = error.message || 'Failed to add coin';
+    let errorMessage = error instanceof Error ? error.message : 'Failed to add coin';
     let statusCode = 500;
 
-    if (error.message.includes("Firebase Admin SDK environment variables are not set correctly")) {
+    if (error instanceof Error && error.message.includes("Firebase Admin SDK environment variables are not set correctly")) {
       errorMessage = "Server configuration error: Firebase Admin SDK not properly set up. Please check your FIREBASE_SERVICE_ACCOUNT environment variable.";
       statusCode = 500;
-    } else if (errorMessage.includes("Authentication required")) {
+    } else if (error instanceof Error && errorMessage.includes("Authentication required")) {
       statusCode = 401;
     }
 

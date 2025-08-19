@@ -59,9 +59,9 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     console.log('[applyPenalty] New CSRF token issued and set in cookie.');
 
     return response;
-  } catch (error: any) {
+  } catch (error) {
     console.error('[applyPenalty] Error:', error);
-    let errorMessage = error.message || 'Failed to apply penalty';
+    let errorMessage = error instanceof Error ? error.message : 'Failed to apply penalty';
     let statusCode = 500;
 
     if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {

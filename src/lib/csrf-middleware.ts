@@ -50,8 +50,10 @@ export function withCsrfProtection(handler: (req: NextRequest) => Promise<NextRe
       console.log(`[CSRFMiddleware] CSRF token valid for session ${sessionId}. Proceeding with handler.`);
       return handler(request);
 
-    } catch (error: any) {
-      console.error('[CSRFMiddleware] Error during CSRF protection:', error.message, error.stack);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[CSRFMiddleware] Error during CSRF protection:', errorMessage, errorStack);
       return NextResponse.json({ error: 'Internal server error during CSRF validation.' }, { status: 500 });
     }
   };

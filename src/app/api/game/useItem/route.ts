@@ -36,10 +36,10 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     }
 
     const data = docSnap.data()!;
-    let inventory = data.inventory || [];
+    let inventory: { id: string }[] = data.inventory || [];
 
     // Count how many of the requested item the player actually has
-    const currentItemCount = inventory.filter((entry: any) => entry?.id === itemId).length;
+    const currentItemCount = inventory.filter(entry => entry?.id === itemId).length;
 
     if (currentItemCount < amount) {
       return NextResponse.json({ error: `You do not have enough ${itemId} to use. You have ${currentItemCount}, but requested ${amount}.` }, { status: 400 });
@@ -47,7 +47,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     // Remove 'amount' number of items from the inventory
     let itemsRemoved = 0;
-    const newInventory = [];
+    const newInventory: { id: string }[] = [];
     for (const entry of inventory) {
       if (entry?.id === itemId && itemsRemoved < amount) {
         itemsRemoved++;
@@ -77,9 +77,9 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     console.log('[useItem] New CSRF token issued and set in cookie.');
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[useItem] Error:', error);
-    let errorMessage = error.message || 'Failed to use item.';
+    let errorMessage = (error instanceof Error) ? error.message : 'Failed to use item.';
     let statusCode = 500;
 
     // إذا كان الخطأ يشير إلى عدم تهيئة Firebase، فقم بمعالجته بشكل خاص

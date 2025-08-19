@@ -3,7 +3,6 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReCAPTCHA from "react-google-recaptcha";
-import { Button } from '@/components/ui/button'; // Button might still be used if we add a manual retry, but not for primary verification.
 import { Loader2, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
@@ -101,10 +100,10 @@ useEffect(() => {
           onClick={handleOverlayClick}
           style={{ backdropFilter: 'blur(5px)' }}
         >
-          Start Boby's World
+          Start Boby World
         </div>
       )}
-      <Image src="/Boby-logo.png" alt="Boby's World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
+      <Image src="/Boby-logo.png" alt="Boby World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
       <h1 className="text-4xl font-bold mb-4 font-headline">Verification Required</h1>
       <p className="text-xl text-muted-foreground mb-6 max-w-md">
         Please complete the verification below.

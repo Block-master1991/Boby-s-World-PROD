@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { PublicKey } from '@solana/web3.js';
 
 import { Octree } from '@/lib/Octree'; // Import Octree
+import { GameObject } from '@/types/game';
 
 import { useDogLogic } from '@/hooks/useDogLogic';
 import { useCoinLogic } from '@/hooks/useCoinLogic';
@@ -12,13 +13,13 @@ import { useEnemyLogic } from '@/hooks/useEnemyLogic';
 import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
 import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
-import { useTreeLogic } from '@/hooks/useTreeLogic';
+import { useTreeLogic, TreeInstance } from '@/hooks/useTreeLogic';
 import { useFloatingEffects } from '@/hooks/useFloatingEffects'; // New import
 import { useDogParticles } from '@/hooks/useDogParticles'; // New import
 import DogSpeedBeam from '@/components/game/DogSpeedBeam'; // New import
 import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
 import { OptimizedStaticObjectManager } from '@/components/OptimizedStaticObjectManager'; // Import the new optimized manager
-import { getChunkCoordinates, getChunkKey, RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '@/lib/chunkUtils'; // Import chunk utilities
+import { getChunkCoordinates, getChunkKey, RENDER_DISTANCE_CHUNKS } from '@/lib/chunkUtils'; // Import chunk utilities
 interface GameCanvasProps {
     sessionPublicKey: PublicKey | null;
     isSpeedBoostActive: boolean;
@@ -36,7 +37,7 @@ interface GameCanvasProps {
     onConsumeProtectionBottle: () => void;
     onEnemyCollisionPenalty: () => void;
     COIN_COUNT: number;
-    octreeRef: React.MutableRefObject<Octree | null>; // Added Octree ref
+    octreeRef: React.MutableRefObject<Octree<GameObject> | null>; // Added Octree ref
     onLoadStart: () => void;
     onLoadProgress: (progress: number) => void;
     onLoadComplete: (success: boolean) => void;
@@ -143,7 +144,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         sceneRef, dogMeshRef, dogSpeed, isRunning // Pass dog's speed and running state
     });
 
-    const { initializeCoins, updateCoins, resetCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
+    const { initializeCoins, updateCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), 
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
@@ -151,7 +152,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         addFloatingEffect, // Pass addFloatingEffect to useCoinLogic
     });
 
-    const { initializeEnemies, updateEnemies, resetEnemies } = useEnemyLogic({
+    const { initializeEnemies, updateEnemies } = useEnemyLogic({
         sceneRef, dogModelRef, isShieldActiveRef, protectionBottleCountRef,
         onConsumeProtectionBottle: () => onConsumeProtectionBottleCallbackRef.current(),
         onEnemyCollisionPenalty: () => onEnemyCollisionPenaltyCallbackRef.current(),
@@ -171,11 +172,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Ref to store currently loaded tree chunks
     // Ref to store currently loaded tree chunks
-    const loadedTreeChunksRef = useRef<Map<string, any[]>>(new Map()); // Map<chunkKey, TreeInstance[]>
+    const loadedTreeChunksRef = useRef<Map<string, TreeInstance[]>>(new Map()); // Map<chunkKey, TreeInstance[]>
     const currentDogChunkRef = useRef<{ chunkX: number; chunkZ: number } | null>(null);
 
     // Destructure updateDynamicModels and cleanupModelPool from useDynamicModelLoader
-    const { updateDynamicModels, cleanupModelPool } = useDynamicModelLoader({
+    const { cleanupModelPool } = useDynamicModelLoader({
         cameraRef,
         sceneRef,
         octreeRef,
@@ -286,7 +287,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         if (rendererRef.current && sceneRef.current && cameraRef.current) {
             rendererRef.current.render(sceneRef.current, cameraRef.current);
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks, updateFloatingEffects, updateParticles, isSpeedBoostActiveRef, isShieldActiveRef]);
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks, updateFloatingEffects, updateParticles]);
 
 
     // Main useEffect for initialization and re-initialization on session change
@@ -406,7 +407,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         onLoadStart, onLoadProgress, onLoadComplete, // Add new props to dependency array
         addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, // Add floating effects hooks
         updateParticles, // Add dog particles hook
-        isSpeedBoostActive, isShieldActive // Add states for continuous effects
+        isSpeedBoostActive, isShieldActive, // Add states for continuous effects
+        animate
     ]);
 
     // Effect for handling resize
@@ -545,7 +547,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                     camera={cameraRef.current}
                     renderer={rendererRef.current}
                     playerPosition={dogModelRef.current.position}
-                    playerDirection={{ x: 0, z: -1 }} // Placeholder direction
                 />
             )}
         </>

@@ -13,6 +13,8 @@ import GameLoadingOverlay from '@/components/game-bootstrap/GameLoadingOverlay';
 import { Octree } from '@/lib/Octree';
 // import { useGameAssetLoader } from '@/hooks/useGameAssetLoader'; // No longer needed here
 
+import { GameObject } from '@/types/game';
+
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { useToast } from '@/hooks/use-toast';
@@ -29,11 +31,9 @@ const GameContainer: React.FC = () => {
         isLoading: isLoadingAuth,
         login: loginAuthHook,
         logout: logoutAuthSessionHook,
-        error: authErrorFromContext,
         checkSession,
         isWalletConnectedAndMatching,
         logoutAndRedirect,
-        retrySessionCheck
     } = useAuth();
     
     const { 
@@ -44,7 +44,7 @@ const GameContainer: React.FC = () => {
     const pathname = usePathname();
     const { toast } = useToast();
 
-    const octreeRef = useRef<Octree | null>(null);
+    const octreeRef = useRef<Octree<GameObject> | null>(null);
 
     const [captchaVerified, setCaptchaVerified] = useState(false);
     const [isRequestingNonce, setIsRequestingNonce] = useState(false); 
@@ -56,7 +56,7 @@ const GameContainer: React.FC = () => {
     const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
     const [showEnableSoundButton, setShowEnableSoundButton] = useState(false); // New state for fallback UI
 
-    const { soundManagerRef, isMuted, toggleMute, hasUserInteracted, setHasUserInteracted, setCurrentScreen } = useAudio(); // Use AudioContext
+    const { soundManagerRef, isMuted, toggleMute, setHasUserInteracted, setCurrentScreen } = useAudio(); // Use AudioContext
 
     const siteKey = RECAPTCHA_SITE_KEY;
 
@@ -81,11 +81,11 @@ const GameContainer: React.FC = () => {
                   console.log("[GameContainer] Initial session check failed or no active session.");
                   setCaptchaVerified(false);
               }
-            } catch (error: any) {
+            } catch (error: unknown) {
               console.error("[GameContainer] Session check error:", error);
               toast({
                 title: "Network Error",
-                description: "Failed to validate session. Retrying...",
+                description: (error instanceof Error) ? error.message : "Failed to validate session. Retrying...",
                 variant: "destructive",
                 duration: 4000,
               });
@@ -117,16 +117,16 @@ const GameContainer: React.FC = () => {
                 console.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
                 setHasUserInteracted(true); // User interaction point
                 soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
-                toast({ title: "Login Successful", description: "Welcome to Boby's World!", duration: 3000 });
+                toast({ title: "Login Successful", description: "Welcome to Boby World!", duration: 3000 });
             } else {
                  console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
                  toast({ title: "Login Failed", description: "An unexpected issue occurred during login.", variant: "destructive" });
             }
-        } catch (error: any) {
-            console.error(`[GameContainer] Login attempt failed: ${error.message}`);
+        } catch (error: unknown) {
+            console.error(`[GameContainer] Login attempt failed: ${(error instanceof Error) ? error.message : 'Unknown error'}`);
             toast({ 
                 title: "Login Failed", 
-                description: error.message || "Could not authenticate with the server. Check console for details.", 
+                description: (error instanceof Error) ? error.message : "Could not authenticate with the server. Check console for details.", 
                 variant: "destructive" 
             });
         } finally {
@@ -154,11 +154,11 @@ const GameContainer: React.FC = () => {
 
 
             toast({ title: "Disconnected", description: "Session ended. Please re-verify CAPTCHA to connect again.", duration: 3000 });
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("[GameContainer] Error during full disconnect process:", error);
             toast({
                 title: "Disconnection Error",
-                description: `An error occurred: ${error.message || 'Unknown error'}.`,
+                description: `An error occurred: ${(error instanceof Error) ? error.message : 'Unknown error'}.`,
                 variant: "destructive",
                 duration: 5000,
             });
@@ -188,7 +188,7 @@ const GameContainer: React.FC = () => {
             if (isRedirectingToAdmin) setIsRedirectingToAdmin(false);
             setSelectedGameMode('none');
         }
-    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, ADMIN_WALLET_ADDRESS]);
+    }, [isAuthenticated, authUser, isLoadingAuth, isWalletConnectedAndMatching, pathname, isRedirectingToAdmin, router]);
 
     // The problematic useEffect has been removed.
     // The loading state will be controlled entirely by the callbacks from the child components.
@@ -252,15 +252,6 @@ const GameContainer: React.FC = () => {
         };
     }, [setHasUserInteracted]);
 
-    const handlePlaybackBlocked = useCallback(() => {
-        setShowEnableSoundButton(true);
-        toast({
-            title: "Sound Blocked",
-            description: "Your browser prevented audio from playing automatically. Click 'Enable Sound' to hear the game.",
-            variant: "default", // Use default or info variant
-            duration: 5000,
-        });
-    }, [toast]);
 
     const handleEnableSoundClick = useCallback(() => {
         if (soundManagerRef.current) {
@@ -292,7 +283,7 @@ const GameContainer: React.FC = () => {
             screen = 'loading'; // Fallback
         }
         setCurrentScreen(screen);
-    }, [isCheckingSession, siteKey, captchaVerified, isAuthenticated, authUser, ADMIN_WALLET_ADDRESS, selectedGameMode, isLoadingGameResources, setCurrentScreen]);
+    }, [isCheckingSession, siteKey, captchaVerified, isAuthenticated, authUser, selectedGameMode, isLoadingGameResources, setCurrentScreen]);
 
 
     // Main content rendering logic
@@ -323,7 +314,7 @@ const GameContainer: React.FC = () => {
     } else if (isGameUIVisible()) {
         // This is the new logic: Render the game UI, and conditionally render the loading screen as an overlay.
         if (selectedGameMode === 'boby-world') {
-            console.log("[GameContainer] Displaying: Boby's World GameUI for regular user.");
+            console.log("[GameContainer] Displaying: Boby World GameUI for regular user.");
             mainContent = (
                 <>
                     <GameUI 

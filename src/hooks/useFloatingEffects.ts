@@ -19,7 +19,7 @@ interface UseFloatingEffectsProps {
   dogMeshRef?: MutableRefObject<THREE.Object3D | null>; // Added for followTarget
 }
 
-export const useFloatingEffects = ({ sceneRef, cameraRef, dogMeshRef }: UseFloatingEffectsProps) => {
+export const useFloatingEffects = ({ sceneRef, cameraRef }: UseFloatingEffectsProps) => {
   const activeEffects = useRef<Map<string, FloatingEffect>>(new Map());
   const [isSpeedBeamActive, setIsSpeedBeamActive] = useState(false);
   const [isShieldEffectActive, setIsShieldEffectActive] = useState(false);
@@ -58,7 +58,7 @@ export const useFloatingEffects = ({ sceneRef, cameraRef, dogMeshRef }: UseFloat
 
     activeEffects.current.set(id, effect);
     sceneRef.current.add(effect.mesh);
-  }, [sceneRef, cameraRef, dogMeshRef]);
+  }, [sceneRef, cameraRef]);
 
   const updateFloatingEffects = useCallback(() => {
     activeEffects.current.forEach(effect => {

@@ -1,6 +1,5 @@
 import * as THREE from 'three';
-import { useCallback, useRef } from 'react';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { useCallback, useMemo, useRef } from 'react';
 
 interface ModelBatch {
   modelPath: string;
@@ -14,7 +13,7 @@ interface ModelBatch {
 
 export const useModelBatching = () => {
   const batchesRef = useRef<Map<string, ModelBatch>>(new Map());
-  const dummy = new THREE.Object3D();
+  const dummy = useMemo(() => new THREE.Object3D(), []);
 
   const addToBatch = useCallback((
     modelPath: string,
@@ -78,7 +77,7 @@ export const useModelBatching = () => {
     batch.mesh = mesh;
 
     return mesh;
-  }, []);
+  }, [dummy]);
 
   const updateBatch = useCallback((
     modelPath: string,
@@ -97,7 +96,7 @@ export const useModelBatching = () => {
 
     batch.mesh.setMatrixAt(instanceIndex, dummy.matrix);
     batch.mesh.instanceMatrix.needsUpdate = true;
-  }, []);
+  }, [dummy]);
 
   const removeInstance = useCallback((
     modelPath: string,
@@ -112,7 +111,7 @@ export const useModelBatching = () => {
 
     batch.mesh.setMatrixAt(instanceIndex, dummy.matrix);
     batch.mesh.instanceMatrix.needsUpdate = true;
-  }, []);
+  }, [dummy]);
 
   const getBatches = useCallback(() => {
     return Array.from(batchesRef.current.values());

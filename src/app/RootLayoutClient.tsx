@@ -1,6 +1,6 @@
 'use client';
 
-import React, { ReactNode, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { Toaster } from "@/components/ui/toaster";
 import WalletContextProvider from '@/components/wallet/WalletContextProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
@@ -31,7 +31,7 @@ export default function RootLayoutClient({
   children: React.ReactNode;
 }>) {
   return (
-    <body className="font-body antialiased">
+    
       <WalletContextProvider>
         <AuthProvider>
           <AudioProvider>
@@ -41,6 +41,5 @@ export default function RootLayoutClient({
           </AudioProvider>
         </AuthProvider>
       </WalletContextProvider>
-    </body>
   );
 }

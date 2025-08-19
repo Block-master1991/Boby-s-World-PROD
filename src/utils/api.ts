@@ -1,7 +1,7 @@
 import { fetchWithCsrf } from '@/lib/utils';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useCallback, useEffect } from 'react';
-import { useToast } from '@/hooks/use-toast'; // Import useToast
+import { useToast } from '@/hooks/use-toast';
 
 // Define a type for the fetch function signature
 type FetchFunction = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
@@ -17,7 +17,83 @@ export const setGlobalTriggerSessionRefresh = (func: () => Promise<boolean>) => 
 
 // Function to set the global toast function.
 export const setGlobalToast = (func: ReturnType<typeof useToast>['toast']) => {
-  globalToast = func;
+  if (typeof func === 'function') {
+    globalToast = func;
+  }
+};
+
+// ===== التخزين المؤقت للاستجابات =====
+const cache = new Map<string, { data: unknown; timestamp: number }>();
+const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 دقائق
+
+// ===== إعدادات عامة =====
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+const REQUEST_TIMEOUT_MS = 30000; // 30 ثانية
+
+// ===== دوال مساعدة =====
+
+// تأخير (للاستخدام مع إعادة المحاولة)
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+// عرض رسالة خطأ للمستخدم
+const showErrorToast = (title: string, description: string) => {
+  if (globalToast) {
+    globalToast({ title, description, variant: "destructive" });
+  }
+};
+
+// التحقق من صحة الاستجابة
+const validateResponse = async (response: Response): Promise<Response> => {
+  const contentType = response.headers.get("content-type");
+  if (contentType?.includes("application/json")) {
+    return response;
+  }
+
+  const text = await response.text();
+  console.error("[apiFetch] Non-JSON response received:", text);
+
+  const error = new Error(
+    `Unexpected response type: ${contentType || "none"} (status ${response.status}). Body: ${text.slice(0, 200)}...`
+  );
+  (error as Error & { response?: Response }).response = response;
+  throw error;
+};
+
+// معالجة 401 (انتهاء الجلسة)
+const handle401Error = async (): Promise<boolean> => {
+  console.warn("[apiFetch] 401 Unauthorized. Trying session refresh...");
+  if (globalTriggerSessionRefresh) {
+    const ok = await globalTriggerSessionRefresh();
+    if (ok) {
+      console.log("[apiFetch] Session refreshed successfully.");
+      return true;
+    }
+    console.error("[apiFetch] Session refresh failed.");
+    showErrorToast("انتهت الجلسة", "تعذّر تجديد الجلسة. يرجى تسجيل الدخول مرة أخرى.");
+  } else {
+    console.error("[apiFetch] globalTriggerSessionRefresh not set.");
+    showErrorToast("خطأ في النظام", "حدث خطأ في النظام. يرجى تحديث الصفحة.");
+  }
+  return false;
+};
+
+// معالجة 403 (CSRF)
+const handle403Error = async (): Promise<boolean> => {
+  console.warn("[apiFetch] 403 Forbidden. Trying CSRF refresh...");
+  try {
+    const csrfRes = await fetch("/api/auth/refresh-csrf", { method: "POST" });
+    if (csrfRes.ok) {
+      console.log("[apiFetch] CSRF token refreshed successfully.");
+      return true;
+    }
+    console.error("[apiFetch] Failed to refresh CSRF token.");
+    showErrorToast("خطأ في المزامنة", "تعذّر تحديث الجلسة. رجاءً أعد تحميل الصفحة.");
+  } catch (e) {
+    console.error("[apiFetch] CSRF refresh request failed:", e);
+    showErrorToast("خطأ في الشبكة", "فشل الاتصال بالخادم. تحقق من الإنترنت.");
+  }
+  return false;
 };
 
 /**
@@ -26,95 +102,96 @@ export const setGlobalToast = (func: ReturnType<typeof useToast>['toast']) => {
  * It relies on a globally set triggerSessionRefresh function from AuthContext.
  */
 export const apiFetch: FetchFunction = async (input, init) => {
-  const MAX_RETRIES = 2; // Allow up to 2 retries for 503 errors
-  const RETRY_DELAY_MS = 1000; // 1 second delay before retrying
+  const url = typeof input === "string" ? input : input.toString();
+  const cacheKey = `${url}_${JSON.stringify(init)}`;
+
+  // تحقق من التخزين المؤقت
+  const cached = cache.get(cacheKey);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
+    console.log(`[apiFetch] Cache hit for: ${url}`);
+    return new Response(JSON.stringify(cached.data), {
+      status: 200,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
+
   let retries = 0;
 
-  while (retries <= MAX_RETRIES) {
+  const attemptFetch = async (): Promise<Response> => {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
     try {
-      const response = await fetchWithCsrf(input, init);
+      console.log(`[apiFetch] Making request to: ${url}`);
+      const response = await fetchWithCsrf(input, { ...init, signal: controller.signal });
+      clearTimeout(timeoutId);
 
+      // التعامل مع 401
       if (response.status === 401) {
-        console.warn('[apiFetch] Received 401. Attempting to refresh session...');
-        if (globalTriggerSessionRefresh) {
-          const refreshSuccess = await globalTriggerSessionRefresh();
-          if (refreshSuccess) {
-            console.log('[apiFetch] Session refreshed successfully. Retrying original request.');
-            retries++; // Increment retries for the 401 retry attempt
-            const retryInput = input instanceof Request ? input.clone() : input;
-            return await fetchWithCsrf(retryInput, init);
-          } else {
-            console.error('[apiFetch] Session refresh failed. Not retrying.');
-            return response;
-          }
-        } else {
-          console.error('[apiFetch] globalTriggerSessionRefresh not set. Cannot refresh session.');
-          return response;
+        console.warn(`[apiFetch] Received 401 for: ${url}`);
+        if (await handle401Error()) {
+          console.log(`[apiFetch] Retrying after session refresh: ${url}`);
+          return attemptFetch();
         }
-      } else if (response.status === 403) {
-        console.warn('[apiFetch] Received 403 Forbidden. Attempting to refresh CSRF token...');
+        return response;
+      }
+
+      // التعامل مع 403
+      if (response.status === 403) {
+        console.warn(`[apiFetch] Received 403 for: ${url}`);
+        if (await handle403Error()) {
+          console.log(`[apiFetch] Retrying after CSRF refresh: ${url}`);
+          return attemptFetch();
+        }
+        return response;
+      }
+
+      // التعامل مع أخطاء الخادم 5xx
+      if (response.status >= 500 && response.status < 600) {
+        if (retries < MAX_RETRIES) {
+          console.warn(`[apiFetch] Server error ${response.status} for: ${url}. Retry ${retries + 1}/${MAX_RETRIES}`);
+          retries++;
+          await delay(RETRY_DELAY_MS);
+          return attemptFetch();
+        }
+        console.error(`[apiFetch] Max retries reached for server error: ${url}`);
+      }
+
+      // تحقق من صحة الاستجابة
+      const validRes = await validateResponse(response);
+
+      // التخزين المؤقت للبيانات JSON فقط
+      if (validRes.ok) {
         try {
-          const csrfResponse = await fetch('/api/auth/refresh-csrf', { method: 'POST' });
-          if (csrfResponse.ok) {
-            console.log('[apiFetch] CSRF token refreshed successfully. Retrying original request.');
-            retries++; // Use a retry attempt for CSRF refresh
-            const retryInput = input instanceof Request ? input.clone() : input;
-            return await fetchWithCsrf(retryInput, init);
-          } else {
-            console.error('[apiFetch] Failed to refresh CSRF token, server responded with:', await csrfResponse.text());
-            if (globalToast) {
-              globalToast({
-                title: 'خطأ في المزامنة',
-                description: 'لم نتمكن من تحديث جلستك. يرجى تحديث الصفحة والمحاولة مرة أخرى.',
-                variant: 'destructive',
-              });
-            }
-            return response; // Return original 403 response if CSRF refresh fails
-          }
-        } catch (e) {
-          console.error('[apiFetch] Error during CSRF token refresh request:', e);
-          if (globalToast) {
-            globalToast({
-              title: 'خطأ في الشبكة',
-              description: 'فشل الاتصال بالخادم لتحديث الجلسة. يرجى التحقق من اتصالك بالإنترنت.',
-              variant: 'destructive',
-            });
-          }
-          return response; // Return original 403 response on network error
-        }
-      } else if (response.status >= 500 && response.status < 600) {
-        console.warn(`[apiFetch] Received ${response.status} (Server Error). Retrying...`);
-        retries++;
-        if (retries <= MAX_RETRIES) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-          // Clone the request for retry
-          const retryInput = input instanceof Request ? input.clone() : input;
-          continue; // Continue to the next iteration of the loop to retry
-        } else {
-          console.error(`[apiFetch] Max retries exceeded for ${response.status} error.`);
-          return response; // Return the last 5xx response if max retries exceeded
+          const data = await validRes.clone().json();
+          cache.set(cacheKey, { data, timestamp: Date.now() });
+          console.log(`[apiFetch] Cached response for: ${url}`);
+        } catch {
+          // ليست JSON → لا نخزنها
+          console.log(`[apiFetch] Response not JSON, not caching: ${url}`);
         }
       }
 
-      // Check if the response is JSON before parsing
-      const contentType = response.headers.get('content-type');
-      if (contentType && contentType.includes('application/json')) {
-        return response; // Return response if it's JSON and not a 401/5xx error
-      } else {
-        // If not JSON, read as text and throw a custom error
-        const text = await response.text();
-        console.error(`[apiFetch] Non-JSON response received from ${input}:`, text);
-        const error = new Error(`Non-JSON response or unexpected content type: ${contentType || 'none'}. Status: ${response.status}. Response body: ${text.substring(0, 200)}...`);
-        (error as any).response = response; // Attach the original response for more context
+      return validRes;
+    } catch (error: unknown) {
+      clearTimeout(timeoutId);
+
+      if (error instanceof Error) {
+        if (error.name === "AbortError") {
+          console.error(`[apiFetch] Request aborted due to timeout: ${url}`);
+          showErrorToast("انتهت مهلة الطلب", "استغرق الطلب وقتًا طويلاً. يرجى المحاولة مرة أخرى.");
+          throw new Error("Request timeout");
+        }
+        console.error(`[apiFetch] Fetch error for ${url}:`, error.message);
         throw error;
+      } else {
+        console.error(`[apiFetch] Unknown error for ${url}:`, error);
+        throw new Error("An unknown error occurred");
       }
-    } catch (error) {
-      console.error('[apiFetch] Error during fetch:', error);
-      throw error; // Re-throw other errors (e.g., network errors)
     }
-  }
-  // This part should ideally not be reached if MAX_RETRIES is handled correctly within the loop
-  throw new Error('apiFetch: Unexpected error or max retries exceeded without a final response.');
+  };
+
+  return attemptFetch();
 };
 
 /**
@@ -131,5 +208,9 @@ export const useApiFetch = () => {
     setGlobalToast(toast);
   }, [triggerSessionRefresh, toast]); // Dependency array ensures it updates if functions change
 
-  return { apiFetch };
+  const memoizedApiFetch = useCallback<FetchFunction>(async (input, init) => {
+    return apiFetch(input, init);
+  }, []);
+
+  return { apiFetch: memoizedApiFetch };
 };

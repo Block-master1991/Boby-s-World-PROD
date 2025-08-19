@@ -1,5 +1,6 @@
 
 import { initializeAdminApp } from './firebase-admin';
+import * as admin from 'firebase-admin'; // Import admin namespace for QueryDocumentSnapshot
 import { getFirestore, FieldValue, Timestamp as AdminTimestamp } from 'firebase-admin/firestore'; // Explicitly import AdminTimestamp
 
 interface BlacklistedTokenDoc {
@@ -10,6 +11,9 @@ interface BlacklistedTokenDoc {
 }
 
 export class TokenBlacklistManager {
+  private static statsCache: { data: { totalBlacklisted: number; byReason: Record<string, number> } | null; timestamp: number } | null = null;
+  private static readonly STATS_CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
   private static getBlacklistCollection() {
     // This function assumes initializeAdminApp() has been called and succeeded.
     const db = getFirestore();
@@ -36,9 +40,12 @@ export class TokenBlacklistManager {
         revokedAt: FieldValue.serverTimestamp() as AdminTimestamp 
       });
       console.log(`[TokenBlacklist] Token JTI: ${jti} successfully added to blacklist. Reason: ${reason}, Original Exp: ${new Date(exp * 1000).toISOString()}`);
-    } catch (error: any) {
-      console.error(`[TokenBlacklist] Error adding token JTI: ${jti} to blacklist:`, error.message, error.stack);
+        } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[TokenBlacklist] Error adding token JTI: ${jti} to blacklist:`, errorMessage, errorStack);
     }
+
   }
 
   static async isBlacklisted(jti: string): Promise<boolean> {
@@ -69,13 +76,16 @@ export class TokenBlacklistManager {
       
       return true; // Found in blacklist and not super-expired for cleanup
 
-    } catch (error: any) {
-      console.error(`[TokenBlacklist] Error checking blacklist for token JTI: ${jti}:`, error.message, error.stack);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[TokenBlacklist] Error checking blacklist for token JTI: ${jti}:`, errorMessage, errorStack);
       // Fail-safe decision: If DB error, prefer to consider token as potentially valid to avoid undue user impact.
       // Log heavily and monitor. For extreme security, you might return true.
       console.warn(`[TokenBlacklist] Database error during blacklist check for JTI ${jti}. Treating as NOT blacklisted due to error.`);
       return false; 
     }
+
   }
 
   static async cleanupExpiredTokens(olderThanDays: number = 30): Promise<void> {
@@ -105,9 +115,12 @@ export class TokenBlacklistManager {
       });
       await batch.commit();
       console.log(`[TokenBlacklist] Cleaned up ${querySnapshot.size} old blacklisted tokens.`);
-    } catch (error: any) {
-        console.error(`[TokenBlacklist] Error during scheduled cleanup of expired tokens:`, error.message, error.stack);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[TokenBlacklist] Error during scheduled cleanup of expired tokens:`, errorMessage, errorStack);
     }
+
   }
 
   // This function remains illustrative as true implementation requires tracking active JTIs per user.
@@ -131,40 +144,87 @@ export class TokenBlacklistManager {
         //     await userSessionsRef.update({ activeJtis: [] });
         //   }
         // }
-    } catch (error: any) {
-      console.error(`[TokenBlacklist] Error in conceptual blacklistAllUserTokens for ${publicKey}:`, error.message, error.stack);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[TokenBlacklist] Error in conceptual blacklistAllUserTokens for ${publicKey}:`, errorMessage, errorStack);
     }
+
   }
 
-  static async getStats(): Promise<{ totalBlacklisted: number; byReason: Record<string, number> } | null> {
+  static async getStats(useCache = true): Promise<{ totalBlacklisted: number; byReason: Record<string, number> } | null> {
+    // Check cache first
+    if (useCache && this.statsCache && (Date.now() - this.statsCache.timestamp < this.STATS_CACHE_TTL_MS)) {
+      console.log(`[TokenBlacklist] Returning cached stats from ${new Date(this.statsCache.timestamp).toISOString()}`);
+      return this.statsCache.data;
+    }
+    
     try {
       await initializeAdminApp();
-      const db = getFirestore();
-      // For accurate counts on large collections, Firestore's aggregation queries should be used.
-      console.warn("[TokenBlacklist] getStats() is illustrative and uses .get() which can be slow/costly on large collections. For production, use Firestore aggregation queries for total count.");
       
-      // Get total count using aggregation if possible (requires specific setup/permissions)
-      // const totalCountSnapshot = await this.getBlacklistCollection().count().get();
-      // const totalBlacklisted = totalCountSnapshot.data().count;
+      // Get total count using aggregation
+      const totalCountSnapshot = await this.getBlacklistCollection().count().get();
+      const totalBlacklisted = totalCountSnapshot.data().count;
       
-      // For byReason, we might still need to fetch and iterate if distinct aggregation is complex or not available
-      // Fetching a sample for byReason stats (limited for performance)
-      const snapshot = await this.getBlacklistCollection().limit(2000).get(); // Increased limit slightly for better sample
+      // For byReason, use a more efficient approach with pagination
+      const byReason: Record<string, number> = {};
+      let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
+      const batchSize = 1000;
+      let hasMore = true;
+      let processedDocs = 0;
       
-      const stats = { totalBlacklisted: snapshot.size, byReason: {} as Record<string, number> };
-      // If using totalCountSnapshot.data().count, use that for stats.totalBlacklisted.
-      // The snapshot.size here is just for the limited query.
-
-      snapshot.forEach(doc => {
-        const data = doc.data() as BlacklistedTokenDoc;
-        stats.byReason[data.reason] = (stats.byReason[data.reason] || 0) + 1;
-      });
-      console.log(`[TokenBlacklist] Stats based on ${snapshot.size} sampled documents:`, stats);
+      console.log(`[TokenBlacklist] Starting stats computation for ${totalBlacklisted} total blacklisted tokens`);
+      
+      while (hasMore) {
+        let query = this.getBlacklistCollection()
+          .select('reason')
+          .limit(batchSize);
+          
+        if (lastDoc) {
+          query = query.startAfter(lastDoc);
+        }
+        
+        const snapshot = await query.get();
+        
+        if (snapshot.empty) {
+          hasMore = false;
+          break;
+        }
+        
+        snapshot.docs.forEach(doc => {
+          const data = doc.data() as BlacklistedTokenDoc;
+          byReason[data.reason] = (byReason[data.reason] || 0) + 1;
+          processedDocs++;
+        });
+        
+        lastDoc = snapshot.docs[snapshot.docs.length - 1];
+        
+        if (snapshot.docs.length < batchSize) {
+          hasMore = false;
+        }
+        
+        // Log progress for large collections
+        if (totalBlacklisted > 10000 && processedDocs % 5000 === 0) {
+          console.log(`[TokenBlacklist] Stats computation progress: ${processedDocs}/${totalBlacklisted} documents processed`);
+        }
+      }
+      
+      const stats = { totalBlacklisted, byReason };
+      
+      // Update cache
+      this.statsCache = {
+        data: stats,
+        timestamp: Date.now()
+      };
+      
+      console.log(`[TokenBlacklist] Stats computed:`, stats);
       return stats;
-    } catch (error: any) {
-        console.error(`[TokenBlacklist] Error getting blacklist stats:`, error.message, error.stack);
-        return null;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error(`[TokenBlacklist] Error getting blacklist stats:`, errorMessage, errorStack);
+      this.statsCache = null; // Invalidate cache on error
+      return null;
     }
   }
 }
-    

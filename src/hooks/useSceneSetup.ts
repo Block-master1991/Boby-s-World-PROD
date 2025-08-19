@@ -5,17 +5,17 @@ import * as React from 'react';
 import * as THREE from 'three';
 
 import type { MutableRefObject } from 'react';
-import { Octree, OctreeObject } from '../lib/Octree';
+import { Octree } from '../lib/Octree';
+import { GameObject } from '@/types/game';
 
 interface UseSceneSetupProps {
   mountRef: MutableRefObject<HTMLDivElement | null>;
   sceneRef: MutableRefObject<THREE.Scene | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   rendererRef: MutableRefObject<THREE.WebGLRenderer | null>;
-  octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
-
+  octreeRef: MutableRefObject<Octree<GameObject> | null>; // Added Octree ref
   isPausedRef: MutableRefObject<boolean>;
-  isJoystickInteractionActiveRef: MutableRefObject<boolean>; // Kept for other potential uses, though not for controls here
+  isJoystickInteractionActiveRef: MutableRefObject<boolean>;
 }
 
 export const useSceneSetup = ({
@@ -24,9 +24,6 @@ export const useSceneSetup = ({
   cameraRef,
   rendererRef,
   octreeRef, // Added Octree ref
-
-  isPausedRef,
-  isJoystickInteractionActiveRef,
 }: UseSceneSetupProps) => {
 
   const initializeScene = React.useCallback(() => {
@@ -50,7 +47,7 @@ export const useSceneSetup = ({
 
     // Initialize Octree
     const worldBounds = new THREE.Box3(new THREE.Vector3(-1000, -10, -1000), new THREE.Vector3(1000, 300, 1000));
-    const octree = new Octree(worldBounds);
+    const octree = new Octree<GameObject>(worldBounds);
     octreeRef.current = octree;
 
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
@@ -78,7 +75,7 @@ export const useSceneSetup = ({
 
     // Add ground plane to Octree
     const groundBox = new THREE.Box3().setFromObject(groundPlane);
-    octree.insert({ id: 'ground', bounds: groundBox, data: groundPlane });
+    octree.insert({ id: 'ground', bounds: groundBox, data: groundPlane as unknown as GameObject });
     
     return true;
   }, [mountRef, sceneRef, cameraRef, rendererRef, octreeRef]); // controlsRef removed from dependencies, octreeRef added

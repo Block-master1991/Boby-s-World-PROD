@@ -5,8 +5,9 @@ import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'; // 
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
-import { Octree, OctreeObject } from '../lib/Octree'; // Import Octree
+import { Octree } from '../lib/Octree'; // Import Octree
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
+import { GameObject } from '@/types/game';
 
 const NORMAL_DOG_SPEED = 0.1; // Normal walking speed
 const SPRINT_DOG_SPEED = 0.3; // Sprinting speed
@@ -38,12 +39,11 @@ interface UseDogLogicProps {
     isSpeedBoostActiveRef: MutableRefObject<boolean>;
     isShieldActiveRef: MutableRefObject<boolean>;
     isJoystickInteractionActiveRef: MutableRefObject<boolean>;
-    octreeRef: MutableRefObject<Octree | null>; // Added Octree ref
+    octreeRef: MutableRefObject<Octree<GameObject> | null>; // Added Octree ref
 }
 
 export const useDogLogic = ({
     sceneRef,
-    clockRef,
     keysPressedRef,
     joystickInputRef,
     isPausedRef,
@@ -152,7 +152,7 @@ export const useDogLogic = ({
                     rotationY: dogModelRef.current.rotation.y
                 };
             }
-        }).catch((error: any) => { // Catch errors from loadModel promise
+        }).catch((error: Error) => { // Catch errors from loadModel promise
             console.error('Error loading dog GLB model (final catch):', error);
             const dogGeometry = new THREE.BoxGeometry(DOG_MODEL_SCALE, DOG_MODEL_SCALE, DOG_MODEL_SCALE);
             const dogMaterial = new THREE.MeshStandardMaterial({ color: 0xA0522D });
@@ -327,7 +327,7 @@ export const useDogLogic = ({
 
         return { isDogActuallyMoving, rotationAppliedThisFrame };
 
-    }, [ clockRef, keysPressedRef, joystickInputRef, isPausedRef, isSpeedBoostActiveRef, isJoystickInteractionActiveRef, octreeRef]);
+    }, [ keysPressedRef, joystickInputRef, isPausedRef, isSpeedBoostActiveRef, isJoystickInteractionActiveRef, octreeRef]);
 
     useEffect(() => {
         const dog = dogModelRef.current;

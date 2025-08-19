@@ -8,7 +8,6 @@ interface OptimizedStaticObjectManagerProps {
   camera: THREE.Camera;
   renderer: THREE.WebGLRenderer;
   playerPosition: THREE.Vector3;
-  playerDirection: { x: number; z: number };
 }
 
 export const OptimizedStaticObjectManager: React.FC<OptimizedStaticObjectManagerProps> = ({
@@ -16,7 +15,6 @@ export const OptimizedStaticObjectManager: React.FC<OptimizedStaticObjectManager
   camera,
   renderer,
   playerPosition,
-  playerDirection,
 }) => {
   const {
     loadModelsWithOptimizations,

@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback, MutableRefObject, useRef } from 'react';
 import * as THREE from 'three';
-import { useDynamicModelLoader, DynamicLoadableObject } from './useDynamicModelLoader';
 import { Octree } from '@/lib/Octree';
 import { useTreeLogic } from './useTreeLogic'; // Import useTreeLogic
+import { GameObject } from '@/types/game';
 
 interface UseGameAssetLoaderProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
-  octreeRef: MutableRefObject<Octree | null>;
+  octreeRef: MutableRefObject<Octree<GameObject> | null>;
   // Callbacks for initialization of game elements
   initializeDog: (onProgress?: (url: string, loaded: number, total: number) => void) => Promise<void>;
   initializeCoins: (onProgress?: (url: string, loaded: number, total: number) => void) => Promise<void>;
@@ -33,6 +33,8 @@ export const useGameAssetLoader = ({
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
+  useTreeLogic({ sceneRef, octreeRef });
+
   const totalAssetsToLoad = 4; // Dog, Coins, Enemies, Trees
   const progressRef = useRef({ dog: 0, coins: 0, enemies: 0, trees: 0 }); // Add trees
 
@@ -47,9 +49,12 @@ export const useGameAssetLoader = ({
       const progressPercentage = total > 0 ? (loaded / total) * 100 : 100;
       progressRef.current[assetName] = progressPercentage;
       console.log(`[GameAssetLoader] ${assetName} progress: ${loaded}/${total} (${progressPercentage.toFixed(2)}%)`);
+      if (onProgress) {
+        onProgress(url, loaded, total);
+      }
       updateProgress();
     };
-  }, [updateProgress]);
+  }, [updateProgress, onProgress]);
 
   const loadGameAssets = useCallback(async () => {
     setIsLoadingAssets(true);
@@ -92,9 +97,13 @@ export const useGameAssetLoader = ({
       setLoadProgress(100);
       console.log("[GameAssetLoader] All game assets loaded successfully. Final Progress: 100%");
 
-    } catch (err: any) {
+    } catch (err) {
       console.error("[GameAssetLoader] Critical error during game asset loading:", err);
-      setError(err.message || "Failed to load game assets.");
+      if (err instanceof Error) {
+        setError(err.message);
+      } else {
+        setError("An unknown error occurred while loading game assets.");
+      }
       setIsLoadingAssets(false);
       setLoadProgress(0);
       // Re-throw the error to ensure it's caught by the parent component (GameCanvas)

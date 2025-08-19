@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { GameObject } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast';
 import { storeItems, type StoreItemDefinition } from '@/lib/items'; // Assuming '@/lib/items' defines store items
@@ -48,7 +49,7 @@ const MAX_JOYSTICK_TRAVEL = (JOYSTICK_BASE_SIZE / 2) - (JOYSTICK_KNOB_SIZE / 2);
 import { Octree } from '@/lib/Octree'; // Import Octree
 
 interface GameUIProps {
-    octreeRef: React.MutableRefObject<Octree | null>;
+    octreeRef: React.MutableRefObject<Octree<GameObject> | null>;
     onLoadStart: () => void;
     onLoadProgress: (progress: number) => void;
     onLoadComplete: (success: boolean) => void;
@@ -83,7 +84,7 @@ const GameUI: React.FC<GameUIProps> = ({
     // New State for pending optimistic updates
     const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate[]>([]);
     // Queue for Bottle consumption requests
-    const BottleConsumptionQueueRef = useRef<Array<{ id: string; resolve: (success: boolean) => void; reject: (error: any) => void }>>([]);
+    const BottleConsumptionQueueRef = useRef<Array<{ id: string; resolve: (success: boolean) => void; reject: (error: Error) => void }>>([]);
     const isProcessingBottleQueueRef = useRef(false);
 
     // Game Effect States
@@ -221,7 +222,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 setPlayerGameUSDT(data.gameUSDTBalance || 0);
                 const rawInventory = data.inventory || [];
                 let speedyCount = 0, shieldCount = 0, pBottleCount = 0, magnetCount = 0;
-                rawInventory.forEach((item: any) => {
+                rawInventory.forEach((item: { id: string }) => {
                     const itemId = typeof item === 'object' && item.id ? item.id : item;
                     if (itemId === '1') pBottleCount++;
                     if (itemId === '2') shieldCount++;
@@ -237,7 +238,7 @@ const GameUI: React.FC<GameUIProps> = ({
             }
         } catch (error) {
             console.error("Network or unexpected error fetching player data from backend:", error);
-            if ((error as any).name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
                 console.debug('[GameUI] fetchPlayerData aborted.'); // Changed to console.debug
             } else {
                 console.debug("Network or unexpected error fetching player data from backend:", error); // Changed to console.debug
@@ -375,18 +376,18 @@ const GameUI: React.FC<GameUIProps> = ({
                 console.error("Backend error adding coin:", data.error || 'Failed to add coin.'); // Log error instead of throwing
                 toast({ title: 'Sync Error', description: data.error || 'Failed to add coin to your balance.', variant: 'destructive' });
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error("Network or unexpected error adding coin to backend:", error);
-            let errorMessage = `Could not update your total USDT balance: ${error.message || String(error)}`;
-            if (error.message && error.message.includes('CSRF token missing')) {
+            let errorMessage = `Could not update your total USDT balance: ${error instanceof Error ? error.message : String(error)}`;
+            if (error instanceof Error && error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-            } else if (error.message && error.message.includes('Non-JSON response')) {
+            } else if (error instanceof Error && error.message && error.message.includes('Non-JSON response')) {
                 errorMessage = 'Server returned an unexpected response format. Please try again later.';
-            } else if (error.message && error.message.includes('Failed to fetch')) {
+            } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
                 errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
             }
             
-            if ((error as any).name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
                 console.log('[GameUI] handleCoinCollected aborted.');
             } else {
                 toast({ title: 'Sync Error', description: errorMessage, variant: 'destructive' });
@@ -599,15 +600,15 @@ const GameUI: React.FC<GameUIProps> = ({
         if (itemIdToConsume === '3') {
             itemDefinition = speedyPawsTreatDef;
             activationFunction = activateSpeedBoost;
-            currentItemCount = speedyPawsTreatCount;
+            currentItemCount = displayedSpeedyPawsTreatCount;
         } else if (itemIdToConsume === '2') {
             itemDefinition = guardianShieldDef;
             activationFunction = activateGuardianShield;
-            currentItemCount = guardianShieldCount;
+            currentItemCount = displayedGuardianShieldCount;
         } else if (itemIdToConsume === '4') {
             itemDefinition = coinMagnetTreatDef;
             activationFunction = activateCoinMagnet;
-            currentItemCount = coinMagnetTreatCount;
+            currentItemCount = displayedCoinMagnetTreatCount;
         } else {
             toast({ title: 'Unknown Item', description: 'This item cannot be used this way.', variant: 'destructive'}); return;
         }
@@ -633,8 +634,7 @@ const GameUI: React.FC<GameUIProps> = ({
             itemId: itemIdToConsume,
             amount: amountToUse,
             timestamp: Date.now(),
-            status: 'pending',
-            rollbackEffect: rollbackEffect // Store the rollback function
+            status: 'pending'
         }]);
 
         const controller = new AbortController();
@@ -675,18 +675,18 @@ const GameUI: React.FC<GameUIProps> = ({
                 console.error("Backend error using item:", data.error || `Failed to use ${itemDefinition.name}.`); // Log error instead of throwing
                 toast({ title: 'Failed to Use Item', description: data.error || `Failed to use ${itemDefinition.name}.`, variant: 'destructive' });
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error("Network or unexpected error using item via backend:", error);
-            let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error.message || String(error)}`;
-            if (error.message && error.message.includes('CSRF token missing')) {
+            let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error instanceof Error ? error.message : String(error)}`;
+            if (error instanceof Error && error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-            } else if (error.message && error.message.includes('Non-JSON response')) {
+            } else if (error instanceof Error && error.message && error.message.includes('Non-JSON response')) {
                 errorMessage = 'Server returned an unexpected response format. Please try again later.';
-            } else if (error.message && error.message.includes('Failed to fetch')) {
+            } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
                 errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
             }
             
-            if ((error as any).name === 'AbortError') {
+            if (error instanceof Error && error.name === 'AbortError') {
                 console.log('[GameUI] handleUseConsumableItem aborted.');
             } else {
                 toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
@@ -696,7 +696,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 if (rollbackEffect) rollbackEffect(); // Call rollback effect
             }
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData, apiFetch ]); // Added apiFetch to dependencies
 
     /**
      * Handles the withdrawal of USDT from the player's game balance via backend API.
@@ -753,17 +753,17 @@ const GameUI: React.FC<GameUIProps> = ({
                 console.error("Backend error withdrawing USDT:", data.error || 'Withdrawal failed.'); // Log error instead of throwing
                 toast({ title: "Withdrawal Error", description: data.error || 'Withdrawal failed.', variant: "destructive" });
             }
-        } catch (error: any) {
+        } catch (error) {
             console.error("Network or unexpected error withdrawing USDT via backend:", error);
-            let errorMessage = `Withdrawal failed: ${error.message || String(error)}`;
-            if ((error as any).name === 'AbortError') {
+            let errorMessage = `Withdrawal failed: ${error instanceof Error ? error.message : String(error)}`;
+            if (error instanceof Error && error.name === 'AbortError') {
                 console.log('[GameUI] handleWithdrawUSDT aborted.');
             } else {
-                if (error.message && error.message.includes('CSRF token missing')) {
+                if (error instanceof Error && error.message && error.message.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-                } else if (error.message && error.message.includes('Non-JSON response')) {
+                } else if (error instanceof Error && error.message && error.message.includes('Non-JSON response')) {
                     errorMessage = 'Server returned an unexpected response format. Please try again later.';
-                } else if (error.message && error.message.includes('Failed to fetch')) {
+                } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
                     errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
                 }
                 toast({ title: "Withdrawal Error", description: errorMessage, variant: "destructive" });
@@ -779,44 +779,6 @@ const GameUI: React.FC<GameUIProps> = ({
     /**
      * Handles the consumption of a Protection Bottle via backend API.
      */
-    const handleConsumeProtectionBottle = useCallback(async () => {
-        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBottleCount <= 0) {
-            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet, or you have no Bottles left.', variant: 'destructive' });
-            return;
-        }
-
-        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
-
-        // Add optimistic update immediately
-        setOptimisticUpdates(prev => [...prev, {
-            id: updateId,
-            type: 'consumeBottle',
-            amount: 1,
-            timestamp: Date.now(),
-            status: 'pending'
-        }]);
-
-        // Enqueue the request
-        BottleConsumptionQueueRef.current.push({
-            id: updateId,
-            resolve: (success) => {
-                if (success) {
-                    //toast({ title: 'Protected!', description: 'A Protection Bottle was used!', variant: 'default' });
-                } else {
-                    // Error toast is handled by processBottleConsumptionQueue
-                }
-            },
-            reject: (error) => {
-                // Error toast is handled by processBottleConsumptionQueue
-            }
-        });
-
-        // Trigger queue processing if not already running
-        if (!isProcessingBottleQueueRef.current) {
-            processBottleConsumptionQueue();
-        }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBottleCount, toast, optimisticUpdates]);
-
     // New function to process the Bottle consumption queue
     const processBottleConsumptionQueue = useCallback(async () => {
         if (isProcessingBottleQueueRef.current || BottleConsumptionQueueRef.current.length === 0) {
@@ -826,7 +788,7 @@ const GameUI: React.FC<GameUIProps> = ({
         isProcessingBottleQueueRef.current = true;
 
         while (BottleConsumptionQueueRef.current.length > 0) {
-            const { id: updateId, resolve, reject } = BottleConsumptionQueueRef.current[0]; // Peek at the first item
+            const { id: updateId, resolve } = BottleConsumptionQueueRef.current[0]; // Peek at the first item
 
             const controller = new AbortController();
             const signal = controller.signal;
@@ -863,21 +825,21 @@ const GameUI: React.FC<GameUIProps> = ({
                         update.id === updateId ? { ...update, status: 'failed' } : update
                     ));
                     console.error("Backend error consuming protection Bottle:", data.error || 'Failed to consume protection Bottle.');
-                    let errorMessage = `Could not consume Protection Bottle. Backend error: ${data.error || 'Unknown error'}`;
+                    const errorMessage = `Could not consume Protection Bottle. Backend error: ${data.error || 'Unknown error'}`;
                     toast({ title: 'Failed to Use Bottle', description: errorMessage, variant: 'destructive' });
                     resolve(false); // Indicate failure
                 }
-            } catch (error: any) {
+            } catch (error) {
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
                 console.error("Network or unexpected error consuming protection Bottle via backend:", error);
-                let errorMessage = `Could not consume Protection Bottle. Error: ${error.message || String(error)}`;
-                if (error.message && errorMessage.includes('CSRF token missing')) {
+                let errorMessage = `Could not consume Protection Bottle. Error: ${error instanceof Error ? error.message : String(error)}`;
+                if (error instanceof Error && error.message && errorMessage.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-                } else if (error.message && error.message.includes('Non-JSON response')) {
+                } else if (error instanceof Error && error.message && error.message.includes('Non-JSON response')) {
                     errorMessage = 'Server returned an unexpected response format. Please try again later.';
-                } else if (error.message && error.message.includes('Failed to fetch')) {
+                } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
                     errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
                 }
                 toast({ title: 'Failed to Use Bottle', description: errorMessage, variant: 'destructive' });
@@ -888,7 +850,45 @@ const GameUI: React.FC<GameUIProps> = ({
         }
 
         isProcessingBottleQueueRef.current = false;
-    }, [isAuthenticated, authUser?.publicKey, toast, fetchPlayerData, optimisticUpdates, apiFetch]); // Added apiFetch to dependencies
+    }, [toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
+
+    const handleConsumeProtectionBottle = useCallback(async () => {
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey || displayedProtectionBottleCount <= 0) {
+            toast({ title: 'Action Blocked', description: 'Please connect and authenticate your wallet, or you have no Bottles left.', variant: 'destructive' });
+            return;
+        }
+
+        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+
+        // Add optimistic update immediately
+        setOptimisticUpdates(prev => [...prev, {
+            id: updateId,
+            type: 'consumeBottle',
+            amount: 1,
+            timestamp: Date.now(),
+            status: 'pending'
+        }]);
+
+        // Enqueue the request
+        BottleConsumptionQueueRef.current.push({
+            id: updateId,
+            resolve: (success) => {
+                if (success) {
+                    //toast({ title: 'Protected!', description: 'A Protection Bottle was used!', variant: 'default' });
+                } else {
+                    // Error toast is handled by processBottleConsumptionQueue
+                }
+            },
+            reject: () => {
+                // Error toast is handled by processBottleConsumptionQueue
+            }
+        });
+
+        // Trigger queue processing if not already running
+        if (!isProcessingBottleQueueRef.current) {
+            processBottleConsumptionQueue();
+        }
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedProtectionBottleCount, toast, processBottleConsumptionQueue]);
 
     /**
      * Applies a penalty to the player's game USDT balance upon enemy collision via backend API.
@@ -943,17 +943,17 @@ const GameUI: React.FC<GameUIProps> = ({
                 toast({ title: 'Penalty Error', description: data.error || 'Failed to apply penalty.', variant: 'destructive' });
             }
 
-        } catch (error: any) {
+        } catch (error) {
             console.error("Network or unexpected error applying enemy collision penalty via backend:", error);
-            let errorMessage = `Could not apply penalty. Error: ${error.message || String(error)}`;
-            if ((error as any).name === 'AbortError') {
+            let errorMessage = `Could not apply penalty. Error: ${error instanceof Error ? error.message : String(error)}`;
+            if (error instanceof Error && error.name === 'AbortError') {
                 console.log('[GameUI] handleEnemyCollisionPenalty aborted.');
             } else {
-                if (error.message && errorMessage.includes('CSRF token missing')) {
+                if (error instanceof Error && error.message && errorMessage.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-                } else if (error.message && error.message.includes('Non-JSON response')) {
+                } else if (error instanceof Error && error.message && errorMessage.includes('Non-JSON response')) {
                     errorMessage = 'Server returned an unexpected response format. Please try again later.';
-                } else if (error.message && error.message.includes('Failed to fetch')) {
+                } else if (error instanceof Error && error.message && errorMessage.includes('Failed to fetch')) {
                     errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
                 }
                 toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useCallback, useState, useImperativeHandle, forwardRef } from 'react';
+import { useEffect, useRef, useCallback, useState, useImperativeHandle, forwardRef } from 'react';
 
 export interface SoundManagerRef {
   toggleMute: () => void;
@@ -67,8 +67,8 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
           await audioRef.current.play();
           console.log(`[SoundManager] Playing: ${currentTrackSrc.current}`);
         }
-      } catch (e: any) {
-        if (e.name === 'NotAllowedError' || e.name === 'AbortError') {
+      } catch (e: unknown) {
+        if (e instanceof Error && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
           console.warn("[SoundManager] Audio playback blocked by browser autoplay policy or aborted:", e.message);
           if (onPlaybackBlocked) {
             onPlaybackBlocked();
@@ -162,5 +162,5 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
 
   return null;
 });
-
+SoundManager.displayName = 'SoundManager';
 export default SoundManager;

@@ -1,10 +1,11 @@
 
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { PublicKey } from '@solana/web3.js';
+import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BOBY_TOKEN_MINT_ADDRESS, USDT_TOKEN_MINT_ADDRESS, LAMPORTS_PER_SOL } from '@/lib/constants';
 import { AlertTriangle, Loader2, WalletCards } from 'lucide-react';
@@ -37,7 +38,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ isLoading, balance, err
                 {!isLoading && error && (
                     <div className="flex items-center text-destructive text-sm">
                         <AlertTriangle className="h-4 w-4 mr-1 rtl:ml-1" /> Error
-                        {/* {onRetry && <Button onClick={onRetry} size="sm" variant="ghost" className="ml-1 h-auto p-1 text-xs">Retry</Button>} */}
+                     {onRetry && <Button onClick={onRetry} size="sm" variant="ghost" className="ml-1 h-auto p-1 text-xs">Retry</Button>}
                     </div>
                 )}
                 {!isLoading && !error && (
@@ -65,7 +66,7 @@ const TokenBalance: React.FC = () => {
     const [bobyError, setBobyError] = useState<ErrorType>(null);
     const [usdtError, setUsdtError] = useState<ErrorType>(null); 
 
-    const fetchBalances = async () => {
+    const fetchBalances = useCallback(async () => {
         if (!connection || !sessionPublicKey || !isAdapterConnected) {
             setSolBalance(null); setBobyBalance(null); setUsdtBalance(null); 
             setIsLoadingSol(false); setIsLoadingBoby(false); setIsLoadingUsdt(false); 
@@ -80,9 +81,11 @@ const TokenBalance: React.FC = () => {
         try {
             const balanceInLamports = await connection.getBalance(sessionPublicKey);
             setSolBalance(balanceInLamports / LAMPORTS_PER_SOL);
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error fetching SOL balance:", error);
-            setSolError(error.message.includes('RPC') ? 'rpc' : 'other');
+            if (error instanceof Error) {
+                setSolError(error.message.includes('RPC') ? 'rpc' : 'other');
+            }
             setSolBalance(null);
         } finally {
             setIsLoadingSol(false);
@@ -96,9 +99,11 @@ const TokenBalance: React.FC = () => {
             } else {
                 setBobyBalance(0);
             }
-        } catch (error: any) {
+        } catch (error: unknown) {
             console.error("Error fetching Boby balance:", error);
-            setBobyError(error.message.includes('RPC') ? 'rpc' : 'other');
+            if (error instanceof Error) {
+                setBobyError(error.message.includes('RPC') ? 'rpc' : 'other');
+            }
             setBobyBalance(null);
         } finally {
             setIsLoadingBoby(false);
@@ -112,20 +117,22 @@ const TokenBalance: React.FC = () => {
             } else {
                 setUsdtBalance(0); 
             }
-        } catch (error: any) {
-            console.error("Error fetching USDT balance:", error); 
-            setUsdtError(error.message.includes('RPC') ? 'rpc' : 'other'); 
-            setUsdtBalance(null); 
+        } catch (error: unknown) {
+            console.error("Error fetching USDT balance:", error);
+            if (error instanceof Error) {
+                setUsdtError(error.message.includes('RPC') ? 'rpc' : 'other');
+            }
+            setUsdtBalance(null);
         } finally {
             setIsLoadingUsdt(false); 
         }
-    };
+    }, [connection, sessionPublicKey, isAdapterConnected]);
 
     useEffect(() => {
         fetchBalances();
         const intervalId = setInterval(fetchBalances, 30000); 
         return () => clearInterval(intervalId);
-    }, [connection, sessionPublicKey, isAdapterConnected]);
+    }, [connection, sessionPublicKey, isAdapterConnected, fetchBalances]);
 
 
     if (!sessionPublicKey) {

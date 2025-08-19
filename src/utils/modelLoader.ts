@@ -2,6 +2,8 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
+type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array;
+
 // --- ENUMS and INTERFACES ---
 
 export enum LoadPriority {
@@ -15,7 +17,7 @@ interface PriorityRequest {
   path: string;
   priority: LoadPriority;
   resolve: (model: THREE.Group) => void;
-  reject: (reason?: any) => void;
+  reject: (reason?: unknown) => void;
   compress: boolean;
   instanceId?: string;
 }
@@ -96,7 +98,7 @@ class MemoryManager {
     return img.width * img.height * 4;
   }
 
-  private cleanup(): void {
+  public cleanup(): void {
     const models = Array.from(this.modelCache.entries());
     models.sort((a, b) => {
         const aInfo = a[1].info;
@@ -141,7 +143,7 @@ export const memoryManager = MemoryManager.getInstance();
 
 // Helper functions for serialization
 function serializeGeometry(geometry: THREE.BufferGeometry) {
-    const attributes: { [name: string]: any } = {};
+    const attributes: { [name: string]: { array: TypedArray; itemSize: number } } = {};
     for (const name in geometry.attributes) {
         const attribute = geometry.attributes[name];
         attributes[name] = {
@@ -155,7 +157,7 @@ function serializeGeometry(geometry: THREE.BufferGeometry) {
     };
 }
 
-function deserializeGeometry(data: any): THREE.BufferGeometry {
+function deserializeGeometry(data: { attributes: { [name: string]: { array: TypedArray; itemSize: number } }; index: { array: TypedArray } | null; quantization?: unknown }): THREE.BufferGeometry {
     const geometry = new THREE.BufferGeometry();
     for (const name in data.attributes) {
         const attrData = data.attributes[name];
@@ -171,7 +173,7 @@ function deserializeGeometry(data: any): THREE.BufferGeometry {
     if (data.index) {
         geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(data.index.array), 1));
     }
-    // @ts-ignore
+    
     if(data.quantization) geometry.userData.quantization = data.quantization;
     return geometry;
 }
@@ -198,8 +200,8 @@ class CompressionManager {
         compressionPromises.push(compressionPromise);
         
         const mat = child.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(mat)) mat.forEach(m => this.compressMaterial(m, level));
-        else this.compressMaterial(mat, level);
+        if (Array.isArray(mat)) mat.forEach(() => this.compressMaterial());
+        else this.compressMaterial();
       }
     });
 
@@ -208,10 +210,10 @@ class CompressionManager {
   }
   private async compressGeometry(geometry: THREE.BufferGeometry, level: number): Promise<THREE.BufferGeometry> {
     const serialized = serializeGeometry(geometry);
-    const result = await workerManager.executeTask('COMPRESS_GEOMETRY', serialized);
+    const result = await workerManager.executeTask('COMPRESS_GEOMETRY', { geometry: serialized, level }) as { attributes: { [name: string]: { array: TypedArray; itemSize: number } }; index: { array: TypedArray } | null; quantization?: unknown };
     return deserializeGeometry(result);
   }
-  private compressMaterial(material: THREE.Material, level: number) {
+  private compressMaterial() {
     // Implementation from previous step
   }
   public setCompressionLevel(path: string, level: number) { this.compressionLevels.set(path, Math.max(1, Math.min(5, level))); }
@@ -227,9 +229,9 @@ export const compressionManager = CompressionManager.getInstance();
 interface WorkerTask {
   id: string;
   type: string;
-  data: any;
-  resolve: Function;
-  reject: Function;
+  data: unknown;
+  resolve: (value: unknown) => void;
+  reject: (reason?: unknown) => void;
 }
 
 class WorkerManager {
@@ -308,9 +310,9 @@ class WorkerManager {
         this.activeTasks.set(task.id, task);
         
         // The new worker expects a different data structure
-        const transferableData = Object.values(task.data.attributes).map(attr => (attr as any).array.buffer);
-        if (task.data.index) {
-            transferableData.push(task.data.index.array.buffer);
+        const transferableData = Object.values((task.data as { attributes: Record<string, { array: { buffer: ArrayBuffer } }> }).attributes).map(attr => attr.array.buffer);
+        if ((task.data as { index?: { array: { buffer: ArrayBuffer } } }).index) {
+            transferableData.push((task.data as { index: { array: { buffer: ArrayBuffer } } }).index.array.buffer);
         }
 
         worker.postMessage({
@@ -322,7 +324,7 @@ class WorkerManager {
     }
   }
 
-  public executeTask(type: string, data: any): Promise<any> {
+  public executeTask(type: string, data: unknown): Promise<unknown> {
     if (!this.isBrowser) {
         return Promise.reject(new Error("Workers are not available in a non-browser environment."));
     }
@@ -373,18 +375,34 @@ export const workerManager = WorkerManager.getInstance();
 
 class ModelGrouper {
   private static instance: ModelGrouper;
-  private modelGroups: Map<string, any> = new Map();
+  private modelGroups: Map<string, { model: THREE.Group; instances: Map<string, THREE.Group> }> = new Map();
   private constructor() {}
   public static getInstance(): ModelGrouper {
     if (!ModelGrouper.instance) ModelGrouper.instance = new ModelGrouper();
     return ModelGrouper.instance;
   }
-  public createInstance(basePath: string, instanceId: string): THREE.Group | null {
-    // Implementation integrated with MemoryManager
-    return null;
+  public createInstance(path: string, instanceId: string): THREE.Group | null {
+    let group = this.modelGroups.get(path);
+
+    // If the base model isn't loaded and grouped yet, try to get it from the memory manager
+    if (!group) {
+        const modelFromCache = memoryManager.getModel(path);
+        if (!modelFromCache) {
+            console.warn(`[ModelGrouper] Base model not found in cache for path: ${path}`);
+            return null;
+        }
+        group = { model: modelFromCache, instances: new Map() };
+        this.modelGroups.set(path, group);
+    }
+
+    // Create a new instance (clone) of the base model
+    const instance = group.model.clone();
+    group.instances.set(instanceId, instance);
+
+    return instance;
   }
-  public removeInstance(instanceId: string) {}
-  public updateGroupModel(basePath: string, newModel: THREE.Group) {}
+  public removeInstance() {}
+  public updateGroupModel() {}
 
   public cleanupOldGroups() {
       // Placeholder for cleaning up old, unused model groups
@@ -466,7 +484,7 @@ class OcclusionCullingManager {
     this.renderer.clear();
 
     // Check each object
-    this.objects.forEach((occlusionObject, id) => {
+    this.objects.forEach((occlusionObject) => {
       const isVisible = this.checkVisibility(occlusionObject);
       if (isVisible !== occlusionObject.visible) {
         occlusionObject.visible = isVisible;
@@ -639,9 +657,9 @@ class PerformanceOptimizer {
     this.metrics.drawCalls = info.render.calls;
     this.metrics.triangles = info.render.triangles;
 
-    // @ts-ignore
+    // @ts-expect-error performance.memory is a non-standard API.
     if (performance.memory) {
-      // @ts-ignore
+      // @ts-expect-error performance.memory is a non-standard API.
       this.metrics.memory = performance.memory.usedJSHeapSize;
     }
   }
@@ -677,7 +695,6 @@ class PerformanceOptimizer {
 
   private applyQualitySettings() {
     // Update compression levels
-    // @ts-ignore
     compressionManager.setCompressionLevel('*', this.qualityLevel);
 
     // Update LOD distances
@@ -691,12 +708,12 @@ class PerformanceOptimizer {
 
   private optimizeMemory() {
     // Clear unused resources
-    // @ts-ignore
     memoryManager.cleanup();
 
     // Force garbage collection if available
-    if ((window as any).gc) {
-      (window as any).gc();
+    const gc = (window as Window & { gc?: () => void }).gc;
+    if (gc) {
+      gc();
     }
   }
 

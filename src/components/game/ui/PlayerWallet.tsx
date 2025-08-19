@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Wallet, Send, Loader2, Info, AlertCircle } from 'lucide-react';
 import Image from 'next/image';
 import { Separator } from '@/components/ui/separator';
-import { Card, CardHeader, CardTitle, CardContent, CardDescription as ShadCardDescription } from '@/components/ui/card';
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import BobyPriceDisplay from '@/components/game/BobyPriceDisplay';
 import TokenBalance from '@/components/game/TokenBalance';
 import DisconnectButton from '@/components/shared/DisconnectButton';
@@ -46,7 +46,7 @@ const PlayerWallet: React.FC<PlayerWalletProps> = ({
     <>
       <SheetHeader className="p-4 pb-2 border-b">
         <SheetTitle className="text-2xl font-headline flex items-center gap-2">
-          <img src="/wallet.png" alt="Wallet Icon" className="h-7 w-7" /> Player Wallet
+            <Image src="/wallet.png" alt="Wallet Icon" width={28} height={28} className="h-7 w-7" /> Player Wallet
         </SheetTitle>
         <BobyPriceDisplay />
         {isWalletMismatch && sessionPublicKey && adapterPublicKey && (

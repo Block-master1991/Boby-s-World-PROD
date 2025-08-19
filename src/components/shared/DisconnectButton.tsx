@@ -19,7 +19,7 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
   redirectPath = '/', 
   ...buttonProps 
 }) => {
-  const { logout: logoutAuthHook, user: authUser } = useAuth();
+  const { logout: logoutAuthHook } = useAuth();
   const { disconnectFromSession, sessionPublicKey } = useSessionWallet();
   const { toast } = useToast();
   const router = useRouter();
@@ -51,11 +51,11 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
         router.push(redirectPath);
       }
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("[DisconnectButton] Error during full disconnect process:", error);
       toast({
         title: "Disconnection Error",
-        description: `An error occurred: ${error.message || 'Unknown error'}.`,
+        description: `An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}.`,
         variant: "destructive",
         duration: 5000,
       });

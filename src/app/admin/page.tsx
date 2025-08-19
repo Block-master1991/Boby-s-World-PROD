@@ -37,6 +37,7 @@ export default function AdminPage() {
 
   // User Statistics
   const [userStats, setUserStats] = useState<{totalUsers: number, onlineUsers: number, offlineUsers: number}|null>(null);
+  const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
 
   // Search & Pagination
   const [search, setSearch] = useState('');
@@ -78,7 +79,7 @@ export default function AdminPage() {
       // Pagination
       setWhitelist(whiteListData.slice((whitePage-1)*PAGE_SIZE, whitePage*PAGE_SIZE));
       setBlacklist(blackListData.slice((blackPage-1)*PAGE_SIZE, blackPage*PAGE_SIZE));
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to fetch lists.' });
     }
     setLoading(false);
@@ -93,8 +94,7 @@ export default function AdminPage() {
   }, [user, search, whitePage, blackPage]);
 
   // Fetch user statistics
-  async function fetchUserStats() {
-    const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
+  const fetchUserStats = React.useCallback(async () => {
     try {
       const response = await apiFetch('/api/admin/users'); // Use apiFetch
       if (!response.ok) {
@@ -106,7 +106,7 @@ export default function AdminPage() {
       console.error('Error fetching user stats:', err);
       setMessage({ type: 'error', text: 'Failed to fetch user statistics.' });
     }
-  }
+  }, [apiFetch]);
 
   // Add IP
   async function handleAddIp() {
@@ -124,7 +124,7 @@ export default function AdminPage() {
       setTimeout(() => {
         topRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to add IP.' });
     }
     setLoading(false);
@@ -140,7 +140,7 @@ export default function AdminPage() {
       setTimeout(() => {
         topRef.current?.scrollIntoView({ behavior: 'smooth' });
       }, 100);
-    } catch (err) {
+    } catch {
       setMessage({ type: 'error', text: 'Failed to remove IP.' });
     }
     setLoading(false);
@@ -153,7 +153,7 @@ export default function AdminPage() {
     if (user?.publicKey !== ADMIN_WALLET_ADDRESS && pathname !== '/') {
       router.push('/');
     }
-  }, [isAuthHookLoading, user, pathname, ADMIN_WALLET_ADDRESS]);
+  }, [isAuthHookLoading, user, pathname, router]);
 
   useEffect(() => {
     if (message) {
@@ -204,7 +204,7 @@ export default function AdminPage() {
         <Card>
           <CardHeader>
             <CardTitle>Overview</CardTitle>
-            <CardDescription>Admin panel content for Boby's World.</CardDescription>
+            <CardDescription>Admin panel content for Boby World.</CardDescription>
           <CardTitle>Manage IP Whitelist & Blacklist</CardTitle>
             <CardDescription>
               Add or remove IPs from the whitelist or blacklist. Only valid IPv4 addresses are accepted.
@@ -352,7 +352,7 @@ export default function AdminPage() {
       {confirmDelete && (
         <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
           <div className="bg-white p-6 rounded shadow-lg">
-            <p>Are you sure you want to remove IP <b>{confirmDelete.ip}</b> from the <b>{confirmDelete.list === 'whitelist' ? 'whitelist' : 'blacklist'}</b>?</p>
+            <p>Are you sure you want to remove IP <b>{confirmDelete.ip}</b> from the <b>{confirmDelete.list === 'whitelist' ? 'whitelist' : 'blacklist'}</b>?&apos;</p>
             <div className="flex gap-4 mt-4">
               <Button variant="destructive" onClick={() => handleDeleteIp(confirmDelete.ip, confirmDelete.list)} disabled={loading}>Yes, Delete</Button>
               <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={loading}>Cancel</Button>

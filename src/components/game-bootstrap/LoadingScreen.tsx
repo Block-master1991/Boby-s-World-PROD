@@ -18,7 +18,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true,
       {showLogo && (
         <Image 
             src="/Boby-logo.png" 
-            alt="Boby's World Logo" 
+            alt="Boby World Logo" 
             width={180} height={180} 
             className="mb-8 rounded-md" 
             data-ai-hint="dog logo"

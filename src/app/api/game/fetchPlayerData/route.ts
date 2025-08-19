@@ -39,9 +39,9 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       gameUSDTBalance: data?.gameUSDTBalance || 0,
       inventory: data?.inventory || [],
     });
-  } catch (error: any) {
+  } catch (error) {
     console.error('[fetchPlayerData] Error:', error); // Updated log message
-    let errorMessage = error.message || 'Failed to fetch player data';
+    let errorMessage = error instanceof Error ? error.message : 'Failed to fetch player data';
     let statusCode = 500;
 
     if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {

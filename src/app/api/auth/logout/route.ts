@@ -79,11 +79,13 @@ export const POST = withCsrfProtection(async (request: Request) => {
     console.log('[LOGOUT] Logout process completed');
     return response;
 
-  } catch (error: any) {
-    console.error('[POST /api/auth/logout] Error during logout:', error.message, error.stack);
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+    const errorStack = error instanceof Error ? error.stack : '';
+    console.error('[POST /api/auth/logout] Error during logout:', errorMessage, errorStack);
     return NextResponse.json({
       error: 'Logout failed',
-      details: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+      details: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error'
     }, { status: 500 });
   }
 });

@@ -1,12 +1,11 @@
 import { initializeAdminApp } from './firebase-admin';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue, Transaction, Firestore } from 'firebase-admin/firestore';
 import { randomBytes } from 'crypto';
 
 const CSRF_TOKEN_EXPIRY_MINUTES = 30; // CSRF token expiry time
 
 export class CSRFManager {
-  private static getCsrfCollection() {
-    const db = getFirestore();
+  private static getCsrfCollection(db: Firestore) {
     return db.collection('csrfTokens');
   }
 
@@ -18,11 +17,10 @@ export class CSRFManager {
   static async generateToken(sessionId: string): Promise<string> {
     await initializeAdminApp();
     const db = getFirestore();
-
     const token = randomBytes(32).toString('hex');
     const expiry = Date.now() + CSRF_TOKEN_EXPIRY_MINUTES * 60 * 1000; // Convert minutes to milliseconds
 
-    const docRef = this.getCsrfCollection().doc(sessionId);
+    const docRef = this.getCsrfCollection(db).doc(sessionId);
 
     await docRef.set({
       token: token,
@@ -44,10 +42,9 @@ export class CSRFManager {
   static async verifyToken(sessionId: string, clientToken: string): Promise<boolean> {
     await initializeAdminApp();
     const db = getFirestore();
+    const docRef = this.getCsrfCollection(db).doc(sessionId);
 
-    const docRef = this.getCsrfCollection().doc(sessionId);
-
-    const result = await db.runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction: Transaction) => {
       const docSnap = await transaction.get(docRef);
 
       if (!docSnap.exists) {
@@ -90,7 +87,7 @@ export class CSRFManager {
   static async getOrCreateToken(sessionId: string): Promise<string> {
     await initializeAdminApp();
     const db = getFirestore();
-    const docRef = this.getCsrfCollection().doc(sessionId);
+    const docRef = this.getCsrfCollection(db).doc(sessionId);
 
     const docSnap = await docRef.get();
 
@@ -118,7 +115,7 @@ export class CSRFManager {
   static async deleteToken(sessionId: string): Promise<void> {
     await initializeAdminApp();
     const db = getFirestore();
-    const docRef = this.getCsrfCollection().doc(sessionId);
+    const docRef = this.getCsrfCollection(db).doc(sessionId);
     await docRef.delete();
     console.log(`[CSRFManager] Deleted CSRF token for session ${sessionId}.`);
   }

@@ -6,6 +6,11 @@ import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CS
 import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
 import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
 
+interface InventoryItem {
+  id: string;
+  quantity: number;
+}
+
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   console.log("[API] /api/game/consumeProtectionBottle called");
 
@@ -30,7 +35,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     const currentInventory = playerData?.inventory || [];
 
     const protectionBottleId = '1'; // Assuming '1' is the ID for Protection Bottle
-    const BottleIndex = currentInventory.findIndex((item: any) => item.id === protectionBottleId);
+    const BottleIndex = currentInventory.findIndex((item: InventoryItem) => item.id === protectionBottleId);
 
     if (BottleIndex === -1) {
       return NextResponse.json({ error: 'No Protection Bottles available.' }, { status: 400 });
@@ -59,12 +64,12 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     console.log('[consumeProtectionBottle] New CSRF token issued and set in cookie.');
 
     return response;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error consuming protection Bottle:", error);
-    let errorMessage = error.message || 'Failed to consume protection Bottle.';
+    let errorMessage = error instanceof Error ? error.message : 'Failed to consume protection Bottle.';
     let statusCode = 500;
 
-    if (error.message.includes("Firebase Admin SDK environment variables are not set correctly")) {
+    if (error instanceof Error && error.message.includes("Firebase Admin SDK environment variables are not set correctly")) {
       errorMessage = "Server configuration error: Firebase Admin SDK not properly set up. Please check your FIREBASE_SERVICE_ACCOUNT environment variable.";
       statusCode = 500;
     } else if (errorMessage.includes("Authentication required")) {

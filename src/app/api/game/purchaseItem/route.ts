@@ -6,7 +6,7 @@ import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CS
 import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
 import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
 import { storeItems } from '@/lib/items'; // To validate item existence
-import { Connection, PublicKey, TransactionResponse, ParsedTransactionWithMeta } from '@solana/web3.js';
+import { Connection, PublicKey } from '@solana/web3.js';
 import { clusterApiUrl } from '@solana/web3.js';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
 import { DEDICATED_RPC_ENDPOINT } from '@/lib/server-constants'; // Moved to server-side constants
@@ -169,49 +169,49 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     console.log('[purchaseItem] New CSRF token issued and set in cookie.');
 
     return response;
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error processing item purchase:", error);
     let errorMessage = 'Failed to process item purchase. Please try again.'; // رسالة عامة للمستخدم
     let statusCode = 500;
 
     // يمكن الاحتفاظ برسائل خطأ محددة إذا كانت لا تكشف معلومات حساسة
-    if (error.message.includes("Authentication required")) {
+    if (error instanceof Error && error.message.includes("Authentication required")) {
       errorMessage = "Authentication required.";
       statusCode = 401;
-    } else if (error.message.includes("Invalid request parameters")) {
+    } else if (error instanceof Error && error.message.includes("Invalid request parameters")) {
       errorMessage = "Invalid request parameters.";
       statusCode = 400;
-    } else if (error.message.includes("Invalid item ID")) {
+    } else if (error instanceof Error && error.message.includes("Invalid item ID")) {
       errorMessage = "Invalid item ID.";
       statusCode = 400;
-    } else if (error.message.includes("This transaction signature has already been used.")) {
+    } else if (error instanceof Error && error.message.includes("This transaction signature has already been used.")) {
       errorMessage = "This transaction has already been processed.";
       statusCode = 409;
-    } else if (error.message.includes("Transaction not found or not confirmed.")) {
+    } else if (error instanceof Error && error.message.includes("Transaction not found or not confirmed.")) {
       errorMessage = "Solana transaction not found or not confirmed.";
       statusCode = 404;
-    } else if (error.message.includes("Transaction failed on Solana blockchain.")) {
+    } else if (error instanceof Error && error.message.includes("Transaction failed on Solana blockchain.")) {
       errorMessage = "Solana transaction failed.";
       statusCode = 400;
-    } else if (error.message.includes("Transaction sender does not match authenticated user.")) {
+    } else if (error instanceof Error && error.message.includes("Transaction sender does not match authenticated user.")) {
       errorMessage = "Transaction sender mismatch.";
       statusCode = 400;
-    } else if (error.message.includes("Invalid token used for purchase. Expected BOBY token.")) {
+    } else if (error instanceof Error && error.message.includes("Invalid token used for purchase. Expected BOBY token.")) {
       errorMessage = "Invalid token used for purchase. Expected BOBY token.";
       statusCode = 400;
-    } else if (error.message.includes("Insufficient amount paid for the item.")) {
+    } else if (error instanceof Error && error.message.includes("Insufficient amount paid for the item.")) {
       errorMessage = "Insufficient amount paid for the item.";
       statusCode = 400;
-    } else if (error.message.includes("Invalid user public key format.")) {
+    } else if (error instanceof Error && error.message.includes("Invalid user public key format.")) {
       errorMessage = "Invalid user public key format.";
       statusCode = 400;
-    } else if (error.message.includes("Missing required environment variables for Solana verification.")) {
+    } else if (error instanceof Error && error.message.includes("Missing required environment variables for Solana verification.")) {
       errorMessage = "Server configuration error. Please contact support.";
       statusCode = 500;
-    } else if (error.message.includes("Server busy, try again later.")) { // من rateLimit
+    } else if (error instanceof Error && error.message.includes("Server busy, try again later.")) { // من rateLimit
       errorMessage = "Server busy, please try again later.";
       statusCode = 503;
-    } else if (error.message.includes("Too many requests. Please try again later.")) { // من rateLimit
+    } else if (error instanceof Error && error.message.includes("Too many requests. Please try again later.")) { // من rateLimit
       errorMessage = "Too many requests. Please try again later.";
       statusCode = 429;
     }

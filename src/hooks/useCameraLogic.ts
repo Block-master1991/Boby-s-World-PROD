@@ -38,8 +38,8 @@ export const useCameraLogic = ({
     camera.position.set(0, 5, 5);
     camera.lookAt(0, 0, 0);
 
-  }, [cameraRef, mountRef, dogModelRef]); // Added dogModelRef to dependencies
-  
+  }, [cameraRef, mountRef]);
+
   const setupInitialCameraPosition = React.useCallback(() => {
     if (cameraRef.current && dogModelRef.current) {
         const dog = dogModelRef.current;

@@ -110,14 +110,15 @@ export async function GET(request: Request) {
         401
       );
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('[SESSION CHECK] Unexpected error in session verification:', error);
+    const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     // In case of any unexpected error, clear cookies and return 500
     const response = createAuthErrorResponse(
       'Session verification failed due to server error.',
       'SESSION_VERIFICATION_FAILED_INTERNAL',
       500,
-      process.env.NODE_ENV === 'development' ? error.message : undefined
+      process.env.NODE_ENV === 'development' ? errorMessage : undefined
     );
     response.cookies.delete('accessToken');
     response.cookies.delete('refreshToken');

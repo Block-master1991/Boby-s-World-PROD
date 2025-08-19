@@ -64,9 +64,9 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     console.log('[withdrawUSDT] New CSRF token issued and set in cookie.');
 
     return response;
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('[withdrawUSDT] Error:', error);
-    let errorMessage = error.message || 'Failed to withdraw USDT.';
+    let errorMessage = (error instanceof Error) ? error.message : 'Failed to withdraw USDT.';
     let statusCode = 500;
 
     if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {

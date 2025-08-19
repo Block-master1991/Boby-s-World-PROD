@@ -1,10 +1,13 @@
-import type {Metadata} from 'next';
+import type { Metadata } from 'next';
+import { Inter } from 'next/font/google';
 import './globals.css';
 import '@solana/wallet-adapter-react-ui/styles.css'; // Added Solana wallet UI styles
 import RootLayoutClient from './RootLayoutClient'; // Import the new client component
 
+const inter = Inter({ subsets: ['latin'] });
+
 export const metadata: Metadata = {
-  title: "Boby's World",
+  title: "Boby World",
   description: 'An open-world dog adventure game on Solana.',
 };
 
@@ -15,14 +18,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <head>
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter&display=swap" rel="stylesheet"></link>
-      </head>
-      <RootLayoutClient>
-        {children}
-      </RootLayoutClient>
+      <body className={inter.className}>
+        <RootLayoutClient>{children}</RootLayoutClient>
+      </body>
     </html>
   );
 }
