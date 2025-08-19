@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Button } from '@/components/ui/button';
@@ -14,27 +14,35 @@ interface AuthenticationScreenProps {
   captchaVerified: boolean;
 }
 
-const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({ 
-    onRequestDisconnect, 
-    onLoginAttempt,
-    captchaVerified
+const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
+  onRequestDisconnect,
+  onLoginAttempt,
+  captchaVerified
 }) => {
   const { isLoading: isLoadingAuth, error: authError, isAuthenticated, user, isWalletConnectedAndMatching } = useAuth();
   const wallet = useWallet();
+  const loginAttemptedRef = useRef(false); // New ref to track if login has been attempted
 
   useEffect(() => {
+    // Reset loginAttemptedRef when relevant conditions change
+    if (!wallet.connected || !captchaVerified || isAuthenticated) {
+      loginAttemptedRef.current = false;
+    }
+
     // Attempt automatic login if captcha is verified, wallet is connected,
     // and we are not already authenticated with the connected wallet.
-    // Also, ensure we are not already in an auth loading state.
+    // Also, ensure we are not already in an auth loading state and haven't attempted login yet.
     if (
       captchaVerified &&
       wallet.connected &&
       !wallet.disconnecting &&
       wallet.publicKey &&
       !isLoadingAuth &&
-      (!isAuthenticated || !isWalletConnectedAndMatching) // If not authenticated OR authenticated but wallet mismatch
+      (!isAuthenticated || !isWalletConnectedAndMatching) && // If not authenticated OR authenticated but wallet mismatch
+      !loginAttemptedRef.current // Only attempt if not already attempted
     ) {
       console.log("[AuthenticationScreen] Wallet connected, captcha verified, and conditions met for automatic login attempt.");
+      loginAttemptedRef.current = true; // Mark as attempted
       onLoginAttempt();
     }
   }, [
@@ -44,15 +52,15 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
     wallet.publicKey,
     isLoadingAuth,
     isAuthenticated,
-    isWalletConnectedAndMatching, // Added new dependency
+    isWalletConnectedAndMatching,
     onLoginAttempt
   ]);
-  
+
   // Display loading screen if authentication is in progress
   if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-        <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
+        <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="mb-8 rounded-md" style={{ width: 'auto', height: 'auto' }} data-ai-hint="dog logo" priority />
         <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
         <h1 className="text-4xl font-bold mb-2 font-headline">Boby World</h1>
         <p className="text-xl text-muted-foreground">
@@ -65,7 +73,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
 
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
-      <Image src="/Boby-logo.png" alt="Boby World Logo" width={180} height={180} className="mb-8 rounded-md" data-ai-hint="dog logo" priority />
+      <Image src="/Boby-logo.png" alt="Boby World Logo" width={180} height={180} className="mb-8 rounded-md" style={{ width: 'auto', height: 'auto' }} data-ai-hint="dog logo" priority />
       <h1 className="text-4xl font-bold mb-4 font-headline">Welcome to Boby World!</h1>
 
       {/* State 1: Wallet not connected */}

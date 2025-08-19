@@ -310,15 +310,16 @@ class WorkerManager {
         this.activeTasks.set(task.id, task);
         
         // The new worker expects a different data structure
-        const transferableData = Object.values((task.data as { attributes: Record<string, { array: { buffer: ArrayBuffer } }> }).attributes).map(attr => attr.array.buffer);
-        if ((task.data as { index?: { array: { buffer: ArrayBuffer } } }).index) {
-            transferableData.push((task.data as { index: { array: { buffer: ArrayBuffer } } }).index.array.buffer);
+        const geometryData = (task.data as { geometry: { attributes: Record<string, { array: { buffer: ArrayBuffer } }>; index?: { array: { buffer: ArrayBuffer } } | null } }).geometry;
+        const transferableData = Object.values(geometryData.attributes).map(attr => attr.array.buffer);
+        if (geometryData.index) {
+            transferableData.push(geometryData.index.array.buffer);
         }
 
         worker.postMessage({
             type: task.type,
             data: task.data
-        }, { transfer: transferableData });
+        }, transferableData);
     } else {
         this.taskQueue.unshift(task);
     }

@@ -64,40 +64,27 @@ const GameContainer: React.FC = () => {
     useEffect(() => {
         const runSessionCheck = async () => {
             setIsCheckingSession(true);
-            console.log("[GameContainer] Initial session check initiated.");
             try {
-              const sessionValid = await checkSession();
-              if (sessionValid) {
-                  setCaptchaVerified(true);
-                  console.log("[GameContainer] Initial session check successful. Captcha marked as verified.");
-              } else if (isAuthenticated) {
-                  toast({
-                    title: "Session Expired",
-                    description: "Your session is invalid or expired. Please log in again.",
-                    variant: "destructive"
-                  });
-                  setCaptchaVerified(false);
-              } else {
-                  console.log("[GameContainer] Initial session check failed or no active session.");
-                  setCaptchaVerified(false);
-              }
-            } catch (error: unknown) {
-              console.error("[GameContainer] Session check error:", error);
-              toast({
-                title: "Network Error",
-                description: (error instanceof Error) ? error.message : "Failed to validate session. Retrying...",
-                variant: "destructive",
-                duration: 4000,
-              });
-              setTimeout(() => {
-                checkSession();
-              }, 3000);
+                const sessionValid = await checkSession();
+                if (sessionValid) {
+                    setCaptchaVerified(true);
+                }
+                // إزالة إعادة تعيين captchaVerified عند فشل الجلسة إذا كان المستخدم قد قام بالتحقق بالفعل
+            } catch (error) {
+                // Error handling
             } finally {
-              setIsCheckingSession(false);
+                setIsCheckingSession(false);
             }
         };
         runSessionCheck();
-    }, [checkSession, isAuthenticated, toast]);
+    }, [checkSession]); // إزالة isAuthenticated من الاعتماديات
+
+    // إضافة شرط للحفاظ على حالة الكابتشا:
+    useEffect(() => {
+        if (isAuthenticated && !captchaVerified) {
+            setCaptchaVerified(true);
+        }
+    }, [isAuthenticated, captchaVerified]);
 
     const handleCaptchaSuccess = useCallback(() => {
         console.log("[GameContainer] Captcha verified successfully.");

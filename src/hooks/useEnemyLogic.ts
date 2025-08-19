@@ -65,10 +65,20 @@ interface EnemyCustomData {
   actions: { [key: string]: THREE.AnimationAction };
   chunkKey: string;
   // Add a reference to the high-detail model within the LOD for mixer
-  highDetailModel: THREE.Group; 
+  highDetailModel: THREE.Group;
 }
 
-type EnemyData = THREE.LOD & EnemyCustomData & BaseGameObject; // Change to THREE.LOD
+interface EnemyData extends EnemyCustomData, BaseGameObject {
+  lod: THREE.LOD; // The LOD object itself
+  position: THREE.Vector3; // Position of the enemy
+  visible: boolean; // Visibility state of the enemy
+  lookAt: (target: THREE.Vector3) => void; // Method to make enemy look at target
+  rotation: THREE.Euler; // Rotation of the enemy
+  scale: THREE.Vector3; // Scale of the enemy
+  type: string; // Type of the enemy
+  isPooled: boolean; // Whether the enemy is pooled
+  isModelInstantiated: boolean; // Whether the model is instantiated
+}
 
 interface UseEnemyLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -286,28 +296,42 @@ export const useEnemyLogic = ({
             });
             Object.values(actions).forEach(action => action.stop());
 
-            const enemyData: EnemyData = lod as EnemyData; // Cast LOD to EnemyData
-            enemyData.targetCoinId = coin.uuid; // Assign unique coin ID
-            enemyData.targetCoinPosition = coin.position.clone();
-            enemyData.patrolCenter = coin.position.clone();
-            enemyData.patrolTarget = new THREE.Vector3();
-            enemyData.isIdling = false;
-            enemyData.idleTimer = 0;
-            enemyData.idleDuration = 0;
-            enemyData.isAttacking = false;
-            enemyData.isDying = false;
-            enemyData.deathTimer = 0;
-            enemyData.hasAppliedDeathEffect = false;
-            enemyData.isSinking = false; // Initialize new property
-            enemyData.sinkingTimer = 0; // Initialize new property
-            enemyData.initialDeathY = 0; // Initialize new property
-            enemyData.mixer = mixer;
-            enemyData.animations = loadedAnimations;
-            enemyData.enemyType = enemyType;
-            enemyData.currentAction = null;
-            enemyData.actions = actions;
-            enemyData.chunkKey = getChunkKey(chunkX, chunkZ);
-            enemyData.highDetailModel = enemyInstanceModel; // Store reference to high-detail model
+            const enemyData: EnemyData = {
+              uuid: THREE.MathUtils.generateUUID(), // Generate a unique ID for the enemy
+              lod: lod,
+              targetCoinId: coin.uuid,
+              targetCoinPosition: coin.position.clone(),
+              patrolCenter: coin.position.clone(),
+              patrolTarget: new THREE.Vector3(),
+              isIdling: false,
+              idleTimer: 0,
+              idleDuration: 0,
+              isAttacking: false,
+              isDying: false,
+              deathTimer: 0,
+              hasAppliedDeathEffect: false,
+              isSinking: false,
+              sinkingTimer: 0,
+              initialDeathY: 0,
+              mixer: mixer,
+              animations: loadedAnimations,
+              enemyType: enemyType,
+              currentAction: null,
+              actions: actions,
+              chunkKey: getChunkKey(chunkX, chunkZ),
+              highDetailModel: enemyInstanceModel,
+              position: new THREE.Vector3(), // Initialize position
+              rotation: new THREE.Euler(), // Initialize rotation
+              scale: new THREE.Vector3(0.5, 0.5, 0.5), // Initialize scale
+              type: 'enemy', // Set type
+              visible: true, // Set initial visibility
+              isPooled: false, // Initialize isPooled
+              isModelInstantiated: true, // Initialize isModelInstantiated
+              lookAt: (target: THREE.Vector3) => {
+                // Delegate to the LOD object's lookAt method
+                lod.lookAt(target);
+              },
+            };
 
             const angle = Math.random() * Math.PI * 2;
             const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
@@ -319,17 +343,14 @@ export const useEnemyLogic = ({
             const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8;
             let enemyX, enemyZ;
             let attempts = 0;
-            const MAX_ATTEMPTS = 100; // Prevent infinite loops
+            const MAX_ATTEMPTS = 100;
 
-            const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0); // Get dog's initial position
+            const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0);
 
             do {
               enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
               enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
 
-              // Clamp enemy positions to world boundaries, accounting for enemy patrol radius
-              // World bounds are +/- 499. ENEMY_PROTECTION_RADIUS is 15.
-              
               const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
               const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
               const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
@@ -349,19 +370,19 @@ export const useEnemyLogic = ({
             if (octreeRef.current) {
               enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
             }
-            enemyData.position.set(enemyX, enemyY, enemyZ);
-            // enemyData.scale.set(0.5, 0.5, 0.5); // Scale is now applied to the highDetailModel
+            enemyData.lod.position.set(enemyX, enemyY, enemyZ); // Use enemyData.lod.position
+            enemyData.position.copy(enemyData.lod.position); // Update the position property of EnemyData
 
             if (octreeRef.current) {
-              const enemyBox = new THREE.Box3().setFromObject(enemyData); // Use LOD for bounds
+              const enemyBox = new THREE.Box3().setFromObject(enemyData.lod); // Use enemyData.lod for bounds
               octreeRef.current.insert({
-                id: `enemy_${enemyData.id}`,
+                id: `enemy_${enemyData.uuid}`, // Use uuid for id
                 bounds: enemyBox,
                 data: enemyData as unknown as GameObject
               });
             }
             enemyMeshesRef.current.push(enemyData);
-            scene.add(enemyData);
+            scene.add(enemyData.lod); // Add enemyData.lod to the scene
 
             const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
             const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
@@ -391,22 +412,22 @@ export const useEnemyLogic = ({
     const chunkMaxZ = chunkMinZ + CHUNK_SIZE;
 
     enemyMeshesRef.current = enemyMeshesRef.current.filter(enemy => {
-      const enemyX = enemy.position.x;
-      const enemyZ = enemy.position.z;
+      const enemyX = enemy.lod.position.x;
+      const enemyZ = enemy.lod.position.z;
 
       if (enemyX >= chunkMinX && enemyX < chunkMaxX && enemyZ >= chunkMinZ && enemyZ < chunkMaxZ) {
         if (octreeRef.current) {
-          const enemyBox = new THREE.Box3().setFromObject(enemy);
+          const enemyBox = new THREE.Box3().setFromObject(enemy.lod);
           octreeRef.current.remove({
-              id: `enemy_${enemy.id}`,
+              id: `enemy_${enemy.uuid}`,
               bounds: enemyBox,
               data: enemy as unknown as GameObject
           });
         }
         enemy.mixer.stopAllAction();
-        scene.remove(enemy);
+        scene.remove(enemy.lod);
         // Dispose all models within the LOD
-        enemy.children.forEach(child => disposeEnemyModelResources(child));
+        enemy.lod.children.forEach(child => disposeEnemyModelResources(child));
         return false;
       }
       return true;
@@ -422,13 +443,13 @@ export const useEnemyLogic = ({
 
     enemyMeshesRef.current.forEach(enemy => {
       if (octreeRef.current) {
-        const enemyBox = new THREE.Box3().setFromObject(enemy);
-        octreeRef.current.remove({ id: `enemy_${enemy.id}`, bounds: enemyBox, data: enemy as unknown as GameObject });
+        const enemyBox = new THREE.Box3().setFromObject(enemy.lod);
+        octreeRef.current.remove({ id: `enemy_${enemy.uuid}`, bounds: enemyBox, data: enemy as unknown as GameObject });
       }
       enemy.mixer.stopAllAction();
-      scene.remove(enemy);
+      scene.remove(enemy.lod);
       // Dispose all models within the LOD
-      enemy.children.forEach(child => disposeEnemyModelResources(child));
+      enemy.lod.children.forEach(child => disposeEnemyModelResources(child));
     });
     enemyMeshesRef.current = [];
     loadedEnemyChunks.current.clear();
@@ -490,23 +511,29 @@ export const useEnemyLogic = ({
     let visibleEnemies = enemyMeshesRef.current;
     if (octreeRef.current) {
       const cameraBox = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(50, 50, 50));
-      visibleEnemies = octreeRef.current.query(cameraBox).map(obj => obj.data as EnemyData);
+      visibleEnemies = octreeRef.current.query(cameraBox).map(obj => obj.data as unknown as EnemyData);
     }
 
     // Filter out enemies that have sunk and been disposed
     enemyMeshesRef.current = enemyMeshesRef.current.filter(enemy => {
       // If sinking and sunk far enough, filter it out
-      if (enemy.isSinking && enemy.sinkingTimer <= 0 && enemy.position.y < enemy.initialDeathY - 5) {
+      if (enemy.isSinking && enemy.sinkingTimer <= 0 && enemy.lod.position.y < enemy.initialDeathY - 5) {
         return false; // Remove from the active enemy list
       }
       return true;
     });
 
     visibleEnemies.forEach(enemy => {
+      // Defensive check for mixer
+      if (!enemy.mixer) {
+        //console.warn(`[useEnemyLogic] Skipping update for enemy ${enemy.uuid} because mixer is undefined.`);
+        return;
+      }
       enemy.mixer.update(delta);
-      const enemyY = enemy.position.y;
+      const enemyY = enemy.lod.position.y;
 
-      enemy.visible = dogPosition.distanceTo(enemy.position) < VISIBLE_ENEMY_DISTANCE;
+      enemy.lod.visible = dogPosition.distanceTo(enemy.lod.position) < VISIBLE_ENEMY_DISTANCE;
+      enemy.visible = enemy.lod.visible; // Keep the EnemyData.visible property in sync
 
       // Handle sinking animation
       if (enemy.isSinking) {
@@ -514,7 +541,8 @@ export const useEnemyLogic = ({
         if (enemy.sinkingTimer <= 0) {
           // Start sinking animation
           const sinkSpeed = 0.5; // Units per second
-          enemy.position.y -= sinkSpeed * delta;
+          enemy.lod.position.y -= sinkSpeed * delta;
+          enemy.position.copy(enemy.lod.position); // Keep EnemyData.position in sync
         }
         return; // Do not process other logic if sinking
       }
@@ -529,18 +557,19 @@ export const useEnemyLogic = ({
           // Death animation finished, start sinking delay
           enemy.isSinking = true;
           enemy.sinkingTimer = ENEMY_SINKING_DELAY;
-          enemy.initialDeathY = enemy.position.y;
-          enemy.visible = true; // Keep visible during sinking delay
+          enemy.initialDeathY = enemy.lod.position.y;
+          enemy.lod.visible = true; // Keep visible during sinking delay
+          enemy.visible = true; // Keep EnemyData.visible in sync
         }
         return; // Do not process other logic if dying
       }
 
-      if (!enemy.visible) {
+      if (!enemy.lod.visible) { // Check enemy.lod.visible
         return;
       }
 
-      const distanceToDog = dogPosition.distanceTo(enemy.position);
-      const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition); // Re-add this line
+      const distanceToDog = dogPosition.distanceTo(enemy.lod.position); // Use enemy.lod.position
+      const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
 
       // Find the protected coin by its unique ID
       const protectedCoin = coinMeshesRef.current.find((coin: CoinData) => coin.uuid === enemy.targetCoinId);
@@ -570,7 +599,7 @@ export const useEnemyLogic = ({
         let isMoving = false;
 
         if (distanceToDog < ENEMY_ATTACK_DISTANCE) {
-          targetPosition.copy(enemy.position);
+          targetPosition.copy(enemy.lod.position); // Use enemy.lod.position
           currentAnimation = enemy.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
           enemy.isAttacking = true;
           enemy.isIdling = false;
@@ -588,13 +617,13 @@ export const useEnemyLogic = ({
               const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
               const newPatrolX = enemy.patrolCenter.x + Math.cos(angle) * radius;
               const newPatrolZ = enemy.patrolTarget.z + Math.sin(angle) * radius;
-              enemy.patrolTarget.set(newPatrolX, enemy.position.y, newPatrolZ);
+              enemy.patrolTarget.set(newPatrolX, enemy.lod.position.y, newPatrolZ); // Use enemy.lod.position.y
               isMoving = true;
               currentAnimation = 'Walk';
             } else {
               currentAnimation = enemy.currentAction?.getClip().name || 'Idle';
             }
-          } else if (enemy.position.distanceTo(enemy.patrolTarget) < 1.0 || enemy.patrolTarget.lengthSq() === 0) {
+          } else if (enemy.lod.position.distanceTo(enemy.patrolTarget) < 1.0 || enemy.patrolTarget.lengthSq() === 0) { // Use enemy.lod.position
             enemy.isIdling = true;
             enemy.idleDuration = Math.random() * 5 + 3;
             enemy.idleTimer = enemy.idleDuration;
@@ -608,16 +637,17 @@ export const useEnemyLogic = ({
           }
         }
 
-        const direction = new THREE.Vector3().subVectors(targetPosition, enemy.position);
+        const direction = new THREE.Vector3().subVectors(targetPosition, enemy.lod.position); // Use enemy.lod.position
         direction.y = 0;
         const movementThreshold = 0.001;
 
         if (isMoving && direction.lengthSq() > movementThreshold) {
           direction.normalize();
           const currentSpeed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
-          enemy.position.addScaledVector(direction, currentSpeed);
+          enemy.lod.position.addScaledVector(direction, currentSpeed); // Use enemy.lod.position
+          enemy.position.copy(enemy.lod.position); // Keep EnemyData.position in sync
           const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
-          enemy.lookAt(lookAtTarget);
+          enemy.lod.lookAt(lookAtTarget); // Use enemy.lod.lookAt
         } else if (isMoving && direction.lengthSq() <= movementThreshold) {
           enemy.isIdling = true;
           enemy.idleDuration = Math.random() * 5 + 3;
@@ -636,14 +666,15 @@ export const useEnemyLogic = ({
         playAnimation(enemy, currentAnimation);
       }
 
-      enemy.position.y = enemyY;
+      enemy.lod.position.y = enemyY; // Use enemy.lod.position.y
+      enemy.position.copy(enemy.lod.position); // Keep EnemyData.position in sync
 
       const dogXZ = new THREE.Vector3(dog.position.x, 0, dog.position.z);
-      const enemyXZ = new THREE.Vector3(enemy.position.x, 0, enemy.position.z);
+      const enemyXZ = new THREE.Vector3(enemy.lod.position.x, 0, enemy.lod.position.z); // Use enemy.lod.position
       const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
 
       // Update LOD levels based on distance to camera
-      enemy.update(camera);
+      enemy.lod.update(camera); // Use enemy.lod.update
 
       if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !enemy.isDying) {
         enemy.isDying = true;
@@ -673,14 +704,14 @@ export const useEnemyLogic = ({
           enemy.hasAppliedDeathEffect = true;
         }
       } else if (distanceXZToDog < ENEMY_ATTACK_DISTANCE && !enemy.isAttacking && !enemy.isDying) {
-        targetPosition.copy(enemy.position);
+        targetPosition.copy(enemy.lod.position);
         enemy.isAttacking = true;
         enemy.isIdling = false;
 
         if (enemy.enemyType === 'herbivore') {
           const lookAtTarget = new THREE.Vector3(dogPosition.x, enemyY, dogPosition.z);
-          enemy.lookAt(lookAtTarget);
-          enemy.rotation.y += Math.PI;
+          enemy.lod.lookAt(lookAtTarget);
+          enemy.lod.rotation.y += Math.PI;
           currentAnimation = 'Attack_Kick';
         } else {
           currentAnimation = 'Attack';

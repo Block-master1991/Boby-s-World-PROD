@@ -274,13 +274,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           await logoutAndRedirect('/');
           toast({ variant: 'destructive', title: 'Access Denied', description: errMsg });
           return false;
+        } else if (loginResponse.status === 400 && loginData.error === 'Invalid nonce. Please retry.' && loginData.nonce) {
+          // Nonce mismatch: retry with the new nonce from the server
+          console.warn('[AuthContext login] Nonce mismatch detected. Retrying login with new nonce.');
+          // Instead of throwing, we'll attempt to re-sign with the new nonce.
+          // This is a recursive call, but with a new nonce, it should resolve.
+          // To prevent infinite loops, we could add a retry counter, but for now,
+          // assuming the server provides a valid new nonce.
+          try {
+            const message = buildSignMessage(loginData.nonce);
+            const messageBytes = new TextEncoder().encode(message);
+            const signature = await walletSignMessage(messageBytes);
+            const signatureHex = Buffer.from(signature).toString('hex');
+
+            const retryLoginResponse = await fetch('/api/auth/login', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify({
+                publicKey: adapterPublicKey.toString(),
+                signature: signatureHex,
+                nonce: loginData.nonce // Use the new nonce
+              })
+            });
+
+            const retryLoginData = await retryLoginResponse.json().catch(() => ({ error: 'Login retry failed.' }));
+            if (retryLoginResponse.ok && retryLoginData.success && retryLoginData.publicKey) {
+              setAuthState({ isAuthenticated: true, isLoading: false, user: { publicKey: retryLoginData.publicKey, wallet: retryLoginData.publicKey }, error: null });
+              toast({ variant: 'default', title: 'Login Successful (Retried)', description: `Welcome back! Wallet ${retryLoginData.publicKey.slice(0, 8)}...` });
+              return true;
+            } else {
+              const retryErrMsg = retryLoginData.error || 'Login retry failed.';
+              toast({ variant: 'destructive', title: 'Login Failed (Retry)', description: retryErrMsg });
+              setAuthState(prev => ({ ...prev, isLoading: false, error: retryErrMsg }));
+              throw new Error(retryErrMsg);
+            }
+          } catch (retrySignError: unknown) {
+            const retrySignErrMsg = retrySignError instanceof Error ? retrySignError.message : 'Unknown signing error during retry';
+            toast({ variant: 'destructive', title: 'Signature Failed (Retry)', description: retrySignErrMsg });
+            setAuthState({ isAuthenticated: false, isLoading: false, user: null, error: retrySignErrMsg });
+            throw new Error(retrySignErrMsg);
+          }
         }
         toast({ variant: 'destructive', title: 'Login Failed', description: errMsg });
         setAuthState(prev => ({ ...prev, isLoading: false, error: errMsg }));
         throw new Error(errMsg);
-
       }
-
       if (loginData.success && loginData.publicKey) {
         setAuthState({ isAuthenticated: true, isLoading: false, user: { publicKey: loginData.publicKey, wallet: loginData.publicKey }, error: null });
         toast({ variant: 'default', title: 'Login Successful', description: `Welcome back! Wallet ${loginData.publicKey.slice(0, 8)}...` });

@@ -3,7 +3,6 @@
 @tailwind utilities;
 
 body {
-  font-family: Arial, Helvetica, sans-serif;
   /* Ensure full viewport height and account for safe areas */
   min-height: 100vh;
   min-height: 100dvh; /* For dynamic viewport height */

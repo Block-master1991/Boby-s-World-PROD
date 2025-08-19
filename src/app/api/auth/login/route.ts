@@ -39,6 +39,15 @@ async function generateNonce(publicKey: string): Promise<string | null> {
 
     const nonceRef = db.collection('authNonces').doc(publicKey);
     console.log(`[AuthNonces] Attempting to set nonce for publicKey ${publicKey} at path: ${nonceRef.path}`);
+
+    // Clean up any existing nonce first
+    const existingNonce = await nonceRef.get();
+    if (existingNonce.exists) {
+      console.log(`[AuthNonces] Found existing nonce for publicKey ${publicKey}, deleting it first.`);
+      await nonceRef.delete();
+    }
+
+    // Then generate new nonce
     await nonceRef.set({
       nonce: newNonce,
       expiry: expiry,
@@ -55,7 +64,7 @@ async function generateNonce(publicKey: string): Promise<string | null> {
   }
 }
 
-async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Promise<boolean> {
+async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Promise<{ success: boolean; reason: string }> {
   console.log(`[AuthNonces] Called verifyAndConsumeNonce for publicKey: ${publicKey}, clientNonce: ${clientNonce}`);
   try {
     await initializeAdminApp();
@@ -69,7 +78,7 @@ async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Pr
       const errorMessage = diagError instanceof Error ? diagError.message : 'An unknown error occurred';
       const errorStack = diagError instanceof Error ? diagError.stack : '';
       console.error("[AuthNonces] Firestore connectivity check FAILED in verifyAndConsumeNonce:", errorMessage, errorStack);
-      return false;
+        return { success: false, reason: 'firestore_connectivity_failed' };
     }
 
     const nonceRef = db.collection('authNonces').doc(publicKey);
@@ -86,6 +95,12 @@ async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Pr
 
       const storedData = nonceDoc.data() as { nonce: string; expiry: number; attempts: number };
       console.log(`[AuthNonces] Nonce data found for ${publicKey}: attempts=${storedData.attempts}, expiry=${new Date(storedData.expiry).toISOString()}`);
+
+      if (storedData.attempts >= MAX_NONCE_ATTEMPTS) {
+          console.warn(`[AuthNonces] Too many attempts for nonce on publicKey ${publicKey}. Deleting.`);
+          transaction.delete(nonceRef);
+          return { success: false, reason: 'too_many_attempts' };
+      }
 
       if (storedData.expiry < Date.now()) {
         console.warn(`[AuthNonces] Nonce expired for publicKey: ${publicKey}. Deleting.`);
@@ -114,13 +129,13 @@ async function verifyAndConsumeNonce(publicKey: string, clientNonce: string): Pr
     });
 
     console.log(`[AuthNonces] Transaction result for ${publicKey}: Success=${result.success}, Reason=${result.reason}`);
-    return result.success;
+    return result;
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     const errorStack = error instanceof Error ? error.stack : '';
     console.error(`[AuthNonces] Transaction error for publicKey ${publicKey}:`, errorMessage, errorStack);
-    return false;
+    return { success: false, reason: 'transaction_error' };
   }
 }
 
@@ -218,16 +233,26 @@ export async function POST(request: Request) {
     console.log('[LOGIN] Parsed body:', { publicKey, signature, clientNonce });
 
     // تحقق من nonce
-    const nonceIsValid = await verifyAndConsumeNonce(publicKey, clientNonce);
-    if (!nonceIsValid) {
-    console.warn('[LOGIN] Invalid, expired, or used nonce. Forcing logout by clearing cookies.');
-    const response = NextResponse.json({ error: 'Invalid nonce. Session terminated. Please login again.' }, { status: 403 });
-    response.cookies.set('accessToken', '', { maxAge: 0, path: '/' });
-    response.cookies.set('refreshToken', '', { maxAge: 0, path: '/' });
-    return response;
+    const nonceResult = await verifyAndConsumeNonce(publicKey, clientNonce);
+    if (!nonceResult.success) {
+        if (nonceResult.reason === 'too_many_attempts' || nonceResult.reason === 'too_many_attempts_mismatch') {
+            console.warn('[LOGIN] Too many nonce attempts detected. Forcing logout by clearing cookies.');
+            const response = NextResponse.json({ error: 'Too many login attempts. Session terminated. Please login again.' }, { status: 403 });
+            response.cookies.set('accessToken', '', { maxAge: 0, path: '/' });
+            response.cookies.set('refreshToken', '', { maxAge: 0, path: '/' });
+            return response;
+        } else {
+            console.warn(`[LOGIN] Nonce verification failed for reason: ${nonceResult.reason}. Generating new one.`);
+            // Generate new nonce and let client retry
+            const newNonce = await generateNonce(publicKey);
+            return NextResponse.json({ 
+                error: 'Invalid nonce. Please retry.',
+                nonce: newNonce 
+            }, { status: 400 });
+        }
     }
 
-    console.log('[LOGIN] Nonce verification result:', nonceIsValid);
+    console.log('[LOGIN] Nonce verification result: success');
 
 
     // تحقق من التوقيع
