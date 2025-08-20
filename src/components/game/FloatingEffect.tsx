@@ -58,7 +58,7 @@ class FloatingEffect {
         case 'coin':
           return '/models/coin.glb';
         case 'Bottle':
-          return '/models/Bottle.glb'; // Assuming you have a Bottle.glb
+          return '/models/Water-bottle.glb'; // Corrected path for Bottle model
         default:
           return '';
       }
