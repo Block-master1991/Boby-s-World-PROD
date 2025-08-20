@@ -14,9 +14,6 @@ import { GameObject, BaseGameObject } from '@/types/game';
 
 
 const COIN_RADIUS = 0.4;
-const COIN_HEIGHT = 0.08;
-const COIN_COLOR = 0xFFD700;
-const COIN_EMISSIVE_COLOR = 0xFFD700; // استخدام اللون الأصلي للعملة للإضاءة المنبعثة
 const COIN_EMISSIVE_INTENSITY = 0.8; // زيادة شدة الإضاءة المنبعثة مع الحفاظ على المظهر الطبيعي
 const COIN_ROTATION_SPEED = 0.03;
 const COIN_VALUE = ENEMY_COLLISION_PENALTY_USDT; // Use the same value as the penalty for consistency

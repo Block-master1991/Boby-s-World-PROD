@@ -794,6 +794,7 @@ export const useEnemyLogic = ({
     unloadEnemiesFromChunk,
     addFloatingEffect,
     onCoinCollected,
+    protectionBottleCountRef
   ]);
   
   const resetEnemies = React.useCallback(() => {
