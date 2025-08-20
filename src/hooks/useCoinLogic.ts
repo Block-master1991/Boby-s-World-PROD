@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from 'react';
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { MutableRefObject } from 'react';
 import { Octree } from '../lib/Octree';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
@@ -15,22 +16,24 @@ import { GameObject, BaseGameObject } from '@/types/game';
 const COIN_RADIUS = 0.4;
 const COIN_HEIGHT = 0.08;
 const COIN_COLOR = 0xFFD700;
-const COIN_EMISSIVE_COLOR = 0xccac00;
-const COIN_ROTATION_SPEED = 0.02;
+const COIN_EMISSIVE_COLOR = 0xFFD700; // استخدام اللون الأصلي للعملة للإضاءة المنبعثة
+const COIN_EMISSIVE_INTENSITY = 0.8; // زيادة شدة الإضاءة المنبعثة مع الحفاظ على المظهر الطبيعي
+const COIN_ROTATION_SPEED = 0.03;
 const COIN_VALUE = ENEMY_COLLISION_PENALTY_USDT; // Use the same value as the penalty for consistency
 const COLLECTION_THRESHOLD_BASE = 0.5;
 const COLLECTION_THRESHOLD = COLLECTION_THRESHOLD_BASE + COIN_RADIUS;
 const VISIBLE_COIN_DISTANCE = 150; // Increased to ensure coins are visible in new chunks
+const COIN_MODEL_PATH = '/models/coin.glb'; // Path to the coin model
 
 // Define CoinData interface
 // Leveraging THREE.Mesh's existing 'uuid' property for unique identification.
 // No need to add a custom 'id' property that conflicts with THREE.Mesh.id (number).
-export interface CoinData extends THREE.Mesh, BaseGameObject {
+export interface CoinData extends THREE.Group, BaseGameObject {
   collected: boolean;
   value?: number;
   rotationSpeed?: number;
   type: 'item';
-  // The 'uuid' property from THREE.Object3D (which THREE.Mesh extends) is already a string UUID.
+  // The 'uuid' property from THREE.Object3D (which THREE.Group extends) is already a string UUID.
   // We can use this directly for unique identification.
 }
 
@@ -71,19 +74,39 @@ export const useCoinLogic = ({
   const remainingCoinsRef = useRef<number>(COIN_COUNT);
   const loadedCoinChunks = useRef<Set<string>>(new Set());
   const currentDogChunk = useRef<{ chunkX: number; chunkZ: number } | null>(null);
+  const coinModelRef = useRef<THREE.Group | null>(null);
+  const gltfLoaderRef = useRef<GLTFLoader | null>(null);
+  const isCoinModelLoadedRef = useRef<boolean>(false);
 
-  const coinGeometry = useRef(new THREE.CylinderGeometry(COIN_RADIUS, COIN_RADIUS, COIN_HEIGHT, 32));
-  const coinMaterial = useRef(new THREE.MeshStandardMaterial({
-    color: COIN_COLOR,
-    emissive: COIN_EMISSIVE_COLOR,
-    metalness: 0.8,
-    roughness: 0.2,
-  }));
+  // Load the coin model
+  const loadCoinModel = useCallback(async () => {
+    if (isCoinModelLoadedRef.current || !sceneRef.current) return;
+    
+    try {
+      if (!gltfLoaderRef.current) {
+        gltfLoaderRef.current = new GLTFLoader();
+      }
+      
+      const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
+      coinModelRef.current = gltf.scene;
+      isCoinModelLoadedRef.current = true;
+      console.log('[CoinLogic] Coin model loaded successfully');
+    } catch (error) {
+      console.error('[CoinLogic] Error loading coin model:', error);
+    }
+  }, [sceneRef]);
 
-  const loadCoinsForChunk = useCallback((chunkX: number, chunkZ: number) => {
+  const loadCoinsForChunk = useCallback(async (chunkX: number, chunkZ: number) => {
     if (!sceneRef.current || loadedCoinChunks.current.has(getChunkKey(chunkX, chunkZ))) {
       return;
     }
+    
+    // Ensure coin model is loaded
+    if (!isCoinModelLoadedRef.current) {
+      await loadCoinModel();
+    }
+    
+    if (!coinModelRef.current) return;
 
     const scene = sceneRef.current;
     const chunkMinX = chunkX * CHUNK_SIZE;
@@ -93,7 +116,7 @@ export const useCoinLogic = ({
 
     const numCoinsToGenerate = (Math.random() < 0.625) ? 1 : 0; // Distribute approximately 1000 coins across 1600 chunks (0.625 coins/chunk average)
     for (let i = 0; i < numCoinsToGenerate; i++) {
-      const coinMesh = new THREE.Mesh(coinGeometry.current, coinMaterial.current) as unknown as CoinData; // Cast to CoinData
+      const coinMesh = coinModelRef.current.clone() as CoinData; // Clone the coin model
       coinMesh.collected = false;
       coinMesh.value = COIN_VALUE;
       coinMesh.rotationSpeed = COIN_ROTATION_SPEED;
@@ -131,8 +154,23 @@ export const useCoinLogic = ({
         coinY = octreeRef.current.getGroundHeightAt(coinX, coinZ) + COIN_RADIUS;
       }
       coinMesh.position.set(coinX, coinY, coinZ);
-      coinMesh.rotation.x = Math.PI / 2;
+      // تعديل اتجاه العملة لتكون واقفة بشكل صحيح
+      coinMesh.rotation.x = 0; // إلغاء أي تدوير حول المحور السيني
+      coinMesh.rotation.z = 0; // إلغاء أي تدوير حول المحور الزيتي
+      coinMesh.rotation.y = 0; // إلغاء أي تدوير حول المحور الصادي
       coinMesh.castShadow = true;
+      // تعديل مقياس العملة ليبدو مناسبًا
+      coinMesh.scale.set(2.5, 2.5, 2.5);
+      
+      // تطبيق إعدادات الإضاءة على العملة مع الحفاظ على اللون الأصلي للنموذج
+      coinMesh.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          // استخدام اللون الأصلي للنموذج للإضاءة المنبعثة
+          const originalColor = child.material.color.clone();
+          child.material.emissive = originalColor;
+          child.material.emissiveIntensity = COIN_EMISSIVE_INTENSITY;
+        }
+      });
       coinMeshesRef.current.push(coinMesh);
       scene.add(coinMesh);
 
@@ -147,7 +185,7 @@ export const useCoinLogic = ({
     }
     loadedCoinChunks.current.add(getChunkKey(chunkX, chunkZ));
     onRemainingCoinsUpdate(remainingCoinsRef.current);
-  }, [sceneRef, octreeRef, onRemainingCoinsUpdate, dogModelRef]);
+  }, [sceneRef, octreeRef, onRemainingCoinsUpdate, dogModelRef, loadCoinModel]);
 
   const unloadCoinsFromChunk = useCallback((chunkX: number, chunkZ: number) => {
     if (!sceneRef.current || !loadedCoinChunks.current.has(getChunkKey(chunkX, chunkZ))) {
@@ -299,8 +337,8 @@ export const useCoinLogic = ({
         if (coin.visible) { // Only update rotation if it's still visible and not collected
           coin.visible = dogPosition.distanceTo(coin.position) < VISIBLE_COIN_DISTANCE;
           if (coin.visible) {
-            const worldYAxis = new THREE.Vector3(0, 1, 0);
-            coin.rotateOnWorldAxis(worldYAxis, COIN_ROTATION_SPEED);
+            // تدوير العملة حول محورها العمودي بشكل احترافي
+            coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
           }
         }
         coinsToKeep.push(coin); // Add to the list of coins to keep
