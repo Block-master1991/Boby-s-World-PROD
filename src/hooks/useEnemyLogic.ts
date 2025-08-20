@@ -120,7 +120,6 @@ export const useEnemyLogic = ({
   addFloatingEffect, // Destructure addFloatingEffect
 }: UseEnemyLogicProps) => {
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
-  const internalOptimisticProtectionBottleCountRef = React.useRef(protectionBottleCountRef.current);
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
@@ -152,11 +151,6 @@ export const useEnemyLogic = ({
     });
     console.log(`[useEnemyLogic] Disposed of enemy model resources.`);
   }, []);
-
-  // Effect to reconcile optimistic count with actual count from parent ref
-  React.useEffect(() => {
-    internalOptimisticProtectionBottleCountRef.current = protectionBottleCountRef.current;
-  }, [protectionBottleCountRef]);
 
   React.useEffect(() => {
     const dracoLoader = new DRACOLoader();
@@ -686,8 +680,8 @@ export const useEnemyLogic = ({
         }
         if (!enemy.hasAppliedDeathEffect) {
           if (isShieldActiveRef.current) {
-          } else if (internalOptimisticProtectionBottleCountRef.current > 0) {
-            internalOptimisticProtectionBottleCountRef.current--;
+          } else if (protectionBottleCountRef.current > 0) {
+            protectionBottleCountRef.current--;
             onConsumeProtectionBottle();
             if (dogModelRef.current) {
               addFloatingEffect(
@@ -749,8 +743,8 @@ export const useEnemyLogic = ({
 
               if (!enemy.hasAppliedDeathEffect) {
                 if (isShieldActiveRef.current) {
-                } else if (internalOptimisticProtectionBottleCountRef.current > 0) {
-                  internalOptimisticProtectionBottleCountRef.current--;
+                } else if (protectionBottleCountRef.current > 0) {
+                  protectionBottleCountRef.current--;
                   onConsumeProtectionBottle();
                   if (dogModelRef.current) {
                     addFloatingEffect(
