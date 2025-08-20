@@ -153,6 +153,7 @@ export const useEnemyLogic = ({
     console.log(`[useEnemyLogic] Disposed of enemy model resources.`);
   }, []);
 
+  // Effect to reconcile optimistic count with actual count from parent ref
   React.useEffect(() => {
     internalOptimisticProtectionBottleCountRef.current = protectionBottleCountRef.current;
   }, [protectionBottleCountRef]);
@@ -688,8 +689,6 @@ export const useEnemyLogic = ({
           } else if (internalOptimisticProtectionBottleCountRef.current > 0) {
             internalOptimisticProtectionBottleCountRef.current--;
             onConsumeProtectionBottle();
-          } else {
-            onEnemyCollisionPenalty();
             if (dogModelRef.current) {
               addFloatingEffect(
                 dogModelRef.current.position.clone(),
@@ -697,7 +696,21 @@ export const useEnemyLogic = ({
                 -1, // Assuming a penalty of -1 Bottle
                 'followTarget',
                 true, // Use 3D model for Bottle
-                dogModelRef.current.position.clone() // Target position is the dog's current position
+                undefined, // targetPosition is not needed for 'followTarget'
+                dogModelRef.current // Pass the dog's mesh as targetMesh
+              );
+            }
+          } else {
+            onEnemyCollisionPenalty();
+            if (dogModelRef.current) {
+              addFloatingEffect(
+                dogModelRef.current.position.clone(),
+                'penalty', // Change effectType to 'penalty'
+                -ENEMY_COLLISION_PENALTY_USDT, // Pass the actual penalty amount as negative
+                'followTarget',
+                false, // Use 2D text for penalty, not 3D model
+                undefined, // targetPosition is not needed for 'followTarget'
+                dogModelRef.current // Pass the dog's mesh as targetMesh
               );
             }
           }
@@ -739,6 +752,17 @@ export const useEnemyLogic = ({
                 } else if (internalOptimisticProtectionBottleCountRef.current > 0) {
                   internalOptimisticProtectionBottleCountRef.current--;
                   onConsumeProtectionBottle();
+                  if (dogModelRef.current) {
+                    addFloatingEffect(
+                      dogModelRef.current.position.clone(),
+                      'Bottle',
+                      -1, // Assuming a penalty of -1 Bottle
+                      'followTarget',
+                      true, // Use 3D model for Bottle
+                      undefined, // targetPosition is not needed for 'followTarget'
+                      dogModelRef.current // Pass the dog's mesh as targetMesh
+                    );
+                  }
                 } else {
                   onEnemyCollisionPenalty();
                   if (dogModelRef.current) {

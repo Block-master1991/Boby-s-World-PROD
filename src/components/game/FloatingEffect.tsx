@@ -134,7 +134,8 @@ class FloatingEffect {
       });
     }
 
-    const formattedValue = value.toFixed(3); // Format to 3 decimal places
+    // If the value is an integer, display it without decimal places. Otherwise, display with decimals.
+    const formattedValue = Number.isInteger(value) ? value.toString() : value.toFixed(3);
     const text = value > 0 ? `+${formattedValue}` : `${formattedValue}`;
     const textTexture = this.createTextTexture(text, value);
     if (textTexture) {
