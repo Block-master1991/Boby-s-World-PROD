@@ -32,7 +32,7 @@ class DogSpeedBeam {
         this.scene.add(this.mesh); // Add back to scene if it was removed
       }
       // Position the beam slightly behind the dog
-      const offset = new THREE.Vector3(0, 0, -0.5).applyEuler(this.dogRotation); // Adjust Z offset and apply dog's rotation
+      const offset = new THREE.Vector3(0, 1.5, -1.0).applyEuler(this.dogRotation); // Adjust Z offset and apply dog's rotation
       this.mesh.position.copy(this.dogPosition).add(offset);
       this.mesh.rotation.copy(this.dogRotation);
 
