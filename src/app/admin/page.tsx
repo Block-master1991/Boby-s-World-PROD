@@ -310,7 +310,7 @@ export default function AdminPage() {
               {/* Blacklist */}
               <div>
                 <h2 className="font-bold mb-2">Blacklist</h2>
-                {loading ? <PawPrint className="animate-spin" /> : (
+                {loading ? <PawPrint className="animate-pulse" /> : (
                   <>
                   <table className="w-full text-sm">
                     <thead>

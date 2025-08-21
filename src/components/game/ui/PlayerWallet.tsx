@@ -46,7 +46,7 @@ const PlayerWallet: React.FC<PlayerWalletProps> = ({
     <>
       <SheetHeader className="p-4 pb-2 border-b">
         <SheetTitle className="text-2xl font-headline flex items-center gap-2">
-            <Image src="/wallet.png" alt="Wallet Icon" width={28} height={28} className="h-7 w-7" /> Player Wallet
+            <Image src="/wallet.png" alt="Wallet Icon" width={28} height={28} className="h-7 w-7" /> Wallet
         </SheetTitle>
         <BobyPriceDisplay />
         {isWalletMismatch && sessionPublicKey && adapterPublicKey && (
@@ -75,12 +75,12 @@ const PlayerWallet: React.FC<PlayerWalletProps> = ({
               </CardTitle>
             </CardHeader>
             <CardContent className="pb-3 pt-1">
-              {isFetchingPlayerUSDT ? (<PawPrint className="h-6 w-6 animate-spin text-primary mx-auto" />) : (
+              {isFetchingPlayerUSDT ? (<PawPrint className="h-6 w-6 animate-pulse text-primary mx-auto" />) : (
                 <p className="text-2xl font-bold text-center text-primary">{playerGameUSDT.toFixed(4)} USDT</p>
               )}
               <Button className="w-full mt-3 text-sm py-2" onClick={onWithdrawUSDT}
                 disabled={playerGameUSDT < MIN_WITHDRAWAL_USDT || isWithdrawing || isFetchingPlayerUSDT || isWalletMismatch || firebaseNotConfigured}>
-                {isWithdrawing ? <PawPrint className="mr-2 rtl:ml-2 h-4 w-4 animate-spin" /> : <Send className="mr-2 rtl:ml-2 h-4 w-4" />}
+                {isWithdrawing ? <PawPrint className="mr-2 rtl:ml-2 h-4 w-4 animate-pulse" /> : <Send className="mr-2 rtl:ml-2 h-4 w-4" />}
                 Withdraw {MIN_WITHDRAWAL_USDT} USDT (Min)
               </Button>
               <p className="text-xs text-muted-foreground mt-1.5 text-center">Withdrawals are simulated.</p>

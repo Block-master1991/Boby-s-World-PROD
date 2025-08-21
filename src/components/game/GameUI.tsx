@@ -1118,7 +1118,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 disabled={(isGameEffectivelyPaused && !isWalletOpen) || isWalletMismatch}
                                 className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
                             >
-                                <Image src="/wallet.png" alt="Player Wallet" width={48} height={48} className="h-full w-full object-contain" />
+                                <Image src="/wallet.png" alt="Wallet" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
                         <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-y-auto">
