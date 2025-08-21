@@ -5,7 +5,7 @@ import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { Button, type ButtonProps } from '@/components/ui/button';
-import { LogOut, Loader2 } from 'lucide-react';
+import { LogOut, PawPrint } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useRouter, usePathname } from 'next/navigation'; // For potential redirect
 
@@ -73,7 +73,7 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
       {...buttonProps}
     >
       {isDisconnecting ? (
-        <Loader2 className="mr-2 rtl:ml-2 h-5 w-5 animate-spin" />
+        <PawPrint className="mr-2 rtl:ml-2 h-5 w-5 animate-pulse" />
       ) : (
         <LogOut className="mr-2 rtl:ml-2 h-5 w-5" />
       )}
@@ -83,4 +83,3 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
 };
 
 export default DisconnectButton;
-

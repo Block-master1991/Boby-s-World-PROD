@@ -6,7 +6,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { ADMIN_WALLET_ADDRESS } from '@/lib/constants';
 import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
-import { Loader2, LogOut, Trash2, Search } from 'lucide-react';
+import { PawPrint, LogOut, Trash2, Search } from 'lucide-react';
 import { useApiFetch } from '@/utils/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
@@ -165,7 +165,7 @@ export default function AdminPage() {
   if (isAuthHookLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8">
-        <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+        <PawPrint className="h-16 w-16 animate-pulse text-primary mb-4" />
         <p className="text-xl">Verifying admin access...</p>
       </div>
     );
@@ -174,7 +174,7 @@ export default function AdminPage() {
   if (user?.publicKey !== ADMIN_WALLET_ADDRESS) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8">
-        <Loader2 className="h-16 w-16 animate-spin text-primary mb-4" />
+        <PawPrint className="h-16 w-16 animate-pulse text-primary mb-4" />
         <p className="text-xl">Redirecting...</p>
       </div>
     );
@@ -274,7 +274,7 @@ export default function AdminPage() {
               {/* Whitelist */}
               <div>
                 <h2 className="font-bold mb-2">Whitelist</h2>
-                {loading ? <Loader2 className="animate-spin" /> : (
+                {loading ? <PawPrint className="animate-pulse" /> : (
                   <>
                   <table className="w-full text-sm">
                     <thead>
@@ -310,7 +310,7 @@ export default function AdminPage() {
               {/* Blacklist */}
               <div>
                 <h2 className="font-bold mb-2">Blacklist</h2>
-                {loading ? <Loader2 className="animate-spin" /> : (
+                {loading ? <PawPrint className="animate-spin" /> : (
                   <>
                   <table className="w-full text-sm">
                     <thead>

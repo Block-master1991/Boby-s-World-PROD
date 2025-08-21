@@ -3,7 +3,7 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReCAPTCHA from "react-google-recaptcha";
-import { Loader2, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
+import { PawPrint, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { useAudio } from '@/contexts/AudioContext';
@@ -120,7 +120,7 @@ useEffect(() => {
       </div>
       {isVerifyingCaptcha && (
         <div className="flex items-center text-muted-foreground mt-4">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+          <PawPrint className="mr-2 h-5 w-5 animate-pulse" />
           <span>Verifying...</span>
         </div>
       )}

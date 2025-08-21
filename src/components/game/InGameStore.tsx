@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, AlertCircle, Loader2, RefreshCw, Plus, Minus } from 'lucide-react';
+import { Send, AlertCircle, PawPrint, RefreshCw, Plus, Minus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
@@ -229,7 +229,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 <div className="p-4 space-y-1">
                     {isBobyPriceLoading && bobyUsdPrice === null && ( 
                         <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
-                            <Loader2 className="h-4 w-4 mr-2 rtl:ml-2 animate-spin"/> Loading Boby price...
+                            <PawPrint className="h-4 w-4 mr-2 rtl:ml-2 animate-pulse"/> Loading Boby price...
                         </div>
                     )}
                     {bobyPriceError && (
@@ -244,7 +244,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                       <div className="text-xs text-muted-foreground text-center mb-3 p-2 bg-secondary/30 rounded-md flex items-center justify-center">
                           Current Price: 1 BOBY = ${bobyUsdPrice.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 10 })} USD
                           <Button variant="ghost" size="icon" onClick={() => fetchBobyUsdPrice(false)} className="ml-2 rtl:mr-2 h-5 w-5 text-muted-foreground hover:text-primary">
-                            {isBobyPriceLoading ? <Loader2 className="h-3 w-3 animate-spin"/> : <RefreshCw className="h-3 w-3"/>}
+                            {isBobyPriceLoading ? <PawPrint className="h-3 w-3 animate-pulse"/> : <RefreshCw className="h-3 w-3"/>}
                             <span className="sr-only">Refresh Price</span>
                           </Button>
                       </div>
@@ -324,7 +324,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                     <Button variant="default" size="sm" onClick={() => handlePurchase(item)}
                                         disabled={isLoading === item.id || !isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey || STORE_TREASURY_WALLET_ADDRESS === 'REPLACE_WITH_YOUR_STORE_TREASURY_WALLET_ADDRESS' || STORE_TREASURY_WALLET_ADDRESS === 'EXAMPLE_DO_NOT_USE' || isBobyPriceLoading || !bobyUsdPrice || bobyUsdPrice <= 0}
                                         className="bg-accent hover:bg-accent/90 text-accent-foreground w-full mt-4 text-xs px-2 py-1">
-                                        {isLoading === item.id ? <Loader2 className="mr-2 rtl:ml-2 h-4 w-4 animate-spin" /> : ( <><Send className="mr-2 rtl:ml-2 h-4 w-4" /> Purchase ({quantity})</> )}
+                                        {isLoading === item.id ? <PawPrint className="mr-2 rtl:ml-2 h-4 w-4 animate-pulse" /> : ( <><Send className="mr-2 rtl:ml-2 h-4 w-4" /> Purchase ({quantity})</> )}
                                     </Button>
                                 </CardContent>
                             </Card>

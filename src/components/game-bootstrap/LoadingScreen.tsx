@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Loader2, AlertTriangle } from 'lucide-react';
+import { PawPrint, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress'; // Import the Progress component
 
@@ -26,7 +26,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ message, showLogo = true,
         />
       )}
       {!isError ? (
-        <Loader2 className="h-16 w-16 animate-spin text-primary mb-6" />
+        <PawPrint className="h-16 w-16 animate-pulse text-primary mb-6" />
       ) : (
         <AlertTriangle className="h-16 w-16 text-destructive mb-6" />
       )}

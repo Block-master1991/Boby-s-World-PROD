@@ -15,7 +15,7 @@ const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected }) => {
 
     return (
         <div className="flex items-center justify-center min-h-screen bg-background text-foreground px-4 sm:px-6">
-            <Card className="w-full max-w-md md:max-w-2xl glass-card"> {/* Apply glass-card here */}
+            <Card className="w-full max-w-md md:max-w-2xl glass-card overflow-y-auto"> {/* Apply glass-card here */}
                 <CardHeader>
                     <CardTitle className="text-center text-2xl md:text-4xl text-foreground">Select Game Mode</CardTitle>
                     <CardDescription className="text-center text-base md:text-lg text-muted-foreground">Choose your adventure!</CardDescription>

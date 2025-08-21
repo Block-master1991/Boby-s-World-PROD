@@ -9,7 +9,7 @@ import GameMenuSheetContent from '@/components/game/ui/GameMenuSheetContent';
 import PlayerWallet from '@/components/game/ui/PlayerWallet'
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetLoading } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
@@ -80,6 +80,98 @@ const GameUI: React.FC<GameUIProps> = ({
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isWalletOpen, setIsWalletOpen] = useState(false);
+
+    // Loading states for sheets
+    const [isStoreLoading, setIsStoreLoading] = useState(false);
+    const [isInventoryLoading, setIsInventoryLoading] = useState(false);
+    const [isWalletLoading, setIsWalletLoading] = useState(false);
+
+    /**
+     * Fetches player data from the backend API.
+     */
+    const fetchPlayerData = useCallback(async (showLoadingState = false) => {
+        if (!isAuthenticated || !authUser?.publicKey) {
+            setIsFetchingPlayerUSDT(false);
+            return null; // Return null if not authenticated
+        }
+
+        // Set loading states if requested
+        if (showLoadingState) {
+            setIsStoreLoading(true);
+            setIsInventoryLoading(true);
+            setIsWalletLoading(true);
+        }
+
+        setIsFetchingPlayerUSDT(true);
+
+        // Show loading states for sheets when requested
+        if (showLoadingState) {
+            setIsStoreLoading(true);
+            setIsInventoryLoading(true);
+            setIsWalletLoading(true);
+        }
+
+        const controller = new AbortController();
+        const signal = controller.signal;
+
+        try {
+            const response = await apiFetch('/api/game/fetchPlayerData', { // استخدام apiFetch
+                method: 'GET',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${authUser.publicKey}`
+                },
+                signal: signal
+            });
+            const data = await response.json();
+
+            if (response.ok) {
+                setPlayerGameUSDT(data.gameUSDTBalance || 0);
+                const rawInventory = data.inventory || [];
+                let speedyCount = 0, shieldCount = 0, pBottleCount = 0, magnetCount = 0;
+                rawInventory.forEach((item: { id: string }) => {
+                    const itemId = typeof item === 'object' && item.id ? item.id : item;
+                    if (itemId === '1') pBottleCount++;
+                    if (itemId === '2') shieldCount++;
+                    if (itemId === '3') speedyCount++;
+                    if (itemId === '4') magnetCount++;
+                });
+                setProtectionBottleCount(pBottleCount);
+                setGuardianShieldCount(shieldCount);
+                setSpeedyPawsTreatCount(speedyCount);
+                setCoinMagnetTreatCount(magnetCount);
+
+                // Reset loading states for sheets
+                setIsStoreLoading(false);
+                setIsInventoryLoading(false);
+                setIsWalletLoading(false);
+            } else {
+                console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.');
+
+                // Reset loading states for sheets even on error
+                setIsStoreLoading(false);
+                setIsInventoryLoading(false);
+                setIsWalletLoading(false);
+            }
+        } catch (error) {
+            console.error("Network or unexpected error fetching player data from backend:", error);
+            if (error instanceof Error && error.name === 'AbortError') {
+                console.debug('[GameUI] fetchPlayerData aborted.'); // Changed to console.debug
+            } else {
+                console.debug("Network or unexpected error fetching player data from backend:", error); // Changed to console.debug
+                toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
+                setProtectionBottleCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
+            }
+
+            // Reset loading states for sheets even on error
+            setIsStoreLoading(false);
+            setIsInventoryLoading(false);
+            setIsWalletLoading(false);
+        } finally {
+            setIsFetchingPlayerUSDT(false);
+        }
+        return controller; // Return the controller
+    }, [isAuthenticated, authUser?.publicKey, toast, apiFetch]); // Added apiFetch to dependencies
 
     // New State for pending optimistic updates
     const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate[]>([]);
@@ -194,62 +286,6 @@ const GameUI: React.FC<GameUIProps> = ({
     }, [coinMagnetTreatCount, optimisticUpdates]);
 
 
-    /**
-     * Fetches player data from the backend API.
-     */
-    const fetchPlayerData = useCallback(async () => {
-        if (!isAuthenticated || !authUser?.publicKey) {
-            setIsFetchingPlayerUSDT(false);
-            return null; // Return null if not authenticated
-        }
-
-        setIsFetchingPlayerUSDT(true);
-        const controller = new AbortController();
-        const signal = controller.signal;
-
-        try {
-            const response = await apiFetch('/api/game/fetchPlayerData', { // استخدام apiFetch
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
-                },
-                signal: signal
-            });
-            const data = await response.json();
-
-            if (response.ok) {
-                setPlayerGameUSDT(data.gameUSDTBalance || 0);
-                const rawInventory = data.inventory || [];
-                let speedyCount = 0, shieldCount = 0, pBottleCount = 0, magnetCount = 0;
-                rawInventory.forEach((item: { id: string }) => {
-                    const itemId = typeof item === 'object' && item.id ? item.id : item;
-                    if (itemId === '1') pBottleCount++;
-                    if (itemId === '2') shieldCount++;
-                    if (itemId === '3') speedyCount++;
-                    if (itemId === '4') magnetCount++;
-                });
-                setProtectionBottleCount(pBottleCount);
-                setGuardianShieldCount(shieldCount);
-                setSpeedyPawsTreatCount(speedyCount);
-                setCoinMagnetTreatCount(magnetCount);
-            } else {
-                console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.');
-            }
-        } catch (error) {
-            console.error("Network or unexpected error fetching player data from backend:", error);
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.debug('[GameUI] fetchPlayerData aborted.'); // Changed to console.debug
-            } else {
-                console.debug("Network or unexpected error fetching player data from backend:", error); // Changed to console.debug
-                toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
-                setProtectionBottleCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
-            }
-        } finally {
-            setIsFetchingPlayerUSDT(false);
-        }
-        return controller; // Return the controller
-    }, [isAuthenticated, authUser?.publicKey, toast, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Handles the start of a touch event on the canvas for joystick control.
@@ -1032,7 +1068,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/GameMenu.png" alt="Game Menu" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-hidden">
+                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-y-auto">
                             <GameMenuSheetContent
                                 isWalletMismatch={isWalletMismatch}
                                 isAuthenticated={isAuthenticated}
@@ -1057,15 +1093,21 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/GameStore-lg.png" alt="Game Store" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-hidden">
-                            <InGameStore
-                                isAuthenticated={isAuthenticated}
-                                authUserPublicKey={authUser?.publicKey}
-                                isWalletConnectedAndMatching={isWalletConnectedAndMatching}
-                                onPurchaseSuccess={async () => {
-                                await fetchPlayerData();
-                                }}
-                            />
+                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-y-auto">
+                            <div className="w-full h-full">
+                                {isStoreLoading ? (
+                                    <SheetLoading />
+                                ) : (
+                                    <InGameStore
+                                        isAuthenticated={isAuthenticated}
+                                        authUserPublicKey={authUser?.publicKey}
+                                        isWalletConnectedAndMatching={isWalletConnectedAndMatching}
+                                        onPurchaseSuccess={async () => {
+                                            await fetchPlayerData();
+                                        }}
+                                    />
+                                )}
+                            </div>
                         </SheetContent>
                     </Sheet>
 
@@ -1079,19 +1121,25 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/wallet.png" alt="Player Wallet" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-hidden">
-                            <PlayerWallet
-                                isAuthenticated={isAuthenticated}
-                                authUserPublicKey={authUser?.publicKey}
-                                isWalletMismatch={isWalletMismatch}
-                                sessionPublicKey={sessionPublicKey}
-                                adapterPublicKey={adapterPublicKey}
-                                isFetchingPlayerUSDT={isFetchingPlayerUSDT}
-                                playerGameUSDT={displayedPlayerGameUSDT}
-                                MIN_WITHDRAWAL_USDT={MIN_WITHDRAWAL_USDT}
-                                isWithdrawing={isWithdrawing}
-                                onWithdrawUSDT={handleWithdrawUSDT}
-                            />
+                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-y-auto">
+                            <div className="w-full h-full">
+                                {isWalletLoading ? (
+                                    <SheetLoading />
+                                ) : (
+                                    <PlayerWallet
+                                        isAuthenticated={isAuthenticated}
+                                        authUserPublicKey={authUser?.publicKey}
+                                        isWalletMismatch={isWalletMismatch}
+                                        sessionPublicKey={sessionPublicKey}
+                                        adapterPublicKey={adapterPublicKey}
+                                        isFetchingPlayerUSDT={isFetchingPlayerUSDT}
+                                        playerGameUSDT={displayedPlayerGameUSDT}
+                                        MIN_WITHDRAWAL_USDT={MIN_WITHDRAWAL_USDT}
+                                        isWithdrawing={isWithdrawing}
+                                        onWithdrawUSDT={handleWithdrawUSDT}
+                                    />
+                                )}
+                            </div>
                         </SheetContent>
                     </Sheet>
                     
@@ -1105,14 +1153,20 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/PlayerInventory.png" alt="Player Inventory" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-hidden">
-                           <PlayerInventory
-                                onUseConsumableItem={handleUseConsumableItem}
-                                speedyPawsTreatCount={displayedSpeedyPawsTreatCount}
-                                guardianShieldCount={displayedGuardianShieldCount}
-                                protectionBottleCount={displayedProtectionBottleCount}
-                                coinMagnetTreatCount={displayedCoinMagnetTreatCount}
-                           />
+                        <SheetContent side="center" className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-y-auto">
+                            <div className="w-full h-full">
+                                {isInventoryLoading ? (
+                                    <SheetLoading />
+                                ) : (
+                                    <PlayerInventory
+                                        onUseConsumableItem={handleUseConsumableItem}
+                                        speedyPawsTreatCount={displayedSpeedyPawsTreatCount}
+                                        guardianShieldCount={displayedGuardianShieldCount}
+                                        protectionBottleCount={displayedProtectionBottleCount}
+                                        coinMagnetTreatCount={displayedCoinMagnetTreatCount}
+                                    />
+                                )}
+                            </div>
                         </SheetContent>
                     </Sheet>
 

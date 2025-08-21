@@ -8,7 +8,7 @@ import { PublicKey } from '@solana/web3.js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { BOBY_TOKEN_MINT_ADDRESS, USDT_TOKEN_MINT_ADDRESS, LAMPORTS_PER_SOL } from '@/lib/constants';
-import { AlertTriangle, Loader2, WalletCards } from 'lucide-react';
+import { AlertTriangle, PawPrint, WalletCards } from 'lucide-react';
 import Image from 'next/image';
 type ErrorType = 'rpc' | 'other' | null;
 
@@ -34,7 +34,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ isLoading, balance, err
                 <span className="text-base font-medium text-foreground">{currencyName}</span>
             </div>
             <div className="text-right">
-                {isLoading && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                {isLoading && <PawPrint className="h-5 w-5 animate-pulse text-primary" />}
                 {!isLoading && error && (
                     <div className="flex items-center text-destructive text-sm">
                         <AlertTriangle className="h-4 w-4 mr-1 rtl:ml-1" /> Error

@@ -144,6 +144,10 @@ export default {
             opacity: '0',
           },
         },
+        pulse: {
+          '0%, 100%': { opacity: '1' },
+          '50%': { opacity: '0.5' },
+        },
       },
       animation: {
         'accordion-down': 'accordion-down 0.2s ease-out',
@@ -154,6 +158,7 @@ export default {
         'zoom-out': 'zoom-out 0.3s ease-in',
         'slide-in-from-center': 'slide-in-from-center 0.3s ease-out',
         'slide-out-to-center': 'slide-out-to-center 0.3s ease-in',
+        pulse: 'pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite',
       },
     },
   },

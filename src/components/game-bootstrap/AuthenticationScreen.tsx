@@ -4,7 +4,7 @@ import React, { useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Button } from '@/components/ui/button';
-import { Loader2, AlertTriangle, LogOutIcon, ShieldCheck } from 'lucide-react';
+import { PawPrint, AlertTriangle, LogOutIcon, ShieldCheck } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -61,7 +61,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="mb-8 rounded-md" style={{ width: 'auto', height: 'auto' }} data-ai-hint="dog logo" priority />
-        <Loader2 className="h-12 w-12 animate-spin text-primary mb-4" />
+        <PawPrint className="h-12 w-12 animate-pulse text-primary mb-4" />
         <h1 className="text-4xl font-bold mb-2 font-headline">Boby World</h1>
         <p className="text-xl text-muted-foreground">
           Processing authentication...
@@ -130,7 +130,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
             </>
           ) : (
             <p className="text-lg text-muted-foreground mb-8">
-              <Loader2 className="inline-block mr-2 h-5 w-5 animate-spin" />
+              <PawPrint className="inline-block mr-2 h-5 w-5 animate-pulse" />
               Authenticating... Please check your wallet if prompted.
             </p>
           )}

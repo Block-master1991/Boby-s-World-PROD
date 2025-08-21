@@ -2,7 +2,7 @@
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, Loader2, RefreshCw } from 'lucide-react';
+import { AlertCircle, PawPrint, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useApiFetch } from '@/utils/api';
@@ -107,7 +107,7 @@ const BobyPriceDisplay: React.FC = () => {
                     <span className="font-medium text-foreground">Boby Price:</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                    {isLoading && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+                    {isLoading && <PawPrint className="h-4 w-4 animate-spin text-primary" />}
                     {!isLoading && errorInfo && (
                         <div className="flex items-center text-destructive text-xs" title={errorInfo.details || displayErrorMessage}>
                             <AlertCircle className="h-4 w-4 mr-1 rtl:ml-1 flex-shrink-0" />
@@ -124,7 +124,7 @@ const BobyPriceDisplay: React.FC = () => {
                         <span className="text-xs text-muted-foreground">Unavailable</span>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => fetchPrice(false)} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Refresh Price">
-                        {isLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin"/> : <RefreshCw className="h-3.5 w-3.5"/>}
+                        {isLoading ? <PawPrint className="h-3.5 w-3.5 animate-spin"/> : <RefreshCw className="h-3.5 w-3.5"/>}
                         <span className="sr-only">Refresh Price</span>
                     </Button>
                 </div>
