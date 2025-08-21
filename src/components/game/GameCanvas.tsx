@@ -383,7 +383,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 onLoadComplete(false);
                 return; 
             }
-        } else if (dogModelRef.current && lastDogTransformRef.current && sessionPublicKey && !isNewSession) {
+        } else if (dogModelRef.current && lastDogTransformRef.current && sessionPublicKey && !isNewSession && !isPaused) {
             dogModelRef.current.position.copy(lastDogTransformRef.current.position);
             dogModelRef.current.rotation.y = lastDogTransformRef.current.rotationY;
             if (cameraRef.current) { 
@@ -408,6 +408,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, // Add floating effects hooks
         updateParticles, // Add dog particles hook
         isSpeedBoostActive, isShieldActive, // Add states for continuous effects
+        isPaused, // Add isPaused to dependencies
         animate
     ]);
 
