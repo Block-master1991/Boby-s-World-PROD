@@ -14,7 +14,7 @@ class DogShieldEffect {
     this.scene = options.scene;
     this.dogPosition = options.dogPosition;
 
-    const geometry = new THREE.SphereGeometry(1, 32, 32); // Radius, widthSegments, heightSegments
+    const geometry = new THREE.SphereGeometry(1.2, 32, 32); // Radius, widthSegments, heightSegments (Increased radius to 1.2)
     const material = new THREE.MeshBasicMaterial({
       color: 0x0000FF, // Blue color
       transparent: true,
@@ -34,6 +34,7 @@ class DogShieldEffect {
         this.scene.add(this.mesh); // Add back to scene if it was removed
       }
       this.mesh.position.copy(this.dogPosition);
+      this.mesh.position.y += 0.75; // Adjust this value to raise or lower the shield
       // Simple pulsing scale effect for the shield
       this.mesh.scale.setScalar(1 + Math.sin(performance.now() * 0.01) * 0.1);
       this.mesh.rotation.y += 0.02; // Rotate the shield
