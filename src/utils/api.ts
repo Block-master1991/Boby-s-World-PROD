@@ -23,8 +23,7 @@ export const setGlobalToast = (func: ReturnType<typeof useToast>['toast']) => {
 };
 
 // ===== التخزين المؤقت للاستجابات =====
-const cache = new Map<string, { data: unknown; timestamp: number }>();
-const CACHE_DURATION_MS = 5 * 60 * 1000; // 5 دقائق
+// تم إلغاء التخزين المؤقت بالكامل
 
 // ===== إعدادات عامة =====
 const MAX_RETRIES = 2;
@@ -103,17 +102,6 @@ const handle403Error = async (): Promise<boolean> => {
  */
 export const apiFetch: FetchFunction = async (input, init) => {
   const url = typeof input === "string" ? input : input.toString();
-  const cacheKey = `${url}_${JSON.stringify(init)}`;
-
-  // تحقق من التخزين المؤقت
-  const cached = cache.get(cacheKey);
-  if (cached && Date.now() - cached.timestamp < CACHE_DURATION_MS) {
-    console.log(`[apiFetch] Cache hit for: ${url}`);
-    return new Response(JSON.stringify(cached.data), {
-      status: 200,
-      headers: { "Content-Type": "application/json" }
-    });
-  }
 
   let retries = 0;
 
@@ -160,17 +148,8 @@ export const apiFetch: FetchFunction = async (input, init) => {
       // تحقق من صحة الاستجابة
       const validRes = await validateResponse(response);
 
-      // التخزين المؤقت للبيانات JSON فقط
-      if (validRes.ok) {
-        try {
-          const data = await validRes.clone().json();
-          cache.set(cacheKey, { data, timestamp: Date.now() });
-          console.log(`[apiFetch] Cached response for: ${url}`);
-        } catch {
-          // ليست JSON → لا نخزنها
-          console.log(`[apiFetch] Response not JSON, not caching: ${url}`);
-        }
-      }
+      // تم إلغاء التخزين المؤقت بالكامل
+      // لا يتم تخزين أي بيانات مؤقتاً
 
       return validRes;
     } catch (error: unknown) {
