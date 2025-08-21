@@ -159,12 +159,16 @@ export const useTreeLogic = ({ sceneRef, octreeRef }: UseTreeLogicProps) => {
         // Random position within the current chunk
         const x = chunkMinX + Math.random() * CHUNK_SIZE;
         const z = chunkMinZ + Math.random() * CHUNK_SIZE;
+
+        // Clamp x and z to ground plane bounds (-1000 to 1000)
+        const clampedX = Math.max(-900, Math.min(900, x));
+        const clampedZ = Math.max(-900, Math.min(900, z));
         
         let y = 0;
         if (octreeRef.current) {
-          y = octreeRef.current.getGroundHeightAt(x, z);
+          y = octreeRef.current.getGroundHeightAt(clampedX, clampedZ);
         }
-        lod.position.set(x, y, z);
+        lod.position.set(clampedX, y, clampedZ);
         lod.name = `Tree_chunk_${chunkX}_${chunkZ}_${i}`;
 
         sceneRef.current.add(lod);

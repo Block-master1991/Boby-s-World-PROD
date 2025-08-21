@@ -207,7 +207,7 @@ class Octree<T> {
         const rayBox = new THREE.Box3().setFromPoints([rayOrigin, rayEnd]);
 
         const intersectingObjects = this.query(rayBox);
-        let highestY = this.root.bounds.min.y;
+        let highestY = 0; // Default to ground plane height
 
         for (const obj of intersectingObjects) {
             if (obj.id === 'ground' || obj.id.startsWith('obstacle_')) {
