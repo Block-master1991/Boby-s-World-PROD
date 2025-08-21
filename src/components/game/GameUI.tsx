@@ -1032,7 +1032,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/GameMenu.png" alt="Game Menu" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="left" className="w-full sm:max-w-xs p-0 flex flex-col">
+                        <SheetContent side="center" className="max-w-md w-full p-0 flex flex-col rounded-xl border-2 shadow-xl">
                             <GameMenuSheetContent
                                 isWalletMismatch={isWalletMismatch}
                                 isAuthenticated={isAuthenticated}
@@ -1057,7 +1057,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/GameStore-lg.png" alt="Game Store" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                        <SheetContent side="center" className="max-w-md w-full p-0 flex flex-col rounded-xl border-2 shadow-xl">
                             <InGameStore
                                 isAuthenticated={isAuthenticated}
                                 authUserPublicKey={authUser?.publicKey}
@@ -1079,7 +1079,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/wallet.png" alt="Player Wallet" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                        <SheetContent side="center" className="max-w-md w-full p-0 flex flex-col rounded-xl border-2 shadow-xl">
                             <PlayerWallet
                                 isAuthenticated={isAuthenticated}
                                 authUserPublicKey={authUser?.publicKey}
@@ -1105,7 +1105,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 <Image src="/PlayerInventory.png" alt="Player Inventory" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>
-                        <SheetContent side="right" className="w-full sm:max-w-md p-0 flex flex-col">
+                        <SheetContent side="center" className="max-w-md w-full p-0 flex flex-col rounded-xl border-2 shadow-xl">
                            <PlayerInventory
                                 onUseConsumableItem={handleUseConsumableItem}
                                 speedyPawsTreatCount={displayedSpeedyPawsTreatCount}
