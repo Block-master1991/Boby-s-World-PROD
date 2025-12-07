@@ -5,9 +5,7 @@ const nextConfig: NextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+   turbopack: {},
   images: {
     remotePatterns: [
       {
@@ -18,11 +16,8 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  ...(process.env.NODE_ENV === 'development' && process.env.NEXT_PUBLIC_DEV_ORIGIN && {
-  experimental: {
-    allowedDevOrigins: [process.env.NEXT_PUBLIC_DEV_ORIGIN],
-  },
-}), // Only add this in development mode if NEXT_PUBLIC_DEV_ORIGIN is set
+  
+ // Only add this in development mode if NEXT_PUBLIC_DEV_ORIGIN is set
   webpack: (config, { isServer }) => {
     // Add a rule to handle JSON files properly
     config.module.rules.push({

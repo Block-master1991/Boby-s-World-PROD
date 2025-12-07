@@ -13,7 +13,11 @@ import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
 import { PublicKey, Transaction } from '@solana/web3.js';
-import { TOKEN_PROGRAM_ID, getAssociatedTokenAddress, createAssociatedTokenAccountInstruction, createTransferInstruction, getAccount, TokenAccountNotFoundError } from '@solana/spl-token';
+import { 
+    Token,
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+    TOKEN_PROGRAM_ID,
+} from '@solana/spl-token';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
@@ -160,23 +164,49 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 throw new Error("Adapter public key not available for transaction.");
             }
             
-            const fromTokenAccountAddress = await getAssociatedTokenAddress(bobyMintPublicKey, adapterPublicKey);
-            const toTokenAccountAddress = await getAssociatedTokenAddress(bobyMintPublicKey, treasuryPublicKey);
+            const fromTokenAccountAddress = await Token.getAssociatedTokenAddress(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
+                TOKEN_PROGRAM_ID,
+                bobyMintPublicKey,
+                adapterPublicKey
+            );
+            const toTokenAccountAddress = await Token.getAssociatedTokenAddress(
+                ASSOCIATED_TOKEN_PROGRAM_ID,
+                TOKEN_PROGRAM_ID,
+                bobyMintPublicKey,
+                treasuryPublicKey
+            );
+
             
             const transaction = new Transaction();
             try {
-                await getAccount(connection, toTokenAccountAddress);
+                await connection.getAccountInfo(toTokenAccountAddress);
             } catch (error) {
-                 if (error instanceof TokenAccountNotFoundError) {
-                    transaction.add(createAssociatedTokenAccountInstruction(adapterPublicKey, toTokenAccountAddress, treasuryPublicKey, bobyMintPublicKey));
-                } else { 
-                    toast({ title: 'Transaction Setup Failed', description: 'Could not prepare store token account.', variant: 'destructive' }); setIsLoading(null); return;
-                }
+                transaction.add(
+                    Token.createAssociatedTokenAccountInstruction(
+                        ASSOCIATED_TOKEN_PROGRAM_ID,
+                        TOKEN_PROGRAM_ID,
+                        bobyMintPublicKey,
+                        toTokenAccountAddress,
+                        treasuryPublicKey,
+                        adapterPublicKey
+                    )
+                );
             }
+
             const bobyAmountInSmallestUnit = Math.round(calculatedBobyAmount * (10 ** BOBY_TOKEN_DECIMALS));
 
-            transaction.add(createTransferInstruction(fromTokenAccountAddress, toTokenAccountAddress, adapterPublicKey, bobyAmountInSmallestUnit, [], TOKEN_PROGRAM_ID));
-            
+            transaction.add(
+                Token.createTransferInstruction(
+                    TOKEN_PROGRAM_ID,
+                    fromTokenAccountAddress,
+                    toTokenAccountAddress,
+                    adapterPublicKey,
+                    [],
+                    bobyAmountInSmallestUnit
+                )
+            );
+
             signature = await sendTransaction(transaction, connection);
             toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Processing inventory update.` });
 
