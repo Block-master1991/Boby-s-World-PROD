@@ -3,7 +3,6 @@
 import { useState, useEffect, useCallback, MutableRefObject, useRef } from 'react';
 import * as THREE from 'three';
 import { Octree } from '@/lib/Octree';
-import { useTreeLogic } from './useTreeLogic'; // Import useTreeLogic
 import { GameObject } from '@/types/game';
 
 interface UseGameAssetLoaderProps {
@@ -32,8 +31,6 @@ export const useGameAssetLoader = ({
   const [isLoadingAssets, setIsLoadingAssets] = useState(true);
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
-
-  useTreeLogic({ sceneRef, octreeRef });
 
   const totalAssetsToLoad = 4; // Dog, Coins, Enemies, Trees
   const progressRef = useRef({ dog: 0, coins: 0, enemies: 0, trees: 0 }); // Add trees
@@ -93,6 +90,17 @@ export const useGameAssetLoader = ({
 
       await Promise.all([coinsPromise, enemiesPromise, treesPromise]); // Wait for all promises
 
+      // Initialize Octree if it doesn't exist yet
+      if (!octreeRef.current) {
+        // Define world bounds for the octree (adjust size based on your game world)
+        const worldBounds = new THREE.Box3(
+          new THREE.Vector3(-100, -10, -100), // min corner
+          new THREE.Vector3(100, 100, 100)   // max corner
+        );
+        octreeRef.current = new Octree<GameObject>(worldBounds);
+        console.log("[GameAssetLoader] Octree initialized for collision detection");
+      }
+      
       setIsLoadingAssets(false);
       setLoadProgress(100);
       console.log("[GameAssetLoader] All game assets loaded successfully. Final Progress: 100%");
@@ -109,7 +117,7 @@ export const useGameAssetLoader = ({
       // Re-throw the error to ensure it's caught by the parent component (GameCanvas)
       throw err;
     }
-  }, [initializeDog, initializeCoins, initializeEnemies, initializeTrees, createProgressCallback, updateProgress]); // Add initializeTrees to dependencies
+  }, [initializeDog, initializeCoins, initializeEnemies, initializeTrees, createProgressCallback, updateProgress, octreeRef]); // Add initializeTrees to dependencies
 
   // This effect will trigger the loading process when the component mounts
   // or when dependencies change (though we want it to run once for initial load)

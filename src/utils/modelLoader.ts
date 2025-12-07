@@ -1,6 +1,7 @@
 // src/utils/modelLoader.ts
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 
 type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array;
 
@@ -755,10 +756,16 @@ class RetryManager {
   private static instance: RetryManager;
   private readonly MAX_RETRIES = 3;
   private readonly RETRY_DELAY = 1000;
+  private _dracoLoader: DRACOLoader | null = null; // Add private dracoLoader
+
   private constructor() {}
   public static getInstance(): RetryManager {
     if (!RetryManager.instance) RetryManager.instance = new RetryManager();
     return RetryManager.instance;
+  }
+
+  public setDracoLoader(loader: DRACOLoader): void {
+    this._dracoLoader = loader;
   }
 
   public async loadWithRetry(path: string, compress: boolean, instanceId: string | undefined, priority: LoadPriority, abortController: AbortController): Promise<THREE.Group> {
@@ -781,6 +788,14 @@ class RetryManager {
 
   private async loadModelInternal(path: string, compress: boolean, priority: LoadPriority, signal: AbortSignal): Promise<THREE.Group> {
     const loader = new GLTFLoader();
+    console.log(`[RetryManager] Attempting to load model: ${path}. DracoLoader instance:`, this._dracoLoader);
+    // Set DRACOLoader if available
+    if (this._dracoLoader) { // Access the dracoLoader from the private property
+      loader.setDRACOLoader(this._dracoLoader);
+      console.log(`[RetryManager] DRACOLoader set on GLTFLoader for ${path}.`);
+    } else {
+      console.warn(`[RetryManager] DRACOLoader is null for ${path}.`);
+    }
     const gltf = await loader.loadAsync(path);
     signal.throwIfAborted();
     let model = gltf.scene;
@@ -886,6 +901,7 @@ export const loadGLTF = (path: string, compress: boolean = true, instanceId?: st
 class ModelLoader {
   private static instance: ModelLoader;
   private initialized = false;
+  private dracoLoader: DRACOLoader | null = null;
 
   private constructor() {}
 
@@ -902,6 +918,18 @@ class ModelLoader {
     // Initialize all systems
     // Note: Most managers are singletons and don't need explicit async init,
     // but this structure is kept for potential future async initializations.
+    // Initialize DRACOLoader
+    this.dracoLoader = new DRACOLoader();
+    this.dracoLoader.setDecoderPath('/libs/draco/'); // Set the path to the Draco decoder
+    console.log("[ModelLoader] DRACOLoader initialized. Decoder path set.");
+
+    // Preload the DRACO decoder files
+    await this.dracoLoader.preload();
+    console.log("[ModelLoader] DRACOLoader decoder preloaded.");
+
+    retryManager.setDracoLoader(this.dracoLoader); // Pass dracoLoader to RetryManager
+    console.log("[ModelLoader] DRACOLoader passed to RetryManager.");
+
     await Promise.all([
       Promise.resolve(workerManager),
       Promise.resolve(lodManager),

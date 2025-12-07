@@ -32,6 +32,7 @@ export const FIREBASE_MESSAGING_SENDER_ID = process.env.NEXT_PUBLIC_FIREBASE_MES
 
 export const FIREBASE_APP_ID = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 
+export const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
 
 // World boundaries and enemy protection radius
 export const WORLD_MIN_BOUND = -999;

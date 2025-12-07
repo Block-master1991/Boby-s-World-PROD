@@ -32,7 +32,7 @@ export const useCameraLogic = ({
       50,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.1,
-      75
+      2000 // Increased far clipping plane to accommodate large cloud plane
     );
     cameraRef.current = camera;
     camera.position.set(0, 5, 5);

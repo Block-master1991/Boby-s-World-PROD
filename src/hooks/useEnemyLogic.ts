@@ -13,6 +13,9 @@ import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDy
 import { CoinData } from './useCoinLogic'; // Import CoinData
 import { GameObject, BaseGameObject } from '@/types/game';
 
+// New: Enemy Model Cache
+const EnemyModelCache: { [key: string]: { model: THREE.Group; animations: THREE.AnimationClip[] } } = {};
+
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
 const ENEMY_ATTACK_DISTANCE = 1.5;
@@ -123,6 +126,7 @@ export const useEnemyLogic = ({
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
+  const areModelsPreloaded = React.useRef(false);
 
   // Get disposeModelResources from useDynamicModelLoader
   const { cleanupModelPool } = useDynamicModelLoader({
@@ -164,12 +168,12 @@ export const useEnemyLogic = ({
     };
   }, []);
 
-  const loadEnemyModel = React.useCallback(async (type: 'carnivore' | 'herbivore') => {
+  const loadEnemyModel = React.useCallback(async (type: 'carnivore' | 'herbivore', modelFileName?: string) => {
     const models = type === 'carnivore'
       ? ['Fox.glb', 'Husky.glb', 'ShibaInu.glb', 'Wolf.glb']
       : ['Alpaca.glb', 'Bull.glb', 'Cow.glb', 'Deer.glb', 'Donkey.glb', 'Horse_White.glb', 'Horse.glb', 'Stag.glb'];
 
-    const randomModel = models[Math.floor(Math.random() * models.length)];
+    const randomModel = modelFileName || models[Math.floor(Math.random() * models.length)];
     const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${randomModel}`;
     const modelName = `enemy_${randomModel}`;
 
@@ -213,6 +217,36 @@ export const useEnemyLogic = ({
       });
     }
   }, []);
+
+  const preloadEnemyModels = React.useCallback(async () => {
+    if (areModelsPreloaded.current) return;
+
+    const carnivoreModels = ['Fox.glb', 'Husky.glb', 'ShibaInu.glb', 'Wolf.glb'];
+    const herbivoreModels = ['Alpaca.glb', 'Bull.glb', 'Cow.glb', 'Deer.glb', 'Donkey.glb', 'Horse_White.glb', 'Horse.glb', 'Stag.glb'];
+
+    const allModels = [
+      ...carnivoreModels.map(m => ({ type: 'carnivore', name: m })),
+      ...herbivoreModels.map(m => ({ type: 'herbivore', name: m }))
+    ];
+
+    for (const { type, name } of allModels) {
+      const modelPath = `/models/Enemies-Animals/${type === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${name}`;
+      const modelName = `enemy_${name}`;
+      if (!EnemyModelCache[modelName]) {
+        try {
+          console.log(`[useEnemyLogic] Preloading enemy model from: ${modelPath}`);
+          const { model, animations } = await loadEnemyModel(type as 'carnivore' | 'herbivore', name);
+          if (model) {
+            EnemyModelCache[modelName] = { model, animations };
+            console.log(`[useEnemyLogic] Successfully preloaded model: ${modelName}`);
+          }
+        } catch (error) {
+          console.error(`[useEnemyLogic] Failed to preload model ${name} from ${modelPath}:`, error);
+        }
+      }
+    }
+    areModelsPreloaded.current = true;
+  }, [loadEnemyModel]);
 
   const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
     const newAction = enemy.actions[newActionName];
@@ -434,6 +468,11 @@ export const useEnemyLogic = ({
 
   const initializeEnemies = React.useCallback(async () => {
     if (!sceneRef.current || !dogModelRef.current) return;
+
+    if (!areModelsPreloaded.current) {
+      await preloadEnemyModels();
+    }
+
     const scene = sceneRef.current;
 
     enemyMeshesRef.current.forEach(enemy => {
@@ -458,7 +497,7 @@ export const useEnemyLogic = ({
         await loadEnemiesForChunk(initialChunkX + x, initialChunkZ + z);
       }
     }
-  }, [sceneRef, dogModelRef, octreeRef, loadEnemiesForChunk, disposeEnemyModelResources]);
+  }, [sceneRef, dogModelRef, octreeRef, loadEnemiesForChunk, disposeEnemyModelResources, preloadEnemyModels]);
 
 
   const updateEnemies = React.useCallback((delta: number) => {

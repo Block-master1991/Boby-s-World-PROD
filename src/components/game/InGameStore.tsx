@@ -251,10 +251,10 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     )}
                 </div>
 
-                <div className="p-6 pt-0 space-y-4">
+                <div className="p-6 pt-0 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Display message if not authenticated or wallet mismatch */}
                     {(!isAuthenticated || !isWalletConnectedAndMatching) && (
-                        <div className="text-center py-8">
+                        <div className="text-center py-8 sm:col-span-2">
                             <p className="text-lg text-muted-foreground mb-4">
                                 Please connect and authenticate your wallet to access the store.
                             </p>

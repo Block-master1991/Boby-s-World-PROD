@@ -35,7 +35,7 @@ export const useSceneSetup = ({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0x87CEEB, 400, 2000);
+    scene.fog = new THREE.FogExp2(0x87CEEB, 0.000); // Adjusted FogExp2 density for clouds at y=100
     sceneRef.current = scene;
 
     const renderer = new THREE.WebGLRenderer({ antialias: true });

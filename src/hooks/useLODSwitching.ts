@@ -35,6 +35,10 @@ export const useLODSwitching = () => {
   const lodMeshesRef = useRef<Map<string, LODMeshes>>(new Map());
   // Stores the state of each individual instance
   const instancesRef = useRef<Map<string, LODInstance>>(new Map());
+  // Frustum for culling objects outside camera view
+  const frustumRef = useRef(new THREE.Frustum());
+  // Camera projection matrix for frustum calculation
+  const cameraProjectionMatrixRef = useRef(new THREE.Matrix4());
 
   const initializeLODModels = useCallback((models: Record<string, LODModelPaths>) => {
     lodModelPathsRef.current = models;
@@ -74,6 +78,10 @@ export const useLODSwitching = () => {
     targetMesh.setMatrixAt(newInstanceIndex, transform);
     targetMesh.instanceMatrix.needsUpdate = true;
     targetMesh.count++;
+    
+    // تأكد من أن الشبكة مرئية
+    targetMesh.visible = true;
+    targetMesh.frustumCulled = false; // تعطيل الإخفاء التلقائي لضمان الرؤية
 
     // Store the instance's state
     const newInstance: LODInstance = {
@@ -85,20 +93,23 @@ export const useLODSwitching = () => {
     };
 
     instancesRef.current.set(instanceId, newInstance);
+    console.log(`[useLODSwitching] Added instance ${instanceId} to instancesRef. Current count: ${instancesRef.current.size}`);
   }, []);
 
   const switchLOD = useCallback((instanceKey: string, newLOD: 'high' | 'medium' | 'low') => {
     const instance = instancesRef.current.get(instanceKey);
     if (!instance || instance.currentLOD === newLOD) return;
 
+    console.log(`[useLODSwitching] Switching LOD for ${instanceKey} from ${instance.currentLOD} to ${newLOD}`);
+
     const modelMeshes = lodMeshesRef.current.get(instance.modelIdentifier);
     if (!modelMeshes) return;
 
-    const oldMesh = modelMeshes[instance.currentLOD];
-    const newMesh = modelMeshes[newLOD];
+    const oldMesh = modelMeshes[instance.currentLOD + 'Mesh' as keyof LODMeshes]; // Access by property name
+    const newMesh = modelMeshes[newLOD + 'Mesh' as keyof LODMeshes]; // Access by property name
 
     if (!oldMesh || !newMesh) {
-      console.error(`LOD mesh not available for ${instance.modelIdentifier}`);
+      console.error(`[useLODSwitching] LOD mesh not available for ${instance.modelIdentifier}`);
       return;
     }
 
@@ -107,6 +118,7 @@ export const useLODSwitching = () => {
     dummy.updateMatrix();
     oldMesh.setMatrixAt(instance.instanceId, dummy.matrix);
     oldMesh.instanceMatrix.needsUpdate = true;
+    console.log(`[useLODSwitching] Hid instance ${instanceKey} in old mesh (${instance.currentLOD})`);
 
     // Find an available slot in the new mesh and "add" it
     // This requires a more complex management of free slots in the InstancedMesh.
@@ -115,6 +127,7 @@ export const useLODSwitching = () => {
     const newInstanceId = instance.instanceId; // Simplified for now
     newMesh.setMatrixAt(newInstanceId, instance.transform);
     newMesh.instanceMatrix.needsUpdate = true;
+    console.log(`[useLODSwitching] Showed instance ${instanceKey} in new mesh (${newLOD})`);
 
     // Update the instance's state
     instance.currentLOD = newLOD;
@@ -122,12 +135,64 @@ export const useLODSwitching = () => {
 
   }, []);
 
+  const removeInstance = useCallback((instanceId: string) => {
+    const instance = instancesRef.current.get(instanceId);
+    if (!instance) return;
+
+    console.log(`[useLODSwitching] Removing instance ${instanceId}`);
+
+    const modelMeshes = lodMeshesRef.current.get(instance.modelIdentifier);
+    if (!modelMeshes) return;
+
+    const currentMesh = modelMeshes[instance.currentLOD + 'Mesh' as keyof LODMeshes];
+    if (currentMesh) {
+      // Set the instance's matrix to a zero scale to effectively hide it
+      dummy.scale.set(0, 0, 0);
+      dummy.updateMatrix();
+      currentMesh.setMatrixAt(instance.instanceId, dummy.matrix);
+      currentMesh.instanceMatrix.needsUpdate = true;
+      console.log(`[useLODSwitching] Hid instance ${instanceId} in its current mesh (${instance.currentLOD})`);
+    }
+    instancesRef.current.delete(instanceId);
+    console.log(`[useLODSwitching] Removed instance ${instanceId} from instancesRef. Remaining count: ${instancesRef.current.size}`);
+  }, []);
+
+  // Update frustum based on camera position and projection
+  const updateFrustum = useCallback((camera: THREE.Camera) => {
+    camera.updateMatrixWorld(); // Make sure the camera matrix is updated
+    cameraProjectionMatrixRef.current.multiplyMatrices(
+      camera.projectionMatrix,
+      camera.matrixWorldInverse
+    );
+    frustumRef.current.setFromProjectionMatrix(cameraProjectionMatrixRef.current);
+  }, []);
+
+  // Check if an object is within the camera's view frustum
+  const isInFrustum = useCallback((position: THREE.Vector3, radius: number = 1) => {
+    return frustumRef.current.intersectsSphere(new THREE.Sphere(position, radius));
+  }, []);
+
   const updateLODBasedOnDistance = useCallback((
     instanceKey: string,
-    distance: number
+    distance: number,
+    camera?: THREE.Camera,
+    position?: THREE.Vector3
   ) => {
     const instance = instancesRef.current.get(instanceKey);
     if (!instance) return;
+
+    // Extract position from transform matrix if not provided
+    let objectPosition = position;
+    if (!objectPosition) {
+      objectPosition = new THREE.Vector3();
+      objectPosition.setFromMatrixPosition(instance.transform);
+    }
+
+    // Check if object is in frustum
+    const inFrustum = camera ? isInFrustum(objectPosition) : true;
+
+    // Skip LOD updates if object is not in frustum
+    if (!inFrustum) return;
 
     let newLOD: 'high' | 'medium' | 'low';
     if (distance < 50) newLOD = 'high';
@@ -137,7 +202,7 @@ export const useLODSwitching = () => {
     if (instance.currentLOD !== newLOD) {
       switchLOD(instanceKey, newLOD);
     }
-  }, [switchLOD]);
+  }, [switchLOD, isInFrustum]);
 
   // This function would be called after loading models to create the InstancedMeshes
   const createLODMeshes = useCallback(async (
@@ -145,30 +210,102 @@ export const useLODSwitching = () => {
     models: { high: THREE.Group, medium: THREE.Group, low: THREE.Group },
     maxCount: number
   ) => {
-    const createMesh = (model: THREE.Group): THREE.InstancedMesh | null => {
+    console.log(`[useLODSwitching] Creating LOD meshes for ${modelIdentifier} with maxCount: ${maxCount}`);
+    const createMesh = (model: THREE.Group, lodLevel: string): THREE.InstancedMesh | null => {
       if (!model.children.length || !(model.children[0] instanceof THREE.Mesh)) {
+        console.warn(`[useLODSwitching] Model for ${modelIdentifier} (${lodLevel}) has no mesh child.`);
         return null;
       }
       const sourceMesh = model.children[0] as THREE.Mesh;
+      const materialUUID = Array.isArray(sourceMesh.material) ? sourceMesh.material[0]?.uuid : sourceMesh.material?.uuid;
+      console.log(`[useLODSwitching] Creating InstancedMesh for ${modelIdentifier} (${lodLevel}) with geometry UUID: ${sourceMesh.geometry.uuid} and material UUID: ${materialUUID}`);
       const mesh = new THREE.InstancedMesh(sourceMesh.geometry.clone(), sourceMesh.material, maxCount);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.name = `${modelIdentifier}_${lodLevel}_InstancedMesh`;
+      
+      // تأكد من أن الشبكة مرئية وقابلة للعرض
+      mesh.visible = true;
+      mesh.frustumCulled = false; // تعطيل الإخفاء التلقائي لضمان الرؤية
+      mesh.castShadow = true; // تفعيل الظل
+      mesh.receiveShadow = true; // تفعيل استقبال الظل
+      
       return mesh;
     };
 
-    const highMesh = createMesh(models.high);
-    const mediumMesh = createMesh(models.medium);
-    const lowMesh = createMesh(models.low);
+    const highMesh = createMesh(models.high, 'high');
+    const mediumMesh = createMesh(models.medium, 'medium');
+    const lowMesh = createMesh(models.low, 'low');
 
     lodMeshesRef.current.set(modelIdentifier, { high: highMesh, medium: mediumMesh, low: lowMesh });
+    console.log(`[useLODSwitching] Stored LOD meshes for ${modelIdentifier}:`, lodMeshesRef.current.get(modelIdentifier));
 
     return { highMesh, mediumMesh, lowMesh };
   }, []);
+
+  // Update visibility of all instances based on frustum culling
+  const updateVisibilityBasedOnFrustum = useCallback((camera: THREE.Camera) => {
+    // Update frustum first
+    updateFrustum(camera);
+
+    // Create a dummy object to manipulate matrices
+    const dummy = new THREE.Object3D();
+    dummy.scale.set(0, 0, 0); // Scale of zero makes objects invisible
+    dummy.updateMatrix();
+
+    // Track visibility changes to avoid unnecessary updates
+    const visibilityChanges: Map<string, boolean> = new Map();
+
+    // Check all instances
+    instancesRef.current.forEach((instance, instanceId) => {
+      // Extract position from transform matrix
+      const position = new THREE.Vector3();
+      position.setFromMatrixPosition(instance.transform);
+
+      // Check if instance is in frustum
+      const inFrustum = isInFrustum(position);
+
+      // Get the current mesh for this instance
+      const modelMeshes = lodMeshesRef.current.get(instance.modelIdentifier);
+      if (!modelMeshes) return;
+
+      const currentMesh = modelMeshes[instance.currentLOD + 'Mesh' as keyof LODMeshes];
+      if (!currentMesh) return;
+
+      // Store visibility change if needed
+      if (visibilityChanges.get(instanceId) !== inFrustum) {
+        visibilityChanges.set(instanceId, inFrustum);
+
+        if (inFrustum) {
+          // Make object visible - restore its transform
+          currentMesh.setMatrixAt(instance.instanceId, instance.transform);
+        } else {
+          // Make object invisible - zero scale
+          currentMesh.setMatrixAt(instance.instanceId, dummy.matrix);
+        }
+      }
+    });
+
+    // Update all meshes that had visibility changes
+    lodMeshesRef.current.forEach(modelMeshes => {
+      Object.values(modelMeshes).forEach(mesh => {
+        if (mesh) {
+          mesh.instanceMatrix.needsUpdate = true;
+        }
+      });
+    });
+
+    return visibilityChanges.size; // Return number of visibility changes
+  }, [updateFrustum, isInFrustum]);
 
   return {
     initializeLODModels,
     updateLODBasedOnDistance,
     createLODMeshes,
     addInstance,
-    getLODMeshes: (modelIdentifier: string) => lodMeshesRef.current.get(modelIdentifier)
+    removeInstance, // Expose removeInstance
+    getLODMeshes: (modelIdentifier: string) => lodMeshesRef.current.get(modelIdentifier),
+    updateFrustum,
+    isInFrustum,
+    updateVisibilityBasedOnFrustum
   };
 };

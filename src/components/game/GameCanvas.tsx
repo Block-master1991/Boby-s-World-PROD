@@ -13,13 +13,21 @@ import { useEnemyLogic } from '@/hooks/useEnemyLogic';
 import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
 import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
-import { useTreeLogic, TreeInstance } from '@/hooks/useTreeLogic';
 import { useFloatingEffects } from '@/hooks/useFloatingEffects'; // New import
 import { useDogParticles } from '@/hooks/useDogParticles'; // New import
 import DogSpeedBeam from '@/components/game/DogSpeedBeam'; // New import
 import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
 import { OptimizedStaticObjectManager } from '@/components/OptimizedStaticObjectManager'; // Import the new optimized manager
-import { getChunkCoordinates, getChunkKey, RENDER_DISTANCE_CHUNKS } from '@/lib/chunkUtils'; // Import chunk utilities
+import { getChunkCoordinates } from '@/lib/chunkUtils'; // Import chunk utilities
+import { modelLoader } from '@/utils/modelLoader'; // Import modelLoader
+import { Environment } from '@/lib/ez-tree/environment/environment'; // Import ez-tree Environment
+// Removed unused import ChunkManager
+// Removed ez-tree specific imports as they are now managed by Environment
+// import { Tree } from '@/lib/ez-tree/tree';
+// import { TreePreset } from '@/lib/ez-tree/presets';
+// import { GrassOptions, Grass } from '@/lib/ez-tree/environment/grass';
+// import { RockOptions as RocksOptions, Rocks } from '@/lib/ez-tree/environment/rocks';
+// import { TreesOptions, Trees } from '@/lib/ez-tree/environment/trees';
 interface GameCanvasProps {
     sessionPublicKey: PublicKey | null;
     isSpeedBoostActive: boolean;
@@ -165,15 +173,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         addFloatingEffect, // Pass addFloatingEffect to useEnemyLogic for penalties
     });
 
-    const { addTreesForChunk, removeTreesForChunk, updateTreeAnimations } = useTreeLogic({
-        sceneRef,
-        octreeRef,
-    });
-
-    // Ref to store currently loaded tree chunks
-    // Ref to store currently loaded tree chunks
-    const loadedTreeChunksRef = useRef<Map<string, TreeInstance[]>>(new Map()); // Map<chunkKey, TreeInstance[]>
     const currentDogChunkRef = useRef<{ chunkX: number; chunkZ: number } | null>(null);
+
+    const environmentRef = useRef<Environment | null>(null); // Ref for ez-tree Environment
+    const lastDogPositionRef = useRef<{ x: number; z: number }>({ x: 0, z: 0 }); // Track last dog position for performance optimization
 
     // Destructure updateDynamicModels and cleanupModelPool from useDynamicModelLoader
     const { cleanupModelPool } = useDynamicModelLoader({
@@ -190,7 +193,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       mountRef,
     });
 
-    const { initializeScene, handleResize, cleanupScene } = useSceneSetup({ // updateControlsState removed
+    const { initializeScene, handleResize, cleanupScene: baseCleanupScene } = useSceneSetup({ // updateControlsState removed
         mountRef, 
         sceneRef, 
         cameraRef, 
@@ -201,43 +204,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         isJoystickInteractionActiveRef,
     });
 
-    // Function to manage loading/unloading of tree chunks
-    const manageTreeChunks = useCallback(async (playerChunkX: number, playerChunkZ: number) => {
-        const activeChunkKeys = new Set<string>();
-
-        // Determine chunks to load (current + render distance)
-        for (let xOffset = -RENDER_DISTANCE_CHUNKS; xOffset <= RENDER_DISTANCE_CHUNKS; xOffset++) {
-            for (let zOffset = -RENDER_DISTANCE_CHUNKS; zOffset <= RENDER_DISTANCE_CHUNKS; zOffset++) {
-                const chunkX = playerChunkX + xOffset;
-                const chunkZ = playerChunkZ + zOffset;
-                const chunkKey = getChunkKey(chunkX, chunkZ);
-                activeChunkKeys.add(chunkKey);
-
-                if (!loadedTreeChunksRef.current.has(chunkKey)) {
-                    console.log(`[GameCanvas] Loading trees for chunk: [${chunkX}, ${chunkZ}]`);
-                    const newTrees = await addTreesForChunk(chunkX, chunkZ);
-                    loadedTreeChunksRef.current.set(chunkKey, newTrees);
-                }
-            }
+    const cleanupScene = useCallback(() => {
+        baseCleanupScene();
+        if (environmentRef.current && sceneRef.current) {
+            sceneRef.current.remove(environmentRef.current);
+            // Dispose of environment resources if necessary
+            // environmentRef.current.dispose(); // Assuming Environment has a dispose method
+            environmentRef.current = null;
         }
-
-        // Unload chunks that are no longer active
-        const chunksToUnload: string[] = [];
-        loadedTreeChunksRef.current.forEach((trees, chunkKey) => {
-            if (!activeChunkKeys.has(chunkKey)) {
-                chunksToUnload.push(chunkKey);
-            }
-        });
-
-        chunksToUnload.forEach(chunkKey => {
-            console.log(`[GameCanvas] Unloading trees for chunk: ${chunkKey}`);
-            const trees = loadedTreeChunksRef.current.get(chunkKey);
-            if (trees) {
-                removeTreesForChunk(trees);
-            }
-            loadedTreeChunksRef.current.delete(chunkKey);
-        });
-    }, [addTreesForChunk, removeTreesForChunk]);
+        // Cleanup ChunkManager (now managed by Environment)
+        if (environmentRef.current && environmentRef.current.chunkManager) {
+            environmentRef.current.chunkManager.dispose();
+        }
+    }, [baseCleanupScene]);
 
     const animate = useCallback(() => {
         if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !sessionPublicKey) {
@@ -257,7 +236,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             updateDog(delta); // Pass delta
             updateCoins();
             updateEnemies(delta); // Pass delta
-            updateTreeAnimations(delta); // Update tree animations
             updateCamera();
             updateFloatingEffects(); // Update floating effects
             updateParticles(); // Update dust particles
@@ -270,24 +248,54 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 shieldEffectRef.current.update(isShieldActiveRef.current, dogModelRef.current.position);
             }
 
-            // Chunk management for trees
+            // Update ez-tree environment
+            try {
+                if (environmentRef.current && dogModelRef.current && cameraRef.current) {
+                    const currentDogPos = dogModelRef.current.position;
+                    // Update environment continuously, passing camera position for clouds
+                    environmentRef.current.update(clockRef.current.getElapsedTime(), cameraRef.current.position);
+
+                    // Update last position for chunk management, not for wind animation
+                    lastDogPositionRef.current = { x: currentDogPos.x, z: currentDogPos.z };
+                }
+            } catch (error) {
+                console.error("[GameCanvas] Error updating ez-tree environment:", error);
+            }
+
+            // Chunk management for trees and grass
             const dogPos = dogModelRef.current.position;
             const { chunkX: newChunkX, chunkZ: newChunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
 
             if (!currentDogChunkRef.current || newChunkX !== currentDogChunkRef.current.chunkX || newChunkZ !== currentDogChunkRef.current.chunkZ) {
                 console.log(`[GameCanvas] Dog moved to new chunk: [${newChunkX}, ${newChunkZ}]`);
                 currentDogChunkRef.current = { chunkX: newChunkX, chunkZ: newChunkZ };
-                manageTreeChunks(newChunkX, newChunkZ);
+                // Update ChunkManager via Environment
+                if (environmentRef.current && environmentRef.current.chunkManager) {
+                    environmentRef.current.chunkManager.updatePlayerPosition(dogPos);
+                }
             }
 
             // Call cleanupModelPool periodically
             cleanupModelPool(60000, 5); // Clean up models idle for 60s or if pool size > 5
         }
         
-        if (rendererRef.current && sceneRef.current && cameraRef.current) {
-            rendererRef.current.render(sceneRef.current, cameraRef.current);
+        try {
+            if (rendererRef.current && sceneRef.current && cameraRef.current) {
+                rendererRef.current.render(sceneRef.current, cameraRef.current);
+            }
+        } catch (error) {
+            console.error("[GameCanvas] Error rendering scene:", error);
+            if (error instanceof Error) {
+                console.error("Error Name:", error.name);
+                console.error("Error Message:", error.message);
+                console.error("Error Stack:", error.stack);
+            }
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+                animationFrameId.current = null;
+            }
         }
-    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateTreeAnimations, updateCamera, dogModelRef, cleanupModelPool, manageTreeChunks, updateFloatingEffects, updateParticles]);
+    }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateCamera, dogModelRef, cleanupModelPool, updateFloatingEffects, updateParticles]);
 
 
     // Main useEffect for initialization and re-initialization on session change
@@ -319,7 +327,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         const loadAllGameAssets = async () => {
             onLoadStart();
             let loadedCount = 0;
-            const totalAssets = 3; // Dog, Coins, Enemies
+            const totalAssets = 4; // ModelLoader, Dog, Coins, Enemies
 
             const updateProgress = () => {
                 loadedCount++;
@@ -328,6 +336,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             };
 
             try {
+                console.log("[GameCanvas] Initializing ModelLoader...");
+                if (rendererRef.current && cameraRef.current) {
+                    await modelLoader.initialize(rendererRef.current, cameraRef.current);
+                    updateProgress();
+                    console.log("[GameCanvas] ModelLoader Initialized.");
+                } else {
+                    throw new Error("Renderer or Camera not available for ModelLoader initialization.");
+                }
+
                 console.log("[GameCanvas] Initializing Dog...");
                 await initializeDog();
                 updateProgress();
@@ -350,7 +367,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                         const dogPos = dogModelRef.current.position;
                         const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
                         currentDogChunkRef.current = { chunkX, chunkZ };
-                        manageTreeChunks(chunkX, chunkZ);
                         onLoadComplete(true); // Signal completion
                     } else {
                         setTimeout(checkDogAndSetupCameraAndChunks, 100);
@@ -371,18 +387,36 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             
             resetDogState();
             resetCamera(); 
-            loadedTreeChunksRef.current.clear();
+            // loadedEzTreeChunksRef.current.clear(); // Clear ez-tree chunks - now managed by Environment
 
             initializeCamera(); 
             const sceneInitialized = initializeScene(); 
 
-            if (sceneInitialized && cameraRef.current && rendererRef.current) {
-                loadAllGameAssets();
-            } else {
-                console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.");
+            if (sceneInitialized && cameraRef.current && rendererRef.current && sceneRef.current) {
+                // Initialize ez-tree environment
+                try {
+                    environmentRef.current = new Environment();
+                    sceneRef.current.add(environmentRef.current);
+                    console.log("[GameCanvas] ez-tree Environment Initialized.");
+                } catch (error) {
+                    console.error("[GameCanvas] Error initializing ez-tree environment:", error);
+                    environmentRef.current = null;
+                }
+                
+                // Update environment with new chunk options (now handled internally by Environment)
+                if (environmentRef.current && dogModelRef.current) {
+                    const dogPos = dogModelRef.current.position;
+                    environmentRef.current.chunkManager.updatePlayerPosition(dogPos);
+                }
+
+                try {
+                    loadAllGameAssets();
+                } catch (err) {
+                console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.", err);
                 onLoadComplete(false);
                 return; 
             }
+        }
         } else if (dogModelRef.current && lastDogTransformRef.current && sessionPublicKey && !isNewSession && !isPaused) {
             dogModelRef.current.position.copy(lastDogTransformRef.current.position);
             dogModelRef.current.rotation.y = lastDogTransformRef.current.rotationY;
@@ -403,13 +437,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         initializeScene, cleanupScene, 
         dogModelRef, lastDogTransformRef, 
         cameraRef, rendererRef,
-        manageTreeChunks,
-        onLoadStart, onLoadProgress, onLoadComplete, // Add new props to dependency array
-        addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, // Add floating effects hooks
-        updateParticles, // Add dog particles hook
-        isSpeedBoostActive, isShieldActive, // Add states for continuous effects
-        isPaused, // Add isPaused to dependencies
-        animate
+        onLoadStart, onLoadProgress, onLoadComplete, 
+        addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, 
+        updateParticles, 
+        isSpeedBoostActive, isShieldActive, 
+        isPaused, 
+        animate,
+        handleResize,
+        onCanvasTouchStartProp, onCanvasTouchMoveProp, onCanvasTouchEndProp,
+        isPausedRef, isJoystickInteractionActiveRef,
+        handleKeyDownCbRef, handleKeyUpCbRef, keysPressedRef,
+        mountRef, speedBeamRef, shieldEffectRef
     ]);
 
     // Effect for handling resize
@@ -419,7 +457,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
       return () => {
         window.removeEventListener('resize', handleResize);
       };
-    }, [handleResize]); // handleResize is stable
+    }, [handleResize]);
 
     // Effect for full cleanup on component unmount
     useEffect(() => {
@@ -429,12 +467,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
           cancelAnimationFrame(animationFrameId.current);
           animationFrameId.current = null;
         }
-        cleanupScene(); 
+        cleanupScene(); // Use the custom cleanupScene
         cleanupFloatingEffects(); // Cleanup floating effects
         if (speedBeamRef.current) speedBeamRef.current.dispose(); // Dispose speed beam
         if (shieldEffectRef.current) shieldEffectRef.current.dispose(); // Dispose shield effect
       };
-    }, [cleanupScene, cleanupFloatingEffects]); // cleanupScene is stable
+    }, [cleanupScene, cleanupFloatingEffects, animationFrameId, speedBeamRef, shieldEffectRef]);
 
     // Touch handling for joystick
     useEffect(() => {
@@ -444,7 +482,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         const handleTouchStartInternal = (event: TouchEvent) => {
             if (event.touches.length === 1 && !isPausedRef.current && sessionPublicKey) {
                 const touch = event.touches[0];
-                // if (controlsRef.current) controlsRef.current.enabled = false; // Removed
                 isJoystickInteractionActiveRef.current = true;
                 initialTouchPointRef.current = { x: touch.clientX, y: touch.clientY, id: touch.identifier };
                 onCanvasTouchStartProp(touch.clientX, touch.clientY);
@@ -471,7 +508,6 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
              }
 
             if (isJoystickInteractionActiveRef.current && touchEnded) {
-                // if (controlsRef.current) controlsRef.current.enabled = true; // Removed
                 isJoystickInteractionActiveRef.current = false;
                 initialTouchPointRef.current = null;
                 onCanvasTouchEndProp();
@@ -489,7 +525,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             currentMount.removeEventListener('touchend', handleTouchEndInternal);
             currentMount.removeEventListener('touchcancel', handleTouchEndInternal);
         };
-    }, [sessionPublicKey, onCanvasTouchStartProp, onCanvasTouchMoveProp, onCanvasTouchEndProp, isPausedRef, isJoystickInteractionActiveRef]); // controlsRef removed
+    }, [sessionPublicKey, onCanvasTouchStartProp, onCanvasTouchMoveProp, onCanvasTouchEndProp, isPausedRef, isJoystickInteractionActiveRef, initialTouchPointRef, mountRef]);
 
     // Keyboard event handling
     useEffect(() => {
@@ -536,7 +572,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             }
             keysPressedRef.current = {}; 
         };
-    }, [sessionPublicKey]);
+    }, [sessionPublicKey, isPausedRef, keysPressedRef, handleKeyDownCbRef, handleKeyUpCbRef]);
 
     return (
         <>

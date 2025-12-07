@@ -101,12 +101,12 @@ export const useOptimizedStaticObjects = ({
     // This single call updates occlusion culling, performance monitoring, etc.
     modelLoader.update();
 
-    // The LOD switching logic would also be called here.
-    // A full implementation would need to iterate through all instances
-    // and calculate their distance to the camera.
-    // For now, we demonstrate the concept by calling it.
-    // lodSwitching.updateLODBasedOnDistance('some_instance_key', 50);
-  }, [isInitialized]);
+    // Update visibility based on frustum culling
+    // This will hide objects outside camera view to improve performance
+    if (camera) {
+      lodSwitching.updateVisibilityBasedOnFrustum(camera);
+    }
+  }, [isInitialized, camera, lodSwitching]);
 
   // 4. Cleanup resources
   const cleanup = useCallback(() => {

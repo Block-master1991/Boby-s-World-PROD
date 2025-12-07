@@ -12,7 +12,7 @@ export interface GameObject extends BaseGameObject {
     scale: { x: number; y: number; z: number };
     
     // Object classification
-    type: 'player' | 'enemy' | 'item' | 'terrain';
+    type: 'player' | 'enemy' | 'item' | 'terrain' | 'staticTree';
     
     // Visibility and rendering
     visible: boolean;
@@ -22,7 +22,7 @@ export interface GameObject extends BaseGameObject {
     
     // For model references
     modelPath?: string;
-    modelInstance?: THREE.Group | null;
+    modelInstance?: THREE.Object3D | null;
     
     // For animated objects
     animations?: THREE.AnimationClip[];
@@ -39,4 +39,10 @@ export interface GameObject extends BaseGameObject {
     
     // Game-specific properties
     isModelInstantiated?: boolean;
+}
+
+export interface Chunk {
+  id: string;
+  x: number;
+  z: number;
 }
