@@ -152,7 +152,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         sceneRef, dogMeshRef, dogSpeed, isRunning // Pass dog's speed and running state
     });
 
-    const { initializeCoins, updateCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
+    const { initializeCoins, updateCoins, coinMeshesRef, loadedCoinChunks } = useCoinLogic({ // Capture coinMeshesRef and loadedCoinChunks
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
         onCoinCollected: () => onCoinCollectedCallbackRef.current(),
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
@@ -166,6 +166,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         onEnemyCollisionPenalty: () => onEnemyCollisionPenaltyCallbackRef.current(),
         isPausedRef,
         coinMeshesRef, // Pass coinMeshesRef to useEnemyLogic
+        loadedCoinChunks, // Pass loadedCoinChunks to useEnemyLogic
         onCoinCollected: () => onCoinCollectedCallbackRef.current(), // Pass onCoinCollected to useEnemyLogic
         onAttackAnimationFinished: onAttackAnimationFinishedCallbackRef.current, // Pass the new callback
         octreeRef,

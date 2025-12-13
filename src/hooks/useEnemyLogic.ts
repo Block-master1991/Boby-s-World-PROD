@@ -20,14 +20,13 @@ const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
 const ENEMY_ATTACK_DISTANCE = 1.5;
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5;
-const ENEMY_DEATH_DURATION = 5.0;
-const ENEMY_SINKING_DELAY = 10.0; // 10 seconds delay before sinking starts
-const ENEMY_PROTECTION_RADIUS = 15;
-const ENEMY_CHASE_RADIUS = 15;
+const ENEMY_DEATH_DURATION = 1.5;
+const ENEMY_SINKING_DELAY = 1.0; // Reduced to 1 second delay before sinking starts
+const ENEMY_PROTECTION_RADIUS = 8;
+const ENEMY_CHASE_RADIUS = 16;
 const CROSSFADE_DURATION = 0.2;
-const VISIBLE_ENEMY_DISTANCE = 75;
+const VISIBLE_ENEMY_DISTANCE = 150; // Matched to coin visibility
 const ENEMIES_PER_COIN_CHUNK = 1;
-
 
 const ENEMY_ANIMATION_NAMES = {
   CARNIVORE: {
@@ -92,6 +91,7 @@ interface UseEnemyLogicProps {
   onEnemyCollisionPenalty: () => void;
   isPausedRef: MutableRefObject<boolean>;
   coinMeshesRef: MutableRefObject<CoinData[]>;
+  loadedCoinChunks: MutableRefObject<Set<string>>; // New prop
   onCoinCollected: () => void;
   onAttackAnimationFinished: (event: THREE.Event) => void;
   octreeRef: MutableRefObject<Octree<GameObject> | null>;
@@ -116,6 +116,7 @@ export const useEnemyLogic = ({
   onEnemyCollisionPenalty,
   isPausedRef,
   coinMeshesRef,
+  loadedCoinChunks, // Destructure new prop
   octreeRef,
   onCoinCollected,
   onAttackAnimationFinished,
@@ -125,6 +126,7 @@ export const useEnemyLogic = ({
   const enemyMeshesRef = React.useRef<EnemyData[]>([]);
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
+  const loadingEnemyChunks = React.useRef<Set<string>>(new Set()); // New loading state
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
   const areModelsPreloaded = React.useRef(false);
 
@@ -194,27 +196,18 @@ export const useEnemyLogic = ({
       }
     } catch (error) {
       console.error(`[useEnemyLogic] Error loading or caching model ${modelName}:`, error);
-      console.log(`[useEnemyLogic] Falling back to direct network load for: ${modelPath}`);
-      return new Promise<{ model: THREE.Group | null; animations: THREE.AnimationClip[] }>((resolve) => {
-        if (!gltfLoader.current) {
-          console.warn('GLTFLoader not initialized. Skipping model load.');
-          return resolve({ model: null, animations: [] });
-        }
-        gltfLoader.current.load(modelPath, (gltf: GLTF) => {
-          const model = gltf.scene;
-          model.traverse((child: THREE.Object3D) => {
-            if ((child as THREE.Mesh).isMesh) {
-              child.castShadow = true;
-              child.receiveShadow = true;
-            }
-          });
-          resolve({ model, animations: gltf.animations });
-        }, undefined, (loadError) => {
-          console.debug('Error loading GLTF model (fallback):', loadError);
-          console.debug('Failed to load enemy model due to a network error. Please check your internet connection.');
-          resolve({ model: null, animations: [] });
-        });
-      });
+      console.log(`[useEnemyLogic] Falling back to placeholder.`);
+
+      // Return a placeholder model (Red Box) to ensure guardian exists
+      const placeholder = new THREE.Group();
+      const mesh = new THREE.Mesh(
+        new THREE.BoxGeometry(0.5, 0.5, 0.5),
+        new THREE.MeshStandardMaterial({ color: 0xff0000 })
+      );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      placeholder.add(mesh);
+      return { model: placeholder, animations: [] };
     }
   }, []);
 
@@ -263,123 +256,125 @@ export const useEnemyLogic = ({
   }, []);
 
   const loadEnemiesForChunk = React.useCallback(async (chunkX: number, chunkZ: number) => {
-    if (!sceneRef.current || loadedEnemyChunks.current.has(getChunkKey(chunkX, chunkZ))) {
+    const chunkKey = getChunkKey(chunkX, chunkZ);
+    if (!sceneRef.current || loadedEnemyChunks.current.has(chunkKey) || loadingEnemyChunks.current.has(chunkKey)) {
       return;
     }
 
-    const scene = sceneRef.current;
-    const chunkMinX = chunkX * CHUNK_SIZE;
-    const chunkMinZ = chunkZ * CHUNK_SIZE;
-    const chunkMaxX = chunkMinX + CHUNK_SIZE;
-    const chunkMaxZ = chunkMinZ + CHUNK_SIZE;
+    loadingEnemyChunks.current.add(chunkKey);
 
-    const coinsInChunk = coinMeshesRef.current.filter(coin => {
-      const coinX = coin.position.x;
-      const coinZ = coin.position.z;
-      return coinX >= chunkMinX && coinX < chunkMaxX && coinZ >= chunkMinZ && coinZ < chunkMaxZ;
-    });
+    try {
+      const scene = sceneRef.current;
+      const chunkMinX = chunkX * CHUNK_SIZE;
+      const chunkMinZ = chunkZ * CHUNK_SIZE;
+      const chunkMaxX = chunkMinX + CHUNK_SIZE;
+      const chunkMaxZ = chunkMinZ + CHUNK_SIZE;
 
-    for (const coin of coinsInChunk) {
-      for (let i = 0; i < ENEMIES_PER_COIN_CHUNK; i++) {
-        const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
-        try {
-          const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
-          if (loadedModel) {
-            const lod = new THREE.LOD();
-            const enemyInstanceModel = loadedModel; // Use the loaded model as the high-detail model
+      const coinsInChunk = coinMeshesRef.current.filter(coin => {
+        const coinX = coin.position.x;
+        const coinZ = coin.position.z;
+        return coinX >= chunkMinX && coinX < chunkMaxX && coinZ >= chunkMinZ && coinZ < chunkMaxZ;
+      });
 
-            enemyInstanceModel.traverse((child: THREE.Object3D) => {
-              if ((child as THREE.Mesh).isMesh) {
-                child.castShadow = true;
-                child.receiveShadow = true;
-              }
-            });
+      console.log(`[EnemyLogic] Loading enemies for chunk ${chunkKey}. Coins found: ${coinsInChunk.length}`);
 
-            enemyInstanceModel.scale.set(0.5, 0.5, 0.5); // Apply initial scale to the high-detail model
-            lod.addLevel(enemyInstanceModel, 25); // Add high-detail model at distance 25
+      for (const coin of coinsInChunk) {
+        for (let i = 0; i < ENEMIES_PER_COIN_CHUNK; i++) {
+          const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
+          try {
+            const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
+            if (loadedModel) {
+              // console.log(`[EnemyLogic] Spawning enemy for coin ${coin.uuid}`);
+              const lod = new THREE.LOD();
+              const enemyInstanceModel = loadedModel; // Use the loaded model as the high-detail model
 
-            // Placeholder for a lower detail model (e.g., a simple box or sphere)
-            const lowDetailModel = new THREE.Mesh(
-              new THREE.BoxGeometry(0.0001, 0.0001, 0.0001),
-              new THREE.MeshBasicMaterial({ color: 0xff0000 })
-            );
-            lowDetailModel.scale.set(0.5, 0.5, 0.5); // Match scale
-            lod.addLevel(lowDetailModel, 50); // Add low-detail model at 50 units distance
+              enemyInstanceModel.traverse((child: THREE.Object3D) => {
+                if ((child as THREE.Mesh).isMesh) {
+                  child.castShadow = true;
+                  child.receiveShadow = true;
+                }
+              });
 
-            const mixer = new THREE.AnimationMixer(enemyInstanceModel); // Mixer is tied to the high-detail model
+              enemyInstanceModel.scale.set(0.5, 0.5, 0.5); // Apply initial scale to the high-detail model
+              lod.addLevel(enemyInstanceModel, 25); // Add high-detail model at distance 25
 
-            const actions: { [key: string]: THREE.AnimationAction } = {};
-            loadedAnimations.forEach((clip: THREE.AnimationClip) => {
-              const action = mixer.clipAction(clip);
-              actions[clip.name] = action;
+              // Placeholder for a lower detail model (e.g., a simple box or sphere)
+              const lowDetailModel = new THREE.Mesh(
+                new THREE.BoxGeometry(0.0001, 0.0001, 0.0001),
+                new THREE.MeshBasicMaterial({ color: 0xff0000 })
+              );
+              lowDetailModel.scale.set(0.5, 0.5, 0.5); // Match scale
+              lod.addLevel(lowDetailModel, 50); // Add low-detail model at 50 units distance
 
-              const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
-              if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
+              const mixer = new THREE.AnimationMixer(enemyInstanceModel); // Mixer is tied to the high-detail model
+
+              const actions: { [key: string]: THREE.AnimationAction } = {};
+              loadedAnimations.forEach((clip: THREE.AnimationClip) => {
+                const action = mixer.clipAction(clip);
+                actions[clip.name] = action;
+
+                const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
+                if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
                   clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
                   isIdleAnimation) {
-                action.setLoop(THREE.LoopRepeat, Infinity);
-              } else {
-                action.setLoop(THREE.LoopOnce, 1);
-                action.clampWhenFinished = true;
-              }
-            });
-            Object.values(actions).forEach(action => action.stop());
+                  action.setLoop(THREE.LoopRepeat, Infinity);
+                } else {
+                  action.setLoop(THREE.LoopOnce, 1);
+                  action.clampWhenFinished = true;
+                }
+              });
+              Object.values(actions).forEach(action => action.stop());
 
-            const enemyData: EnemyData = {
-              uuid: THREE.MathUtils.generateUUID(), // Generate a unique ID for the enemy
-              lod: lod,
-              targetCoinId: coin.uuid,
-              targetCoinPosition: coin.position.clone(),
-              patrolCenter: coin.position.clone(),
-              patrolTarget: new THREE.Vector3(),
-              isIdling: false,
-              idleTimer: 0,
-              idleDuration: 0,
-              isAttacking: false,
-              isDying: false,
-              deathTimer: 0,
-              hasAppliedDeathEffect: false,
-              isSinking: false,
-              sinkingTimer: 0,
-              initialDeathY: 0,
-              mixer: mixer,
-              animations: loadedAnimations,
-              enemyType: enemyType,
-              currentAction: null,
-              actions: actions,
-              chunkKey: getChunkKey(chunkX, chunkZ),
-              highDetailModel: enemyInstanceModel,
-              position: new THREE.Vector3(), // Initialize position
-              rotation: new THREE.Euler(), // Initialize rotation
-              scale: new THREE.Vector3(0.5, 0.5, 0.5), // Initialize scale
-              type: 'enemy', // Set type
-              visible: true, // Set initial visibility
-              isPooled: false, // Initialize isPooled
-              isModelInstantiated: true, // Initialize isModelInstantiated
-              lookAt: (target: THREE.Vector3) => {
-                // Delegate to the LOD object's lookAt method
-                lod.lookAt(target);
-              },
-            };
+              const enemyData: EnemyData = {
+                uuid: THREE.MathUtils.generateUUID(), // Generate a unique ID for the enemy
+                lod: lod,
+                targetCoinId: coin.uuid,
+                targetCoinPosition: coin.position.clone(),
+                patrolCenter: coin.position.clone(),
+                patrolTarget: new THREE.Vector3(),
+                isIdling: false,
+                idleTimer: 0,
+                idleDuration: 0,
+                isAttacking: false,
+                isDying: false,
+                deathTimer: 0,
+                hasAppliedDeathEffect: false,
+                isSinking: false,
+                sinkingTimer: 0,
+                initialDeathY: 0,
+                mixer: mixer,
+                animations: loadedAnimations,
+                enemyType: enemyType,
+                currentAction: null,
+                actions: actions,
+                chunkKey: getChunkKey(chunkX, chunkZ),
+                highDetailModel: enemyInstanceModel,
+                position: new THREE.Vector3(), // Initialize position
+                rotation: new THREE.Euler(), // Initialize rotation
+                scale: new THREE.Vector3(0.5, 0.5, 0.5), // Initialize scale
+                type: 'enemy', // Set type
+                visible: false, // Start invisible to prevent flickering (pop-in). Sync logic will enable it.
+                isPooled: false, // Initialize isPooled
+                isModelInstantiated: true, // Initialize isModelInstantiated
+                lookAt: (target: THREE.Vector3) => {
+                  // Delegate to the LOD object's lookAt method
+                  lod.lookAt(target);
+                },
+              };
 
-            const angle = Math.random() * Math.PI * 2;
-            const radius = Math.random() * ENEMY_PROTECTION_RADIUS;
-            const initialPatrolX = coin.position.x + Math.cos(angle) * radius;
-            const initialPatrolZ = coin.position.z + Math.sin(angle) * radius;
-            enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
+              // Force strict proximity (6.0 units offset - doubled from 1.5)
+              const initialPatrolX = coin.position.x + 6.0;
+              const initialPatrolZ = coin.position.z;
 
-            const spawnAngle = Math.random() * Math.PI * 2;
-            const spawnRadius = ENEMY_PROTECTION_RADIUS * 0.8;
-            let enemyX, enemyZ;
-            let attempts = 0;
-            const MAX_ATTEMPTS = 100;
+              enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
 
-            const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0);
+              // Force spawn exactly at the calculated patrol start position
+              let enemyX = initialPatrolX;
+              let enemyZ = initialPatrolZ;
 
-            do {
-              enemyX = coin.position.x + Math.cos(spawnAngle) * spawnRadius;
-              enemyZ = coin.position.z + Math.sin(spawnAngle) * spawnRadius;
+              console.log(`[EnemyLogic] SPAWN: Enemy (${enemyX.toFixed(2)}, ${enemyZ.toFixed(2)}) linked to Coin (${coin.position.x.toFixed(2)}, ${coin.position.z.toFixed(2)})`);
 
+              // Clamp to world bounds just in case, but keep relative position if possible
               const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
               const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
               const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
@@ -388,45 +383,45 @@ export const useEnemyLogic = ({
               enemyX = Math.max(minSpawnX, Math.min(maxSpawnX, enemyX));
               enemyZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, enemyZ));
 
-              attempts++;
-              if (attempts > MAX_ATTEMPTS) {
-                console.warn("Max attempts reached for enemy spawning, placing enemy without protection.");
-                break;
+              let enemyY = 0;
+              if (octreeRef.current) {
+                enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
               }
-            } while (dogPosition.distanceTo(new THREE.Vector3(enemyX, dogPosition.y, enemyZ)) < DOG_SPAWN_PROTECTION_RADIUS);
+              enemyData.lod.position.set(enemyX, enemyY, enemyZ); // Use enemyData.lod.position
+              enemyData.position.copy(enemyData.lod.position); // Update the position property of EnemyData
 
-            let enemyY = 0;
-            if (octreeRef.current) {
-              enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
-            }
-            enemyData.lod.position.set(enemyX, enemyY, enemyZ); // Use enemyData.lod.position
-            enemyData.position.copy(enemyData.lod.position); // Update the position property of EnemyData
+              if (octreeRef.current) {
+                const enemyBox = new THREE.Box3().setFromObject(enemyData.lod); // Use enemyData.lod for bounds
+                octreeRef.current.insert({
+                  id: `enemy_${enemyData.uuid}`, // Use uuid for id
+                  bounds: enemyBox,
+                  data: enemyData as unknown as GameObject
+                });
+              }
+              enemyMeshesRef.current.push(enemyData);
+              scene.add(enemyData.lod); // Add enemyData.lod to the scene
 
-            if (octreeRef.current) {
-              const enemyBox = new THREE.Box3().setFromObject(enemyData.lod); // Use enemyData.lod for bounds
-              octreeRef.current.insert({
-                id: `enemy_${enemyData.uuid}`, // Use uuid for id
-                bounds: enemyBox,
-                data: enemyData as unknown as GameObject
-              });
+              const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+              const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+              if (enemyData.actions[initialIdleActionName]) {
+                enemyData.currentAction = enemyData.actions[initialIdleActionName];
+                enemyData.currentAction.play();
+              }
             }
-            enemyMeshesRef.current.push(enemyData);
-            scene.add(enemyData.lod); // Add enemyData.lod to the scene
-
-            const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-            const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-            if (enemyData.actions[initialIdleActionName]) {
-              enemyData.currentAction = enemyData.actions[initialIdleActionName];
-              enemyData.currentAction.play();
-            }
+          } catch (error) {
+            console.error('Error loading enemy model:', error);
+            continue;
           }
-        } catch (error) {
-          console.error('Error loading enemy model:', error);
-          continue;
         }
       }
+    } catch (error) {
+      console.error(`[EnemyLogic] Critical error loading enemies for chunk ${chunkKey}:`, error);
+    } finally {
+      // CRITICAL: Always mark chunk as loaded to prevent infinite retry loops and duplicates
+      // Even if it failed, we don't want to spam spawn requests.
+      loadedEnemyChunks.current.add(chunkKey);
+      loadingEnemyChunks.current.delete(chunkKey);
     }
-    loadedEnemyChunks.current.add(getChunkKey(chunkX, chunkZ));
   }, [sceneRef, coinMeshesRef, loadEnemyModel, octreeRef, dogModelRef]);
 
   const unloadEnemiesFromChunk = React.useCallback((chunkX: number, chunkZ: number) => {
@@ -448,9 +443,9 @@ export const useEnemyLogic = ({
         if (octreeRef.current) {
           const enemyBox = new THREE.Box3().setFromObject(enemy.lod);
           octreeRef.current.remove({
-              id: `enemy_${enemy.uuid}`,
-              bounds: enemyBox,
-              data: enemy as unknown as GameObject
+            id: `enemy_${enemy.uuid}`,
+            bounds: enemyBox,
+            data: enemy as unknown as GameObject
           });
         }
         enemy.mixer.stopAllAction();
@@ -464,7 +459,6 @@ export const useEnemyLogic = ({
     loadedEnemyChunks.current.delete(getChunkKey(chunkX, chunkZ));
     cleanupModelPool();
   }, [sceneRef, octreeRef, disposeEnemyModelResources, cleanupModelPool]);
-
 
   const initializeEnemies = React.useCallback(async () => {
     if (!sceneRef.current || !dogModelRef.current) return;
@@ -487,6 +481,7 @@ export const useEnemyLogic = ({
     });
     enemyMeshesRef.current = [];
     loadedEnemyChunks.current.clear();
+    loadingEnemyChunks.current.clear(); // Clear loading state on reset
 
     const dogPosition = dogModelRef.current.position;
     const { chunkX: initialChunkX, chunkZ: initialChunkZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
@@ -509,6 +504,11 @@ export const useEnemyLogic = ({
 
     const { chunkX: currentX, chunkZ: currentZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
 
+    // Debug logging for sync issues
+    if (Math.random() < 0.01) { // Occasional log
+      console.log(`[EnemyLogic] updateEnemies running. Loaded Coin Chunks: ${loadedCoinChunks.current.size}, Loaded Enemy Chunks: ${loadedEnemyChunks.current.size}`);
+    }
+
     if (!currentDogChunk.current || currentX !== currentDogChunk.current.chunkX || currentZ !== currentDogChunk.current.chunkZ) {
       currentDogChunk.current = { chunkX: currentX, chunkZ: currentZ };
 
@@ -527,8 +527,31 @@ export const useEnemyLogic = ({
       });
 
       chunksToLoad.forEach(chunkKey => {
-        if (!loadedEnemyChunks.current.has(chunkKey)) {
+        // Log if we *should* load but can't because coins aren't ready
+        if (!loadedEnemyChunks.current.has(chunkKey) && !loadedCoinChunks.current.has(chunkKey)) {
+          // console.log(`[EnemyLogic] Waiting for coins in chunk ${chunkKey} before spawning enemies.`);
+        }
+
+        if (!loadedEnemyChunks.current.has(chunkKey) && loadedCoinChunks.current.has(chunkKey)) {
           const [cx, cz] = chunkKey.split(',').map(Number);
+          console.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey}`);
+          loadEnemiesForChunk(cx, cz);
+        }
+      });
+    } else {
+      // Even if dog didn't move chunks, we must check if pending coin chunks finished loading!
+      // The previous logic ONLY checked on chunk change. This is a BUG.
+      // We need to continuously check local area for newly loaded coins.
+      const chunksToLoad = new Set<string>();
+      for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
+        for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+          chunksToLoad.add(getChunkKey(currentX + x, currentZ + z));
+        }
+      }
+      chunksToLoad.forEach(chunkKey => {
+        if (!loadedEnemyChunks.current.has(chunkKey) && loadedCoinChunks.current.has(chunkKey)) {
+          const [cx, cz] = chunkKey.split(',').map(Number);
+          console.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey} (Late Update)`);
           loadEnemiesForChunk(cx, cz);
         }
       });
@@ -566,7 +589,17 @@ export const useEnemyLogic = ({
       enemy.mixer.update(delta);
       const enemyY = enemy.lod.position.y;
 
-      enemy.lod.visible = dogPosition.distanceTo(enemy.lod.position) < VISIBLE_ENEMY_DISTANCE;
+      // Strict Visibility Sync: Enemy is visible ONLY if its linked coin is visible
+      const linkedCoin = coinMeshesRef.current.find(c => c.uuid === enemy.targetCoinId);
+
+      if (linkedCoin) {
+        // Inherit visibility from the guarded coin (handles distance culling and collection status)
+        enemy.lod.visible = linkedCoin.visible;
+      } else {
+        // If no linked coin found (shouldn't happen, but safety net), hide enemy
+        enemy.lod.visible = false;
+      }
+
       enemy.visible = enemy.lod.visible; // Keep the EnemyData.visible property in sync
 
       // Handle sinking animation
@@ -691,7 +724,7 @@ export const useEnemyLogic = ({
         } else if (!isMoving) {
           const idleAnimations = ENEMY_ANIMATION_NAMES[enemy.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
           if (!idleAnimations.includes(currentAnimation)) {
-              currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+            currentAnimation = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
           }
         }
       }
@@ -835,7 +868,7 @@ export const useEnemyLogic = ({
     onCoinCollected,
     protectionBottleCountRef
   ]);
-  
+
   const resetEnemies = React.useCallback(() => {
     initializeEnemies();
   }, [initializeEnemies]);

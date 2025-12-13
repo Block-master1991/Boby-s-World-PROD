@@ -75,113 +75,130 @@ export const useCoinLogic = ({
   const gltfLoaderRef = useRef<GLTFLoader | null>(null);
   const isCoinModelLoadedRef = useRef<boolean>(false);
 
+  const loadingCoinChunks = useRef<Set<string>>(new Set());
+
+  const coinModelPromiseRef = useRef<Promise<void> | null>(null);
+
   // Load the coin model
   const loadCoinModel = useCallback(async () => {
     if (isCoinModelLoadedRef.current || !sceneRef.current) return;
-    
-    try {
-      if (!gltfLoaderRef.current) {
-        gltfLoaderRef.current = new GLTFLoader();
-      }
-      
-      const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
-      coinModelRef.current = gltf.scene;
-      isCoinModelLoadedRef.current = true;
-      console.log('[CoinLogic] Coin model loaded successfully');
-    } catch (error) {
-      console.error('[CoinLogic] Error loading coin model:', error);
+
+    // If a load is already in progress, wait for it
+    if (coinModelPromiseRef.current) {
+      return coinModelPromiseRef.current;
     }
+
+    coinModelPromiseRef.current = (async () => {
+      try {
+        if (!gltfLoaderRef.current) {
+          gltfLoaderRef.current = new GLTFLoader();
+        }
+
+        const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
+        coinModelRef.current = gltf.scene;
+        isCoinModelLoadedRef.current = true;
+        console.log('[CoinLogic] Coin model loaded successfully (Singleton)');
+      } catch (error) {
+        console.error('[CoinLogic] Error loading coin model:', error);
+        coinModelPromiseRef.current = null; // Reset on failure so we can try again
+      }
+    })();
+
+    await coinModelPromiseRef.current;
   }, [sceneRef]);
 
   const loadCoinsForChunk = useCallback(async (chunkX: number, chunkZ: number) => {
-    if (!sceneRef.current || loadedCoinChunks.current.has(getChunkKey(chunkX, chunkZ))) {
+    const chunkKey = getChunkKey(chunkX, chunkZ);
+    if (!sceneRef.current || loadedCoinChunks.current.has(chunkKey) || loadingCoinChunks.current.has(chunkKey)) {
       return;
     }
-    
-    // Ensure coin model is loaded
-    if (!isCoinModelLoadedRef.current) {
-      await loadCoinModel();
-    }
-    
-    if (!coinModelRef.current) return;
 
-    const scene = sceneRef.current;
-    const chunkMinX = chunkX * CHUNK_SIZE;
-    const chunkMinZ = chunkZ * CHUNK_SIZE;
+    loadingCoinChunks.current.add(chunkKey);
 
-    const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0); // Get dog's initial position
-
-    const numCoinsToGenerate = (Math.random() < 0.625) ? 1 : 0; // Distribute approximately 1000 coins across 1600 chunks (0.625 coins/chunk average)
-    for (let i = 0; i < numCoinsToGenerate; i++) {
-      const coinMesh = coinModelRef.current.clone() as CoinData; // Clone the coin model
-      coinMesh.collected = false;
-      coinMesh.value = COIN_VALUE;
-      coinMesh.rotationSpeed = COIN_ROTATION_SPEED;
-      let coinX, coinZ;
-      let attempts = 0;
-      const MAX_ATTEMPTS = 100; // Prevent infinite loops
-
-      do {
-        coinX = chunkMinX + Math.random() * CHUNK_SIZE;
-        coinZ = chunkMinZ + Math.random() * CHUNK_SIZE;
-
-        // Clamp coin positions to world boundaries, accounting for enemy patrol radius
-        const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-        const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-        const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-        const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-
-        coinX = Math.max(minSpawnX, Math.min(maxSpawnX, coinX));
-        coinZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, coinZ));
-        
-        // إضافة انحراف عشوائي صغير بعد التقييد
-        const randomOffset = (Math.random() - 0.5) * 2; // قيمة بين -0.25 و 0.25
-        coinX += randomOffset;
-        coinZ += randomOffset;
-
-        attempts++;
-        if (attempts > MAX_ATTEMPTS) {
-          console.warn("Max attempts reached for coin spawning, placing coin without protection.");
-          break;
-        }
-      } while (dogPosition.distanceTo(new THREE.Vector3(coinX, dogPosition.y, coinZ)) < DOG_SPAWN_PROTECTION_RADIUS);
-
-      let coinY = COIN_RADIUS;
-      if (octreeRef.current) {
-        coinY = octreeRef.current.getGroundHeightAt(coinX, coinZ) + COIN_RADIUS;
+    try {
+      // Ensure coin model is loaded
+      if (!isCoinModelLoadedRef.current) {
+        await loadCoinModel();
       }
-      coinMesh.position.set(coinX, coinY, coinZ);
-      // تعديل اتجاه العملة لتكون واقفة بشكل صحيح
-      coinMesh.rotation.x = 0; // إلغاء أي تدوير حول المحور السيني
-      coinMesh.rotation.z = 0; // إلغاء أي تدوير حول المحور الزيتي
-      coinMesh.rotation.y = 0; // إلغاء أي تدوير حول المحور الصادي
-      coinMesh.castShadow = true;
-      // تعديل مقياس العملة ليبدو مناسبًا
-      coinMesh.scale.set(2.5, 2.5, 2.5);
-      
-      // تطبيق إعدادات الإضاءة على العملة مع الحفاظ على اللون الأصلي للنموذج
-      coinMesh.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          // استخدام اللون الأصلي للنموذج للإضاءة المنبعثة
-          const originalColor = child.material.color.clone();
-          child.material.emissive = originalColor;
-          child.material.emissiveIntensity = COIN_EMISSIVE_INTENSITY;
-        }
-      });
-      coinMeshesRef.current.push(coinMesh);
-      scene.add(coinMesh);
 
-      if (octreeRef.current) {
-        const coinBox = new THREE.Box3().setFromObject(coinMesh);
-        octreeRef.current.insert({
-          id: `coin_${coinMesh.uuid}`,
-          bounds: coinBox,
-          data: coinMesh as unknown as GameObject
+      if (!coinModelRef.current) return;
+
+      const scene = sceneRef.current;
+      const chunkMinX = chunkX * CHUNK_SIZE;
+      const chunkMinZ = chunkZ * CHUNK_SIZE;
+
+      const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0); // Get dog's initial position
+
+      const numCoinsToGenerate = (Math.random() < 0.625) ? 1 : 0; // Distribute approximately 1000 coins across 1600 chunks (0.625 coins/chunk average)
+      for (let i = 0; i < numCoinsToGenerate; i++) {
+        const coinMesh = coinModelRef.current.clone() as CoinData; // Clone the coin model
+        coinMesh.collected = false;
+        coinMesh.value = COIN_VALUE;
+        coinMesh.rotationSpeed = COIN_ROTATION_SPEED;
+        let coinX, coinZ;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 100; // Prevent infinite loops
+
+        do {
+          coinX = chunkMinX + Math.random() * CHUNK_SIZE;
+          coinZ = chunkMinZ + Math.random() * CHUNK_SIZE;
+
+          // Clamp coin positions to world boundaries, accounting for enemy patrol radius
+          const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+          const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+          const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+          const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+
+          coinX = Math.max(minSpawnX, Math.min(maxSpawnX, coinX));
+          coinZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, coinZ));
+
+          attempts++;
+          if (attempts > MAX_ATTEMPTS) {
+            console.warn("Max attempts reached for coin spawning, placing coin without protection.");
+            break;
+          }
+        } while (dogPosition.distanceTo(new THREE.Vector3(coinX, dogPosition.y, coinZ)) < DOG_SPAWN_PROTECTION_RADIUS);
+
+        let coinY = COIN_RADIUS;
+        if (octreeRef.current) {
+          coinY = octreeRef.current.getGroundHeightAt(coinX, coinZ) + COIN_RADIUS;
+        }
+        coinMesh.position.set(coinX, coinY, coinZ);
+        // تعديل اتجاه العملة لتكون واقفة بشكل صحيح
+        coinMesh.rotation.x = 0; // إلغاء أي تدوير حول المحور السيني
+        coinMesh.rotation.z = 0; // إلغاء أي تدوير حول المحور الزيتي
+        coinMesh.rotation.y = 0; // إلغاء أي تدوير حول المحور الصادي
+        coinMesh.castShadow = true;
+        // تعديل مقياس العملة ليبدو مناسبًا
+        coinMesh.scale.set(2.5, 2.5, 2.5);
+
+        // تطبيق إعدادات الإضاءة على العملة مع الحفاظ على اللون الأصلي للنموذج
+        coinMesh.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            // استخدام اللون الأصلي للنموذج للإضاءة المنبعثة
+            const originalColor = child.material.color.clone();
+            child.material.emissive = originalColor;
+            child.material.emissiveIntensity = COIN_EMISSIVE_INTENSITY;
+          }
         });
+        coinMeshesRef.current.push(coinMesh);
+        scene.add(coinMesh);
+
+        if (octreeRef.current) {
+          const coinBox = new THREE.Box3().setFromObject(coinMesh);
+          octreeRef.current.insert({
+            id: `coin_${coinMesh.uuid}`,
+            bounds: coinBox,
+            data: coinMesh as unknown as GameObject
+          });
+        }
       }
+      loadedCoinChunks.current.add(chunkKey);
+      console.log(`[CoinLogic] Chunk ${chunkKey} marked as LOADED. Total Loaded: ${loadedCoinChunks.current.size}`);
+      onRemainingCoinsUpdate(remainingCoinsRef.current);
+    } finally {
+      loadingCoinChunks.current.delete(chunkKey);
     }
-    loadedCoinChunks.current.add(getChunkKey(chunkX, chunkZ));
-    onRemainingCoinsUpdate(remainingCoinsRef.current);
   }, [sceneRef, octreeRef, onRemainingCoinsUpdate, dogModelRef, loadCoinModel]);
 
   const unloadCoinsFromChunk = useCallback((chunkX: number, chunkZ: number) => {
@@ -280,8 +297,8 @@ export const useCoinLogic = ({
 
     for (const coin of coinMeshesRef.current) {
       if (coin.collected) {
-    continue;
-  }
+        continue;
+      }
       let collectedThisFrame = false;
       // Only check for collection if the coin is currently visible
       if (coin.visible) {
@@ -326,69 +343,70 @@ export const useCoinLogic = ({
       } else {
         // This coin was NOT collected this frame
         // Update its visibility based on distance if it's not already collected
-        if (coin.visible) { // Only update rotation if it's still visible and not collected
-          coin.visible = dogPosition.distanceTo(coin.position) < VISIBLE_COIN_DISTANCE;
-          if (coin.visible) {
-            // تدوير العملة حول محورها العمودي بشكل احترافي
-            coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
+        // Always check visibility against distance
+        coin.visible = dogPosition.distanceTo(coin.position) < VISIBLE_COIN_DISTANCE;
+        if (coin.visible) {
+          // تدوير العملة حول محورها العمودي بشكل احترافي
+          coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
+        }
+
+        // تحديث حركة العملة إذا كانت في حالة جذب
+        if (coin.userData.isAttracted) {
+          // تحديث موضع الهدف دائمًا ليتبع الكلب
+          const targetPosition = dogPosition.clone();
+          targetPosition.y += 1; // ارتفاع مستهدف فوق الكلب
+
+          // تحريك العملة نحو الهدف (الكلب) بسرعة متزايدة كلما اقتربت
+          const distanceToDog = dogPosition.distanceTo(coin.position);
+          const speed = Math.min(0.15, 0.05 + (COIN_MAGNET_RADIUS - distanceToDog) / COIN_MAGNET_RADIUS * 0.1);
+          coin.position.lerp(targetPosition, speed);
+
+          // تدوير العملة بشكل أسرع وهي تقترب
+          coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), coin.rotationSpeed || COIN_ROTATION_SPEED);
+
+          // التعامل مع عملية الاختفاء التدريجي
+          if (coin.userData.isDisappearing) {
+            const elapsed = performance.now() - coin.userData.disappearStartTime;
+            const progress = Math.min(1, elapsed / coin.userData.disappearDuration);
+
+            // تصغير حجم العملة تدريجياً
+            const scale = 1 - progress;
+            coin.scale.set(scale, scale, scale);
+
+            // زيادة سرعة الدوران أثناء الاختفاء
+            coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED * 5 * progress);
+
+            // رفع العملة للأعلى أثناء الاختفاء
+            coin.position.y += 0.02 * progress;
+
+            // عند اكتمال الاختفاء
+            if (progress >= 1) {
+              coin.collected = true;
+              collectedThisFrame = true;
+            }
           }
-          
-          // تحديث حركة العملة إذا كانت في حالة جذب
-          if (coin.userData.isAttracted) {
-            // تحديث موضع الهدف دائمًا ليتبع الكلب
-            const targetPosition = dogPosition.clone();
-            targetPosition.y += 1; // ارتفاع مستهدف فوق الكلب
-            
-            // تحريك العملة نحو الهدف (الكلب) بسرعة متزايدة كلما اقتربت
-            const distanceToDog = dogPosition.distanceTo(coin.position);
-            const speed = Math.min(0.15, 0.05 + (COIN_MAGNET_RADIUS - distanceToDog) / COIN_MAGNET_RADIUS * 0.1);
-            coin.position.lerp(targetPosition, speed);
-            
-            // تدوير العملة بشكل أسرع وهي تقترب
-            coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), coin.rotationSpeed || COIN_ROTATION_SPEED);
-            
-            // التعامل مع عملية الاختفاء التدريجي
-            if (coin.userData.isDisappearing) {
-              const elapsed = performance.now() - coin.userData.disappearStartTime;
-              const progress = Math.min(1, elapsed / coin.userData.disappearDuration);
-              
-              // تصغير حجم العملة تدريجياً
-              const scale = 1 - progress;
-              coin.scale.set(scale, scale, scale);
-              
-              // زيادة سرعة الدوران أثناء الاختفاء
-              coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED * 5 * progress);
-              
-              // رفع العملة للأعلى أثناء الاختفاء
-              coin.position.y += 0.02 * progress;
-              
-              // عند اكتمال الاختفاء
-              if (progress >= 1) {
-                coin.collected = true;
-                collectedThisFrame = true;
-              }
-            }
-            
-            // التحقق من وصول العملة إلى الكلب فقط إذا لم تكن تختفي بالفعل
-            if (distanceToDog < COLLECTION_THRESHOLD) {
-              // بدء عملية الاختفاء التدريجي للعملة
-              coin.userData.isDisappearing = true;
-              coin.userData.disappearStartTime = performance.now();
-              coin.userData.disappearDuration = 300; // مدة الاختفاء بالميلي ثانية
-              
-              // Add floating effect for coin collection
-              addFloatingEffect(
-                coin.position.clone(),
-                'coin',
-                coin.value || 0.001, // Use the actual coin value
-                'followTarget', // Make it follow the dog's head
-                true, // Use 3D model for coin
-                undefined, // targetPosition is not needed for 'followTarget'
-                dogModelRef.current // Pass the dog's mesh as targetMesh
-              );
-            }
+
+          // التحقق من وصول العملة إلى الكلب فقط إذا لم تكن تختفي بالفعل
+          if (distanceToDog < COLLECTION_THRESHOLD) {
+            // بدء عملية الاختفاء التدريجي للعملة
+            coin.userData.isDisappearing = true;
+            coin.userData.disappearStartTime = performance.now();
+            coin.userData.disappearDuration = 300; // مدة الاختفاء بالميلي ثانية
+
+            // Add floating effect for coin collection
+            addFloatingEffect(
+              coin.position.clone(),
+              'coin',
+              coin.value || 0.001, // Use the actual coin value
+              'followTarget', // Make it follow the dog's head
+              true, // Use 3D model for coin
+              undefined, // targetPosition is not needed for 'followTarget'
+              dogModelRef.current // Pass the dog's mesh as targetMesh
+            );
           }
         }
+      }
+      if (!collectedThisFrame) {
         coinsToKeep.push(coin); // Add to the list of coins to keep
       }
     }
@@ -413,9 +431,10 @@ export const useCoinLogic = ({
 
   return {
     initializeCoins,
-    updateCoins,
+    updateCoins, // Restore updateCoins
     resetCoins,
     coinMeshesRef,
     remainingCoinsRef,
+    loadedCoinChunks, // Expose loadedCoinChunks
   };
 };
