@@ -17,7 +17,7 @@ import { useFloatingEffects } from '@/hooks/useFloatingEffects'; // New import
 import { useDogParticles } from '@/hooks/useDogParticles'; // New import
 import DogSpeedBeam from '@/components/game/DogSpeedBeam'; // New import
 import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
-import { OptimizedStaticObjectManager } from '@/components/OptimizedStaticObjectManager'; // Import the new optimized manager
+
 import { getChunkCoordinates } from '@/lib/chunkUtils'; // Import chunk utilities
 import { modelLoader } from '@/utils/modelLoader'; // Import modelLoader
 import { Environment } from '@/lib/ez-tree/environment/environment'; // Import ez-tree Environment
@@ -75,13 +75,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     const animationFrameId = useRef<number | null>(null);
-    
+
     const sceneRef = useRef<THREE.Scene | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null);
     // controlsRef is no longer needed
     // import type { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-    
+
     const clockRef = useRef(new THREE.Clock());
     const keysPressedRef = useRef<{ [key: string]: boolean }>({});
     const dogMeshRef = useRef<THREE.Object3D | null>(null); // Ref for the dog's 3D model
@@ -98,7 +98,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const isPausedRef = useRef(isPaused);
     const joystickInputRef = useRef(joystickInputFromUI);
     const protectionBottleCountRef = useRef(protectionBottleCount);
-    const isJoystickInteractionActiveRef = useRef(false); 
+    const isJoystickInteractionActiveRef = useRef(false);
 
     const prevSessionPublicKeyRef = useRef<PublicKey | null>(null);
     const initialTouchPointRef = useRef<{ x: number, y: number, id: number } | null>(null);
@@ -108,10 +108,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     useEffect(() => { isShieldActiveRef.current = isShieldActive; }, [isShieldActive]);
     useEffect(() => { isCoinMagnetActiveRef.current = isCoinMagnetActive; }, [isCoinMagnetActive]);
     useEffect(() => { protectionBottleCountRef.current = protectionBottleCount; }, [protectionBottleCount]);
-    useEffect(() => { 
+    useEffect(() => {
         isPausedRef.current = isPaused;
         if (isPaused && isJoystickInteractionActiveRef.current) {
-            onCanvasTouchEndProp(); 
+            onCanvasTouchEndProp();
             isJoystickInteractionActiveRef.current = false;
             initialTouchPointRef.current = null;
         }
@@ -154,7 +154,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     const { initializeCoins, updateCoins, coinMeshesRef } = useCoinLogic({ // Capture coinMeshesRef
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
-        onCoinCollected: () => onCoinCollectedCallbackRef.current(), 
+        onCoinCollected: () => onCoinCollectedCallbackRef.current(),
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
         isPausedRef, octreeRef,
         addFloatingEffect, // Pass addFloatingEffect to useCoinLogic
@@ -185,22 +185,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         octreeRef,
         objectsToManage: [], // This hook is used for dynamic loading, but we'll use cleanupModelPool directly
     });
-    
+
     const { initializeCamera, setupInitialCameraPosition, updateCamera, resetCamera } = useCameraLogic({
-      cameraRef, 
-      // controlsRef, // Removed
-      dogModelRef, 
-      mountRef,
+        cameraRef,
+        // controlsRef, // Removed
+        dogModelRef,
+        mountRef,
     });
 
     const { initializeScene, handleResize, cleanupScene: baseCleanupScene } = useSceneSetup({ // updateControlsState removed
-        mountRef, 
-        sceneRef, 
-        cameraRef, 
-        rendererRef, 
+        mountRef,
+        sceneRef,
+        cameraRef,
+        rendererRef,
         octreeRef, // Pass octreeRef
         // controlsRef, // Removed
-        isPausedRef, 
+        isPausedRef,
         isJoystickInteractionActiveRef,
     });
 
@@ -229,7 +229,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         // updateControlsState(); // Removed as OrbitControls are removed
 
         const delta = clockRef.current.getDelta(); // Get delta time
-        if (dogModelRef.current && !isPausedRef.current) { 
+        if (dogModelRef.current && !isPausedRef.current) {
             // Update dog's mesh ref for other hooks
             dogMeshRef.current = dogModelRef.current;
 
@@ -278,7 +278,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             // Call cleanupModelPool periodically
             cleanupModelPool(60000, 5); // Clean up models idle for 60s or if pool size > 5
         }
-        
+
         try {
             if (rendererRef.current && sceneRef.current && cameraRef.current) {
                 rendererRef.current.render(sceneRef.current, cameraRef.current);
@@ -306,9 +306,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         }
 
         const isNewSession = !prevSessionPublicKeyRef.current ||
-                             (sessionPublicKey && prevSessionPublicKeyRef.current && !sessionPublicKey.equals(prevSessionPublicKeyRef.current)) ||
-                             !rendererRef.current;
-        
+            (sessionPublicKey && prevSessionPublicKeyRef.current && !sessionPublicKey.equals(prevSessionPublicKeyRef.current)) ||
+            !rendererRef.current;
+
         // Initialize continuous effects classes
         if (sceneRef.current && dogModelRef.current && !speedBeamRef.current) {
             speedBeamRef.current = new DogSpeedBeam({
@@ -382,15 +382,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
         if (isNewSession) {
             console.log("[GameCanvas] New session or first load. Initializing scene elements.");
-            
-            if (rendererRef.current) cleanupScene(); 
-            
+
+            if (rendererRef.current) cleanupScene();
+
             resetDogState();
-            resetCamera(); 
+            resetCamera();
             // loadedEzTreeChunksRef.current.clear(); // Clear ez-tree chunks - now managed by Environment
 
-            initializeCamera(); 
-            const sceneInitialized = initializeScene(); 
+            initializeCamera();
+            const sceneInitialized = initializeScene();
 
             if (sceneInitialized && cameraRef.current && rendererRef.current && sceneRef.current) {
                 // Initialize ez-tree environment
@@ -402,7 +402,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                     console.error("[GameCanvas] Error initializing ez-tree environment:", error);
                     environmentRef.current = null;
                 }
-                
+
                 // Update environment with new chunk options (now handled internally by Environment)
                 if (environmentRef.current && dogModelRef.current) {
                     const dogPos = dogModelRef.current.position;
@@ -412,36 +412,36 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 try {
                     loadAllGameAssets();
                 } catch (err) {
-                console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.", err);
-                onLoadComplete(false);
-                return; 
+                    console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.", err);
+                    onLoadComplete(false);
+                    return;
+                }
             }
-        }
         } else if (dogModelRef.current && lastDogTransformRef.current && sessionPublicKey && !isNewSession && !isPaused) {
             dogModelRef.current.position.copy(lastDogTransformRef.current.position);
             dogModelRef.current.rotation.y = lastDogTransformRef.current.rotationY;
-            if (cameraRef.current) { 
-                setupInitialCameraPosition(); 
+            if (cameraRef.current) {
+                setupInitialCameraPosition();
             }
         }
-        
+
         prevSessionPublicKeyRef.current = sessionPublicKey;
 
         if (!animationFrameId.current && rendererRef.current && sceneRef.current && cameraRef.current) {
             animate();
         }
-        
-    }, [ 
-        sessionPublicKey, 
+
+    }, [
+        sessionPublicKey,
         initializeDog, resetDogState, initializeCoins, initializeEnemies, initializeCamera, setupInitialCameraPosition, resetCamera,
-        initializeScene, cleanupScene, 
-        dogModelRef, lastDogTransformRef, 
+        initializeScene, cleanupScene,
+        dogModelRef, lastDogTransformRef,
         cameraRef, rendererRef,
-        onLoadStart, onLoadProgress, onLoadComplete, 
-        addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, 
-        updateParticles, 
-        isSpeedBoostActive, isShieldActive, 
-        isPaused, 
+        onLoadStart, onLoadProgress, onLoadComplete,
+        addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects,
+        updateParticles,
+        isSpeedBoostActive, isShieldActive,
+        isPaused,
         animate,
         handleResize,
         onCanvasTouchStartProp, onCanvasTouchMoveProp, onCanvasTouchEndProp,
@@ -452,26 +452,26 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // Effect for handling resize
     useEffect(() => {
-      window.addEventListener('resize', handleResize);
-      handleResize(); 
-      return () => {
-        window.removeEventListener('resize', handleResize);
-      };
+        window.addEventListener('resize', handleResize);
+        handleResize();
+        return () => {
+            window.removeEventListener('resize', handleResize);
+        };
     }, [handleResize]);
 
     // Effect for full cleanup on component unmount
     useEffect(() => {
-      return () => {
-        console.log("[GameCanvas] Component unmounting. Full cleanup.");
-        if (animationFrameId.current) {
-          cancelAnimationFrame(animationFrameId.current);
-          animationFrameId.current = null;
-        }
-        cleanupScene(); // Use the custom cleanupScene
-        cleanupFloatingEffects(); // Cleanup floating effects
-        if (speedBeamRef.current) speedBeamRef.current.dispose(); // Dispose speed beam
-        if (shieldEffectRef.current) shieldEffectRef.current.dispose(); // Dispose shield effect
-      };
+        return () => {
+            console.log("[GameCanvas] Component unmounting. Full cleanup.");
+            if (animationFrameId.current) {
+                cancelAnimationFrame(animationFrameId.current);
+                animationFrameId.current = null;
+            }
+            cleanupScene(); // Use the custom cleanupScene
+            cleanupFloatingEffects(); // Cleanup floating effects
+            if (speedBeamRef.current) speedBeamRef.current.dispose(); // Dispose speed beam
+            if (shieldEffectRef.current) shieldEffectRef.current.dispose(); // Dispose shield effect
+        };
     }, [cleanupScene, cleanupFloatingEffects, animationFrameId, speedBeamRef, shieldEffectRef]);
 
     // Touch handling for joystick
@@ -489,8 +489,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         };
         const handleTouchMoveInternal = (event: TouchEvent) => {
             if (isJoystickInteractionActiveRef.current && initialTouchPointRef.current !== null) {
-                 let touch = null;
-                 for (let i = 0; i < event.touches.length; i++) { if (event.touches[i].identifier === initialTouchPointRef.current.id) { touch = event.touches[i]; break; } }
+                let touch = null;
+                for (let i = 0; i < event.touches.length; i++) { if (event.touches[i].identifier === initialTouchPointRef.current.id) { touch = event.touches[i]; break; } }
                 if (touch) {
                     if (event.cancelable) event.preventDefault();
                     const deltaX = touch.clientX - initialTouchPointRef.current.x;
@@ -500,12 +500,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             }
         };
         const handleTouchEndInternal = (event: TouchEvent) => {
-             let touchEnded = false;
-             if (initialTouchPointRef.current !== null) {
-                 let stillTouchingWithSameId = false;
-                 for (let i = 0; i < event.touches.length; i++) { if (event.touches[i].identifier === initialTouchPointRef.current.id) { stillTouchingWithSameId = true; break; } }
-                 if (!stillTouchingWithSameId) { touchEnded = true; }
-             }
+            let touchEnded = false;
+            if (initialTouchPointRef.current !== null) {
+                let stillTouchingWithSameId = false;
+                for (let i = 0; i < event.touches.length; i++) { if (event.touches[i].identifier === initialTouchPointRef.current.id) { stillTouchingWithSameId = true; break; } }
+                if (!stillTouchingWithSameId) { touchEnded = true; }
+            }
 
             if (isJoystickInteractionActiveRef.current && touchEnded) {
                 isJoystickInteractionActiveRef.current = false;
@@ -535,7 +535,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
             const gameControlCodes = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space', 'ShiftLeft', 'ShiftRight'];
             if (gameControlCodes.includes(event.code)) {
-                event.preventDefault(); 
+                event.preventDefault();
             }
             keysPressedRef.current[event.code] = true;
         };
@@ -544,16 +544,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             keysPressedRef.current[event.code] = false;
         };
 
-        if (!sessionPublicKey) { 
+        if (!sessionPublicKey) {
             if (handleKeyDownCbRef.current) {
                 window.removeEventListener('keydown', handleKeyDownCbRef.current);
-                handleKeyDownCbRef.current = null; 
+                handleKeyDownCbRef.current = null;
             }
             if (handleKeyUpCbRef.current) {
                 window.removeEventListener('keyup', handleKeyUpCbRef.current);
-                handleKeyUpCbRef.current = null; 
+                handleKeyUpCbRef.current = null;
             }
-            keysPressedRef.current = {}; 
+            keysPressedRef.current = {};
             return;
         }
 
@@ -570,22 +570,14 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             if (handleKeyUpCbRef.current) {
                 window.removeEventListener('keyup', handleKeyUpCbRef.current);
             }
-            keysPressedRef.current = {}; 
+            keysPressedRef.current = {};
         };
     }, [sessionPublicKey, isPausedRef, keysPressedRef, handleKeyDownCbRef, handleKeyUpCbRef]);
 
     return (
         <>
             <div ref={mountRef} className="w-full h-full absolute inset-0 z-0" />
-            {/* Render the OptimizedStaticObjectManager here */}
-            {sceneRef.current && cameraRef.current && rendererRef.current && dogModelRef.current && (
-                <OptimizedStaticObjectManager
-                    scene={sceneRef.current}
-                    camera={cameraRef.current}
-                    renderer={rendererRef.current}
-                    playerPosition={dogModelRef.current.position}
-                />
-            )}
+            {/* OptimizedStaticObjectManager removed */}
         </>
     );
 };
