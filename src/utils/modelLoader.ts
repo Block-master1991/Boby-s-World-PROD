@@ -34,12 +34,12 @@ interface MemoryInfo {
 
 class MemoryManager {
   private static instance: MemoryManager;
-  private modelCache: Map<string, {model: THREE.Group; info: MemoryInfo}> = new Map();
+  private modelCache: Map<string, { model: THREE.Group; info: MemoryInfo }> = new Map();
   private readonly MAX_MEMORY_USAGE = 500 * 1024 * 1024; // 500MB
   private readonly CLEANUP_THRESHOLD = 0.8;
   private currentMemoryUsage = 0;
 
-  private constructor() {}
+  private constructor() { }
 
   public static getInstance(): MemoryManager {
     if (!MemoryManager.instance) {
@@ -55,8 +55,8 @@ class MemoryManager {
       this.cleanup();
     }
     if (this.currentMemoryUsage + size > this.MAX_MEMORY_USAGE) {
-        console.warn(`Cannot cache model ${path}, not enough memory.`);
-        return;
+      console.warn(`Cannot cache model ${path}, not enough memory.`);
+      return;
     }
 
     const info: MemoryInfo = { size, lastAccessed: Date.now(), accessCount: 1, priority };
@@ -81,11 +81,11 @@ class MemoryManager {
         if (geom.attributes.normal) size += geom.attributes.normal.array.byteLength;
         if (geom.attributes.uv) size += geom.attributes.uv.array.byteLength;
         if (geom.index) size += geom.index.array.byteLength;
-        
+
         const mat = child.material;
         if (mat instanceof THREE.MeshStandardMaterial) {
-            if (mat.map) size += this.calculateTextureSize(mat.map);
-            if (mat.normalMap) size += this.calculateTextureSize(mat.normalMap);
+          if (mat.map) size += this.calculateTextureSize(mat.map);
+          if (mat.normalMap) size += this.calculateTextureSize(mat.normalMap);
         }
       }
     });
@@ -102,12 +102,12 @@ class MemoryManager {
   public cleanup(): void {
     const models = Array.from(this.modelCache.entries());
     models.sort((a, b) => {
-        const aInfo = a[1].info;
-        const bInfo = b[1].info;
-        if (aInfo.priority !== bInfo.priority) return aInfo.priority - bInfo.priority; // Lower priority first
-        const aScore = aInfo.accessCount / (Date.now() - aInfo.lastAccessed + 1);
-        const bScore = bInfo.accessCount / (Date.now() - bInfo.lastAccessed + 1);
-        return aScore - bScore; // Lower score first
+      const aInfo = a[1].info;
+      const bInfo = b[1].info;
+      if (aInfo.priority !== bInfo.priority) return aInfo.priority - bInfo.priority; // Lower priority first
+      const aScore = aInfo.accessCount / (Date.now() - aInfo.lastAccessed + 1);
+      const bScore = bInfo.accessCount / (Date.now() - bInfo.lastAccessed + 1);
+      return aScore - bScore; // Lower score first
     });
 
     let removedSize = 0;
@@ -118,20 +118,20 @@ class MemoryManager {
     }
     this.currentMemoryUsage -= removedSize;
   }
-  
+
   public removeFromCache(path: string) {
-      const cached = this.modelCache.get(path);
-      if (cached) {
-          this.currentMemoryUsage -= cached.info.size;
-          this.modelCache.delete(path);
-      }
+    const cached = this.modelCache.get(path);
+    if (cached) {
+      this.currentMemoryUsage -= cached.info.size;
+      this.modelCache.delete(path);
+    }
   }
 
   public getMemoryUsage() {
-      return {
-          current: this.currentMemoryUsage,
-          max: this.MAX_MEMORY_USAGE,
-      };
+    return {
+      current: this.currentMemoryUsage,
+      max: this.MAX_MEMORY_USAGE,
+    };
   }
 }
 
@@ -144,46 +144,46 @@ export const memoryManager = MemoryManager.getInstance();
 
 // Helper functions for serialization
 function serializeGeometry(geometry: THREE.BufferGeometry) {
-    const attributes: { [name: string]: { array: TypedArray; itemSize: number } } = {};
-    for (const name in geometry.attributes) {
-        const attribute = geometry.attributes[name];
-        attributes[name] = {
-            array: attribute.array.slice(0), // Create a copy for transferring
-            itemSize: attribute.itemSize,
-        };
-    }
-    return {
-        attributes,
-        index: geometry.index ? { array: geometry.index.array.slice(0) } : null, // Create a copy for transferring
+  const attributes: { [name: string]: { array: TypedArray; itemSize: number } } = {};
+  for (const name in geometry.attributes) {
+    const attribute = geometry.attributes[name];
+    attributes[name] = {
+      array: attribute.array.slice(0), // Create a copy for transferring
+      itemSize: attribute.itemSize,
     };
+  }
+  return {
+    attributes,
+    index: geometry.index ? { array: geometry.index.array.slice(0) } : null, // Create a copy for transferring
+  };
 }
 
 function deserializeGeometry(data: { attributes: { [name: string]: { array: TypedArray; itemSize: number } }; index: { array: TypedArray } | null; quantization?: unknown }): THREE.BufferGeometry {
-    const geometry = new THREE.BufferGeometry();
-    for (const name in data.attributes) {
-        const attrData = data.attributes[name];
-        let buffer;
-        // Handle different quantized array types
-        if (name === 'position') buffer = new Int16Array(attrData.array);
-        else if (name === 'uv') buffer = new Uint16Array(attrData.array);
-        else if (name === 'normal') buffer = new Int8Array(attrData.array);
-        else buffer = new Float32Array(attrData.array);
-        
-        geometry.setAttribute(name, new THREE.BufferAttribute(buffer, attrData.itemSize));
-    }
-    if (data.index) {
-        geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(data.index.array), 1));
-    }
-    
-    if(data.quantization) geometry.userData.quantization = data.quantization;
-    return geometry;
+  const geometry = new THREE.BufferGeometry();
+  for (const name in data.attributes) {
+    const attrData = data.attributes[name];
+    let buffer;
+    // Handle different quantized array types
+    if (name === 'position') buffer = new Int16Array(attrData.array);
+    else if (name === 'uv') buffer = new Uint16Array(attrData.array);
+    else if (name === 'normal') buffer = new Int8Array(attrData.array);
+    else buffer = new Float32Array(attrData.array);
+
+    geometry.setAttribute(name, new THREE.BufferAttribute(buffer, attrData.itemSize));
+  }
+  if (data.index) {
+    geometry.setIndex(new THREE.BufferAttribute(new Uint32Array(data.index.array), 1));
+  }
+
+  if (data.quantization) geometry.userData.quantization = data.quantization;
+  return geometry;
 }
 
 
 class CompressionManager {
   private static instance: CompressionManager;
   private compressionLevels: Map<string, number> = new Map();
-  private constructor() {}
+  private constructor() { }
   public static getInstance(): CompressionManager {
     if (!CompressionManager.instance) CompressionManager.instance = new CompressionManager();
     return CompressionManager.instance;
@@ -195,11 +195,11 @@ class CompressionManager {
     compressed.traverse((child) => {
       if (child instanceof THREE.Mesh) {
         const compressionPromise = this.compressGeometry(child.geometry, level).then(compressedGeom => {
-            child.geometry.dispose(); // Dispose old geometry
-            child.geometry = compressedGeom;
+          child.geometry.dispose(); // Dispose old geometry
+          child.geometry = compressedGeom;
         });
         compressionPromises.push(compressionPromise);
-        
+
         const mat = child.material as THREE.Material | THREE.Material[];
         if (Array.isArray(mat)) mat.forEach(() => this.compressMaterial());
         else this.compressMaterial();
@@ -245,10 +245,10 @@ class WorkerManager {
 
   private constructor() {
     this.isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
-    this.MAX_WORKERS = this.isBrowser ? navigator.hardwareConcurrency || 4 : 4;
-    
+    this.MAX_WORKERS = this.isBrowser ? Math.min(navigator.hardwareConcurrency || 4, 4) : 4;
+
     if (this.isBrowser) {
-        this.initializeWorkers();
+      this.initializeWorkers();
     }
   }
 
@@ -272,19 +272,19 @@ class WorkerManager {
   private handleWorkerMessage(event: MessageEvent) {
     // The new worker has a different message structure
     const { type, data, error } = event.data;
-    
+
     // Find the task associated with this worker response. This is a simplification.
     // A robust implementation would match response to a specific task ID.
     const task = this.taskQueue.shift(); // Assuming FIFO for simplicity
-    
+
     if (task) {
-        this.activeTasks.delete(task.id);
-        if (type.endsWith('_COMPLETE')) {
-            task.resolve(data);
-        } else if (type === 'ERROR') {
-            task.reject(new Error(error));
-        }
-        this.processQueue();
+      this.activeTasks.delete(task.id);
+      if (type.endsWith('_COMPLETE')) {
+        task.resolve(data);
+      } else if (type === 'ERROR') {
+        task.reject(new Error(error));
+      }
+      this.processQueue();
     }
   }
 
@@ -308,27 +308,27 @@ class WorkerManager {
   private _executeTaskOnWorker(task: WorkerTask) {
     const worker = this.workers[this.activeTasks.size % this.MAX_WORKERS];
     if (worker) {
-        this.activeTasks.set(task.id, task);
-        
-        // The new worker expects a different data structure
-        const geometryData = (task.data as { geometry: { attributes: Record<string, { array: { buffer: ArrayBuffer } }>; index?: { array: { buffer: ArrayBuffer } } | null } }).geometry;
-        const transferableData = Object.values(geometryData.attributes).map(attr => attr.array.buffer);
-        if (geometryData.index) {
-            transferableData.push(geometryData.index.array.buffer);
-        }
+      this.activeTasks.set(task.id, task);
 
-        worker.postMessage({
-            type: task.type,
-            data: task.data
-        }, transferableData);
+      // The new worker expects a different data structure
+      const geometryData = (task.data as { geometry: { attributes: Record<string, { array: { buffer: ArrayBuffer } }>; index?: { array: { buffer: ArrayBuffer } } | null } }).geometry;
+      const transferableData = Object.values(geometryData.attributes).map(attr => attr.array.buffer);
+      if (geometryData.index) {
+        transferableData.push(geometryData.index.array.buffer);
+      }
+
+      worker.postMessage({
+        type: task.type,
+        data: task.data
+      }, transferableData);
     } else {
-        this.taskQueue.unshift(task);
+      this.taskQueue.unshift(task);
     }
   }
 
   public executeTask(type: string, data: unknown): Promise<unknown> {
     if (!this.isBrowser) {
-        return Promise.reject(new Error("Workers are not available in a non-browser environment."));
+      return Promise.reject(new Error("Workers are not available in a non-browser environment."));
     }
     return new Promise((resolve, reject) => {
       const task: WorkerTask = {
@@ -350,7 +350,7 @@ class WorkerManager {
     queued: number;
   } {
     if (!this.isBrowser) {
-        return { total: 0, active: 0, queued: 0 };
+      return { total: 0, active: 0, queued: 0 };
     }
     return {
       total: this.workers.length,
@@ -378,7 +378,7 @@ export const workerManager = WorkerManager.getInstance();
 class ModelGrouper {
   private static instance: ModelGrouper;
   private modelGroups: Map<string, { model: THREE.Group; instances: Map<string, THREE.Group> }> = new Map();
-  private constructor() {}
+  private constructor() { }
   public static getInstance(): ModelGrouper {
     if (!ModelGrouper.instance) ModelGrouper.instance = new ModelGrouper();
     return ModelGrouper.instance;
@@ -388,13 +388,13 @@ class ModelGrouper {
 
     // If the base model isn't loaded and grouped yet, try to get it from the memory manager
     if (!group) {
-        const modelFromCache = memoryManager.getModel(path);
-        if (!modelFromCache) {
-            console.warn(`[ModelGrouper] Base model not found in cache for path: ${path}`);
-            return null;
-        }
-        group = { model: modelFromCache, instances: new Map() };
-        this.modelGroups.set(path, group);
+      const modelFromCache = memoryManager.getModel(path);
+      if (!modelFromCache) {
+        console.warn(`[ModelGrouper] Base model not found in cache for path: ${path}`);
+        return null;
+      }
+      group = { model: modelFromCache, instances: new Map() };
+      this.modelGroups.set(path, group);
     }
 
     // Create a new instance (clone) of the base model
@@ -403,11 +403,11 @@ class ModelGrouper {
 
     return instance;
   }
-  public removeInstance() {}
-  public updateGroupModel() {}
+  public removeInstance() { }
+  public updateGroupModel() { }
 
   public cleanupOldGroups() {
-      // Placeholder for cleaning up old, unused model groups
+    // Placeholder for cleaning up old, unused model groups
   }
 }
 export const modelGrouper = ModelGrouper.getInstance();
@@ -434,7 +434,7 @@ class OcclusionCullingManager {
   private lastCheck = 0;
   private renderer: THREE.WebGLRenderer | null = null;
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): OcclusionCullingManager {
     if (!OcclusionCullingManager.instance) {
@@ -446,7 +446,7 @@ class OcclusionCullingManager {
   initialize(renderer: THREE.WebGLRenderer, camera: THREE.Camera) {
     this.renderer = renderer;
     this.camera = camera;
-    
+
     // Create occlusion map
     this.occlusionMap = new THREE.WebGLRenderTarget(256, 256, {
       minFilter: THREE.NearestFilter,
@@ -564,26 +564,26 @@ export const occlusionCullingManager = OcclusionCullingManager.getInstance();
 // --- LOD MANAGER ---
 
 class LODManager {
-    private static instance: LODManager;
-    private camera: THREE.Camera | null = null;
+  private static instance: LODManager;
+  private camera: THREE.Camera | null = null;
 
-    private constructor() {}
+  private constructor() { }
 
-    static getInstance(): LODManager {
-        if (!LODManager.instance) {
-            LODManager.instance = new LODManager();
-        }
-        return LODManager.instance;
+  static getInstance(): LODManager {
+    if (!LODManager.instance) {
+      LODManager.instance = new LODManager();
     }
+    return LODManager.instance;
+  }
 
-    setCamera(camera: THREE.Camera) {
-        this.camera = camera;
-    }
+  setCamera(camera: THREE.Camera) {
+    this.camera = camera;
+  }
 
-    updateLODDistances(qualityLevel: number) {
-        console.log(`[LODManager] Updating LOD distances with quality level: ${qualityLevel}`);
-        // In a full implementation, this would adjust LOD distances on relevant objects
-    }
+  updateLODDistances(qualityLevel: number) {
+    console.log(`[LODManager] Updating LOD distances with quality level: ${qualityLevel}`);
+    // In a full implementation, this would adjust LOD distances on relevant objects
+  }
 }
 
 export const lodManager = LODManager.getInstance();
@@ -615,7 +615,7 @@ class PerformanceOptimizer {
   private optimizationInterval = 5000; // 5 seconds
   private renderer: THREE.WebGLRenderer | null = null;
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): PerformanceOptimizer {
     if (!PerformanceOptimizer.instance) {
@@ -740,8 +740,8 @@ class PerformanceOptimizer {
   }
 
   update() {
-      // The optimization logic is already running via requestAnimationFrame in startMonitoring.
-      // This update method can be used for any additional per-frame logic if needed in the future.
+    // The optimization logic is already running via requestAnimationFrame in startMonitoring.
+    // This update method can be used for any additional per-frame logic if needed in the future.
   }
 }
 
@@ -758,7 +758,7 @@ class RetryManager {
   private readonly RETRY_DELAY = 1000;
   private _dracoLoader: DRACOLoader | null = null; // Add private dracoLoader
 
-  private constructor() {}
+  private constructor() { }
   public static getInstance(): RetryManager {
     if (!RetryManager.instance) RetryManager.instance = new RetryManager();
     return RetryManager.instance;
@@ -773,15 +773,15 @@ class RetryManager {
     if (cachedModel) return cachedModel;
 
     for (let i = 0; i < this.MAX_RETRIES; i++) {
-        if (abortController.signal.aborted) throw new Error('Load cancelled');
-        try {
-            const model = await this.loadModelInternal(path, compress, priority, abortController.signal);
-            memoryManager.cacheModel(path, model, priority);
-            return model.clone();
-        } catch (error) {
-            if (i === this.MAX_RETRIES - 1) throw error;
-            await new Promise(res => setTimeout(res, this.RETRY_DELAY));
-        }
+      if (abortController.signal.aborted) throw new Error('Load cancelled');
+      try {
+        const model = await this.loadModelInternal(path, compress, priority, abortController.signal);
+        memoryManager.cacheModel(path, model, priority);
+        return model.clone();
+      } catch (error) {
+        if (i === this.MAX_RETRIES - 1) throw error;
+        await new Promise(res => setTimeout(res, this.RETRY_DELAY));
+      }
     }
     throw new Error(`Failed to load model at ${path}`);
   }
@@ -860,7 +860,7 @@ class PriorityManager {
   }
 
   private getNextRequest(): PriorityRequest | null {
-    const priorities = Object.values(LoadPriority).filter(v => typeof v === 'number').sort((a,b) => (a as number) - (b as number)) as LoadPriority[];
+    const priorities = Object.values(LoadPriority).filter(v => typeof v === 'number').sort((a, b) => (a as number) - (b as number)) as LoadPriority[];
     for (const priority of priorities) {
       const queue = this.loadQueues.get(priority);
       if (queue && queue.length > 0) return queue.shift()!;
@@ -869,12 +869,12 @@ class PriorityManager {
   }
 
   public getQueueStatus() {
-      let total = 0;
-      this.loadQueues.forEach(queue => total += queue.length);
-      return {
-          active: this.activeLoads.size,
-          queued: total,
-      };
+    let total = 0;
+    this.loadQueues.forEach(queue => total += queue.length);
+    return {
+      active: this.activeLoads.size,
+      queued: total,
+    };
   }
 }
 export const priorityManager = PriorityManager.getInstance();
@@ -885,15 +885,15 @@ export const priorityManager = PriorityManager.getInstance();
 // --- PUBLIC API ---
 
 export const loadGLTF = (path: string, compress: boolean = true, instanceId?: string, priority: LoadPriority = LoadPriority.MEDIUM): Promise<THREE.Group> => {
-    const promise = priorityManager.addToQueue(path, priority, compress, instanceId);
-    promise.then(model => {
-        // Automatically add loaded models to the occlusion culling system
-        const id = instanceId || path;
-        occlusionCullingManager.addObject(id, model);
-    }).catch(error => {
-        console.error(`Failed to load model for occlusion culling: ${path}`, error);
-    });
-    return promise;
+  const promise = priorityManager.addToQueue(path, priority, compress, instanceId);
+  promise.then(model => {
+    // Automatically add loaded models to the occlusion culling system
+    const id = instanceId || path;
+    occlusionCullingManager.addObject(id, model);
+  }).catch(error => {
+    console.error(`Failed to load model for occlusion culling: ${path}`, error);
+  });
+  return promise;
 };
 
 // --- UNIFIED MODEL LOADER FACADE ---
@@ -903,7 +903,7 @@ class ModelLoader {
   private initialized = false;
   private dracoLoader: DRACOLoader | null = null;
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): ModelLoader {
     if (!ModelLoader.instance) {
@@ -965,11 +965,11 @@ class ModelLoader {
     // We can call it directly. In a larger refactor, this logic would be moved inside this class.
     // For now, we wrap the existing public API.
     const model = await loadGLTF(path, compress, instanceId, priority);
-    
+
     // The createInstance logic from ModelGrouper should be properly integrated here.
     // For now, we return the cloned model directly from the loader.
     const groupInstance = modelGrouper.createInstance(path, instanceId || path);
-    
+
     return groupInstance ? groupInstance : model;
   }
 
@@ -984,7 +984,7 @@ class ModelLoader {
 
   getStatus() {
     if (!this.initialized) {
-        return { error: "ModelLoader not initialized." };
+      return { error: "ModelLoader not initialized." };
     }
     return {
       memory: memoryManager.getMemoryUsage(),
