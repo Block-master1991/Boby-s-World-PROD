@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { WORLD_MIN_BOUND, WORLD_MAX_BOUND } from '../constants';
 import { RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../chunkUtils';
 import { Grass } from '../ez-tree/environment/grass';
 import { Rocks } from '../ez-tree/environment/rocks';
@@ -239,6 +240,8 @@ export class ChunkManager extends THREE.Object3D {
         treesOptions: this.treesGenerator.options,
         flowersOptions: this.flowersGenerator.options,
         chunkKey,
+        worldMin: WORLD_MIN_BOUND,
+        worldMax: WORLD_MAX_BOUND,
       });
     });
   }
