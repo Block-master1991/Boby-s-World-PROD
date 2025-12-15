@@ -25,7 +25,7 @@ import { Volume2, VolumeX } from 'lucide-react';
 import { useAudio } from '@/contexts/AudioContext'; // Import useAudio
 
 const GameContainer: React.FC = () => {
-    const { 
+    const {
         isAuthenticated,
         user: authUser,
         isLoading: isLoadingAuth,
@@ -35,11 +35,11 @@ const GameContainer: React.FC = () => {
         isWalletConnectedAndMatching,
         logoutAndRedirect,
     } = useAuth();
-    
-    const { 
+
+    const {
         disconnectFromSession: disconnectWalletAdapterSession
     } = useSessionWallet();
-    
+
     const router = useRouter();
     const pathname = usePathname();
     const { toast } = useToast();
@@ -47,9 +47,10 @@ const GameContainer: React.FC = () => {
     const octreeRef = useRef<Octree<GameObject> | null>(null);
 
     const [captchaVerified, setCaptchaVerified] = useState(false);
-    const [isRequestingNonce, setIsRequestingNonce] = useState(false); 
+    const [isRequestingNonce, setIsRequestingNonce] = useState(false);
     const [isLoadingGameResources, setIsLoadingGameResources] = useState(false); // Re-introducing for manual control
     const [loadProgress, setLoadProgress] = useState(0); // State for progress
+    const [loadPhase, setLoadPhase] = useState<string>('system'); // State for current loading phase
     const [assetLoadError, setAssetLoadError] = useState<string | null>(null); // State for error
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -99,28 +100,28 @@ const GameContainer: React.FC = () => {
         setIsRequestingNonce(true);
         console.log("[GameContainer] Attempting login via useAuth.login()...");
         try {
-            const loginSuccess = await loginAuthHook(); 
+            const loginSuccess = await loginAuthHook();
             if (loginSuccess) {
                 console.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
                 setHasUserInteracted(true); // User interaction point
                 soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
                 toast({ title: "Login Successful", description: "Welcome to Boby World!", duration: 3000 });
             } else {
-                 console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
-                 toast({ title: "Login Failed", description: "An unexpected issue occurred during login.", variant: "destructive" });
+                console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
+                toast({ title: "Login Failed", description: "An unexpected issue occurred during login.", variant: "destructive" });
             }
         } catch (error: unknown) {
             console.error(`[GameContainer] Login attempt failed: ${(error instanceof Error) ? error.message : 'Unknown error'}`);
-            toast({ 
-                title: "Login Failed", 
-                description: (error instanceof Error) ? error.message : "Could not authenticate with the server. Check console for details.", 
-                variant: "destructive" 
+            toast({
+                title: "Login Failed",
+                description: (error instanceof Error) ? error.message : "Could not authenticate with the server. Check console for details.",
+                variant: "destructive"
             });
         } finally {
-        setIsRequestingNonce(false);
-    }
-}, [loginAuthHook, toast, captchaVerified, isRequestingNonce, setHasUserInteracted, soundManagerRef]);
-    
+            setIsRequestingNonce(false);
+        }
+    }, [loginAuthHook, toast, captchaVerified, isRequestingNonce, setHasUserInteracted, soundManagerRef]);
+
     const handleDisconnect = useCallback(async () => {
         toast({ title: "Disconnecting...", description: "Attempting to end your session." });
         try {
@@ -131,11 +132,11 @@ const GameContainer: React.FC = () => {
             console.log("[GameContainer] Attempting disconnectWalletAdapter (disconnects wallet from site)...");
             await disconnectWalletAdapterSession();
             console.log("[GameContainer] disconnectWalletAdapter completed.");
-            
-            setCaptchaVerified(false); 
+
+            setCaptchaVerified(false);
             // setIsLoadingGameResources(false); // This is now managed by the asset loader hook
-            setIsRedirectingToAdmin(false); 
-            setIsRequestingNonce(false); 
+            setIsRedirectingToAdmin(false);
+            setIsRequestingNonce(false);
             setHasUserInteracted(false); // Reset user interaction state on disconnect
             setShowEnableSoundButton(false); // Reset sound button state
 
@@ -167,10 +168,10 @@ const GameContainer: React.FC = () => {
                     setIsRedirectingToAdmin(true);
                     router.push('/admin');
                 }
-            } else { 
+            } else {
                 console.log("[GameContainer] Authenticated as regular user. State will be managed by selectedGameMode effect.");
             }
-        } else { 
+        } else {
             // if (isLoadingGameResources) setIsLoadingGameResources(false); // Managed by asset loader
             if (isRedirectingToAdmin) setIsRedirectingToAdmin(false);
             setSelectedGameMode('none');
@@ -196,9 +197,12 @@ const GameContainer: React.FC = () => {
         setLoadProgress(0);
     }, []);
 
-    const handleLoadProgress = useCallback((progress: number) => {
+    const handleLoadProgress = useCallback((progress: number, phase?: string) => {
         // console.log(`[GameContainer] Received progress update: ${progress}%`);
         setLoadProgress(progress);
+        if (phase) {
+            setLoadPhase(phase);
+        }
     }, []);
 
     const handleLoadComplete = useCallback((success: boolean) => {
@@ -304,13 +308,13 @@ const GameContainer: React.FC = () => {
             console.log("[GameContainer] Displaying: Boby World GameUI for regular user.");
             mainContent = (
                 <>
-                    <GameUI 
-                        octreeRef={octreeRef} 
+                    <GameUI
+                        octreeRef={octreeRef}
                         onLoadStart={handleLoadStart}
                         onLoadProgress={handleLoadProgress}
                         onLoadComplete={handleLoadComplete}
                     />
-                    <GameLoadingOverlay isLoading={isLoadingGameResources} progress={loadProgress} error={assetLoadError} />
+                    <GameLoadingOverlay isLoading={isLoadingGameResources} progress={loadProgress} error={assetLoadError} phase={loadPhase} showTips={true} />
                 </>
             );
         } else if (selectedGameMode === 'running-game') {
@@ -327,9 +331,9 @@ const GameContainer: React.FC = () => {
         <>
             {/* Mute/Unmute Button */}
             <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
-                <Button 
-                    variant="outline" 
-                    size="icon" 
+                <Button
+                    variant="outline"
+                    size="icon"
                     onClick={toggleMute}
                     aria-label={isMuted ? "Unmute" : "Mute"}
                 >

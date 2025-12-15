@@ -37,8 +37,8 @@ export const useGameAssetLoader = ({
   const [loadProgress, setLoadProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  const totalAssetsToLoad = 5; // Environment + Dog, Coins, Enemies, Trees
-  const progressRef = useRef({ environment: 0, dog: 0, coins: 0, enemies: 0, trees: 0 }); // Add environment and trees
+  const totalAssetsToLoad = 6; // Environment + Dog, Coins, Enemies, Trees, World
+  const progressRef = useRef({ environment: 0, dog: 0, coins: 0, enemies: 0, trees: 0, world: 0 }); // Add world preload
 
   const updateProgress = useCallback(() => {
     const totalProgressPercentage = (progressRef.current.environment + progressRef.current.dog + progressRef.current.coins + progressRef.current.enemies + progressRef.current.trees) / totalAssetsToLoad; // Update calculation
@@ -73,7 +73,7 @@ export const useGameAssetLoader = ({
     setIsLoadingAssets(true);
     setLoadProgress(0);
     setError(null);
-    progressRef.current = { environment: 0, dog: 0, coins: 0, enemies: 0, trees: 0 }; // Reset all progress
+    progressRef.current = { environment: 0, dog: 0, coins: 0, enemies: 0, trees: 0, world: 0 }; // Reset all progress
     console.log("[GameAssetLoader] Starting hybrid asset loading...");
 
     try {

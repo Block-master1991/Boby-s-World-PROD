@@ -420,6 +420,33 @@ export class ChunkManager extends THREE.Object3D {
     // No update needed for flowers as they don't have animation or wind effects
   }
 
+  /**
+   * Generate a single chunk asynchronously for preloading purposes
+   * Used for initial scene setup without affecting the main loading queue
+   */
+  public async generateChunkAsync(chunkX: number, chunkZ: number): Promise<void> {
+    const chunkKey = getChunkKey(chunkX, chunkZ);
+
+    // Skip if already loaded
+    if (this.loadedChunks.has(chunkKey)) {
+      return;
+    }
+
+    try {
+      const chunkContent = await this.loadChunkModern(chunkX, chunkZ);
+
+      // Ensure the chunk is still not loaded before setting it
+      if (!this.loadedChunks.has(chunkKey)) {
+        this.loadedChunks.set(chunkKey, chunkContent);
+        this.addChunkContentToScene(chunkContent);
+        console.log(`[ChunkManager] Preloaded chunk ${chunkKey}`);
+      }
+    } catch (error) {
+      console.error(`[ChunkManager] Failed to preload chunk ${chunkKey}:`, error);
+      // Don't throw - allow game to continue
+    }
+  }
+
   public dispose(): void {
     this.loadedChunks.forEach((chunkContent, chunkKey) => {
       this.unloadChunk(chunkContent);

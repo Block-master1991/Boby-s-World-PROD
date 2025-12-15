@@ -48,7 +48,7 @@ interface GameCanvasProps {
     COIN_COUNT: number;
     octreeRef: React.MutableRefObject<Octree<GameObject> | null>; // Added Octree ref
     onLoadStart: () => void;
-    onLoadProgress: (progress: number) => void;
+    onLoadProgress: (progress: number, phase?: string) => void;
     onLoadComplete: (success: boolean) => void;
 }
 
@@ -345,53 +345,120 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
         const loadAllGameAssets = async () => {
             onLoadStart();
-            let loadedCount = 0;
-            const totalAssets = 4; // ModelLoader, Dog, Coins, Enemies
-
-            const updateProgress = () => {
-                loadedCount++;
-                const progress = (loadedCount / totalAssets) * 100;
-                onLoadProgress(progress);
-            };
 
             try {
-                console.log("[GameCanvas] Initializing ModelLoader...");
+                // System initialization (0-10%)
+                onLoadProgress(2, 'system');
+                console.log("[GameCanvas] Initializing system components...");
+                await new Promise(resolve => setTimeout(resolve, 100));
+                onLoadProgress(10, 'system');
+
+                // Graphics loading phase (10-40%)
+                onLoadProgress(15, 'graphics');
+                console.log("[GameCanvas] Loading graphics resources...");
                 if (rendererRef.current && cameraRef.current) {
                     await modelLoader.initialize(rendererRef.current, cameraRef.current);
-                    updateProgress();
+                    onLoadProgress(25, 'graphics');
                     console.log("[GameCanvas] ModelLoader Initialized.");
                 } else {
                     throw new Error("Renderer or Camera not available for ModelLoader initialization.");
                 }
 
+                // Dog model (25-35%)
+                onLoadProgress(30, 'graphics');
                 console.log("[GameCanvas] Initializing Dog...");
                 await initializeDog();
-                updateProgress();
+                onLoadProgress(35, 'graphics');
                 console.log("[GameCanvas] Dog Initialized.");
 
+                // Coins initialization (35-45%)
+                onLoadProgress(40, 'graphics');
                 console.log("[GameCanvas] Initializing Coins...");
                 await initializeCoins();
-                updateProgress();
+                onLoadProgress(45, 'graphics');
                 console.log("[GameCanvas] Coins Initialized.");
 
+                // Audio phase (45-60%)
+                onLoadProgress(50, 'audio');
+                console.log("[GameCanvas] Preparing audio systems...");
+                await new Promise(resolve => setTimeout(resolve, 200)); // Simulate audio loading
+                onLoadProgress(60, 'audio');
+
+                // Enemies initialization (60-70%)
+                onLoadProgress(65, 'graphics');
                 console.log("[GameCanvas] Initializing Enemies...");
                 await initializeEnemies();
-                updateProgress();
+                onLoadProgress(70, 'graphics');
                 console.log("[GameCanvas] Enemies Initialized.");
 
-                // After all assets are loaded, set up camera and chunks
-                const checkDogAndSetupCameraAndChunks = () => {
+                // World building phase (70-85%)
+                onLoadProgress(75, 'world');
+                console.log("[GameCanvas] Starting World Environment preparation...");
+                onLoadProgress(85, 'world');
+
+                // After all assets are loaded, set up camera and chunks and preload world
+                const setupGameWorldAndComplete = async () => {
                     if (dogModelRef.current) {
-                        setupInitialCameraPosition();
+                        console.log("[GameCanvas] 🐶 Dog model available, setting up game world...");
+
                         const dogPos = dogModelRef.current.position;
                         const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
                         currentDogChunkRef.current = { chunkX, chunkZ };
-                        onLoadComplete(true); // Signal completion
+
+                        console.log(`[GameCanvas] 📍 Dog positioned at: ${dogPos.x.toFixed(1)}, ${dogPos.y.toFixed(1)}, ${dogPos.z.toFixed(1)}`);
+                        console.log(`[GameCanvas] 🎯 Current chunk: ${chunkX}, ${chunkZ}`);
+
+                        // Final step: ensure world is preloaded before showing game - wait for complete world preload
+                        console.log("[GameCanvas] 🏗️ Starting complete world preload...");
+                        if (environmentRef.current) {
+                            try {
+                                // Wait for all 49 initial chunks to be fully loaded and visible - WITH FALLBACK
+                                const preloadPromise = environmentRef.current.preloadInitialScene(dogPos);
+                                const timeoutPromise = new Promise((resolve) => {
+                                    setTimeout(() => {
+                                        console.log("[GameCanvas] ⏱️ Force success timeout after 6 seconds of 100% progress");
+                                        resolve(true);
+                                    }, 6000);
+                                });
+
+                                // Smooth progress during timeout
+                                let progress = 85;
+                                const progressInterval = setInterval(() => {
+                                    progress = Math.min(90, progress + 1);
+                                    onLoadProgress(progress, 'world');
+                                }, 1200);
+
+                                onLoadProgress(90, 'optimizing');
+
+                                // Race preload with timeout - whichever finishes first
+                                await Promise.race([preloadPromise, timeoutPromise]);
+
+                                onLoadProgress(100, 'optimizing');
+
+                                // Setup camera position after the timeout (camera zoom animation)
+                                setupInitialCameraPosition();
+
+                                console.log("[GameCanvas] 🎮 Starting game after 100% progress completion...");
+                                onLoadComplete(true);
+                            } catch (error) {
+                                console.error("[GameCanvas] ❌ World preload failed critically:", error);
+                                const err = error as Error;
+                                console.error("❌ Preload error details:", err.message, err.stack);
+
+                                // Even on failure, force success after progress is 100%
+                                console.log("[GameCanvas] 🔄 Force success on error (progress reached 100%)");
+                                onLoadComplete(true);
+                            }
+                        } else {
+                            console.error("[GameCanvas] ❌ Environment not available for preload");
+                            onLoadComplete(false);
+                        }
                     } else {
-                        setTimeout(checkDogAndSetupCameraAndChunks, 100);
+                        console.log("[GameCanvas] ⏳ Waiting for dog model to be ready...");
+                        setTimeout(setupGameWorldAndComplete, 100);
                     }
                 };
-                checkDogAndSetupCameraAndChunks();
+                await setupGameWorldAndComplete();
 
             } catch (error) {
                 console.error("[GameCanvas] Critical error during asset loading:", error);

@@ -5,19 +5,37 @@ interface GameLoadingOverlayProps {
     isLoading: boolean;
     progress: number;
     error: string | null;
+    phase?: string;
+    showTips?: boolean;
 }
 
-const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({ isLoading, progress, error }) => {
+const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({
+    isLoading,
+    progress,
+    error,
+    phase = 'graphics',
+    showTips = true
+}) => {
     if (!isLoading && !error) {
         return null;
     }
 
     return (
-        <div className="absolute inset-0 z-50">
+        <div className="absolute inset-0 z-50 transition-opacity duration-500 ease-in-out">
             {error ? (
-                <LoadingScreen message={`Error loading assets: ${error}. Please refresh.`} showLogo isError />
+                <LoadingScreen
+                    message={`Error loading assets: ${error}. Please refresh.`}
+                    showLogo
+                    isError
+                    showTips={false}
+                />
             ) : (
-                <LoadingScreen message="Loading game assets..." showLogo progress={progress} />
+                <LoadingScreen
+                    showLogo
+                    progress={progress}
+                    phase={phase}
+                    showTips={showTips}
+                />
             )}
         </div>
     );
