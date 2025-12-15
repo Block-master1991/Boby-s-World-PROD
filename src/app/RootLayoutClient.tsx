@@ -30,16 +30,31 @@ export default function RootLayoutClient({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Register Service Worker for asset caching
+  useEffect(() => {
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js')
+        .then(registration => {
+          console.log('[SW] Registered successfully:', registration.scope);
+        })
+        .catch(error => {
+          console.error('[SW] Registration failed:', error);
+        });
+    } else {
+      console.warn('[SW] Service Workers not supported');
+    }
+  }, []);
+
   return (
-    
-      <WalletContextProvider>
-        <AuthProvider>
-          <AudioProvider>
-            {children}
-            <Toaster />
-            <AudioInitializer />
-          </AudioProvider>
-        </AuthProvider>
-      </WalletContextProvider>
+
+    <WalletContextProvider>
+      <AuthProvider>
+        <AudioProvider>
+          {children}
+          <Toaster />
+          <AudioInitializer />
+        </AudioProvider>
+      </AuthProvider>
+    </WalletContextProvider>
   );
 }

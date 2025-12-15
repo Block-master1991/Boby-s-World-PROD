@@ -21,6 +21,7 @@ import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
 import { getChunkCoordinates } from '@/lib/chunkUtils'; // Import chunk utilities
 import { modelLoader } from '@/utils/modelLoader'; // Import modelLoader
 import { Environment } from '@/lib/ez-tree/environment/environment'; // Import ez-tree Environment
+import { getDevicePerformanceConfig } from '@/lib/utils'; // Import performance config
 // Removed unused import ChunkManager
 // Removed ez-tree specific imports as they are now managed by Environment
 // import { Tree } from '@/lib/ez-tree/tree';
@@ -85,6 +86,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     const clockRef = useRef(new THREE.Clock());
     const keysPressedRef = useRef<{ [key: string]: boolean }>({});
     const dogMeshRef = useRef<THREE.Object3D | null>(null); // Ref for the dog's 3D model
+
+    // FPS limiter for performance optimization
+    const lastFrameTimeRef = useRef<number>(0);
 
     const handleKeyDownCbRef = useRef<((event: KeyboardEvent) => void) | null>(null);
     const handleKeyUpCbRef = useRef<((event: KeyboardEvent) => void) | null>(null);
@@ -225,6 +229,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             animationFrameId.current = null;
             return;
         }
+
+        // FPS limiter for mobile devices
+        const perfConfig = getDevicePerformanceConfig();
+        const currentTime = performance.now();
+        const frameInterval = 1000 / perfConfig.game.fpsLimit;
+        const elapsed = currentTime - lastFrameTimeRef.current;
+
+        if (perfConfig.isMobile && elapsed < frameInterval) {
+            // Skip frame if not enough time has passed
+            animationFrameId.current = requestAnimationFrame(animate);
+            return;
+        }
+        lastFrameTimeRef.current = currentTime;
+
         animationFrameId.current = requestAnimationFrame(animate);
 
         // updateControlsState(); // Removed as OrbitControls are removed

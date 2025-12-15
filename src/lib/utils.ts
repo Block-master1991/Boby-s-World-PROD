@@ -53,3 +53,62 @@ export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit
   // For GET and other methods, just use native fetch
   return fetch(input, init);
 }
+
+// Mobile device detection (for performance optimization)
+export function isMobileDevice(): boolean {
+  if (typeof navigator === 'undefined') return false; // SSR safe
+
+  // Check user agent for common mobile indicators
+  const userAgent = navigator.userAgent.toLowerCase();
+  const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i;
+
+  // Also check for touch capability and screen size as backup
+  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  const smallScreen = Math.min(window.screen.width, window.screen.height) < 768;
+
+  return mobileRegex.test(userAgent) || (hasTouch && smallScreen);
+}
+
+// Get mobile performance level (higher = more capable)
+export function getMobilePerformanceLevel(): 'low' | 'medium' | 'high' {
+  if (typeof navigator === 'undefined') return 'high';
+
+  // Simple heuristic based on device memory and hardware concurrency
+  const deviceMemory = (navigator as any).deviceMemory || 4;
+  const hardwareConcurrency = navigator.hardwareConcurrency || 4;
+
+  const score = deviceMemory * hardwareConcurrency;
+
+  if (score <= 4) return 'low';       // Low-end mobile/phone
+  if (score <= 8) return 'medium';    // Mid-range mobile/tablet
+  return 'high';                      // High-end devices
+}
+
+// Performance optimization config based on device
+export function getDevicePerformanceConfig() {
+  const isMobile = isMobileDevice();
+  const performanceLevel = getMobilePerformanceLevel();
+
+  return {
+    isMobile,
+    performanceLevel,
+    // Environment density multipliers
+    environmentDensity: {
+      grassMultiplier: isMobile ? (performanceLevel === 'low' ? 0.1 : 0.2) : 1.0,
+      treeMultiplier: isMobile ? (performanceLevel === 'low' ? 0.5 : 0.7) : 1.0,
+      rocksMultiplier: isMobile ? (performanceLevel === 'low' ? 0.3 : 0.5) : 1.0,
+      flowersMultiplier: isMobile ? (performanceLevel === 'low' ? 0.2 : 0.4) : 1.0,
+    },
+    // Renderer settings
+    renderer: {
+      antialias: !isMobile || performanceLevel === 'high',
+      shadowMapSize: isMobile ? (performanceLevel === 'low' ? 1024 : 2048) : 4096,
+      pixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0),
+    },
+    // Game settings
+    game: {
+      fpsLimit: isMobile ? 30 : 60,
+      animationUpdates: !isMobile, // Skip animation updates on mobile unless high-end
+    }
+  };
+}

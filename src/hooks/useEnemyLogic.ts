@@ -13,6 +13,7 @@ import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAW
 import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
 import { CoinData } from './useCoinLogic'; // Import CoinData
 import { GameObject, BaseGameObject } from '@/types/game';
+import { getDevicePerformanceConfig } from '@/lib/utils';
 
 // New: Enemy Model Cache
 const EnemyModelCache: { [key: string]: { model: THREE.Group; animations: THREE.AnimationClip[] } } = {};
@@ -558,6 +559,7 @@ export const useEnemyLogic = ({
   const updateEnemies = React.useCallback((delta: number) => {
     if (isPausedRef.current || !dogModelRef.current || !sceneRef.current || !cameraRef.current) return;
 
+    const perfConfig = getDevicePerformanceConfig();
     const dog = dogModelRef.current;
     const dogPosition = dog.position;
     const camera = cameraRef.current;
@@ -679,7 +681,13 @@ export const useEnemyLogic = ({
         //console.warn(`[useEnemyLogic] Skipping update for enemy ${enemy.uuid} because mixer is undefined.`);
         return;
       }
-      enemy.mixer.update(delta);
+
+      // On mobile devices, skip animation updates for performance (except high-end)
+      if (perfConfig.isMobile && perfConfig.performanceLevel !== 'high') {
+        // Still update logic but skip mixer updates
+      } else {
+        enemy.mixer.update(delta);
+      }
       const enemyY = enemy.lod.position.y;
 
       // Strict Visibility Sync: Enemy is visible ONLY if its linked coin is visible

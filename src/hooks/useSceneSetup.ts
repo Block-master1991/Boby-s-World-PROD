@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 import { Octree } from '../lib/Octree';
 import { GameObject } from '@/types/game';
+import { getDevicePerformanceConfig } from '@/lib/utils';
 
 interface UseSceneSetupProps {
   mountRef: MutableRefObject<HTMLDivElement | null>;
@@ -28,20 +29,39 @@ export const useSceneSetup = ({
 
   const initializeScene = React.useCallback(() => {
     if (!mountRef.current || !cameraRef.current) {
-        console.warn("[useSceneSetup] Mount point or camera not ready for scene initialization.");
-        return false;
+      console.warn("[useSceneSetup] Mount point or camera not ready for scene initialization.");
+      return false;
     }
     const currentMount = mountRef.current;
 
+    // Get device performance config
+    const perfConfig = getDevicePerformanceConfig();
+
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.FogExp2(0x87CEEB, 0.000); // Adjusted FogExp2 density for clouds at y=100
+    scene.fog = new THREE.FogExp2(0x87CEEB, perfConfig.isMobile ? 0.0005 : 0.000); // Increased fog on mobile for distant culling
     sceneRef.current = scene;
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
+    // Configure renderer based on device
+    const renderer = new THREE.WebGLRenderer({
+      antialias: perfConfig.renderer.antialias,
+      powerPreference: 'high-performance' // Prefer higher performance GPU
+    });
+
     renderer.setSize(currentMount.clientWidth || window.innerWidth, currentMount.clientHeight || window.innerHeight);
-    renderer.shadowMap.enabled = true;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.setPixelRatio(perfConfig.renderer.pixelRatio);
+
+    renderer.shadowMap.enabled = !perfConfig.isMobile; // Disable shadows on mobile for performance
+    if (!perfConfig.isMobile) {
+      renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    }
+
+    console.log(`[useSceneSetup] Renderer configured for ${perfConfig.isMobile ? 'mobile' : 'desktop'} (${perfConfig.performanceLevel} performance):`, {
+      antialias: perfConfig.renderer.antialias,
+      pixelRatio: perfConfig.renderer.pixelRatio,
+      shadows: renderer.shadowMap.enabled
+    });
+
     currentMount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
@@ -55,15 +75,17 @@ export const useSceneSetup = ({
 
     const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
     directionalLight.position.set(100, 200, 150);
-    directionalLight.castShadow = true;
-    directionalLight.shadow.mapSize.width = 4096;
-    directionalLight.shadow.mapSize.height = 4096;
-    directionalLight.shadow.camera.near = 50;
-    directionalLight.shadow.camera.far = 500;
-    directionalLight.shadow.camera.left = -250;
-    directionalLight.shadow.camera.right = 250;
-    directionalLight.shadow.camera.top = 250;
-    directionalLight.shadow.camera.bottom = -250;
+    directionalLight.castShadow = !perfConfig.isMobile;
+    if (!perfConfig.isMobile) {
+      directionalLight.shadow.mapSize.width = perfConfig.renderer.shadowMapSize;
+      directionalLight.shadow.mapSize.height = perfConfig.renderer.shadowMapSize;
+      directionalLight.shadow.camera.near = 50;
+      directionalLight.shadow.camera.far = perfConfig.isMobile ? 200 : 500; // Reduced shadow distance on mobile
+      directionalLight.shadow.camera.left = perfConfig.isMobile ? -100 : -250;
+      directionalLight.shadow.camera.right = perfConfig.isMobile ? 100 : 250;
+      directionalLight.shadow.camera.top = perfConfig.isMobile ? 100 : 250;
+      directionalLight.shadow.camera.bottom = perfConfig.isMobile ? -100 : -250;
+    }
     scene.add(directionalLight);
 
     const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
@@ -76,7 +98,7 @@ export const useSceneSetup = ({
     // Add ground plane to Octree
     const groundBox = new THREE.Box3().setFromObject(groundPlane);
     octree.insert({ id: 'ground', bounds: groundBox, data: groundPlane as unknown as GameObject });
-    
+
     return true;
   }, [mountRef, sceneRef, cameraRef, rendererRef, octreeRef]); // controlsRef removed from dependencies, octreeRef added
 
@@ -88,31 +110,31 @@ export const useSceneSetup = ({
     }
   }, [cameraRef, rendererRef, mountRef]);
 
-  
+
 
 
   const cleanupScene = React.useCallback(() => {
     if (rendererRef.current && mountRef.current && mountRef.current.contains(rendererRef.current.domElement)) {
-        try { mountRef.current.removeChild(rendererRef.current.domElement); } catch (e) { console.warn("Error removing renderer on cleanup:", e); }
+      try { mountRef.current.removeChild(rendererRef.current.domElement); } catch (e) { console.warn("Error removing renderer on cleanup:", e); }
     }
     if (rendererRef.current) { rendererRef.current.dispose(); rendererRef.current = null; }
     if (sceneRef.current) {
-        sceneRef.current.traverse((object) => {
-            if (object instanceof THREE.Light && object.shadow && object.shadow.map) { object.shadow.map.dispose(); }
-            if ((object as THREE.Mesh).geometry) (object as THREE.Mesh).geometry.dispose();
-            if ((object as THREE.Mesh).material) {
-                const material = (object as THREE.Mesh).material;
-                if (Array.isArray(material)) material.forEach(m => m.dispose());
-                else (material as THREE.Material).dispose();
-            }
-        });
-        sceneRef.current.clear(); sceneRef.current = null;
+      sceneRef.current.traverse((object) => {
+        if (object instanceof THREE.Light && object.shadow && object.shadow.map) { object.shadow.map.dispose(); }
+        if ((object as THREE.Mesh).geometry) (object as THREE.Mesh).geometry.dispose();
+        if ((object as THREE.Mesh).material) {
+          const material = (object as THREE.Mesh).material;
+          if (Array.isArray(material)) material.forEach(m => m.dispose());
+          else (material as THREE.Material).dispose();
+        }
+      });
+      sceneRef.current.clear(); sceneRef.current = null;
     }
     // Clear Octree reference on cleanup
     if (octreeRef.current) {
-        octreeRef.current = null;
+      octreeRef.current = null;
     }
-   
+
     console.log("[useSceneSetup] Cleanup complete.");
   }, [rendererRef, sceneRef, mountRef, octreeRef]); // octreeRef added to dependencies
 

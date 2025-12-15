@@ -1,5 +1,5 @@
 
-import type {NextConfig} from 'next';
+import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -15,9 +15,52 @@ const nextConfig: NextConfig = {
       },
     ],
   },
-  
- // Only add this in development mode if NEXT_PUBLIC_DEV_ORIGIN is set
-    webpack: (config, { isServer }) => {
+  async headers() {
+    return [
+      {
+        // Cache game textures and models for long term
+        source: '/textures/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable', // 1 year cache
+          },
+        ],
+      },
+      {
+        source: '/models/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable', // 1 year cache
+          },
+        ],
+      },
+      {
+        // Cache libs for long term (WebGL, Draco, etc.)
+        source: '/libs/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable', // 1 year cache
+          },
+        ],
+      },
+      {
+        // Cache audio files
+        source: '/audio/:path*',
+        headers: [
+          {
+            key: 'Cache-Control',
+            value: 'public, max-age=31536000, immutable', // 1 year cache
+          },
+        ],
+      },
+    ];
+  },
+
+  // Only add this in development mode if NEXT_PUBLIC_DEV_ORIGIN is set
+  webpack: (config, { isServer }) => {
     // Add a rule to handle JSON files properly
     config.module.rules.push({
       test: /\.json$/,
@@ -26,10 +69,10 @@ const nextConfig: NextConfig = {
     });
 
     const pinoAliases = !isServer ? {
-        'pino': 'pino/browser',
-        'pino-pretty': 'pino-pretty/lib/browser',
-        'sonic-boom': false,
-        'thread-stream': false,
+      'pino': 'pino/browser',
+      'pino-pretty': 'pino-pretty/lib/browser',
+      'sonic-boom': false,
+      'thread-stream': false,
     } : {};
 
     config.resolve.alias = {
