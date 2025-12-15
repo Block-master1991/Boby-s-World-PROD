@@ -32,6 +32,16 @@ export interface CoinData extends THREE.Group, BaseGameObject {
   type: 'item';
   // The 'uuid' property from THREE.Object3D (which THREE.Group extends) is already a string UUID.
   // We can use this directly for unique identification.
+
+  // Custom properties for magnet logic
+  userData: {
+    isAttracted?: boolean;
+    originalRotationSpeed?: number;
+    isAnimatingCollection?: boolean;
+    collectionStartTime?: number;
+    isCredited?: boolean; // Flag to track if the coin has already been credited to balance
+    [key: string]: any;
+  };
 }
 
 interface UseCoinLogicProps {
@@ -304,22 +314,68 @@ export const useCoinLogic = ({
       if (coin.visible) {
         const distanceToDog = dogPosition.distanceTo(coin.position);
 
-        if (distanceToDog < COLLECTION_THRESHOLD) {
-          coin.collected = true;
-          collectedThisFrame = true;
-          // Add floating effect for normal coin collection
-          addFloatingEffect(
-            coin.position.clone(),
-            'coin',
-            coin.value || 0.001, // Use the actual coin value
-            'followTarget', // Make it follow the dog's head
-            true, // Use 3D model for coin
-            undefined, // targetPosition is not needed for 'followTarget'
-            dogModelRef.current // Pass the dog's mesh as targetMesh
-          );
-        } else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS && !coin.userData.isAttracted) {
+        // زيادة مسافة الجمع عند تفعيل المغناطيس لضمان جمع العملة وعدم بقائها عالقة
+        // Increase collection threshold when magnet is active to ensure collection
+        const effectiveThreshold = isCoinMagnetActiveRef.current ? COLLECTION_THRESHOLD * 2.0 : COLLECTION_THRESHOLD;
+
+        if (distanceToDog < effectiveThreshold) {
+          // If magnet is active, play the cool animation
+          // إذا كان المغناطيس مفعل، شغل الأنيميشن الجذاب
+          if (isCoinMagnetActiveRef.current && !coin.userData.isAnimatingCollection) {
+            coin.userData.isAnimatingCollection = true;
+            coin.userData.collectionStartTime = performance.now();
+
+            // IMMEDIATE CREDIT LOGIC (Moved to where Attraction starts for guaranteed pickup)
+            // We give the reward NOW so it feels instant.
+            // نمنح الجائزة فوراً ليشعر اللاعب بالاستجابة
+            // NOTE: Credit is now handled when attraction BEGINS (below).
+            // But if for some reason it wasn't, we do it here as backup.
+            if (!coin.userData.isCredited) {
+              coin.userData.isCredited = true;
+              onCoinCollected();             // Add score/money
+              remainingCoinsRef.current--;   // Update count
+              onRemainingCoinsUpdate(remainingCoinsRef.current);
+            }
+
+            // Trigger effect immediately
+            addFloatingEffect(
+              coin.position.clone(),
+              'coin',
+              coin.value || 0.001,
+              'followTarget',
+              true,
+              undefined,
+              dogModelRef.current
+            );
+          }
+          // If NOT magnet (normal pickup), OR if it's normal logic
+          else if (!isCoinMagnetActiveRef.current) {
+            coin.collected = true;
+            collectedThisFrame = true;
+            // Standard pickup effect
+            addFloatingEffect(
+              coin.position.clone(),
+              'coin',
+              coin.value || 0.001,
+              'followTarget',
+              true,
+              undefined,
+              dogModelRef.current
+            );
+          }
+        } else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS && !coin.userData.isAttracted && !coin.userData.isAnimatingCollection) {
           // If magnet is active, apply attraction directly to the coin model
           coin.userData.isAttracted = true; // Mark coin as being attracted
+
+          // IMMEDIATE CREDIT ON ATTRACTION START
+          // This guarantees "No Coin Left Behind" even if player runs away fast.
+          if (!coin.userData.isCredited) {
+            coin.userData.isCredited = true;
+            onCoinCollected();
+            remainingCoinsRef.current--;
+            onRemainingCoinsUpdate(remainingCoinsRef.current);
+          }
+
           coin.userData.originalRotationSpeed = coin.rotationSpeed || COIN_ROTATION_SPEED;
           coin.rotationSpeed = COIN_ROTATION_SPEED * 3; // Increase rotation speed when attracted
           // Don't mark as collected yet, let the animation complete first
@@ -351,59 +407,43 @@ export const useCoinLogic = ({
         }
 
         // تحديث حركة العملة إذا كانت في حالة جذب
-        if (coin.userData.isAttracted) {
-          // تحديث موضع الهدف دائمًا ليتبع الكلب
-          const targetPosition = dogPosition.clone();
-          targetPosition.y += 1; // ارتفاع مستهدف فوق الكلب
+        // Update magnet attraction / animation
+        if (coin.userData.isAnimatingCollection) {
+          // HANDLE ANIMATION STATE
+          const startTime = coin.userData.collectionStartTime || performance.now();
+          const elapsed = performance.now() - startTime;
+          const duration = 200; // Fast 200ms animation
+          const progress = Math.min(1, elapsed / duration);
 
-          // تحريك العملة نحو الهدف (الكلب) بسرعة متزايدة كلما اقتربت
+          // Shrink
+          const scale = Math.max(0.1, 2.5 * (1 - progress)); // From 2.5 down to 0.1
+          coin.scale.set(scale, scale, scale);
+
+          // Super spin
+          coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), 0.5);
+
+          // Move to head
+          const headPos = dogPosition.clone();
+          headPos.y += 1.0;
+          coin.position.lerp(headPos, 0.3);
+
+          if (progress >= 1) {
+            coin.collected = true;
+            collectedThisFrame = true;
+            // Note: Effect was already triggered at start
+          }
+
+        } else if (coin.userData.isAttracted) {
+          // Standard attraction logic (move towards dog)
+          const targetPosition = dogPosition.clone();
+          targetPosition.y += 0.5;
+
           const distanceToDog = dogPosition.distanceTo(coin.position);
-          const speed = Math.min(0.15, 0.05 + (COIN_MAGNET_RADIUS - distanceToDog) / COIN_MAGNET_RADIUS * 0.1);
+          // SLOWER SPEED: Reduced max speed from 0.25 to 0.12 for smoother feel
+          const speed = Math.min(0.12, 0.02 + (COIN_MAGNET_RADIUS - distanceToDog) / COIN_MAGNET_RADIUS * 0.1);
           coin.position.lerp(targetPosition, speed);
 
-          // تدوير العملة بشكل أسرع وهي تقترب
           coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), coin.rotationSpeed || COIN_ROTATION_SPEED);
-
-          // التعامل مع عملية الاختفاء التدريجي
-          if (coin.userData.isDisappearing) {
-            const elapsed = performance.now() - coin.userData.disappearStartTime;
-            const progress = Math.min(1, elapsed / coin.userData.disappearDuration);
-
-            // تصغير حجم العملة تدريجياً
-            const scale = 1 - progress;
-            coin.scale.set(scale, scale, scale);
-
-            // زيادة سرعة الدوران أثناء الاختفاء
-            coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED * 5 * progress);
-
-            // رفع العملة للأعلى أثناء الاختفاء
-            coin.position.y += 0.02 * progress;
-
-            // عند اكتمال الاختفاء
-            if (progress >= 1) {
-              coin.collected = true;
-              collectedThisFrame = true;
-            }
-          }
-
-          // التحقق من وصول العملة إلى الكلب فقط إذا لم تكن تختفي بالفعل
-          if (distanceToDog < COLLECTION_THRESHOLD) {
-            // بدء عملية الاختفاء التدريجي للعملة
-            coin.userData.isDisappearing = true;
-            coin.userData.disappearStartTime = performance.now();
-            coin.userData.disappearDuration = 300; // مدة الاختفاء بالميلي ثانية
-
-            // Add floating effect for coin collection
-            addFloatingEffect(
-              coin.position.clone(),
-              'coin',
-              coin.value || 0.001, // Use the actual coin value
-              'followTarget', // Make it follow the dog's head
-              true, // Use 3D model for coin
-              undefined, // targetPosition is not needed for 'followTarget'
-              dogModelRef.current // Pass the dog's mesh as targetMesh
-            );
-          }
         }
       }
       if (!collectedThisFrame) {
