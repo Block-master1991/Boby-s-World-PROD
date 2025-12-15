@@ -689,8 +689,9 @@ export const useEnemyLogic = ({
         // Inherit visibility from the guarded coin (handles distance culling and collection status)
         enemy.lod.visible = linkedCoin.visible;
       } else {
-        // If no linked coin found (shouldn't happen, but safety net), hide enemy
-        enemy.lod.visible = false;
+        // If coin is missing (collected), keep enemy visible so it can play death animation
+        // The enemy will be removed later by the death/sinking logic check
+        enemy.lod.visible = true;
       }
 
       enemy.visible = enemy.lod.visible; // Keep the EnemyData.visible property in sync
@@ -743,7 +744,8 @@ export const useEnemyLogic = ({
           if (enemy.actions[deathAnimationName]) {
             playAnimation(enemy, deathAnimationName);
           }
-          onCoinCollected(); // Call the callback when the enemy's coin is collected
+          // Do not call onCoinCollected() here as it is already handled by useCoinLogic when the coin is removed
+          // onCoinCollected(); 
         }
       }
 
