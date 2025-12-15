@@ -4,7 +4,7 @@ import React, { createContext, useContext, useState, useRef, ReactNode } from 'r
 import { SoundManagerRef } from '@/components/game/SoundManager';
 
 interface AudioContextType {
-  soundManagerRef: React.RefObject<SoundManagerRef>;
+  soundManagerRef: React.RefObject<SoundManagerRef | null>;
   currentScreen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin';
   setCurrentScreen: (screen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin') => void;
   isMuted: boolean;

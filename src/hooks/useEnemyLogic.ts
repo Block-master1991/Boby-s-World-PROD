@@ -5,6 +5,7 @@ import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils';
 import { Octree } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
@@ -15,6 +16,7 @@ import { GameObject, BaseGameObject } from '@/types/game';
 
 // New: Enemy Model Cache
 const EnemyModelCache: { [key: string]: { model: THREE.Group; animations: THREE.AnimationClip[] } } = {};
+let areModelsPreloaded = false;
 
 const ENEMY_SPEED = 0.03;
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
@@ -127,8 +129,9 @@ export const useEnemyLogic = ({
   const gltfLoader = React.useRef<GLTFLoader | null>(null);
   const loadedEnemyChunks = React.useRef<Set<string>>(new Set());
   const loadingEnemyChunks = React.useRef<Set<string>>(new Set()); // New loading state
+  const pendingCoinIds = React.useRef<Set<string>>(new Set()); // New: Track coins currently being processed for spawns
+  const reconciliationTimer = React.useRef<number>(0); // New: Timer for periodic reconciliation
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
-  const areModelsPreloaded = React.useRef(false);
 
   // Get disposeModelResources from useDynamicModelLoader
   const { cleanupModelPool } = useDynamicModelLoader({
@@ -212,7 +215,7 @@ export const useEnemyLogic = ({
   }, []);
 
   const preloadEnemyModels = React.useCallback(async () => {
-    if (areModelsPreloaded.current) return;
+    if (areModelsPreloaded) return;
 
     const carnivoreModels = ['Fox.glb', 'Husky.glb', 'ShibaInu.glb', 'Wolf.glb'];
     const herbivoreModels = ['Alpaca.glb', 'Bull.glb', 'Cow.glb', 'Deer.glb', 'Donkey.glb', 'Horse_White.glb', 'Horse.glb', 'Stag.glb'];
@@ -230,6 +233,8 @@ export const useEnemyLogic = ({
           console.log(`[useEnemyLogic] Preloading enemy model from: ${modelPath}`);
           const { model, animations } = await loadEnemyModel(type as 'carnivore' | 'herbivore', name);
           if (model) {
+            // Update matrix world to ensure proper initialization before caching
+            model.updateMatrixWorld(true);
             EnemyModelCache[modelName] = { model, animations };
             console.log(`[useEnemyLogic] Successfully preloaded model: ${modelName}`);
           }
@@ -238,8 +243,15 @@ export const useEnemyLogic = ({
         }
       }
     }
-    areModelsPreloaded.current = true;
+    areModelsPreloaded = true;
+    console.log('[useEnemyLogic] Preload completed! Cache now has', Object.keys(EnemyModelCache).length, 'models');
   }, [loadEnemyModel]);
+
+  // Preload enemy models when component mounts
+  React.useEffect(() => {
+    console.log('[useEnemyLogic] Component mounted, starting preload...');
+    preloadEnemyModels();
+  }, [preloadEnemyModels]);
 
   const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
     const newAction = enemy.actions[newActionName];
@@ -255,6 +267,187 @@ export const useEnemyLogic = ({
     }
   }, []);
 
+  const spawnEnemyForCoin = React.useCallback(async (coin: CoinData, chunkKey: string) => {
+    // Double check: if coin is already collected or guardian already exists/pending, skip
+    if (coin.collected || pendingCoinIds.current.has(coin.uuid)) return;
+
+    // Check if an enemy already exists for this coin
+    const existingEnemy = enemyMeshesRef.current.find(e => e.targetCoinId === coin.uuid);
+    if (existingEnemy) return;
+
+    pendingCoinIds.current.add(coin.uuid);
+
+    // We only spawn 1 enemy per coin as per requirement "with *each* coin an enemy"
+    // (The previous code had a loop for ENEMIES_PER_COIN_CHUNK which was 1 anyway)
+
+    const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
+
+    try {
+      const models = enemyType === 'carnivore'
+        ? ['Fox.glb', 'Husky.glb', 'ShibaInu.glb', 'Wolf.glb']
+        : ['Alpaca.glb', 'Bull.glb', 'Cow.glb', 'Deer.glb', 'Donkey.glb', 'Horse_White.glb', 'Horse.glb', 'Stag.glb'];
+      const randomModel = models[Math.floor(Math.random() * models.length)];
+      const modelName = `enemy_${randomModel}`;
+
+      let loadedModel: THREE.Group | undefined = undefined;
+      let loadedAnimations: THREE.AnimationClip[] | undefined = undefined;
+
+      if (EnemyModelCache[modelName]) {
+        try {
+          loadedModel = SkeletonUtils.clone(EnemyModelCache[modelName].model) as THREE.Group;
+          loadedModel.updateMatrixWorld(true);
+          loadedAnimations = EnemyModelCache[modelName].animations;
+        } catch (error) {
+          const { model, animations } = await loadEnemyModel(enemyType, randomModel);
+          loadedModel = model;
+          loadedAnimations = animations;
+        }
+      } else {
+        const { model, animations } = await loadEnemyModel(enemyType, randomModel);
+        if (model) {
+          // updateMatrixWorld is crucial for SkeletonUtils to work correctly
+          model.updateMatrixWorld(true);
+
+          // Cache the PRISTINE model
+          EnemyModelCache[modelName] = { model: model, animations };
+
+          // Use a proper Skeleton clone for the current instance
+          loadedModel = SkeletonUtils.clone(model) as THREE.Group;
+          loadedAnimations = animations;
+        }
+      }
+
+      if (!loadedModel || !loadedAnimations) {
+        console.error(`[EnemyLogic] ❌ FAILED to spawn enemy for coin ${coin.uuid}`);
+        return;
+      }
+
+      // --- Spawn Logic (Same as before) ---
+      const lod = new THREE.LOD();
+      const enemyInstanceModel = loadedModel;
+
+      enemyInstanceModel.traverse((child: THREE.Object3D) => {
+        if ((child as THREE.Mesh).isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      enemyInstanceModel.scale.set(0.5, 0.5, 0.5);
+      lod.addLevel(enemyInstanceModel, 25);
+
+      const lowDetailModel = new THREE.Mesh(
+        new THREE.BoxGeometry(0.0001, 0.0001, 0.0001),
+        new THREE.MeshBasicMaterial({ color: 0xff0000 })
+      );
+      lowDetailModel.scale.set(0.5, 0.5, 0.5);
+      lod.addLevel(lowDetailModel, 50);
+
+      const mixer = new THREE.AnimationMixer(enemyInstanceModel);
+      const actions: { [key: string]: THREE.AnimationAction } = {};
+
+      // ... Animation setup ...
+      loadedAnimations.forEach((clip: THREE.AnimationClip) => {
+        const action = mixer.clipAction(clip);
+        actions[clip.name] = action;
+        const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
+        if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
+          clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
+          isIdleAnimation) {
+          action.setLoop(THREE.LoopRepeat, Infinity);
+        } else {
+          action.setLoop(THREE.LoopOnce, 1);
+          action.clampWhenFinished = true;
+        }
+      });
+      Object.values(actions).forEach(action => action.stop());
+
+      const enemyData: EnemyData = {
+        uuid: THREE.MathUtils.generateUUID(),
+        lod: lod,
+        targetCoinId: coin.uuid,
+        targetCoinPosition: coin.position.clone(),
+        patrolCenter: coin.position.clone(),
+        patrolTarget: new THREE.Vector3(),
+        isIdling: false,
+        idleTimer: 0,
+        idleDuration: 0,
+        isAttacking: false,
+        isDying: false,
+        deathTimer: 0,
+        hasAppliedDeathEffect: false,
+        isSinking: false,
+        sinkingTimer: 0,
+        initialDeathY: 0,
+        mixer: mixer,
+        animations: loadedAnimations,
+        enemyType: enemyType,
+        currentAction: null,
+        actions: actions,
+        chunkKey: chunkKey,
+        highDetailModel: enemyInstanceModel,
+        position: new THREE.Vector3(),
+        rotation: new THREE.Euler(),
+        scale: new THREE.Vector3(0.5, 0.5, 0.5),
+        type: 'enemy',
+        visible: true, // Visible by default if coin is visible
+        isPooled: false,
+        isModelInstantiated: true,
+        lookAt: (target: THREE.Vector3) => {
+          lod.lookAt(target);
+        },
+      };
+
+      const initialPatrolX = coin.position.x + 6.0;
+      const initialPatrolZ = coin.position.z;
+      enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
+
+      let enemyX = initialPatrolX;
+      let enemyZ = initialPatrolZ;
+
+      const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+      const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+      const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
+      const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
+
+      enemyX = Math.max(minSpawnX, Math.min(maxSpawnX, enemyX));
+      enemyZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, enemyZ));
+
+      let enemyY = 0;
+      if (octreeRef.current) {
+        enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
+      }
+      enemyData.lod.position.set(enemyX, enemyY, enemyZ);
+      enemyData.position.copy(enemyData.lod.position);
+
+      if (octreeRef.current) {
+        const enemyBox = new THREE.Box3().setFromObject(enemyData.lod);
+        octreeRef.current.insert({
+          id: `enemy_${enemyData.uuid}`,
+          bounds: enemyBox,
+          data: enemyData as unknown as GameObject
+        });
+      }
+
+      enemyMeshesRef.current.push(enemyData);
+      if (sceneRef.current) {
+        sceneRef.current.add(enemyData.lod);
+      }
+
+      // Start idle animation
+      const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+      const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+      if (enemyData.actions[initialIdleActionName]) {
+        enemyData.currentAction = enemyData.actions[initialIdleActionName];
+        enemyData.currentAction.play();
+      }
+    } catch (error) {
+      console.error('Error spawning enemy:', error);
+    } finally {
+      pendingCoinIds.current.delete(coin.uuid);
+    }
+  }, [sceneRef, octreeRef, loadEnemyModel]);
+
   const loadEnemiesForChunk = React.useCallback(async (chunkX: number, chunkZ: number) => {
     const chunkKey = getChunkKey(chunkX, chunkZ);
     if (!sceneRef.current || loadedEnemyChunks.current.has(chunkKey) || loadingEnemyChunks.current.has(chunkKey)) {
@@ -264,7 +457,6 @@ export const useEnemyLogic = ({
     loadingEnemyChunks.current.add(chunkKey);
 
     try {
-      const scene = sceneRef.current;
       const chunkMinX = chunkX * CHUNK_SIZE;
       const chunkMinZ = chunkZ * CHUNK_SIZE;
       const chunkMaxX = chunkMinX + CHUNK_SIZE;
@@ -278,151 +470,16 @@ export const useEnemyLogic = ({
 
       console.log(`[EnemyLogic] Loading enemies for chunk ${chunkKey}. Coins found: ${coinsInChunk.length}`);
 
-      for (const coin of coinsInChunk) {
-        for (let i = 0; i < ENEMIES_PER_COIN_CHUNK; i++) {
-          const enemyType: 'carnivore' | 'herbivore' = Math.random() < 0.5 ? 'carnivore' : 'herbivore';
-          try {
-            const { model: loadedModel, animations: loadedAnimations } = await loadEnemyModel(enemyType);
-            if (loadedModel) {
-              // console.log(`[EnemyLogic] Spawning enemy for coin ${coin.uuid}`);
-              const lod = new THREE.LOD();
-              const enemyInstanceModel = loadedModel; // Use the loaded model as the high-detail model
+      // Use spawnEnemyForCoin for each coin
+      await Promise.all(coinsInChunk.map(coin => spawnEnemyForCoin(coin, chunkKey)));
 
-              enemyInstanceModel.traverse((child: THREE.Object3D) => {
-                if ((child as THREE.Mesh).isMesh) {
-                  child.castShadow = true;
-                  child.receiveShadow = true;
-                }
-              });
-
-              enemyInstanceModel.scale.set(0.5, 0.5, 0.5); // Apply initial scale to the high-detail model
-              lod.addLevel(enemyInstanceModel, 25); // Add high-detail model at distance 25
-
-              // Placeholder for a lower detail model (e.g., a simple box or sphere)
-              const lowDetailModel = new THREE.Mesh(
-                new THREE.BoxGeometry(0.0001, 0.0001, 0.0001),
-                new THREE.MeshBasicMaterial({ color: 0xff0000 })
-              );
-              lowDetailModel.scale.set(0.5, 0.5, 0.5); // Match scale
-              lod.addLevel(lowDetailModel, 50); // Add low-detail model at 50 units distance
-
-              const mixer = new THREE.AnimationMixer(enemyInstanceModel); // Mixer is tied to the high-detail model
-
-              const actions: { [key: string]: THREE.AnimationAction } = {};
-              loadedAnimations.forEach((clip: THREE.AnimationClip) => {
-                const action = mixer.clipAction(clip);
-                actions[clip.name] = action;
-
-                const isIdleAnimation = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
-                if (clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
-                  clip.name === ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
-                  isIdleAnimation) {
-                  action.setLoop(THREE.LoopRepeat, Infinity);
-                } else {
-                  action.setLoop(THREE.LoopOnce, 1);
-                  action.clampWhenFinished = true;
-                }
-              });
-              Object.values(actions).forEach(action => action.stop());
-
-              const enemyData: EnemyData = {
-                uuid: THREE.MathUtils.generateUUID(), // Generate a unique ID for the enemy
-                lod: lod,
-                targetCoinId: coin.uuid,
-                targetCoinPosition: coin.position.clone(),
-                patrolCenter: coin.position.clone(),
-                patrolTarget: new THREE.Vector3(),
-                isIdling: false,
-                idleTimer: 0,
-                idleDuration: 0,
-                isAttacking: false,
-                isDying: false,
-                deathTimer: 0,
-                hasAppliedDeathEffect: false,
-                isSinking: false,
-                sinkingTimer: 0,
-                initialDeathY: 0,
-                mixer: mixer,
-                animations: loadedAnimations,
-                enemyType: enemyType,
-                currentAction: null,
-                actions: actions,
-                chunkKey: getChunkKey(chunkX, chunkZ),
-                highDetailModel: enemyInstanceModel,
-                position: new THREE.Vector3(), // Initialize position
-                rotation: new THREE.Euler(), // Initialize rotation
-                scale: new THREE.Vector3(0.5, 0.5, 0.5), // Initialize scale
-                type: 'enemy', // Set type
-                visible: false, // Start invisible to prevent flickering (pop-in). Sync logic will enable it.
-                isPooled: false, // Initialize isPooled
-                isModelInstantiated: true, // Initialize isModelInstantiated
-                lookAt: (target: THREE.Vector3) => {
-                  // Delegate to the LOD object's lookAt method
-                  lod.lookAt(target);
-                },
-              };
-
-              // Force strict proximity (6.0 units offset - doubled from 1.5)
-              const initialPatrolX = coin.position.x + 6.0;
-              const initialPatrolZ = coin.position.z;
-
-              enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
-
-              // Force spawn exactly at the calculated patrol start position
-              let enemyX = initialPatrolX;
-              let enemyZ = initialPatrolZ;
-
-              console.log(`[EnemyLogic] SPAWN: Enemy (${enemyX.toFixed(2)}, ${enemyZ.toFixed(2)}) linked to Coin (${coin.position.x.toFixed(2)}, ${coin.position.z.toFixed(2)})`);
-
-              // Clamp to world bounds just in case, but keep relative position if possible
-              const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-              const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-              const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-              const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-
-              enemyX = Math.max(minSpawnX, Math.min(maxSpawnX, enemyX));
-              enemyZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, enemyZ));
-
-              let enemyY = 0;
-              if (octreeRef.current) {
-                enemyY = octreeRef.current.getGroundHeightAt(enemyX, enemyZ);
-              }
-              enemyData.lod.position.set(enemyX, enemyY, enemyZ); // Use enemyData.lod.position
-              enemyData.position.copy(enemyData.lod.position); // Update the position property of EnemyData
-
-              if (octreeRef.current) {
-                const enemyBox = new THREE.Box3().setFromObject(enemyData.lod); // Use enemyData.lod for bounds
-                octreeRef.current.insert({
-                  id: `enemy_${enemyData.uuid}`, // Use uuid for id
-                  bounds: enemyBox,
-                  data: enemyData as unknown as GameObject
-                });
-              }
-              enemyMeshesRef.current.push(enemyData);
-              scene.add(enemyData.lod); // Add enemyData.lod to the scene
-
-              const idleAnimations = ENEMY_ANIMATION_NAMES[enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-              const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-              if (enemyData.actions[initialIdleActionName]) {
-                enemyData.currentAction = enemyData.actions[initialIdleActionName];
-                enemyData.currentAction.play();
-              }
-            }
-          } catch (error) {
-            console.error('Error loading enemy model:', error);
-            continue;
-          }
-        }
-      }
     } catch (error) {
       console.error(`[EnemyLogic] Critical error loading enemies for chunk ${chunkKey}:`, error);
     } finally {
-      // CRITICAL: Always mark chunk as loaded to prevent infinite retry loops and duplicates
-      // Even if it failed, we don't want to spam spawn requests.
       loadedEnemyChunks.current.add(chunkKey);
       loadingEnemyChunks.current.delete(chunkKey);
     }
-  }, [sceneRef, coinMeshesRef, loadEnemyModel, octreeRef, dogModelRef]);
+  }, [sceneRef, coinMeshesRef, spawnEnemyForCoin]);
 
   const unloadEnemiesFromChunk = React.useCallback((chunkX: number, chunkZ: number) => {
     if (!sceneRef.current || !loadedEnemyChunks.current.has(getChunkKey(chunkX, chunkZ))) {
@@ -463,8 +520,11 @@ export const useEnemyLogic = ({
   const initializeEnemies = React.useCallback(async () => {
     if (!sceneRef.current || !dogModelRef.current) return;
 
-    if (!areModelsPreloaded.current) {
+    // CRITICAL: Always preload models before spawning enemies
+    if (!areModelsPreloaded) {
+      console.log('[initializeEnemies] Waiting for enemy models to preload...');
       await preloadEnemyModels();
+      console.log('[initializeEnemies] Preload complete! Cache now has', Object.keys(EnemyModelCache).length, 'models');
     }
 
     const scene = sceneRef.current;
@@ -549,12 +609,45 @@ export const useEnemyLogic = ({
         }
       }
       chunksToLoad.forEach(chunkKey => {
-        if (!loadedEnemyChunks.current.has(chunkKey) && loadedCoinChunks.current.has(chunkKey)) {
+        if (!loadedEnemyChunks.current.has(chunkKey) &&
+          !loadingEnemyChunks.current.has(chunkKey) &&
+          loadedCoinChunks.current.has(chunkKey)) {
           const [cx, cz] = chunkKey.split(',').map(Number);
           console.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey} (Late Update)`);
           loadEnemiesForChunk(cx, cz);
         }
       });
+    }
+
+    // --- RECONCILIATION ---
+    // Periodically checks if there are any coins that don't have guardians
+    // This is the "healing" mechanism to ensure every coin has an enemy
+    const RECONCILIATION_INTERVAL = 1.0; // Run every 1 second
+    reconciliationTimer.current += delta;
+    if (reconciliationTimer.current > RECONCILIATION_INTERVAL) {
+      reconciliationTimer.current = 0;
+
+      const guardedCoinIds = new Set<string>();
+      enemyMeshesRef.current.forEach(enemy => {
+        if (enemy.targetCoinId) guardedCoinIds.add(enemy.targetCoinId);
+      });
+
+      // Find visible coins that lack a guardian and aren't already pending
+      const coinsNeedingGuardians = coinMeshesRef.current.filter(coin =>
+        !coin.collected &&
+        !guardedCoinIds.has(coin.uuid) &&
+        !pendingCoinIds.current.has(coin.uuid)
+      );
+
+      if (coinsNeedingGuardians.length > 0) {
+        console.log(`[EnemyLogic] Reconciliation: Found ${coinsNeedingGuardians.length} unguarded coins. Spawning enemies...`);
+        coinsNeedingGuardians.forEach(coin => {
+          // Determine chunk key for this coin
+          const { chunkX, chunkZ } = getChunkCoordinates(coin.position.x, coin.position.z);
+          const chunkKey = getChunkKey(chunkX, chunkZ);
+          spawnEnemyForCoin(coin, chunkKey);
+        });
+      }
     }
 
     camera.updateMatrixWorld();
