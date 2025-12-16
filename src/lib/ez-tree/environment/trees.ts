@@ -6,7 +6,7 @@ import { CHUNK_SIZE } from '../../chunkUtils';
 
 export class TreesOptions {
   public treeCountPerChunk: number = 2; // Number of trees per chunk
-  public scale: number = 0.5;
+  public scale: number = 100;
   public patchiness: number = 0.7;
   public windStrength: { x: number; y: number; z: number } = { x: 0.05, y: 0.02, z: 0.05 }; // Much less than grass
   public windFrequency: number = 0.2; // Much slower frequency for trees

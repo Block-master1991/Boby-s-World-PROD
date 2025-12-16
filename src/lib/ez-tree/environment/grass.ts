@@ -10,7 +10,7 @@ let _grassMesh: THREE.Mesh | null = null;
 
 export class GrassOptions {
   public instanceCountPerChunk: number = 2000; // Number of grass instances per chunk
-  public scale: number = 1;
+  public scale: number = 100;
   public patchiness: number = 0.7;
   public size: { x: number; y: number; z: number } = { x: 0.2, y: 0.2, z: 0.2 };
   public sizeVariation: { x: number; y: number; z: number } = { x: 0.05, y: 0.05, z: 0.05 };
@@ -60,9 +60,9 @@ export class Grass extends THREE.Object3D {
 
   public static async fetchAssets(): Promise<void> {
     if (loaded) return;
-  
+
     const gltfLoader = new GLTFLoader();
-  
+
     // Helper function to find the first mesh in a GLTF scene
     const findMesh = (scene: THREE.Group): THREE.Mesh | null => {
       let mesh: THREE.Mesh | null = null;
@@ -73,10 +73,10 @@ export class Grass extends THREE.Object3D {
       });
       return mesh;
     };
-  
+
     const grassGltf = await gltfLoader.loadAsync('/models/grass.glb');
     _grassMesh = findMesh(grassGltf.scene);
-  
+
     loaded = true;
   }
 

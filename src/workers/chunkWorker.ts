@@ -95,10 +95,10 @@ function generateGrassData(chunkX: number, chunkZ: number, options: GrassOptions
             continue;
         }
 
-        // Use multi-octave noise for more natural distribution
-        const n = 0.5 + 0.5 * getMultiOctaveNoise(worldX, worldZ, options.scale, 3, 0.5, 2); // 3 octaves, persistence 0.5, lacunarity 2
+        // Use standard simplex noise to match ground shader
+        const n = 0.5 + 0.5 * getCachedNoise(worldX, worldZ, options.scale);
 
-        if (n < options.patchiness && rng.random(0, 1) > options.patchiness) { // Invert condition for patchiness
+        if (n > options.patchiness - 0.05) { // Skip if noise is growing towards Dirt (Buffer zone for Grass)
             continue;
         }
 
@@ -149,10 +149,10 @@ function generateRockData(chunkX: number, chunkZ: number, options: RocksOptions,
             continue;
         }
 
-        // Use multi-octave noise for rock placement
-        const n = 0.5 + 0.5 * getMultiOctaveNoise(worldX, worldZ, options.scale, 3, 0.5, 2);
+        // Use standard simplex noise to match ground shader
+        const n = 0.5 + 0.5 * getCachedNoise(worldX, worldZ, options.scale);
 
-        if (n < options.patchiness && rng.random(0, 1) > options.patchiness) {
+        if (n < options.patchiness + 0.05) { // Skip if noise is low (Grass + Buffer zone)
             continue;
         }
 
@@ -204,10 +204,10 @@ function generateTreeData(chunkX: number, chunkZ: number, options: TreesOptions,
             continue;
         }
 
-        // Use multi-octave noise for tree placement
-        const n = 0.5 + 0.5 * getMultiOctaveNoise(worldX, worldZ, options.scale, 3, 0.5, 2);
+        // Use standard simplex noise to match ground shader
+        const n = 0.5 + 0.5 * getCachedNoise(worldX, worldZ, options.scale);
 
-        if (n < options.patchiness && rng.random(0, 1) > options.patchiness) {
+        if (n > options.patchiness - 0.05) { // Skip if noise is high (Buffer zone for Trees)
             continue;
         }
 
@@ -257,10 +257,10 @@ function generateFlowerData(chunkX: number, chunkZ: number, options: FlowerOptio
             continue;
         }
 
-        // Use multi-octave noise for rock placement
-        const n = 0.5 + 0.5 * getMultiOctaveNoise(worldX, worldZ, options.scale, 3, 0.5, 2);
+        // Use standard simplex noise to match ground shader
+        const n = 0.5 + 0.5 * getCachedNoise(worldX, worldZ, options.scale);
 
-        if (n < options.patchiness && rng.random(0, 1) > options.patchiness) {
+        if (n > options.patchiness - 0.05) { // Skip if noise is high (Buffer zone for Flowers)
             continue;
         }
 

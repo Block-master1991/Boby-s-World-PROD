@@ -13,7 +13,7 @@ export class RockOptions {
   public rockCountPerChunk: number = 5; // Number of rocks per chunk
   public size: { x: number; y: number; z: number } = { x: 0.2, y: 0.2, z: 0.2 };
   public sizeVariation: { x: number; y: number; z: number } = { x: 0.3, y: 0.3, z: 0.3 };
-  public scale: number = 1;
+  public scale: number = 100;
   public patchiness: number = 0.7;
 }
 
@@ -92,7 +92,7 @@ export class Rocks extends THREE.Group {
         p.z / this.options.scale
       ));
 
-      if (n > this.options.patchiness && Math.random() + 0.7 > this.options.patchiness) { continue; }
+      if (n < this.options.patchiness && Math.random() + 0.7 > this.options.patchiness) { continue; }
 
       const rockMesh = rockMeshes[Math.floor(Math.random() * rockMeshes.length)];
       const rock = rockMesh.clone();

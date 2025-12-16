@@ -65,7 +65,8 @@ export class Ground extends THREE.Mesh {
         shader.vertexShader = shader.vertexShader.replace(
           '#include <worldpos_vertex>',
           `#include <worldpos_vertex>
-            vWorldPosition = worldPosition.xyz;
+            vec4 groundWorldPosition = modelMatrix * vec4( transformed, 1.0 );
+            vWorldPosition = groundWorldPosition.xyz;
             `
         );
 
@@ -113,6 +114,7 @@ export class Ground extends THREE.Mesh {
             return 130.0 * dot(m, g);
           }
           
+          
           void main() {`,
         );
 
@@ -120,11 +122,11 @@ export class Ground extends THREE.Mesh {
           '#include <map_fragment>',
           `
           vec2 uv = vec2(vWorldPosition.x, vWorldPosition.z);
-          vec3 grassColor = texture2D(uGrassTexture, uv / 15.0).rgb;
-          vec3 dirtColor = texture2D(uDirtTexture, uv / 15.0).rgb;
+          vec3 grassColor = texture2D(uGrassTexture, uv / 10.0).rgb;
+          vec3 dirtColor = texture2D(uDirtTexture, uv / 10.0).rgb;
 
           float n = 0.5 + 0.5 * simplex2d(uv / uNoiseScale);
-          float s = smoothstep(uPatchiness - 0.1 , uPatchiness + 0.1, n);
+          float s = smoothstep(uPatchiness - 0.05 , uPatchiness + 0.05, n);
 
           vec4 sampledDiffuseColor = vec4(mix(grassColor, dirtColor, s), 1.0);
           diffuseColor *= sampledDiffuseColor;
@@ -135,7 +137,7 @@ export class Ground extends THREE.Mesh {
           '#include <normal_fragment_maps>',
           `
           vec2 normalUv = vec2(vWorldPosition.x, vWorldPosition.z); // Use different variable name for normal map
-          vec3 mapN = texture2D( normalMap, normalUv / 15.0 ).xyz * 2.0 - 1.0;
+          vec3 mapN = texture2D( normalMap, normalUv / 30.0 ).xyz * 2.0 - 1.0;
           mapN.xy *= normalScale;
 
           normal = normalize( tbn * mapN );
