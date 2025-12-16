@@ -16,6 +16,10 @@ interface ChunkContent {
   objects: THREE.Object3D[]; // Array to hold all Three.js objects in this chunk for easy removal
   isLoaded: boolean; // Track if chunk content is fully loaded and added to scene
   isDisposed: boolean; // Track if chunk resources are disposed
+  gameplayData?: {
+    coinSpawns: { position: number[] }[];
+    enemySpawns: { position: number[]; coinIndex: number }[];
+  };
 }
 
 // واجهة لبيانات القطعة التي يتم إنشاؤها بواسطة العامل
@@ -43,6 +47,10 @@ interface ChunkData {
     scales: number[];
     quaternions: number[];
     colors: number[];
+  };
+  gameplayData: {
+    coinSpawns: { position: number[] }[];
+    enemySpawns: { position: number[]; coinIndex: number }[];
   };
 }
 
@@ -72,12 +80,12 @@ export class ChunkManager extends THREE.Object3D {
 
     this.worker = new Worker(new URL('../../workers/chunkWorker.ts', import.meta.url));
     this.worker.onmessage = (e) => {
-      const { chunkKey, grassData, rocksData, treesData, flowersData } = e.data;
+      const { chunkKey, grassData, rocksData, treesData, flowersData, gameplayData } = e.data;
       const chunk = this.loadedChunks.get(chunkKey);
 
       // Populate the chunk with the received data
       if (chunk) {
-        this.populateChunk(chunk, grassData, rocksData, treesData, flowersData);
+        this.populateChunk(chunk, grassData, rocksData, treesData, flowersData, gameplayData);
         // Add chunk content to scene after populating
         this.addChunkContentToScene(chunk);
         console.log(`[ChunkManager] Populated chunk ${chunkKey} with ${grassData.positions.length / 3} grass, ${rocksData.positions.length / 3} rocks, ${treesData.positions.length / 3} trees, ${flowersData.positions.length / 3} flowers`);
@@ -205,6 +213,7 @@ export class ChunkManager extends THREE.Object3D {
       objects: [],
       isLoaded: false,
       isDisposed: false,
+      gameplayData: { coinSpawns: [], enemySpawns: [] }
     };
 
     if (!this.grassGenerator || !this.rocksGenerator || !this.treesGenerator || !this.flowersGenerator) {
@@ -216,7 +225,7 @@ export class ChunkManager extends THREE.Object3D {
       // Store the resolve function to be called when worker responds
       const originalHandler = this.worker.onmessage;
       this.worker.onmessage = (e) => {
-        const { chunkKey: responseChunkKey, grassData, rocksData, treesData, flowersData } = e.data;
+        const { chunkKey: responseChunkKey, grassData, rocksData, treesData, flowersData, gameplayData } = e.data;
 
         // Only process if this is the response we're waiting for
         if (responseChunkKey === chunkKey) {
@@ -224,7 +233,7 @@ export class ChunkManager extends THREE.Object3D {
           this.worker.onmessage = originalHandler;
 
           // Populate the chunk with the received data
-          this.populateChunk(chunkContent, grassData, rocksData, treesData, flowersData);
+          this.populateChunk(chunkContent, grassData, rocksData, treesData, flowersData, gameplayData);
 
           // Mark as loaded and resolve
           chunkContent.isLoaded = true;
@@ -266,6 +275,9 @@ export class ChunkManager extends THREE.Object3D {
     scales: number[];
     quaternions: number[];
     colors: number[];
+  }, gameplayData: {
+    coinSpawns: { position: number[] }[];
+    enemySpawns: { position: number[]; coinIndex: number }[];
   }): void {
     if (!this.grassGenerator || !this.rocksGenerator || !this.treesGenerator || !this.flowersGenerator) {
       console.error('Generators not initialized');
@@ -342,6 +354,17 @@ export class ChunkManager extends THREE.Object3D {
     }
 
     chunk.isLoaded = true;
+    if (gameplayData) {
+      chunk.gameplayData = gameplayData;
+    }
+  }
+
+  public getGameplaySpawns(chunkKey: string): { coinSpawns: { position: number[] }[]; enemySpawns: { position: number[]; coinIndex: number }[] } | null {
+    const chunk = this.loadedChunks.get(chunkKey);
+    if (chunk && chunk.gameplayData) {
+      return chunk.gameplayData;
+    }
+    return null;
   }
 
   private addChunkContentToScene(chunk: ChunkContent): void {

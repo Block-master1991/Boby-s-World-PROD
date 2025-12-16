@@ -14,6 +14,10 @@ export interface ChunkData {
     rocksData: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] };
     treesData: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] };
     flowersData: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] };
+    gameplayData: {
+        coinSpawns: { position: number[] }[];
+        enemySpawns: { position: number[]; coinIndex: number }[];
+    };
 }
 
 export interface ChunkWorkerMessage {
@@ -370,6 +374,94 @@ function generateFlowerData(chunkX: number, chunkZ: number, options: FlowerOptio
 }
 
 
+function generateGameplayData(chunkX: number, chunkZ: number, worldMin: number, worldMax: number, grid: OccupancyGrid): { coinSpawns: { position: number[] }[]; enemySpawns: { position: number[]; coinIndex: number }[] } {
+    const coinSpawns: { position: number[] }[] = [];
+    const enemySpawns: { position: number[]; coinIndex: number }[] = [];
+
+    const chunkWorldStartX = chunkX * CHUNK_SIZE;
+    const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
+
+    // Use a seed based on chunk coordinates for consistent generation
+    const seed = chunkX * 40000 + chunkZ;
+    const rng = new RNG(seed);
+
+    // --- COINS GENERATION ---
+    // Replicating the logic from useCoinLogic.ts to maintain the exact same difficulty/count
+    // Logic: (Math.random() < 0.625) ? 1 : 0
+    const numCoinsToGenerate = (rng.random(0, 1) < 0.625) ? 1 : 0;
+
+    for (let i = 0; i < numCoinsToGenerate; i++) {
+        let coinX, coinZ;
+        let attempts = 0;
+        const MAX_ATTEMPTS = 50;
+        let validSpotFound = false;
+
+        // Try to find a spot that is NOT occupied by Trees or Rocks
+        while (attempts < MAX_ATTEMPTS) {
+            const localX = rng.random(0, CHUNK_SIZE);
+            const localZ = rng.random(0, CHUNK_SIZE);
+            const worldX = chunkWorldStartX + localX;
+            const worldZ = chunkWorldStartZ + localZ;
+
+            // Bounds check (Padding for enemy protection radius)
+            // We use a safe padding (e.g. 5 units) so enemies have space to patrol
+            const PADDING = 8; // ENEMY_PROTECTION_RADIUS
+            if (worldX < worldMin + PADDING || worldX > worldMax - PADDING ||
+                worldZ < worldMin + PADDING || worldZ > worldMax - PADDING) {
+                attempts++;
+                continue;
+            }
+
+            // CHECK OCCUPANCY GRID
+            // Coins are small (0.4), but let's give them 0.5 clearance
+            if (!grid.isOccupied(localX, localZ, 0.5)) {
+                coinX = worldX;
+                coinZ = worldZ;
+                validSpotFound = true;
+
+                // Mark grid for the coin
+                grid.markOccupied(localX, localZ, 0.5);
+                break;
+            }
+            attempts++;
+        }
+
+        if (validSpotFound && coinX !== undefined && coinZ !== undefined) {
+            coinSpawns.push({ position: [coinX, 0, coinZ] }); // Y will be determined by Octree on main thread
+
+            // --- ENEMY GENERATION (Linked to Coin) ---
+            // Try to spawn 1 enemy for this coin
+            let enemyAttempts = 0;
+            const ENEMY_MAX_ATTEMPTS = 20;
+            const PROTECTION_RADIUS = 8; // Max patrol radius
+
+            while (enemyAttempts < ENEMY_MAX_ATTEMPTS) {
+                const angle = rng.random(0, Math.PI * 2);
+                const radius = rng.random(2, PROTECTION_RADIUS); // Between 2 and 8 meters from coin
+                const eWorldX = coinX + Math.cos(angle) * radius;
+                const eWorldZ = coinZ + Math.sin(angle) * radius;
+
+                const eLocalX = eWorldX - chunkWorldStartX;
+                const eLocalZ = eWorldZ - chunkWorldStartZ;
+
+                // Check bounds and Grid
+                // Enemies are about size 1.0, give them 1.0 clearance
+                if (eLocalX >= 0 && eLocalX < CHUNK_SIZE && eLocalZ >= 0 && eLocalZ < CHUNK_SIZE) {
+                    if (!grid.isOccupied(eLocalX, eLocalZ, 1.0)) {
+                        enemySpawns.push({ position: [eWorldX, 0, eWorldZ], coinIndex: coinSpawns.length - 1 });
+                        grid.markOccupied(eLocalX, eLocalZ, 1.0);
+                        break;
+                    }
+                }
+                enemyAttempts++;
+            }
+        }
+    }
+
+    return { coinSpawns, enemySpawns };
+}
+
+
 // Performance monitoring
 const performanceMetrics = {
     totalChunksGenerated: 0,
@@ -411,6 +503,11 @@ self.onmessage = (e) => {
     // Generate in priority order: Trees -> Rocks -> Flowers -> Grass
     const treesData = generateTreeData(chunkX, chunkZ, treesOptions, worldMin, worldMax, grid);
     const rocksData = generateRockData(chunkX, chunkZ, rocksOptions, worldMin, worldMax, grid);
+
+    // Gameplay: Coins and Enemies (Prioritized over Flowers/Grass to ensure they spawn validly)
+    // Note: We insert them into the grid so flowers/grass don't grow on coins/enemies
+    const gameplayData = generateGameplayData(chunkX, chunkZ, worldMin, worldMax, grid);
+
     const flowersData = generateFlowerData(chunkX, chunkZ, flowersOptions, worldMin, worldMax, grid);
     const grassData = generateGrassData(chunkX, chunkZ, grassOptions, worldMin, worldMax, grid);
 
@@ -419,6 +516,7 @@ self.onmessage = (e) => {
         rocksData,
         treesData,
         flowersData,
+        gameplayData,
     };
 
     // Store in cache

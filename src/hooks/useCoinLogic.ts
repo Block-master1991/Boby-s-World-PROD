@@ -139,35 +139,29 @@ export const useCoinLogic = ({
 
       const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0); // Get dog's initial position
 
-      const numCoinsToGenerate = (Math.random() < 0.625) ? 1 : 0; // Distribute approximately 1000 coins across 1600 chunks (0.625 coins/chunk average)
-      for (let i = 0; i < numCoinsToGenerate; i++) {
+      // Get spawn points from ChunkManager (Worker-calculated)
+      const chunkManager = scene.getObjectByName('ChunkManager') as any;
+      if (!chunkManager) return;
+
+      const gameplayData = chunkManager.getGameplaySpawns(chunkKey);
+      if (!gameplayData) {
+        // Terrain not ready yet, retry next frame
+        return;
+      }
+
+      const coinSpawns = gameplayData.coinSpawns;
+
+      for (const spawn of coinSpawns) {
         const coinMesh = coinModelRef.current.clone() as CoinData; // Clone the coin model
         coinMesh.collected = false;
         coinMesh.value = COIN_VALUE;
         coinMesh.rotationSpeed = COIN_ROTATION_SPEED;
-        let coinX, coinZ;
-        let attempts = 0;
-        const MAX_ATTEMPTS = 100; // Prevent infinite loops
 
-        do {
-          coinX = chunkMinX + Math.random() * CHUNK_SIZE;
-          coinZ = chunkMinZ + Math.random() * CHUNK_SIZE;
+        const coinX = spawn.position[0];
+        const coinZ = spawn.position[2];
 
-          // Clamp coin positions to world boundaries, accounting for enemy patrol radius
-          const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-          const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-          const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
-          const maxSpawnZ = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
-
-          coinX = Math.max(minSpawnX, Math.min(maxSpawnX, coinX));
-          coinZ = Math.max(minSpawnZ, Math.min(maxSpawnZ, coinZ));
-
-          attempts++;
-          if (attempts > MAX_ATTEMPTS) {
-            console.warn("Max attempts reached for coin spawning, placing coin without protection.");
-            break;
-          }
-        } while (dogPosition.distanceTo(new THREE.Vector3(coinX, dogPosition.y, coinZ)) < DOG_SPAWN_PROTECTION_RADIUS);
+        // Ensure we respect the calculated position
+        // ... coordinates are already valid from worker ...
 
         let coinY = COIN_RADIUS;
         if (octreeRef.current) {

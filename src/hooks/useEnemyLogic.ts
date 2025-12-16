@@ -363,6 +363,39 @@ export const useEnemyLogic = ({
       });
       Object.values(actions).forEach(action => action.stop());
 
+      // CALCULATE SPAWN POSITION FROM WORKER DATA
+      let enemyX = coin.position.x + 6.0; // Default fallback
+      let enemyZ = coin.position.z;
+
+      const chunkManager = sceneRef.current?.getObjectByName('ChunkManager') as any;
+      if (chunkManager) {
+        const gameplayData = chunkManager.getGameplaySpawns(chunkKey);
+        if (gameplayData) {
+          // Find which coin index this is
+          // We compare positions with a small epsilon
+          let coinIndex = -1;
+          for (let i = 0; i < gameplayData.coinSpawns.length; i++) {
+            const sp = gameplayData.coinSpawns[i].position;
+            const dx = Math.abs(sp[0] - coin.position.x);
+            const dz = Math.abs(sp[2] - coin.position.z);
+            if (dx < 0.1 && dz < 0.1) {
+              coinIndex = i;
+              break;
+            }
+          }
+
+          if (coinIndex !== -1) {
+            // Find enemy spawn for this coin index
+            const enemySpawn = gameplayData.enemySpawns.find((e: any) => e.coinIndex === coinIndex);
+            if (enemySpawn) {
+              enemyX = enemySpawn.position[0];
+              enemyZ = enemySpawn.position[2];
+              console.log(`[EnemyLogic] Using worker spawn for enemy at ${enemyX.toFixed(2)}, ${enemyZ.toFixed(2)}`);
+            }
+          }
+        }
+      }
+
       const enemyData: EnemyData = {
         uuid: THREE.MathUtils.generateUUID(),
         lod: lod,
@@ -399,13 +432,10 @@ export const useEnemyLogic = ({
         },
       };
 
-      const initialPatrolX = coin.position.x + 6.0;
-      const initialPatrolZ = coin.position.z;
-      enemyData.patrolTarget.set(initialPatrolX, coin.position.y, initialPatrolZ);
+      // Set initial patrol target to current spawn
+      enemyData.patrolTarget.set(enemyX, coin.position.y, enemyZ);
 
-      let enemyX = initialPatrolX;
-      let enemyZ = initialPatrolZ;
-
+      // Clamp (Double check bounds, though worker does this)
       const minSpawnX = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
       const maxSpawnX = WORLD_MAX_BOUND - ENEMY_PROTECTION_RADIUS_VAL;
       const minSpawnZ = WORLD_MIN_BOUND + ENEMY_PROTECTION_RADIUS_VAL;
