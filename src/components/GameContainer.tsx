@@ -287,10 +287,10 @@ const GameContainer: React.FC = () => {
     let mainContent;
     if (isCheckingSession) {
         console.log("[GameContainer] Displaying: Checking session...");
-        mainContent = <LoadingScreen message="" showLogo />;
+        mainContent = <LoadingScreen message="" showLogo variant='indeterminate' />;
     } else if (!siteKey) {
         console.log("[GameContainer] Displaying: Preparing verification (no CAPTCHA site key).");
-        mainContent = <LoadingScreen message="Preparing verification..." showLogo />;
+        mainContent = <LoadingScreen message="Preparing verification..." showLogo variant='indeterminate' />;
     } else if (!captchaVerified) {
         console.log("[GameContainer] Displaying: Awaiting captcha verification.");
         mainContent = <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
@@ -300,10 +300,10 @@ const GameContainer: React.FC = () => {
     } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
         if (!isRedirectingToAdmin) {
             console.log("[GameContainer] Admin user authenticated, initiating redirect.");
-            mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo />;
+            mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo variant='indeterminate' />;
         } else {
             console.log("[GameContainer] Displaying: Redirecting to admin panel...");
-            mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo />;
+            mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo variant='indeterminate' />;
         }
     } else if (selectedGameMode === 'none') {
         console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");

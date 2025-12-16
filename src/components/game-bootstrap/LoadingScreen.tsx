@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { PawPrint, AlertTriangle, Sparkles, Mountain, Volume2, Zap } from 'lucide-react';
+import { PawPrint, AlertTriangle, Sparkles, Mountain, Volume2, Zap, Loader2 } from 'lucide-react';
 import Image from 'next/image';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent } from '@/components/ui/card';
@@ -30,6 +30,7 @@ interface LoadingScreenProps {
   currentAsset?: string;
   loadedAssets?: number;
   totalAssets?: number;
+  variant?: 'default' | 'indeterminate';
 }
 
 export type { LoadingScreenProps };
@@ -134,7 +135,8 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
   showTips = true,
   currentAsset,
   loadedAssets,
-  totalAssets
+  totalAssets,
+  variant = 'default'
 }) => {
   const [currentTip, setCurrentTip] = useState<LoadingTip | null>(null);
   const [displayProgress, setDisplayProgress] = useState(0);
@@ -403,40 +405,47 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
           {!isError && (
             <Card className="mb-6 bg-card/50 backdrop-blur-sm border-primary/20">
               <CardContent className="p-4">
-                <div className="space-y-2">
-                  <div className="flex justify-between items-center text-xs text-muted-foreground">
-                    <span>Overall Progress</span>
-                    <span>{Math.round(displayProgress)}%</span>
-                  </div>
-                  <Progress
-                    value={displayProgress}
-                    className="w-full h-2"
-                  />
-                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                    <div className={`w-2 h-2 rounded-full ${displayProgress < 25 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
-                    <span>
-                      {displayProgress < 25 ? 'Initializing...' :
-                        displayProgress < 50 ? 'Loading assets...' :
-                          displayProgress < 75 ? 'Preparing world...' :
-                            'Almost ready!'}
-                    </span>
-                  </div>
-
-                  {/* Time estimation */}
-                  {estimatedTimeLeft !== null && estimatedTimeLeft > 0 && !isError && (
-                    <div className="flex items-center justify-center gap-2 text-xs text-primary/80 mt-1">
-                      <span>⏱️</span>
+                {variant === 'default' ? (
+                  <div className="space-y-2">
+                    <div className="flex justify-between items-center text-xs text-muted-foreground">
+                      <span>Overall Progress</span>
+                      <span>{Math.round(displayProgress)}%</span>
+                    </div>
+                    <Progress
+                      value={displayProgress}
+                      className="w-full h-2"
+                    />
+                    <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                      <div className={`w-2 h-2 rounded-full ${displayProgress < 25 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
                       <span>
-                        {estimatedTimeLeft < 1
-                          ? 'Less than a second'
-                          : estimatedTimeLeft === 1
-                            ? '1 second left'
-                            : `${estimatedTimeLeft} seconds left`
-                        }
+                        {displayProgress < 25 ? 'Initializing...' :
+                          displayProgress < 50 ? 'Loading assets...' :
+                            displayProgress < 75 ? 'Preparing world...' :
+                              'Almost ready!'}
                       </span>
                     </div>
-                  )}
-                </div>
+
+                    {/* Time estimation */}
+                    {estimatedTimeLeft !== null && estimatedTimeLeft > 0 && !isError && (
+                      <div className="flex items-center justify-center gap-2 text-xs text-primary/80 mt-1">
+                        <span>⏱️</span>
+                        <span>
+                          {estimatedTimeLeft < 1
+                            ? 'Less than a second'
+                            : estimatedTimeLeft === 1
+                              ? '1 second left'
+                              : `${estimatedTimeLeft} seconds left`
+                          }
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center justify-center py-4 space-y-3">
+                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
+                    <p className="text-xs text-muted-foreground animate-pulse">Please wait...</p>
+                  </div>
+                )}
               </CardContent>
             </Card>
           )}
