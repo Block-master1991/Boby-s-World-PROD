@@ -272,24 +272,25 @@ export const useCoinLogic = ({
 
     const { chunkX: currentX, chunkZ: currentZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
 
+    // This logic now only handles unloading chunks that are out of range
     if (!currentDogChunk.current || currentX !== currentDogChunk.current.chunkX || currentZ !== currentDogChunk.current.chunkZ) {
       currentDogChunk.current = { chunkX: currentX, chunkZ: currentZ };
 
-      const chunksToLoad = new Set<string>();
+      const chunksToKeepLoaded = new Set<string>();
       for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
         for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
-          chunksToLoad.add(getChunkKey(currentX + x, currentZ + z));
+          chunksToKeepLoaded.add(getChunkKey(currentX + x, currentZ + z));
         }
       }
 
-      loadedCoinChunks.current.forEach(chunkKey => {
-        if (!chunksToLoad.has(chunkKey)) {
+      loadedCoinChunks.current.forEach((chunkKey: string) => {
+        if (!chunksToKeepLoaded.has(chunkKey)) {
           const [cx, cz] = chunkKey.split(',').map(Number);
           unloadCoinsFromChunk(cx, cz);
         }
       });
 
-      chunksToLoad.forEach(chunkKey => {
+      chunksToKeepLoaded.forEach((chunkKey: string) => {
         if (!loadedCoinChunks.current.has(chunkKey)) {
           const [cx, cz] = chunkKey.split(',').map(Number);
           loadCoinsForChunk(cx, cz);

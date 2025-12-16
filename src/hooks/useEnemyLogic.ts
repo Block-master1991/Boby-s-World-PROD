@@ -1002,6 +1002,46 @@ export const useEnemyLogic = ({
     protectionBottleCountRef
   ]);
 
+  // Event-Driven Spawn: Listen for terrain ready signals
+  React.useEffect(() => {
+    const chunkManager = sceneRef.current?.getObjectByName('ChunkManager');
+    if (!chunkManager) return;
+
+    const onChunkLoaded = (event: any) => {
+      if (event.checkChunkKey) {
+        const parts = event.checkChunkKey.split(',');
+        const x = parseInt(parts[0]);
+        const z = parseInt(parts[1]);
+        loadEnemiesForChunk(x, z);
+      }
+    };
+
+    chunkManager.addEventListener('chunk-loaded', onChunkLoaded);
+
+    // CATCH-UP: Check manually for keys that might have loaded before we listened
+    // Use currentDogChunk logic if available, or assume 0,0 for start
+    // Note: useEnemyLogic doesn't seem to expose 'currentDogChunk' ref directly in this scope?
+    // It uses 'dogModelRef' to get position.
+    // We can calc startX/Z from dogModelRef if valid, else 0.
+    let startX = 0;
+    let startZ = 0;
+    if (dogModelRef.current) {
+      const coords = getChunkCoordinates(dogModelRef.current.position.x, dogModelRef.current.position.z);
+      startX = coords.chunkX;
+      startZ = coords.chunkZ;
+    }
+
+    for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
+      for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+        loadEnemiesForChunk(startX + x, startZ + z);
+      }
+    }
+
+    return () => {
+      chunkManager.removeEventListener('chunk-loaded', onChunkLoaded);
+    };
+  }, [sceneRef, loadEnemiesForChunk, dogModelRef]);
+
   const resetEnemies = React.useCallback(() => {
     initializeEnemies();
   }, [initializeEnemies]);

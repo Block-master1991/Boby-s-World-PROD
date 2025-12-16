@@ -68,6 +68,8 @@ export class ChunkManager extends THREE.Object3D {
   private unloadingQueue: string[] = [];
   private isProcessingQueue: boolean = false;
   private _generatorsReady: boolean = false; // New flag to indicate if generators are ready
+  // Map to store pending promise resolvers for chunk generation
+  private pendingResolves = new Map<string, (data: any) => void>();
 
   constructor(grassGenerator: Grass, rocksGenerator: Rocks, treesGenerator: Trees, flowersGenerator: Flowers) {
     super();
@@ -81,14 +83,21 @@ export class ChunkManager extends THREE.Object3D {
     this.worker = new Worker(new URL('../../workers/chunkWorker.ts', import.meta.url));
     this.worker.onmessage = (e) => {
       const { chunkKey, grassData, rocksData, treesData, flowersData, gameplayData } = e.data;
-      const chunk = this.loadedChunks.get(chunkKey);
 
-      // Populate the chunk with the received data
-      if (chunk) {
-        this.populateChunk(chunk, grassData, rocksData, treesData, flowersData, gameplayData);
-        // Add chunk content to scene after populating
-        this.addChunkContentToScene(chunk);
-        console.log(`[ChunkManager] Populated chunk ${chunkKey} with ${grassData.positions.length / 3} grass, ${rocksData.positions.length / 3} rocks, ${treesData.positions.length / 3} trees, ${flowersData.positions.length / 3} flowers`);
+      // Check if there is a pending resolver for this chunk
+      if (this.pendingResolves.has(chunkKey)) {
+        const resolve = this.pendingResolves.get(chunkKey);
+        this.pendingResolves.delete(chunkKey);
+        if (resolve) resolve(e.data);
+      } else {
+        // Fallback: Check if chunk exists in loadedChunks and populate it
+        // This handles cases where data arrives without a specific pending promise (rare in new flow)
+        const chunk = this.loadedChunks.get(chunkKey);
+        if (chunk) {
+          this.populateChunk(chunk, grassData, rocksData, treesData, flowersData, gameplayData);
+          this.addChunkContentToScene(chunk);
+          console.log(`[ChunkManager] Populated chunk ${chunkKey} (Fallback)`);
+        }
       }
     };
   }
@@ -204,6 +213,12 @@ export class ChunkManager extends THREE.Object3D {
 
   private async loadChunkModern(chunkX: number, chunkZ: number): Promise<ChunkContent> {
     const chunkKey = getChunkKey(chunkX, chunkZ);
+
+    // Check if valid generators
+    if (!this.grassGenerator || !this.rocksGenerator || !this.treesGenerator || !this.flowersGenerator) {
+      throw new Error('Generators not initialized for modern API');
+    }
+
     const chunkContent: ChunkContent = {
       id: chunkKey,
       grassMesh: null,
@@ -216,30 +231,19 @@ export class ChunkManager extends THREE.Object3D {
       gameplayData: { coinSpawns: [], enemySpawns: [] }
     };
 
-    if (!this.grassGenerator || !this.rocksGenerator || !this.treesGenerator || !this.flowersGenerator) {
-      throw new Error('Generators not initialized for modern API');
-    }
-
     // Create a promise to wait for worker response
     return new Promise((resolve) => {
-      // Store the resolve function to be called when worker responds
-      const originalHandler = this.worker.onmessage;
-      this.worker.onmessage = (e) => {
-        const { chunkKey: responseChunkKey, grassData, rocksData, treesData, flowersData, gameplayData } = e.data;
+      // Register the resolver
+      // We overwrite any existing resolver for this key (last writer wins)
+      this.pendingResolves.set(chunkKey, (data: any) => {
+        const { grassData, rocksData, treesData, flowersData, gameplayData } = data;
 
-        // Only process if this is the response we're waiting for
-        if (responseChunkKey === chunkKey) {
-          // Restore original handler
-          this.worker.onmessage = originalHandler;
+        this.populateChunk(chunkContent, grassData, rocksData, treesData, flowersData, gameplayData);
 
-          // Populate the chunk with the received data
-          this.populateChunk(chunkContent, grassData, rocksData, treesData, flowersData, gameplayData);
-
-          // Mark as loaded and resolve
-          chunkContent.isLoaded = true;
-          resolve(chunkContent);
-        }
-      };
+        chunkContent.isLoaded = true;
+        this.dispatchEvent({ type: 'chunk-loaded', checkChunkKey: chunkKey, chunk: chunkContent } as any);
+        resolve(chunkContent);
+      });
 
       this.worker.postMessage({
         chunkX,
