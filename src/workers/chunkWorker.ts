@@ -28,6 +28,62 @@ export interface ChunkWorkerMessage {
     worldMax: number;
 }
 
+class OccupancyGrid {
+    private grid: boolean[][];
+    private size: number;
+    private resolution: number; // cells per unit
+
+    constructor(size: number, resolution: number = 2) {
+        this.size = size;
+        this.resolution = resolution;
+        const gridSize = Math.ceil(size * resolution);
+        this.grid = new Array(gridSize).fill(false).map(() => new Array(gridSize).fill(false));
+    }
+
+    private getKey(localX: number, localZ: number): { x: number, z: number } | null {
+        if (localX < 0 || localX >= this.size || localZ < 0 || localZ >= this.size) return null;
+        return {
+            x: Math.floor(localX * this.resolution),
+            z: Math.floor(localZ * this.resolution)
+        };
+    }
+
+    isOccupied(localX: number, localZ: number, radius: number): boolean {
+        const center = this.getKey(localX, localZ);
+        if (!center) return true; // Treat out of bounds as occupied to be safe
+
+        const radiusCells = Math.ceil(radius * this.resolution);
+        const startX = Math.max(0, center.x - radiusCells);
+        const endX = Math.min(this.grid.length - 1, center.x + radiusCells);
+        const startZ = Math.max(0, center.z - radiusCells);
+        const endZ = Math.min(this.grid.length - 1, center.z + radiusCells);
+
+        for (let x = startX; x <= endX; x++) {
+            for (let z = startZ; z <= endZ; z++) {
+                if (this.grid[x][z]) return true;
+            }
+        }
+        return false;
+    }
+
+    markOccupied(localX: number, localZ: number, radius: number): void {
+        const center = this.getKey(localX, localZ);
+        if (!center) return;
+
+        const radiusCells = Math.ceil(radius * this.resolution);
+        const startX = Math.max(0, center.x - radiusCells);
+        const endX = Math.min(this.grid.length - 1, center.x + radiusCells);
+        const startZ = Math.max(0, center.z - radiusCells);
+        const endZ = Math.min(this.grid.length - 1, center.z + radiusCells);
+
+        for (let x = startX; x <= endX; x++) {
+            for (let z = startZ; z <= endZ; z++) {
+                this.grid[x][z] = true;
+            }
+        }
+    }
+}
+
 const generatedChunkData = new Map<string, ChunkData>();
 
 // Cache for noise calculations to improve performance
@@ -70,7 +126,7 @@ function getMultiOctaveNoise(x: number, z: number, baseScale: number, octaves: n
     return total / maxValue; // Normalize
 }
 
-function generateGrassData(chunkX: number, chunkZ: number, options: GrassOptions, worldMin: number, worldMax: number) {
+function generateGrassData(chunkX: number, chunkZ: number, options: GrassOptions, worldMin: number, worldMax: number, grid: OccupancyGrid) {
     const positions = [];
     const scales = [];
     const quaternions = [];
@@ -102,6 +158,11 @@ function generateGrassData(chunkX: number, chunkZ: number, options: GrassOptions
             continue;
         }
 
+        // Check for overlap
+        if (grid.isOccupied(localX, localZ, 0.2)) {
+            continue;
+        }
+
         // Add jittering
         const jitterX = rng.random(-0.5, 0.5);
         const jitterZ = rng.random(-0.5, 0.5);
@@ -124,7 +185,7 @@ function generateGrassData(chunkX: number, chunkZ: number, options: GrassOptions
 }
 
 
-function generateRockData(chunkX: number, chunkZ: number, options: RocksOptions, worldMin: number, worldMax: number): { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] } {
+function generateRockData(chunkX: number, chunkZ: number, options: RocksOptions, worldMin: number, worldMax: number, grid: OccupancyGrid): { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] } {
     const positions = [];
     const scales = [];
     const quaternions = [];
@@ -156,6 +217,13 @@ function generateRockData(chunkX: number, chunkZ: number, options: RocksOptions,
             continue;
         }
 
+        // Check for overlap (allow some overlap for rocks with other rocks, but generally check)
+        // Rocks reserve space
+        if (grid.isOccupied(localX, localZ, 1.0)) {
+            continue;
+        }
+        grid.markOccupied(localX, localZ, 1.0);
+
         // Add jittering
         const jitterX = rng.random(-1, 1);
         const jitterZ = rng.random(-1, 1);
@@ -179,7 +247,7 @@ function generateRockData(chunkX: number, chunkZ: number, options: RocksOptions,
     return { positions, scales, quaternions, colors };
 }
 
-function generateTreeData(chunkX: number, chunkZ: number, options: TreesOptions, worldMin: number, worldMax: number): { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] } {
+function generateTreeData(chunkX: number, chunkZ: number, options: TreesOptions, worldMin: number, worldMax: number, grid: OccupancyGrid): { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] } {
     const positions = [];
     const scales = [];
     const quaternions = [];
@@ -211,6 +279,12 @@ function generateTreeData(chunkX: number, chunkZ: number, options: TreesOptions,
             continue;
         }
 
+        // Trees reserve a large space
+        if (grid.isOccupied(localX, localZ, 1.5)) {
+            continue;
+        }
+        grid.markOccupied(localX, localZ, 1.5);
+
         // Add jittering
         const jitterX = rng.random(-2, 2);
         const jitterZ = rng.random(-2, 2);
@@ -231,7 +305,7 @@ function generateTreeData(chunkX: number, chunkZ: number, options: TreesOptions,
     return { positions, scales, quaternions, colors };
 }
 
-function generateFlowerData(chunkX: number, chunkZ: number, options: FlowerOptions, worldMin: number, worldMax: number): { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] } {
+function generateFlowerData(chunkX: number, chunkZ: number, options: FlowerOptions, worldMin: number, worldMax: number, grid: OccupancyGrid): { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] } {
 
     const positions = [];
     const scales = [];
@@ -263,6 +337,13 @@ function generateFlowerData(chunkX: number, chunkZ: number, options: FlowerOptio
         if (n > options.patchiness - 0.05) { // Skip if noise is high (Buffer zone for Flowers)
             continue;
         }
+
+        // Check occupancy
+        if (grid.isOccupied(localX, localZ, 0.3)) {
+            continue;
+        }
+        // Flowers occupy space for other flowers/grass
+        grid.markOccupied(localX, localZ, 0.3);
 
         // Add jittering
         const jitterX = rng.random(-1, 1);
@@ -324,11 +405,14 @@ self.onmessage = (e) => {
         return;
     }
 
-    // Generate chunk data
-    const grassData = generateGrassData(chunkX, chunkZ, grassOptions, worldMin, worldMax);
-    const rocksData = generateRockData(chunkX, chunkZ, rocksOptions, worldMin, worldMax);
-    const treesData = generateTreeData(chunkX, chunkZ, treesOptions, worldMin, worldMax);
-    const flowersData = generateFlowerData(chunkX, chunkZ, flowersOptions, worldMin, worldMax);
+    // Initialize Occupancy Grid
+    const grid = new OccupancyGrid(CHUNK_SIZE, 2); // 2 cells per unit = 0.5m resolution
+
+    // Generate in priority order: Trees -> Rocks -> Flowers -> Grass
+    const treesData = generateTreeData(chunkX, chunkZ, treesOptions, worldMin, worldMax, grid);
+    const rocksData = generateRockData(chunkX, chunkZ, rocksOptions, worldMin, worldMax, grid);
+    const flowersData = generateFlowerData(chunkX, chunkZ, flowersOptions, worldMin, worldMax, grid);
+    const grassData = generateGrassData(chunkX, chunkZ, grassOptions, worldMin, worldMax, grid);
 
     const chunkData = {
         grassData,
