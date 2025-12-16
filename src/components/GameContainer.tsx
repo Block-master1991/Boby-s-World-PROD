@@ -51,6 +51,9 @@ const GameContainer: React.FC = () => {
     const [isLoadingGameResources, setIsLoadingGameResources] = useState(false); // Re-introducing for manual control
     const [loadProgress, setLoadProgress] = useState(0); // State for progress
     const [loadPhase, setLoadPhase] = useState<string>('system'); // State for current loading phase
+    const [currentAsset, setCurrentAsset] = useState<string | undefined>(); // State for current loading asset
+    const [loadedAssetsCount, setLoadedAssetsCount] = useState<number | undefined>(); // State for loaded assets count
+    const [totalAssetsCount, setTotalAssetsCount] = useState<number | undefined>(); // State for total assets count
     const [assetLoadError, setAssetLoadError] = useState<string | null>(null); // State for error
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
     const [isCheckingSession, setIsCheckingSession] = useState(true);
@@ -197,12 +200,15 @@ const GameContainer: React.FC = () => {
         setLoadProgress(0);
     }, []);
 
-    const handleLoadProgress = useCallback((progress: number, phase?: string) => {
+    const handleLoadProgress = useCallback((progress: number, phase?: string, currentAsset?: string, loadedAssets?: number, totalAssets?: number) => {
         // console.log(`[GameContainer] Received progress update: ${progress}%`);
         setLoadProgress(progress);
         if (phase) {
             setLoadPhase(phase);
         }
+        setCurrentAsset(currentAsset);
+        setLoadedAssetsCount(loadedAssets);
+        setTotalAssetsCount(totalAssets);
     }, []);
 
     const handleLoadComplete = useCallback((success: boolean) => {
@@ -314,7 +320,16 @@ const GameContainer: React.FC = () => {
                         onLoadProgress={handleLoadProgress}
                         onLoadComplete={handleLoadComplete}
                     />
-                    <GameLoadingOverlay isLoading={isLoadingGameResources} progress={loadProgress} error={assetLoadError} phase={loadPhase} showTips={true} />
+                    <GameLoadingOverlay
+                        isLoading={isLoadingGameResources}
+                        progress={loadProgress}
+                        error={assetLoadError}
+                        phase={loadPhase}
+                        showTips={true}
+                        currentAsset={currentAsset}
+                        loadedAssets={loadedAssetsCount}
+                        totalAssets={totalAssetsCount}
+                    />
                 </>
             );
         } else if (selectedGameMode === 'running-game') {

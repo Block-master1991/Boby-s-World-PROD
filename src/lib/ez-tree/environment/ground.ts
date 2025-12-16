@@ -120,8 +120,8 @@ export class Ground extends THREE.Mesh {
           '#include <map_fragment>',
           `
           vec2 uv = vec2(vWorldPosition.x, vWorldPosition.z);
-          vec3 grassColor = texture2D(uGrassTexture, uv / 1.0).rgb;
-          vec3 dirtColor = texture2D(uDirtTexture, uv / 1.0).rgb;
+          vec3 grassColor = texture2D(uGrassTexture, uv / 15.0).rgb;
+          vec3 dirtColor = texture2D(uDirtTexture, uv / 15.0).rgb;
 
           float n = 0.5 + 0.5 * simplex2d(uv / uNoiseScale);
           float s = smoothstep(uPatchiness - 0.1 , uPatchiness + 0.1, n);
@@ -135,7 +135,7 @@ export class Ground extends THREE.Mesh {
           '#include <normal_fragment_maps>',
           `
           vec2 normalUv = vec2(vWorldPosition.x, vWorldPosition.z); // Use different variable name for normal map
-          vec3 mapN = texture2D( normalMap, normalUv / 1.0 ).xyz * 2.0 - 1.0;
+          vec3 mapN = texture2D( normalMap, normalUv / 15.0 ).xyz * 2.0 - 1.0;
           mapN.xy *= normalScale;
 
           normal = normalize( tbn * mapN );

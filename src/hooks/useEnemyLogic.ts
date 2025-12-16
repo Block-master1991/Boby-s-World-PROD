@@ -19,7 +19,7 @@ import { getDevicePerformanceConfig } from '@/lib/utils';
 const EnemyModelCache: { [key: string]: { model: THREE.Group; animations: THREE.AnimationClip[] } } = {};
 let areModelsPreloaded = false;
 
-const ENEMY_SPEED = 0.03;
+const ENEMY_SPEED = 1.5; // Units per second (was 0.03 per frame)
 const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
 const ENEMY_ATTACK_DISTANCE = 1.5;
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5;
@@ -814,7 +814,7 @@ export const useEnemyLogic = ({
         if (isMoving && direction.lengthSq() > movementThreshold) {
           direction.normalize();
           const currentSpeed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
-          enemy.lod.position.addScaledVector(direction, currentSpeed); // Use enemy.lod.position
+          enemy.lod.position.addScaledVector(direction, currentSpeed * delta); // Use enemy.lod.position
           enemy.position.copy(enemy.lod.position); // Keep EnemyData.position in sync
           const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
           enemy.lod.lookAt(lookAtTarget); // Use enemy.lod.lookAt

@@ -9,11 +9,13 @@ import { Octree } from '../lib/Octree'; // Import Octree
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 import { GameObject } from '@/types/game';
 
-const NORMAL_DOG_SPEED = 0.1; // Normal walking speed
-const SPRINT_DOG_SPEED = 0.3; // Sprinting speed
-const BOOSTED_DOG_SPEED = 0.4; // Speed when boosted
-const KEYBOARD_ROTATION_SPEED = 0.0175; // Rotation speed for keyboard input
-const JOYSTICK_ROTATION_SPEED = 0.013; // Rotation speed for joystick input
+const NORMAL_DOG_SPEED = 6.0; // Normal walking speed (units per second)
+const SPRINT_DOG_SPEED = 18.0; // Sprinting speed (units per second)
+const BOOSTED_DOG_SPEED = 24.0; // Speed when boosted (units per second)
+const KEYBOARD_ROTATION_SPEED = 1.05; // Rotation speed for keyboard input (radians per second)
+const SPRINT_KEYBOARD_ROTATION_SPEED = 0.6; // Slower rotation for keyboard during sprint
+const JOYSTICK_ROTATION_SPEED = 0.78; // Rotation speed for joystick input (radians per second)
+const SPRINT_JOYSTICK_ROTATION_SPEED = 0.5; // Slower rotation for joystick during sprint
 const JOYSTICK_ROTATION_THRESHOLD = 0.2; // Threshold for joystick rotation
 const DOG_MODEL_SCALE = 1.5; // Adjusted for better visibility
 const SHIELD_EMISSIVE_COLOR = 0x0077ff;
@@ -186,7 +188,7 @@ export const useDogLogic = ({
         currentActionRef.current = null;
         lastDogTransformRef.current = null;
     }, [sceneRef]);
-    
+
 
     const updateDog = useCallback((delta: number) => { // Accept delta as argument
         if (!dogModelRef.current || !animationMixerRef.current) {
@@ -194,7 +196,7 @@ export const useDogLogic = ({
             isRunningRef.current = false;
             return { isDogActuallyMoving: false, rotationAppliedThisFrame: false };
         }
-        
+
         const dog = dogModelRef.current;
         let isDogActuallyMoving = false;
         let rotationAppliedThisFrame = false;
@@ -216,36 +218,40 @@ export const useDogLogic = ({
             if (isSprinting) { currentDogSpeed = SPRINT_DOG_SPEED; }
             if (isSpeedBoostActiveRef.current) { currentDogSpeed = BOOSTED_DOG_SPEED; }
 
+            // Use slower rotation speeds during sprinting for better control
+            const currentKeyboardRotationSpeed = isSprinting ? SPRINT_KEYBOARD_ROTATION_SPEED : KEYBOARD_ROTATION_SPEED;
+            const currentJoystickRotationSpeed = isSprinting ? SPRINT_JOYSTICK_ROTATION_SPEED : JOYSTICK_ROTATION_SPEED;
+
             const forward = new THREE.Vector3();
             let movementAppliedThisFrame = false;
 
             if (joystickIsActive) {
                 if (Math.abs(jX) > JOYSTICK_ROTATION_THRESHOLD) {
-                    if (jX > 0) dog.rotation.y -= JOYSTICK_ROTATION_SPEED * (Math.abs(jX) * 2);
-                    else dog.rotation.y += JOYSTICK_ROTATION_SPEED * (Math.abs(jX) * 2);
+                    if (jX > 0) dog.rotation.y -= currentJoystickRotationSpeed * (Math.abs(jX) * 2) * delta;
+                    else dog.rotation.y += currentJoystickRotationSpeed * (Math.abs(jX) * 2) * delta;
                     rotationAppliedThisFrame = true;
                 }
                 dog.getWorldDirection(forward);
-                const appliedMovementSpeed = currentDogSpeed * Math.abs(jY);
+                const appliedMovementSpeed = currentDogSpeed * Math.abs(jY) * delta;
                 if (jY < 0) { dog.position.addScaledVector(forward, appliedMovementSpeed); movementAppliedThisFrame = appliedMovementSpeed > 0.001; }
                 else if (jY > 0) { dog.position.addScaledVector(forward, -appliedMovementSpeed); movementAppliedThisFrame = appliedMovementSpeed > 0.001; }
             } else {
                 if (keysPressedRef.current['KeyA'] || keysPressedRef.current['ArrowLeft']) {
-                    dog.rotation.y += KEYBOARD_ROTATION_SPEED;
+                    dog.rotation.y += currentKeyboardRotationSpeed * delta;
                     rotationAppliedThisFrame = true;
                 }
                 if (keysPressedRef.current['KeyD'] || keysPressedRef.current['ArrowRight']) {
-                    dog.rotation.y -= KEYBOARD_ROTATION_SPEED;
+                    dog.rotation.y -= currentKeyboardRotationSpeed * delta;
                     rotationAppliedThisFrame = true;
                 }
 
                 dog.getWorldDirection(forward);
                 if (keysPressedRef.current['KeyW'] || keysPressedRef.current['ArrowUp']) {
-                    dog.position.addScaledVector(forward, currentDogSpeed);
+                    dog.position.addScaledVector(forward, currentDogSpeed * delta);
                     movementAppliedThisFrame = true;
                 }
                 if (keysPressedRef.current['KeyS'] || keysPressedRef.current['ArrowDown']) {
-                    dog.position.addScaledVector(forward, -currentDogSpeed);
+                    dog.position.addScaledVector(forward, -currentDogSpeed * delta);
                     movementAppliedThisFrame = true;
                 }
             }
@@ -264,7 +270,7 @@ export const useDogLogic = ({
                 } else if (rotationAppliedThisFrame) {
                     newActionName = ANIMATION_NAMES.WALK;
                 }
-                
+
                 const newAction = animationActionsRef.current[newActionName];
                 const oldAction = currentActionRef.current;
 
@@ -327,7 +333,7 @@ export const useDogLogic = ({
 
         return { isDogActuallyMoving, rotationAppliedThisFrame };
 
-    }, [ keysPressedRef, joystickInputRef, isPausedRef, isSpeedBoostActiveRef, isJoystickInteractionActiveRef, octreeRef]);
+    }, [keysPressedRef, joystickInputRef, isPausedRef, isSpeedBoostActiveRef, isJoystickInteractionActiveRef, octreeRef]);
 
     useEffect(() => {
         const dog = dogModelRef.current;

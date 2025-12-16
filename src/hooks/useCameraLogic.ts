@@ -24,8 +24,8 @@ export const useCameraLogic = ({
 
   const initializeCamera = React.useCallback(() => {
     if (!mountRef.current) {
-        console.warn("[useCameraLogic] Mount point not ready for camera initialization.");
-        return;
+      console.warn("[useCameraLogic] Mount point not ready for camera initialization.");
+      return;
     }
 
     const camera = new THREE.PerspectiveCamera(
@@ -42,18 +42,18 @@ export const useCameraLogic = ({
 
   const setupInitialCameraPosition = React.useCallback(() => {
     if (cameraRef.current && dogModelRef.current) {
-        const dog = dogModelRef.current;
-        const worldOffset = CAMERA_FOLLOW_OFFSET.clone().applyQuaternion(dog.quaternion);
-        const targetCameraPosition = dog.position.clone().add(worldOffset);
-        
-        // Smoothly interpolate to the final position from the current (midpoint) position
-        cameraRef.current.position.lerp(targetCameraPosition, CAMERA_INITIAL_LERP_FACTOR);
-        cameraRef.current.lookAt(dog.position);
+      const dog = dogModelRef.current;
+      const worldOffset = CAMERA_FOLLOW_OFFSET.clone().applyQuaternion(dog.quaternion);
+      const targetCameraPosition = dog.position.clone().add(worldOffset);
+
+      // Smoothly interpolate to the final position from the current (midpoint) position
+      cameraRef.current.position.lerp(targetCameraPosition, CAMERA_INITIAL_LERP_FACTOR);
+      cameraRef.current.lookAt(dog.position);
     }
   }, [cameraRef, dogModelRef]);
 
 
-  const updateCamera = React.useCallback(() => {
+  const updateCamera = React.useCallback((delta?: number) => {
     if (!cameraRef.current || !dogModelRef.current) return;
 
     const dog = dogModelRef.current;
@@ -61,21 +61,24 @@ export const useCameraLogic = ({
 
     const worldOffset = CAMERA_FOLLOW_OFFSET.clone().applyQuaternion(dog.quaternion);
     const cameraTargetPosition = dog.position.clone().add(worldOffset);
-    
+
+    // Use delta-based lerp factor for smooth movement, higher delta = more lerp to catch up
+    const lerpFactor = delta ? CAMERA_LERP_FACTOR * delta * 60 : CAMERA_LERP_FACTOR;
+
     if (camera.position.distanceToSquared(cameraTargetPosition) > POSITION_THRESHOLD_SQUARED) {
-        camera.position.lerp(cameraTargetPosition, CAMERA_LERP_FACTOR);
+      camera.position.lerp(cameraTargetPosition, lerpFactor);
     } else {
-        camera.position.copy(cameraTargetPosition);
+      camera.position.copy(cameraTargetPosition);
     }
-    
-camera.lookAt(dog.position.clone().add(new THREE.Vector3(0, 1.75, 0)));
+
+    camera.lookAt(dog.position.clone().add(new THREE.Vector3(0, 1.75, 0)));
 
   }, [cameraRef, dogModelRef]);
 
   const resetCamera = React.useCallback(() => {
     if (cameraRef.current) {
-        cameraRef.current.position.set(0, 2.5, -5);
-        cameraRef.current.lookAt(0, 0, 0);
+      cameraRef.current.position.set(0, 2.5, -5);
+      cameraRef.current.lookAt(0, 0, 0);
     }
   }, [cameraRef]);
 

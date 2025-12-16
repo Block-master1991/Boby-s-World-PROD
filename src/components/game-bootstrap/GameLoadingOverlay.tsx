@@ -7,6 +7,9 @@ interface GameLoadingOverlayProps {
     error: string | null;
     phase?: string;
     showTips?: boolean;
+    currentAsset?: string;
+    loadedAssets?: number;
+    totalAssets?: number;
 }
 
 const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({
@@ -14,7 +17,10 @@ const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({
     progress,
     error,
     phase = 'graphics',
-    showTips = true
+    showTips = true,
+    currentAsset,
+    loadedAssets,
+    totalAssets
 }) => {
     if (!isLoading && !error) {
         return null;
@@ -35,6 +41,9 @@ const GameLoadingOverlay: React.FC<GameLoadingOverlayProps> = ({
                     progress={progress}
                     phase={phase}
                     showTips={showTips}
+                    currentAsset={currentAsset}
+                    loadedAssets={loadedAssets}
+                    totalAssets={totalAssets}
                 />
             )}
         </div>
