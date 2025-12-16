@@ -1046,10 +1046,32 @@ export const useEnemyLogic = ({
     initializeEnemies();
   }, [initializeEnemies]);
 
+  const forceLoadAreaEnemies = React.useCallback(async (centerX: number, centerZ: number) => {
+    if (!sceneRef.current) return;
+
+    const chunksToLoad = new Set<string>();
+    for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
+      for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+        chunksToLoad.add(getChunkKey(centerX + x, centerZ + z));
+      }
+    }
+
+    const loadPromises = Array.from(chunksToLoad).map(async (chunkKey) => {
+      if (!loadedEnemyChunks.current.has(chunkKey) && !loadingEnemyChunks.current.has(chunkKey)) {
+        const [cx, cz] = chunkKey.split(',').map(Number);
+        await loadEnemiesForChunk(cx, cz);
+      }
+    });
+
+    await Promise.all(loadPromises);
+    console.log(`[EnemyLogic] Force loaded enemies for ${chunksToLoad.size} chunks around ${centerX}, ${centerZ}`);
+  }, [sceneRef, loadEnemiesForChunk]);
+
   return {
     initializeEnemies,
     updateEnemies,
     resetEnemies,
+    forceLoadAreaEnemies, // Expose force load function
     enemyMeshesRef,
   };
 };

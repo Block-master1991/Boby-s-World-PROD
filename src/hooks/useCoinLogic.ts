@@ -464,10 +464,32 @@ export const useCoinLogic = ({
     initializeCoins();
   }, [initializeCoins]);
 
+  const forceLoadAreaCoins = useCallback(async (centerX: number, centerZ: number) => {
+    if (!sceneRef.current) return;
+
+    const chunksToLoad = new Set<string>();
+    for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
+      for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+        chunksToLoad.add(getChunkKey(centerX + x, centerZ + z));
+      }
+    }
+
+    const loadPromises = Array.from(chunksToLoad).map(async (chunkKey) => {
+      if (!loadedCoinChunks.current.has(chunkKey)) {
+        const [cx, cz] = chunkKey.split(',').map(Number);
+        await loadCoinsForChunk(cx, cz);
+      }
+    });
+
+    await Promise.all(loadPromises);
+    console.log(`[CoinLogic] Force loaded coins for ${chunksToLoad.size} chunks around ${centerX}, ${centerZ}`);
+  }, [sceneRef, loadCoinsForChunk]);
+
   return {
     initializeCoins,
     updateCoins, // Restore updateCoins
     resetCoins,
+    forceLoadAreaCoins, // Expose force load function
     coinMeshesRef,
     remainingCoinsRef,
     loadedCoinChunks, // Expose loadedCoinChunks

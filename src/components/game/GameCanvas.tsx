@@ -776,7 +776,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         sceneRef, dogMeshRef, dogSpeed, isRunning // Pass dog's speed and running state
     });
 
-    const { initializeCoins, updateCoins, coinMeshesRef, loadedCoinChunks } = useCoinLogic({ // Capture coinMeshesRef and loadedCoinChunks
+    const { initializeCoins, updateCoins, coinMeshesRef, loadedCoinChunks, forceLoadAreaCoins } = useCoinLogic({ // Capture coinMeshesRef and loadedCoinChunks
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
         onCoinCollected: () => onCoinCollectedCallbackRef.current(),
         onRemainingCoinsUpdate: (remaining) => onRemainingCoinsUpdateCallbackRef.current(remaining),
@@ -784,7 +784,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         addFloatingEffect, // Pass addFloatingEffect to useCoinLogic
     });
 
-    const { initializeEnemies, updateEnemies } = useEnemyLogic({
+    const { initializeEnemies, updateEnemies, forceLoadAreaEnemies } = useEnemyLogic({
         sceneRef, dogModelRef, isShieldActiveRef, protectionBottleCountRef,
         onConsumeProtectionBottle: () => onConsumeProtectionBottleCallbackRef.current(),
         onEnemyCollisionPenalty: () => onEnemyCollisionPenaltyCallbackRef.current(),
@@ -1020,6 +1020,17 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
                                 // Race preload with timeout - whichever finishes first
                                 await Promise.race([preloadPromise, timeoutPromise]);
+
+                                onLoadProgress(95, 'finalizing');
+
+                                // Force load coins and enemies for the initial area to ensure everything is ready
+                                const { chunkX: centerX, chunkZ: centerZ } = getChunkCoordinates(dogPos.x, dogPos.z);
+                                console.log(`[GameCanvas] 🔄 Force loading game objects for initial area around chunk ${centerX}, ${centerZ}`);
+
+                                await Promise.all([
+                                    forceLoadAreaCoins(centerX, centerZ),
+                                    forceLoadAreaEnemies(centerX, centerZ)
+                                ]);
 
                                 onLoadProgress(100, 'optimizing');
 
