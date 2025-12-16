@@ -146,10 +146,13 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
   // Smooth progress animation
   useEffect(() => {
     const timer = setTimeout(() => {
-      setDisplayProgress(progress);
+      // Prevent progress from going backward
+      if (progress >= displayProgress) {
+        setDisplayProgress(progress);
+      }
     }, 300);
     return () => clearTimeout(timer);
-  }, [progress]);
+  }, [progress, phase, currentAsset, loadedAssets, totalAssets, displayProgress]);
 
   // Loading time estimation
   useEffect(() => {

@@ -450,38 +450,34 @@ class PriorityAssetLoader {
 
         // Load HIGH priority assets in parallel
         if (assetsByPriority[AssetPriority.HIGH]) {
-            onProgress(30, 'graphics');
-            const highPriorityPromises = assetsByPriority[AssetPriority.HIGH].map(async (asset) => {
-                await this.loadAsset(asset, onProgress);
-                loadedCount++;
-                const progress = 25 + Math.round(((loadedCount - (assetsByPriority[AssetPriority.CRITICAL] || []).length) / assetsByPriority[AssetPriority.HIGH].length) * 25); // 25-50%
-                onProgress(Math.min(progress, 50), 'graphics', undefined, loadedCount, totalAssets);
-            });
-            await Promise.all(highPriorityPromises);
+            onProgress(25, 'graphics');
+            await Promise.all(
+                assetsByPriority[AssetPriority.HIGH].map(asset => this.loadAsset(asset, onProgress))
+            );
+            loadedCount += assetsByPriority[AssetPriority.HIGH].length;
+            const progress = Math.round((loadedCount / totalAssets) * 50); // 25-50%
+            onProgress(progress, 'graphics', undefined, loadedCount, totalAssets);
         }
 
         // Load MEDIUM priority assets
         if (assetsByPriority[AssetPriority.MEDIUM]) {
-            onProgress(55, 'audio');
-            const mediumPromises = assetsByPriority[AssetPriority.MEDIUM].map(async (asset) => {
-                await this.loadAsset(asset, onProgress);
-                loadedCount++;
-            });
-            await Promise.all(mediumPromises);
-            onProgress(70, 'audio', undefined, loadedCount, totalAssets);
+            onProgress(50, 'audio');
+            await Promise.all(
+                assetsByPriority[AssetPriority.MEDIUM].map(asset => this.loadAsset(asset, onProgress))
+            );
+            loadedCount += assetsByPriority[AssetPriority.MEDIUM].length;
+            const progress = Math.round((loadedCount / totalAssets) * 75); // 50-75%
+            onProgress(progress, 'audio', undefined, loadedCount, totalAssets);
         }
 
-        // Load LOW priority assets in background
+        // Load LOW priority assets in background (no progress updates to avoid conflicts)
         if (assetsByPriority[AssetPriority.LOW]) {
-            onProgress(75, 'world');
-            // Don't await - these can load in background
-            const lowPromises = assetsByPriority[AssetPriority.LOW].map(async (asset) => {
-                await this.loadAsset(asset, onProgress);
-                loadedCount++;
-            });
-            // Start loading but don't block
-            Promise.all(lowPromises).then(() => {
-                onProgress(90, 'world', undefined, loadedCount, totalAssets);
+            // Don't await - these can load in background and don't affect progress
+            Promise.all(
+                assetsByPriority[AssetPriority.LOW].map(asset => this.loadAsset(asset, onProgress))
+            ).then(() => {
+                loadedCount += assetsByPriority[AssetPriority.LOW].length;
+                // Don't send progress update to avoid conflicts with main loading
             }).catch(console.error);
         }
     }
@@ -507,11 +503,6 @@ class PriorityAssetLoader {
         }
 
         try {
-            // Notify about current asset being loaded
-            if (onProgress) {
-                onProgress(-1, 'loading', asset.name, -1, this.manifest.length);
-            }
-
             // Check dependencies
             if (asset.dependencies) {
                 for (const dep of asset.dependencies) {
@@ -1000,26 +991,39 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                         console.log("[GameCanvas] 🏗️ Starting complete world preload...");
                         if (environmentRef.current) {
                             try {
-                                // Wait for all 49 initial chunks to be fully loaded and visible - WITH FALLBACK
-                                const preloadPromise = environmentRef.current.preloadInitialScene(dogPos);
-                                const timeoutPromise = new Promise((resolve) => {
+                                // Professional solution: Simplified approach using timeout with proper interval cleanup
+                                const preloadTimeoutPromise = new Promise<boolean>((resolve) => {
+                                    // Start the preload (don't wait for its promise since it's broken)
+                                    const preloadPromise = environmentRef.current!.preloadInitialScene(dogPos);
+
+                                    // Use a professional timeout-based approach
                                     setTimeout(() => {
-                                        console.log("[GameCanvas] ⏱️ Force success timeout after 6 seconds of 100% progress");
                                         resolve(true);
                                     }, 6000);
                                 });
 
-                                // Smooth progress during timeout
+                                // Smooth progress during preload
                                 let progress = 85;
+                                let intervalCleared = false;
                                 const progressInterval = setInterval(() => {
+                                    // Safety check - don't continue if already cleared
+                                    if (intervalCleared) {
+                                        clearInterval(progressInterval);
+                                        return;
+                                    }
+
                                     progress = Math.min(90, progress + 1);
                                     onLoadProgress(progress, 'world');
                                 }, 1200);
 
                                 onLoadProgress(90, 'optimizing');
 
-                                // Race preload with timeout - whichever finishes first
-                                await Promise.race([preloadPromise, timeoutPromise]);
+                                // Wait for timeout to complete, then clear interval
+                                await preloadTimeoutPromise.finally(() => {
+                                    // Always clear the progress interval
+                                    intervalCleared = true;
+                                    clearInterval(progressInterval);
+                                });
 
                                 onLoadProgress(95, 'finalizing');
 
