@@ -11,11 +11,11 @@ type BaseWalletState = Omit<WalletContextState, 'publicKey' | 'connected' | 'dis
 export interface SessionWallet extends BaseWalletState {
   sessionPublicKey: PublicKey | null; // The PublicKey of the established game session
   adapterPublicKey: PublicKey | null; // The current PublicKey from the wallet adapter (can change)
-  
+
   isConnectedToSession: boolean;    // True if adapter is connected AND adapterPK matches sessionPK (once sessionPK is set)
   isAdapterConnected: boolean;      // True if the wallet adapter itself is connected (raw status)
   isWalletMismatch: boolean;        // True if a sessionPK is set AND adapterPK is connected but different from sessionPK
-  
+
   disconnectFromSession: () => Promise<void>; // Custom disconnect to clear session state
 }
 
@@ -38,13 +38,17 @@ export const useSessionWallet = (): SessionWallet => {
   const disconnectFromSession = useCallback(async () => {
     await actualWallet.disconnect();
     setSessionPublicKey(null); // Explicitly clear session on our disconnect call
+    // Clear wallet preference from localStorage to prevent remembering
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('walletName');
+    }
   }, [actualWallet]);
 
   const isAdapterConnected = actualWallet.connected;
   const adapterPublicKey = actualWallet.publicKey;
-  
+
   const isWalletMismatch = !!(sessionPublicKey && adapterPublicKey && isAdapterConnected && !sessionPublicKey.equals(adapterPublicKey));
-  
+
   // Considered connected to session if:
   // 1. An adapter is connected AND
   // 2. A sessionPublicKey has been established AND

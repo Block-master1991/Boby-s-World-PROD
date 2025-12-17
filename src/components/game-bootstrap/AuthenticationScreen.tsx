@@ -82,8 +82,13 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
           </div>
         </div>
         <p className="text-sm text-muted-foreground mt-4 text-center max-w-xs">
-          {isMobile ? 'Check your wallet app if prompted for approval.' : 'Please wait. If prompted, check your wallet.'}
+          {isMobile ? 'Check your wallet app if prompted for approval. Connection may take longer on mobile.' : 'Please wait. If prompted, check your wallet.'}
         </p>
+        {isMobile && (
+          <Button onClick={onRequestDisconnect} variant="outline" size="sm" className="mt-4">
+            <LogOutIcon className="mr-2 h-4 w-4" /> Cancel & Disconnect Wallet
+          </Button>
+        )}
       </div>
     );
   }

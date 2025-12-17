@@ -30,7 +30,7 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
 
         if (isMobile) {
             return [
-                new PhantomWalletAdapter(),
+                new PhantomWalletAdapter({ appUrl: 'phantom://' }),
                 new SolflareWalletAdapter(),
                 new WalletConnectWalletAdapter({
                     network: network,

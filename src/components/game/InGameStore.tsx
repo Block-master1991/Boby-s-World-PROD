@@ -184,6 +184,27 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     treasuryPublicKey
                 );
 
+                // Check if user's token account exists and has sufficient balance
+                let userTokenAccountInfo;
+                try {
+                    userTokenAccountInfo = await connection.getAccountInfo(fromTokenAccountAddress);
+                } catch (error) {
+                    // Account doesn't exist
+                    userTokenAccountInfo = null;
+                }
+
+                if (!userTokenAccountInfo) {
+                    throw new Error("Your BOBY token account does not exist. You may need to receive BOBY tokens first to initialize it.");
+                }
+
+                // Get token balance
+                const userTokenAccount = await connection.getTokenAccountBalance(fromTokenAccountAddress);
+                const userBalance = userTokenAccount.value.uiAmount || 0;
+
+                if (userBalance < calculatedBobyAmount) {
+                    throw new Error(`Insufficient BOBY balance. You have ${userBalance.toLocaleString()} BOBY but need ${calculatedBobyAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} BOBY.`);
+                }
+
                 const transaction = new Transaction();
                 try {
                     await connection.getAccountInfo(toTokenAccountAddress);
@@ -212,6 +233,14 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         bobyAmountInSmallestUnit
                     )
                 );
+
+                // Ensure transaction has required fields (especially for mobile wallets)
+                if (!transaction.recentBlockhash || !transaction.feePayer) {
+                    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
+                    transaction.recentBlockhash = blockhash;
+                    transaction.lastValidBlockHeight = lastValidBlockHeight;
+                    transaction.feePayer = adapterPublicKey;
+                }
 
                 // Set transaction timeout for mobile
                 const timeoutMs = isMobile ? 60000 : 30000; // 60 seconds for mobile, 30 for desktop
