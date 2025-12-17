@@ -55,19 +55,45 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     const playerDocRef = db.collection('players').doc(userPublicKey);
 
-    // Verify the transactionSignature on the backend
-    const connection = new Connection(DEDICATED_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed'); // استخدام نقطة نهاية مخصصة إذا كانت متاحة
+    // Verify the transactionSignature on the backend with retry logic for mobile
+    const connection = new Connection(DEDICATED_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed');
 
     console.log(`[API] Verifying transaction signature: ${transactionSignature}`);
 
-    const transaction = await connection.getParsedTransaction(transactionSignature, {
-      maxSupportedTransactionVersion: 0, // أو 0 إذا كنت تستخدم معاملات الإصدار القديم
-      commitment: 'confirmed'
-    });
+    let transaction = null;
+    let attempts = 0;
+    const maxAttempts = 3;
+    const delayBetweenAttempts = 2000; // 2 seconds
+
+    while (attempts < maxAttempts && !transaction) {
+      try {
+        transaction = await connection.getParsedTransaction(transactionSignature, {
+          maxSupportedTransactionVersion: 0,
+          commitment: 'confirmed'
+        });
+
+        if (!transaction && attempts < maxAttempts - 1) {
+          console.log(`[API] Transaction not found, attempt ${attempts + 1}/${maxAttempts}. Retrying in ${delayBetweenAttempts}ms...`);
+          await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
+          attempts++;
+        }
+      } catch (error) {
+        console.error(`[API] Error fetching transaction on attempt ${attempts + 1}:`, error);
+        if (attempts < maxAttempts - 1) {
+          await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
+          attempts++;
+        } else {
+          break;
+        }
+      }
+    }
 
     if (!transaction) {
-      console.error(`[API] Transaction not found or not confirmed: ${transactionSignature}`);
-      return NextResponse.json({ error: 'Transaction not found or not confirmed.' }, { status: 404 });
+      console.error(`[API] Transaction not found after ${maxAttempts} attempts: ${transactionSignature}`);
+      return NextResponse.json({
+        error: 'Transaction not found or not confirmed. Please wait a moment and try again.',
+        code: 'TRANSACTION_NOT_FOUND'
+      }, { status: 404 });
     }
 
     // تحقق من حالة المعاملة

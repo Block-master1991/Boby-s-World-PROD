@@ -4,9 +4,10 @@ import React, { useEffect, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { WalletMultiButton } from '@solana/wallet-adapter-react-ui';
 import { Button } from '@/components/ui/button';
-import { PawPrint, AlertTriangle, LogOutIcon, ShieldCheck } from 'lucide-react';
+import { PawPrint, AlertTriangle, LogOutIcon, ShieldCheck, Smartphone, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface AuthenticationScreenProps {
   onRequestDisconnect: () => Promise<void>;
@@ -21,6 +22,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
 }) => {
   const { isLoading: isLoadingAuth, error: authError, isAuthenticated, user, isWalletConnectedAndMatching } = useAuth();
   const wallet = useWallet();
+  const isMobile = useIsMobile();
   const loginAttemptedRef = useRef(false); // New ref to track if login has been attempted
 
   useEffect(() => {
@@ -60,13 +62,27 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   if (isLoadingAuth) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
-        <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="mb-8 rounded-md" style={{ width: 'auto', height: 'auto' }} data-ai-hint="dog logo" priority />
+        <div className="relative mb-8">
+          <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="rounded-md opacity-80" style={{ width: 'auto', height: 'auto' }} data-ai-hint="dog logo" priority />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
+          </div>
+        </div>
         <PawPrint className="h-12 w-12 animate-pulse text-primary mb-4" />
         <h1 className="text-4xl font-bold mb-2 font-headline">Boby World</h1>
         <p className="text-xl text-muted-foreground">
           Processing authentication...
         </p>
-        <p className="text-sm text-muted-foreground mt-2">Please wait. If prompted, check your wallet.</p>
+        <div className="flex items-center gap-2 mt-4">
+          <div className="flex gap-1">
+            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+        </div>
+        <p className="text-sm text-muted-foreground mt-4 text-center max-w-xs">
+          {isMobile ? 'Check your wallet app if prompted for approval.' : 'Please wait. If prompted, check your wallet.'}
+        </p>
       </div>
     );
   }
@@ -79,9 +95,25 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
       {/* State 1: Wallet not connected */}
       {!wallet.connected && (
         <>
-          <p className="text-xl text-muted-foreground mb-10 max-w-md">
+          <p className="text-xl text-muted-foreground mb-6 max-w-md">
             Connect your wallet to start your adventure.
           </p>
+
+          {isMobile && (
+            <div className="bg-secondary/20 p-4 rounded-lg mb-6 max-w-md">
+              <div className="flex items-center gap-2 mb-2">
+                <Smartphone className="h-5 w-5 text-primary" />
+                <span className="font-semibold text-sm">Mobile Wallet Tips</span>
+              </div>
+              <ul className="text-xs text-muted-foreground space-y-1 text-left">
+                <li>• Choose Phantom or Solflare for best experience</li>
+                <li>• You'll be redirected to your wallet app</li>
+                <li>• Return here after connecting</li>
+                <li>• Transactions will open your wallet automatically</li>
+              </ul>
+            </div>
+          )}
+
           <WalletMultiButton
             style={{
               backgroundColor: 'hsl(var(--primary))',
@@ -93,24 +125,28 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
               lineHeight: 'normal'
             }}
           />
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={() => {
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('walletName');
-                console.log("Wallet preference cleared from localStorage.");
-                window.location.reload();
-              }
-            }}
-          >
-            Reset Wallet Selection
-          </Button>
+
+          <div className="flex gap-2 mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (typeof window !== 'undefined') {
+                  localStorage.removeItem('walletName');
+                  console.log("Wallet preference cleared from localStorage.");
+                  window.location.reload();
+                }
+              }}
+            >
+              <RefreshCw className="h-4 w-4 mr-1" />
+              Reset Selection
+            </Button>
+          </div>
         </>
       )}
 
       {/* State 2: Wallet connected, but not authenticated OR authenticated with a different wallet */}
-      {wallet.connected && wallet.publicKey && (!isAuthenticated || !isWalletConnectedAndMatching) && ( 
+      {wallet.connected && wallet.publicKey && (!isAuthenticated || !isWalletConnectedAndMatching) && (
         <>
           <p className="text-xl text-muted-foreground mb-6 max-w-md">
             Wallet <span className="font-semibold text-primary">{wallet.publicKey.toBase58().substring(0, 4)}...{wallet.publicKey.toBase58().substring(wallet.publicKey.toBase58().length - 4)}</span> connected.

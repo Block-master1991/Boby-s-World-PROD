@@ -8,12 +8,12 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { SheetHeader, SheetTitle, SheetDescription, SheetFooter } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Send, AlertCircle, PawPrint, RefreshCw, Plus, Minus } from 'lucide-react';
+import { Send, AlertCircle, PawPrint, RefreshCw, Plus, Minus, Smartphone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import Image from 'next/image';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
 import { PublicKey, Transaction } from '@solana/web3.js';
-import { 
+import {
     Token,
     ASSOCIATED_TOKEN_PROGRAM_ID,
     TOKEN_PROGRAM_ID,
@@ -22,6 +22,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -47,6 +48,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         adapterPublicKey // Current connected wallet's public key
     } = useSessionWallet();
     const { toast } = useToast();
+    const isMobile = useIsMobile();
 
     const [isLoading, setIsLoading] = useState<string | null>(null); // For individual item purchase loading
     const [quantities, setQuantities] = useState<Record<string, number>>(() => {
@@ -62,7 +64,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
 
     const fetchBobyUsdPrice = useCallback(async (isInitialLoad = false) => {
         if (!isInitialLoad) {
-             setIsBobyPriceLoading(true);
+            setIsBobyPriceLoading(true);
         }
         setBobyPriceError(null);
         try {
@@ -80,7 +82,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     }
                 } catch {
                     if (response.status === 429) {
-                         errorMsg = 'Price API rate limit. Try later.';
+                        errorMsg = 'Price API rate limit. Try later.';
                     }
                 }
                 throw new Error(`${errorMsg} (${errorDetails})`);
@@ -151,94 +153,167 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         const calculatedBobyAmount = totalUsdValue / bobyUsdPrice;
 
         setIsLoading(item.id);
-        toast({ title: 'Purchase Initiated', description: `Buying ${quantity} ${item.name} for ~${calculatedBobyAmount.toLocaleString(undefined, {maximumFractionDigits: 2})} Boby ($${totalUsdValue.toFixed(2)}). Approve in wallet.` });
+        const mobileMessage = isMobile ? 'Check your wallet app for approval.' : 'Approve the transaction in your wallet.';
+        toast({ title: 'Purchase Initiated', description: `Buying ${quantity} ${item.name} for ~${calculatedBobyAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} Boby ($${totalUsdValue.toFixed(2)}). ${mobileMessage}` });
+
         let signature: string | undefined = undefined;
+        let retryCount = 0;
+        const maxRetries = isMobile ? 2 : 1;
 
-        try {
-            const bobyMintPublicKey = new PublicKey(BOBY_TOKEN_MINT_ADDRESS);
-            if (!STORE_TREASURY_WALLET_ADDRESS) {
-            throw new Error("STORE_TREASURY_WALLET_ADDRESS is not set.");
-            }
-            const treasuryPublicKey = new PublicKey(STORE_TREASURY_WALLET_ADDRESS);
-            if (!adapterPublicKey) {
-                throw new Error("Adapter public key not available for transaction.");
-            }
-            
-            const fromTokenAccountAddress = await Token.getAssociatedTokenAddress(
-                ASSOCIATED_TOKEN_PROGRAM_ID,
-                TOKEN_PROGRAM_ID,
-                bobyMintPublicKey,
-                adapterPublicKey
-            );
-            const toTokenAccountAddress = await Token.getAssociatedTokenAddress(
-                ASSOCIATED_TOKEN_PROGRAM_ID,
-                TOKEN_PROGRAM_ID,
-                bobyMintPublicKey,
-                treasuryPublicKey
-            );
-
-            
-            const transaction = new Transaction();
+        const attemptPurchase = async (): Promise<void> => {
             try {
-                await connection.getAccountInfo(toTokenAccountAddress);
-            } catch (error) {
+                const bobyMintPublicKey = new PublicKey(BOBY_TOKEN_MINT_ADDRESS);
+                if (!STORE_TREASURY_WALLET_ADDRESS) {
+                    throw new Error("STORE_TREASURY_WALLET_ADDRESS is not set.");
+                }
+                const treasuryPublicKey = new PublicKey(STORE_TREASURY_WALLET_ADDRESS);
+                if (!adapterPublicKey) {
+                    throw new Error("Adapter public key not available for transaction.");
+                }
+
+                const fromTokenAccountAddress = await Token.getAssociatedTokenAddress(
+                    ASSOCIATED_TOKEN_PROGRAM_ID,
+                    TOKEN_PROGRAM_ID,
+                    bobyMintPublicKey,
+                    adapterPublicKey
+                );
+                const toTokenAccountAddress = await Token.getAssociatedTokenAddress(
+                    ASSOCIATED_TOKEN_PROGRAM_ID,
+                    TOKEN_PROGRAM_ID,
+                    bobyMintPublicKey,
+                    treasuryPublicKey
+                );
+
+                const transaction = new Transaction();
+                try {
+                    await connection.getAccountInfo(toTokenAccountAddress);
+                } catch (error) {
+                    transaction.add(
+                        Token.createAssociatedTokenAccountInstruction(
+                            ASSOCIATED_TOKEN_PROGRAM_ID,
+                            TOKEN_PROGRAM_ID,
+                            bobyMintPublicKey,
+                            toTokenAccountAddress,
+                            treasuryPublicKey,
+                            adapterPublicKey
+                        )
+                    );
+                }
+
+                const bobyAmountInSmallestUnit = Math.round(calculatedBobyAmount * (10 ** BOBY_TOKEN_DECIMALS));
+
                 transaction.add(
-                    Token.createAssociatedTokenAccountInstruction(
-                        ASSOCIATED_TOKEN_PROGRAM_ID,
+                    Token.createTransferInstruction(
                         TOKEN_PROGRAM_ID,
-                        bobyMintPublicKey,
+                        fromTokenAccountAddress,
                         toTokenAccountAddress,
-                        treasuryPublicKey,
-                        adapterPublicKey
+                        adapterPublicKey,
+                        [],
+                        bobyAmountInSmallestUnit
                     )
                 );
-            }
 
-            const bobyAmountInSmallestUnit = Math.round(calculatedBobyAmount * (10 ** BOBY_TOKEN_DECIMALS));
+                // Set transaction timeout for mobile
+                const timeoutMs = isMobile ? 60000 : 30000; // 60 seconds for mobile, 30 for desktop
+                const timeoutPromise = new Promise((_, reject) => {
+                    setTimeout(() => reject(new Error('Transaction timeout')), timeoutMs);
+                });
 
-            transaction.add(
-                Token.createTransferInstruction(
-                    TOKEN_PROGRAM_ID,
-                    fromTokenAccountAddress,
-                    toTokenAccountAddress,
-                    adapterPublicKey,
-                    [],
-                    bobyAmountInSmallestUnit
-                )
-            );
+                const sendPromise = sendTransaction(transaction, connection);
+                signature = await Promise.race([sendPromise, timeoutPromise]) as string;
 
-            signature = await sendTransaction(transaction, connection);
-            toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0,10)}... Processing inventory update.` });
+                toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0, 10)}... Processing inventory update.` });
 
-            // Call backend API to update inventory
-            const inventoryUpdateResponse = await apiFetch('/api/game/purchaseItem', { // استخدام apiFetch
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    // 'Authorization': `Bearer ${authUserPublicKey}` // لا حاجة لهذا الرأس، المصادقة تتم عبر الكوكيز
-                },
-                body: JSON.stringify({ itemId: item.id, quantity, transactionSignature: signature })
-            });
+                // Call backend API to update inventory with timeout
+                const apiTimeoutMs = isMobile ? 30000 : 15000; // 30 seconds for mobile, 15 for desktop
+                const controller = new AbortController();
+                const apiTimeout = setTimeout(() => controller.abort(), apiTimeoutMs);
 
-            const inventoryUpdateData = await inventoryUpdateResponse.json();
+                const inventoryUpdateResponse = await apiFetch('/api/game/purchaseItem', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ itemId: item.id, quantity, transactionSignature: signature }),
+                    signal: controller.signal
+                });
 
-            if (inventoryUpdateResponse.ok) {
-                toast({ title: 'Inventory Updated', description: inventoryUpdateData.message || `${quantity} ${item.name} added to inventory.` });
-                if (onPurchaseSuccess) {
-                    await onPurchaseSuccess(); // Re-fetch player data to update inventory counts
+                clearTimeout(apiTimeout);
+                const inventoryUpdateData = await inventoryUpdateResponse.json();
+
+                if (inventoryUpdateResponse.ok) {
+                    toast({ title: 'Inventory Updated', description: inventoryUpdateData.message || `${quantity} ${item.name} added to inventory.` });
+                    if (onPurchaseSuccess) {
+                        await onPurchaseSuccess();
+                    }
+                    return; // Success, exit function
+                } else {
+                    // Handle specific API errors
+                    const errorCode = inventoryUpdateData.code;
+                    if (errorCode === 'TRANSACTION_NOT_FOUND' && retryCount < maxRetries) {
+                        console.log(`Transaction not found, retrying... (${retryCount + 1}/${maxRetries})`);
+                        retryCount++;
+                        toast({ title: 'Retrying...', description: 'Transaction verification in progress. Please wait.' });
+                        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+                        return attemptPurchase(); // Retry
+                    }
+                    throw new Error(inventoryUpdateData.error || 'Failed to update inventory after purchase.');
                 }
-            } else {
-                throw new Error(inventoryUpdateData.error || 'Failed to update inventory after purchase.');
-            }
 
-        } catch (error) { 
-            console.error('Purchase failed:', error);
-            toast({ title: 'Purchase Failed', description: `${error instanceof Error ? error.message : 'Could not complete purchase.'}`, variant: 'destructive' });
+            } catch (error) {
+                console.error('Purchase attempt failed:', error);
+                const errorMessage = error instanceof Error ? error.message : 'Could not complete purchase.';
+
+                // Check if it's a timeout or user rejection error
+                if (errorMessage.includes('timeout') || errorMessage.includes('User rejected')) {
+                    if (retryCount < maxRetries) {
+                        console.log(`Retrying purchase due to: ${errorMessage} (${retryCount + 1}/${maxRetries})`);
+                        retryCount++;
+                        toast({ title: 'Retrying...', description: 'Transaction failed, retrying automatically.' });
+                        await new Promise(resolve => setTimeout(resolve, 2000));
+                        return attemptPurchase();
+                    }
+                }
+
+                // If all retries failed or it's a different error
+                toast({ title: 'Purchase Failed', description: errorMessage, variant: 'destructive' });
+
+                // On mobile, offer manual retry for certain errors
+                if (isMobile && (errorMessage.includes('User rejected') || errorMessage.includes('timeout') || errorMessage.includes('not found'))) {
+                    setTimeout(() => {
+                        toast({
+                            title: 'Retry Purchase?',
+                            description: 'The transaction may need more time to confirm. Try again?',
+                            action: (
+                                <Button size="sm" onClick={() => handlePurchase(item)}>
+                                    Retry
+                                </Button>
+                            ),
+                        });
+                    }, 5000);
+                }
+
+                throw error; // Re-throw to be caught by outer catch
+            }
+        };
+
+        try {
+            await attemptPurchase();
+        } catch (error) {
+            // Final error handling - all retries exhausted
+            console.error('All purchase attempts failed:', error);
+            const finalErrorMessage = error instanceof Error ? error.message : 'Purchase failed after multiple attempts.';
+            toast({
+                title: 'Purchase Failed',
+                description: finalErrorMessage,
+                variant: 'destructive',
+                duration: 10000
+            });
         } finally {
             setIsLoading(null);
         }
     };
-    
+
     return (
         <>
             <SheetHeader className="p-6 pb-4 border-b">
@@ -248,36 +323,36 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 <SheetDescription>
                     Purchase items using Boby tokens.
                 </SheetDescription>
-                 {isWalletMismatch && sessionPublicKey && adapterPublicKey && (
+                {isWalletMismatch && sessionPublicKey && adapterPublicKey && (
                     <div className="mt-2 p-2 text-xs bg-destructive/10 text-destructive rounded-md border border-destructive/30 flex items-center gap-2">
-                        <AlertCircle size={16}/>
-                        <span>Warning! Wallet in Solflare ({adapterPublicKey.toBase58().substring(0,4)}...) differs from your session wallet ({sessionPublicKey.toBase58().substring(0,4)}...). You will not be able to make purchases.</span>
+                        <AlertCircle size={16} />
+                        <span>Warning! Wallet in Solflare ({adapterPublicKey.toBase58().substring(0, 4)}...) differs from your session wallet ({sessionPublicKey.toBase58().substring(0, 4)}...). You will not be able to make purchases.</span>
                     </div>
                 )}
             </SheetHeader>
             <ScrollArea className="flex-grow">
                 <div className="p-4 space-y-1">
-                    {isBobyPriceLoading && bobyUsdPrice === null && ( 
+                    {isBobyPriceLoading && bobyUsdPrice === null && (
                         <div className="flex items-center justify-center py-4 text-sm text-muted-foreground">
-                            <PawPrint className="h-4 w-4 mr-2 rtl:ml-2 animate-pulse"/> Loading Boby price...
+                            <PawPrint className="h-4 w-4 mr-2 rtl:ml-2 animate-pulse" /> Loading Boby price...
                         </div>
                     )}
                     {bobyPriceError && (
                         <div className="flex flex-col items-center justify-center py-4 text-sm text-destructive">
-                            <p className="flex items-center text-center"><AlertCircle className="h-4 w-4 mr-2 rtl:ml-2"/> {bobyPriceError}</p>
+                            <p className="flex items-center text-center"><AlertCircle className="h-4 w-4 mr-2 rtl:ml-2" /> {bobyPriceError}</p>
                             <Button variant="link" size="sm" onClick={() => fetchBobyUsdPrice(false)} className="text-destructive hover:text-destructive/80">
-                                <RefreshCw className="h-3 w-3 mr-1 rtl:ml-1"/> Try Again
+                                <RefreshCw className="h-3 w-3 mr-1 rtl:ml-1" /> Try Again
                             </Button>
                         </div>
                     )}
                     {bobyUsdPrice !== null && bobyUsdPrice > 0 && (
-                      <div className="text-xs text-muted-foreground text-center mb-3 p-2 bg-secondary/30 rounded-md flex items-center justify-center">
-                          Current Price: 1 BOBY = ${bobyUsdPrice.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 10 })} USD
-                          <Button variant="ghost" size="icon" onClick={() => fetchBobyUsdPrice(false)} className="ml-2 rtl:mr-2 h-5 w-5 text-muted-foreground hover:text-primary">
-                            {isBobyPriceLoading ? <PawPrint className="h-3 w-3 animate-pulse"/> : <RefreshCw className="h-3 w-3"/>}
-                            <span className="sr-only">Refresh Price</span>
-                          </Button>
-                      </div>
+                        <div className="text-xs text-muted-foreground text-center mb-3 p-2 bg-secondary/30 rounded-md flex items-center justify-center">
+                            Current Price: 1 BOBY = ${bobyUsdPrice.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 10 })} USD
+                            <Button variant="ghost" size="icon" onClick={() => fetchBobyUsdPrice(false)} className="ml-2 rtl:mr-2 h-5 w-5 text-muted-foreground hover:text-primary">
+                                {isBobyPriceLoading ? <PawPrint className="h-3 w-3 animate-pulse" /> : <RefreshCw className="h-3 w-3" />}
+                                <span className="sr-only">Refresh Price</span>
+                            </Button>
+                        </div>
                     )}
                 </div>
 
@@ -303,7 +378,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         return (
                             <Card key={item.id} className="flex flex-col"> {/* Added flex flex-col */}
                                 <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
-                                    <Image src={item.image} alt={item.name} width={60} height={60} className="rounded-md border" data-ai-hint={item.dataAiHint} priority={item.id === '1'}/>
+                                    <Image src={item.image} alt={item.name} width={60} height={60} className="rounded-md border" data-ai-hint={item.dataAiHint} priority={item.id === '1'} />
                                     <div>
                                         <CardTitle className="text-lg">{item.name}</CardTitle> {/* Changed h3 to CardTitle */}
                                         <CardDescription className="text-xs">{item.description}</CardDescription> {/* Changed p to CardDescription */}
@@ -311,7 +386,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                             ${item.price.toFixed(3)} USD
                                             {calculatedBobyPricePerUnit !== null && (
                                                 <span className="text-xs text-muted-foreground ml-1 rtl:mr-1">
-                                                    (~{calculatedBobyPricePerUnit.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: 2})} BOBY)
+                                                    (~{calculatedBobyPricePerUnit.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })} BOBY)
                                                 </span>
                                             )}
                                         </p>
@@ -320,20 +395,20 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                 <CardContent className="p-4 pt-0 flex flex-col flex-grow"> {/* New CardContent */}
                                     <div className="flex items-center justify-center space-x-2 mt-4">
                                         {/* Removed Label for Quantity as it's not in PlayerInventory's quantity controls */}
-                                        <Button 
-                                            variant="outline" 
-                                            size="icon" 
-                                            className="h-9 w-9" 
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-9 w-9"
                                             onClick={() => handleDecrement(item.id)}
                                             disabled={quantity <= 1}
                                         >
                                             <Minus className="h-4 w-4" />
                                         </Button>
                                         <Input id={`quantity-${item.id}`} type="number" min="1" value={quantity} onChange={(e) => handleQuantityChange(item.id, e.target.value)} className="h-9 w-24 text-center no-spinners flex-grow" />
-                                        <Button 
-                                            variant="outline" 
-                                            size="icon" 
-                                            className="h-9 w-9" 
+                                        <Button
+                                            variant="outline"
+                                            size="icon"
+                                            className="h-9 w-9"
                                             onClick={() => handleIncrement(item.id)}
                                         >
                                             <Plus className="h-4 w-4" />
@@ -343,7 +418,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                         Total:
                                         {totalBobyPrice !== null ? (
                                             <>
-                                                {totalBobyPrice.toLocaleString(undefined, {minimumFractionDigits: 0, maximumFractionDigits: BOBY_TOKEN_DECIMALS})}
+                                                {totalBobyPrice.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: BOBY_TOKEN_DECIMALS })}
                                                 <Image src="/Boby-logo.png" alt="Boby Token" width={14} height={14} className="rounded-none" priority={false} />
                                             </>
                                         ) : (
@@ -353,8 +428,21 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                                     </p>
                                     <Button variant="default" size="sm" onClick={() => handlePurchase(item)}
                                         disabled={isLoading === item.id || !isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey || STORE_TREASURY_WALLET_ADDRESS === 'REPLACE_WITH_YOUR_STORE_TREASURY_WALLET_ADDRESS' || STORE_TREASURY_WALLET_ADDRESS === 'EXAMPLE_DO_NOT_USE' || isBobyPriceLoading || !bobyUsdPrice || bobyUsdPrice <= 0}
-                                        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full mt-4 text-xs px-2 py-1">
-                                        {isLoading === item.id ? <PawPrint className="mr-2 rtl:ml-2 h-4 w-4 animate-pulse" /> : ( <><Send className="mr-2 rtl:ml-2 h-4 w-4" /> Purchase ({quantity})</> )}
+                                        className="bg-accent hover:bg-accent/90 text-accent-foreground w-full mt-4 text-xs px-2 py-1 relative overflow-hidden">
+                                        {isLoading === item.id ? (
+                                            <div className="flex items-center justify-center">
+                                                <div className="w-4 h-4 border-2 border-accent-foreground/20 border-t-accent-foreground rounded-full animate-spin mr-2"></div>
+                                                <span className="animate-pulse">Processing...</span>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center">
+                                                <Send className="mr-2 rtl:ml-2 h-4 w-4" />
+                                                <span>Purchase ({quantity})</span>
+                                            </div>
+                                        )}
+                                        {isLoading === item.id && (
+                                            <div className="absolute inset-0 bg-accent/10 animate-pulse"></div>
+                                        )}
                                     </Button>
                                 </CardContent>
                             </Card>
@@ -368,7 +456,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         Warning to store owner: Please configure `STORE_TREASURY_WALLET_ADDRESS` in `src/lib/constants.ts`.
                     </p>
                 )}
-                 <p className="text-xs text-muted-foreground text-center w-full">
+                <p className="text-xs text-muted-foreground text-center w-full">
                     Prices displayed in Boby are dynamically converted. Final amount may vary slightly due to price fluctuations and rounding.
                 </p>
             </SheetFooter>

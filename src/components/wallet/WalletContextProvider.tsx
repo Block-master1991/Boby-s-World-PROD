@@ -8,6 +8,8 @@ import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { WalletAdapter } from '@solana/wallet-adapter-base';
 import { WalletConnectWalletAdapter } from '@solana/wallet-adapter-walletconnect';
+import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
+import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import { SOL_NETWORK } from '@/lib/constants';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -16,8 +18,8 @@ interface WalletContextProps {
 }
 
 const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
-    const network = WalletAdapterNetwork.Mainnet; 
-    
+    const network = WalletAdapterNetwork.Mainnet;
+
     const endpoint = useMemo(() => SOL_NETWORK, []);
 
     const isMobile = useIsMobile();
@@ -28,6 +30,8 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
 
         if (isMobile) {
             return [
+                new PhantomWalletAdapter(),
+                new SolflareWalletAdapter(),
                 new WalletConnectWalletAdapter({
                     network: network,
                     options: {
@@ -38,8 +42,8 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
                             url: appUrl,
                             icons: [`${appUrl}/Boby-logo.png`],
                             redirect: {
-                                native: appUrl,
-                                universal: appUrl
+                                native: `${appUrl}/auth/callback`,
+                                universal: `${appUrl}/auth/callback`
                             }
                         }
                     }
