@@ -9,6 +9,12 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: "Boby World",
   description: 'An open-world dog adventure game on Solana.',
+  icons: {
+    icon: '/Boby-logo.png',
+    shortcut: '/Boby-logo.png',
+    apple: '/Boby-logo.png',
+  },
+  manifest: '/manifest.json',
 };
 
 export default function RootLayout({

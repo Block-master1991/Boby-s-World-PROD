@@ -43,7 +43,7 @@ function buildSignMessage(nonce: string): string {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { publicKey: adapterPublicKey, signMessage: walletSignMessage, connected, disconnect: adapterDisconnect } = useWallet();
+  const { publicKey: adapterPublicKey, signMessage: walletSignMessage, connected, disconnect: adapterDisconnect, wallet } = useWallet();
   const { toast } = useToast();
 
   const [authState, setAuthState] = useState<AuthState>({
@@ -120,17 +120,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     console.log('[AuthContext checkSession] Starting session check.');
     try {
       // Use a direct fetch here as apiFetch depends on AuthContext, avoiding circular dependency
-      const response = await fetch('/api/auth/session', { 
-        method: 'GET', 
-        credentials: 'include' 
+      const response = await fetch('/api/auth/session', {
+        method: 'GET',
+        credentials: 'include'
       });
 
       if (response.ok) {
         const data = await response.json();
         if (data.authenticated && data.user && data.user.wallet) {
-          setAuthState(prev => ({ 
+          setAuthState(prev => ({
             ...prev, // Keep existing loading state if it was true
-            isAuthenticated: true, 
+            isAuthenticated: true,
             user: { publicKey: data.user.wallet, wallet: data.user.wallet },
             error: null
           }));
@@ -138,40 +138,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           return true;
         }
       } else if (response.status === 401 || response.status === 403) {
-          // If the user was previously authenticated, and now the session is invalid, force logout.
-          // If they were not authenticated, it's just a normal unauthenticated state, no need to force logout/redirect.
-          if (authState.isAuthenticated) {
-            console.warn('[AuthContext checkSession] Session expired or unauthorized for an authenticated user. Forcing logout and redirect.');
-            console.log('[AuthContext checkSession] Triggering logoutAndRedirect from checkSession due to 401/403.');
-            await logoutAndRedirect('/');
-            toast({ variant: 'destructive', title: 'Session Expired', description: 'You have been logged out due to session timeout or wallet mismatch.' });
-          } else {
-            console.log('[AuthContext checkSession] Not authenticated, which is expected for new/logged out users.');
-            setAuthState(prev => ({ 
-              ...prev, 
-              isAuthenticated: false, 
-              user: null, 
-              error: null 
-            }));
-          }
-          return false;
+        // If the user was previously authenticated, and now the session is invalid, force logout.
+        // If they were not authenticated, it's just a normal unauthenticated state, no need to force logout/redirect.
+        if (authState.isAuthenticated) {
+          console.warn('[AuthContext checkSession] Session expired or unauthorized for an authenticated user. Forcing logout and redirect.');
+          console.log('[AuthContext checkSession] Triggering logoutAndRedirect from checkSession due to 401/403.');
+          await logoutAndRedirect('/');
+          toast({ variant: 'destructive', title: 'Session Expired', description: 'You have been logged out due to session timeout or wallet mismatch.' });
+        } else {
+          console.log('[AuthContext checkSession] Not authenticated, which is expected for new/logged out users.');
+          setAuthState(prev => ({
+            ...prev,
+            isAuthenticated: false,
+            user: null,
+            error: null
+          }));
         }
+        return false;
+      }
       // If response not OK and not 401/403, clear auth state (e.g., 500 error, or other non-auth related issues)
       console.log('[AuthContext checkSession] Session check failed or not authenticated (non-401/403 response).');
-      setAuthState(prev => ({ 
-        ...prev, 
-        isAuthenticated: false, 
-        user: null, 
+      setAuthState(prev => ({
+        ...prev,
+        isAuthenticated: false,
+        user: null,
         error: null // Clear error on successful check that just shows not authenticated
       }));
       return false;
     } catch (error) {
       console.error('[AuthContext checkSession] Session check request failed:', error);
-      setAuthState(prev => ({ 
-        ...prev, 
-        isAuthenticated: false, 
-        user: null, 
-        error: 'Session check failed due to network or server error.' 
+      setAuthState(prev => ({
+        ...prev,
+        isAuthenticated: false,
+        user: null,
+        error: 'Session check failed due to network or server error.'
       }));
       toast({ variant: 'destructive', title: 'Network Error', description: 'Failed to validate session. Please check your connection.' });
       return false;
@@ -222,17 +222,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       console.log('[AuthContext login] Nonce received:', nonce);
 
       console.log('[AuthContext login] Step 2: Requesting signature from wallet...');
-      
-      
+
+
       let signatureHex;
       try {
         const message = buildSignMessage(nonce);
         const messageBytes = new TextEncoder().encode(message);
-        const signature = await walletSignMessage(messageBytes);
+        let signature;
+        try {
+          // Try to pass display options for all wallets that support it
+          signature = await (wallet as any).signMessage(messageBytes, {
+            display: JSON.stringify({
+              title: 'Boby World',
+              text: 'Sign in to Boby World',
+              icon: `${window.location.origin}/Boby-logo.png`,
+              domain: window.location.hostname
+            })
+          });
+        } catch {
+          // Fallback to standard signMessage if display options are not supported
+          signature = await walletSignMessage(messageBytes);
+        }
         signatureHex = Buffer.from(signature).toString('hex');
-        console.log('[AuthContext login] Signature received (hex):', signatureHex ? `${signatureHex.substring(0,10)}...` : 'Empty');
-      
-      } catch (signError:  unknown) {
+        console.log('[AuthContext login] Signature received (hex):', signatureHex ? `${signatureHex.substring(0, 10)}...` : 'Empty');
+
+      } catch (signError: unknown) {
         let userFacingError = 'Failed to sign message.';
 
         if (signError instanceof Error && signError?.message?.includes('User rejected')) {
@@ -242,7 +256,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         } else if (signError instanceof Error && signError?.message) {
           userFacingError = `Signing error: ${signError.message}`;
         }
-        
+
         toast({
           variant: 'destructive',
           title: 'Signature Failed',
@@ -260,11 +274,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ 
-          publicKey: adapterPublicKey.toString(), 
-          signature: signatureHex, 
+        body: JSON.stringify({
+          publicKey: adapterPublicKey.toString(),
+          signature: signatureHex,
           nonce
-         })
+        })
       });
 
       const loginData = await loginResponse.json().catch(() => ({ error: 'Login failed.' }));
@@ -284,7 +298,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             const message = buildSignMessage(loginData.nonce);
             const messageBytes = new TextEncoder().encode(message);
-            const signature = await walletSignMessage(messageBytes);
+            let signature;
+            try {
+              // Try to pass display options for all wallets that support it
+              signature = await (wallet as any).signMessage(messageBytes, {
+                display: JSON.stringify({
+                  title: 'Boby World',
+                  text: 'Sign in to Boby World',
+                  icon: `${window.location.origin}/Boby-logo.png`,
+                  domain: window.location.hostname
+                })
+              });
+            } catch {
+              // Fallback to standard signMessage if display options are not supported
+              signature = await walletSignMessage(messageBytes);
+            }
             const signatureHex = Buffer.from(signature).toString('hex');
 
             const retryLoginResponse = await fetch('/api/auth/login', {
@@ -383,7 +411,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Effect to handle wallet connection changes and enforce mismatch logout
   useEffect(() => {
-    
+
     if (!connected && !authState.isAuthenticated && authState.isLoading) {
       setAuthState(prev => ({ ...prev, isLoading: false }));
     }
