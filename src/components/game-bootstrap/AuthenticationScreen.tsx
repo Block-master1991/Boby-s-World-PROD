@@ -8,6 +8,7 @@ import { PawPrint, AlertTriangle, LogOutIcon, ShieldCheck, Smartphone, RefreshCw
 import Image from 'next/image';
 import { useAuth } from '@/hooks/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { PWAInstallButton } from '@/components/shared/PWAInstallButton';
 
 interface AuthenticationScreenProps {
   onRequestDisconnect: () => Promise<void>;
@@ -182,9 +183,19 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
           <p className="text-xl text-muted-foreground mb-6 max-w-md">
             You are logged in as <span className="font-semibold text-primary">{user?.publicKey.substring(0, 4)}...{user?.publicKey.substring(user?.publicKey.length - 4)}</span>.
           </p>
-          <p className="text-lg text-muted-foreground mb-8">
+          <p className="text-lg text-muted-foreground mb-6">
             Ready to enter Boby World!
           </p>
+
+          {/* PWA Install Button */}
+          <div className="mb-6">
+            <PWAInstallButton
+              variant="button"
+              showOnlyOnMobile={true}
+              className="w-full max-w-xs"
+            />
+          </div>
+
           {/* No explicit button to "enter game" here, as GameContainer handles the transition */}
         </>
       )}
