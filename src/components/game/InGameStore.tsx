@@ -205,6 +205,19 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     throw new Error(`Insufficient BOBY balance. You have ${userBalance.toLocaleString()} BOBY but need ${calculatedBobyAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} BOBY.`);
                 }
 
+                // Check SOL balance for transaction fees
+                let solBalance = 0;
+                try {
+                    solBalance = await connection.getBalance(adapterPublicKey);
+                } catch (error) {
+                    // Account doesn't exist, balance is 0
+                    console.warn('SOL account not found, assuming balance 0:', error);
+                }
+                const minSolForFees = 10000; // 0.00001 SOL in lamports (adjust as needed)
+                if (solBalance < minSolForFees) {
+                    throw new Error(`Insufficient SOL balance for transaction fees. You have ${(solBalance / 1000000000).toFixed(6)} SOL but need at least 0.00001 SOL.`);
+                }
+
                 const transaction = new Transaction();
                 try {
                     await connection.getAccountInfo(toTokenAccountAddress);
@@ -291,7 +304,12 @@ const InGameStore: React.FC<InGameStoreProps> = ({
 
             } catch (error) {
                 console.error('Purchase attempt failed:', error);
-                const errorMessage = error instanceof Error ? error.message : 'Could not complete purchase.';
+                let errorMessage = error instanceof Error ? error.message : 'Could not complete purchase.';
+
+                // Improve error messages for better user experience
+                if (errorMessage.includes('debit an account') || errorMessage.includes('no record of a prior credit')) {
+                    errorMessage = 'Insufficient SOL balance for transaction fees. Please ensure your wallet has enough SOL (at least 0.00001 SOL) to cover network fees.';
+                }
 
                 // Check if it's a timeout or user rejection error
                 if (errorMessage.includes('timeout') || errorMessage.includes('User rejected')) {

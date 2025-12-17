@@ -65,22 +65,12 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
         <div className="relative mb-8">
           <Image src="/Boby-logo.png" alt="Boby World Loading" width={180} height={180} className="rounded-md opacity-80" style={{ width: 'auto', height: 'auto' }} data-ai-hint="dog logo" priority />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin"></div>
-          </div>
         </div>
         <PawPrint className="h-12 w-12 animate-pulse text-primary mb-4" />
         <h1 className="text-4xl font-bold mb-2 font-headline">Boby World</h1>
         <p className="text-xl text-muted-foreground">
           Processing authentication...
         </p>
-        <div className="flex items-center gap-2 mt-4">
-          <div className="flex gap-1">
-            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
-            <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
-          </div>
-        </div>
         <p className="text-sm text-muted-foreground mt-4 text-center max-w-xs">
           {isMobile ? 'Check your wallet app if prompted for approval. Connection may take longer on mobile.' : 'Please wait. If prompted, check your wallet.'}
         </p>
