@@ -45,13 +45,42 @@ export default function AuthCallback() {
                     setTimeout(() => router.push('/'), 3000);
                 }
             }
-            // If wallet not connected after a delay, redirect anyway
+            // If wallet not connected, wait longer for reconnection (especially for Trust Wallet)
             else if (!connected && !hasAttemptedLogin) {
-                const timer = setTimeout(() => {
-                    console.log('[AuthCallback] Wallet not connected, redirecting to home');
-                    router.push('/');
-                }, 3000);
-                return () => clearTimeout(timer);
+                console.log('[AuthCallback] Wallet not immediately connected, waiting for reconnection...');
+
+                // Wait up to 10 seconds for wallet to reconnect (for Trust Wallet and others)
+                let attempts = 0;
+                const checkConnection = () => {
+                    attempts++;
+
+                    if (connected && publicKey && !loginAttempted && !isAuthLoading) {
+                        console.log('[AuthCallback] Wallet reconnected, attempting login');
+                        setLoginAttempted(true);
+                        setHasAttemptedLogin(true);
+
+                        login().then(loginSuccess => {
+                            if (loginSuccess) {
+                                console.log('[AuthCallback] Login successful after reconnection');
+                                router.push('/');
+                            } else {
+                                console.warn('[AuthCallback] Login failed after reconnection');
+                                setTimeout(() => router.push('/'), 3000);
+                            }
+                        }).catch(error => {
+                            console.error('[AuthCallback] Login error after reconnection:', error);
+                            setTimeout(() => router.push('/'), 3000);
+                        });
+                    } else if (attempts >= 10) { // After 10 seconds
+                        console.log('[AuthCallback] Wallet still not connected after 10 attempts, redirecting');
+                        router.push('/');
+                    } else {
+                        // Check again in 1 second
+                        setTimeout(checkConnection, 1000);
+                    }
+                };
+
+                setTimeout(checkConnection, 1000);
             }
         };
 
