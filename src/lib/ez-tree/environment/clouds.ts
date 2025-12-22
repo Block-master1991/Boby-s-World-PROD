@@ -26,8 +26,7 @@ export class Clouds extends THREE.Object3D {
     }
 
     private init() {
-        const perfConfig = getDevicePerformanceConfig();
-        const baseCount = perfConfig.isMobile ? 100 : 300;
+        const baseCount = 40; // عدد قليل وثابت لجميع الأجهزة لإعطاء مظهر نظيف وفخم
         this.count = baseCount;
 
         const textureLoader = new THREE.TextureLoader();
@@ -61,7 +60,7 @@ export class Clouds extends THREE.Object3D {
                 Math.random() * this.worldSize - this.worldSize / 2
             );
 
-            const scale = 200 + Math.random() * 300;
+            const scale = 600 + Math.random() * 600; // تكبير حجم السحاب (600 إلى 1200)
             const driftSpeedMultiplier = isHigh ? 0.3 : 0.8;
 
             this.cloudData.push({
