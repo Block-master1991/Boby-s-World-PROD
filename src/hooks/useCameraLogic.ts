@@ -31,8 +31,8 @@ export const useCameraLogic = ({
     const camera = new THREE.PerspectiveCamera(
       50,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
-      0.1,
-      2000 // Increased far clipping plane to accommodate large cloud plane
+      0.5,
+      5000 // Increased significantly to 5000 to match the world and cloud layer
     );
     cameraRef.current = camera;
     camera.position.set(0, 5, 5);

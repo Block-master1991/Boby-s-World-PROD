@@ -39,13 +39,14 @@ export const useSceneSetup = ({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.FogExp2(0x87CEEB, perfConfig.isMobile ? 0.0005 : 0.000); // Increased fog on mobile for distant culling
+    scene.fog = new THREE.FogExp2(0x87CEEB, 0.0001); // Even more subtle fog for better distance viewing
     sceneRef.current = scene;
 
     // Configure renderer based on device
     const renderer = new THREE.WebGLRenderer({
       antialias: perfConfig.renderer.antialias,
-      powerPreference: 'high-performance' // Prefer higher performance GPU
+      powerPreference: 'high-performance', // Prefer higher performance GPU
+      logarithmicDepthBuffer: true // Crucial for large scene depth precision (fixes ground jitter)
     });
 
     renderer.setSize(currentMount.clientWidth || window.innerWidth, currentMount.clientHeight || window.innerHeight);
@@ -66,7 +67,7 @@ export const useSceneSetup = ({
     rendererRef.current = renderer;
 
     // Initialize Octree
-    const worldBounds = new THREE.Box3(new THREE.Vector3(-1000, -10, -1000), new THREE.Vector3(1000, 300, 1000));
+    const worldBounds = new THREE.Box3(new THREE.Vector3(-5000, -10, -5000), new THREE.Vector3(5000, 300, 5000));
     const octree = new Octree<GameObject>(worldBounds);
     octreeRef.current = octree;
 
@@ -88,16 +89,9 @@ export const useSceneSetup = ({
     }
     scene.add(directionalLight);
 
-    const groundGeometry = new THREE.PlaneGeometry(2000, 2000);
-    const groundMaterial = new THREE.MeshStandardMaterial({ color: 0x556B2F, side: THREE.DoubleSide });
-    const groundPlane = new THREE.Mesh(groundGeometry, groundMaterial);
-    groundPlane.rotation.x = -Math.PI / 2;
-    groundPlane.receiveShadow = true;
-    scene.add(groundPlane);
-
-    // Add ground plane to Octree
-    const groundBox = new THREE.Box3().setFromObject(groundPlane);
-    octree.insert({ id: 'ground', bounds: groundBox, data: groundPlane as unknown as GameObject });
+    // Simplified setup: We removed the basic ground plane from here 
+    // because Environment.ts adds a more advanced Ground with shaders.
+    // Having both caused Z-Fighting (ground jitter).
 
     return true;
   }, [mountRef, sceneRef, cameraRef, rendererRef, octreeRef]); // controlsRef removed from dependencies, octreeRef added

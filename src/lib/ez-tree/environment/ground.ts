@@ -147,7 +147,7 @@ export class Ground extends THREE.Mesh {
         (this.material as THREE.MeshPhongMaterial).userData.shader = shader;
       };
 
-      this.geometry = new THREE.PlaneGeometry(2000, 2000);
+      this.geometry = new THREE.PlaneGeometry(10000, 10000);
       this.rotation.x = -Math.PI / 2;
       this.receiveShadow = true;
     });
