@@ -29,7 +29,7 @@ const ANIMATION_NAMES = {
     SPRINT_JUMP: 'Run_Jump'
 };
 const CROSSFADE_DURATION = 0.2;
-const MOVEMENT_BOUNDARY = 999;
+// Movement boundary removed for infinite world
 
 
 interface UseDogLogicProps {
@@ -257,8 +257,7 @@ export const useDogLogic = ({
             }
             isDogActuallyMoving = movementAppliedThisFrame;
 
-            dog.position.x = Math.max(-MOVEMENT_BOUNDARY, Math.min(MOVEMENT_BOUNDARY, dog.position.x));
-            dog.position.z = Math.max(-MOVEMENT_BOUNDARY, Math.min(MOVEMENT_BOUNDARY, dog.position.z));
+            // Position clamping removed for infinite world traversal
             dog.position.y = 0;
 
             if (animationMixerRef.current) {

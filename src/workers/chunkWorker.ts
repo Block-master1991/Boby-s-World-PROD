@@ -386,9 +386,10 @@ function generateGameplayData(chunkX: number, chunkZ: number, worldMin: number, 
     const rng = new RNG(seed);
 
     // --- COINS GENERATION ---
-    // Replicating the logic from useCoinLogic.ts to maintain the exact same difficulty/count
-    // Logic: (Math.random() < 0.625) ? 1 : 0
-    const numCoinsToGenerate = (rng.random(0, 1) < 0.625) ? 1 : 0;
+    // Deterministic Coin Zone: Only spawn in central chunks (-20 to 20)
+    // This creates a ~2000m x 2000m area with a fixed supply of approx 1000 coins.
+    const isInsideCoinZone = Math.abs(chunkX) <= 20 && Math.abs(chunkZ) <= 20;
+    const numCoinsToGenerate = (isInsideCoinZone && rng.random(0, 1) < 0.625) ? 1 : 0;
 
     for (let i = 0; i < numCoinsToGenerate; i++) {
         let coinX, coinZ;

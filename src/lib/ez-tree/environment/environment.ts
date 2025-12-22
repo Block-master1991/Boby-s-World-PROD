@@ -83,6 +83,7 @@ export class Environment extends THREE.Object3D {
   public update(elapsedTime: number, cameraPosition: THREE.Vector3): void {
     if (cameraPosition) {
       this.skybox.position.copy(cameraPosition); // Make skybox follow camera
+      this.ground.position.set(cameraPosition.x, 0, cameraPosition.z); // Make ground follow camera
     }
     this.chunkManager.updateModern(elapsedTime); // Pass elapsedTime to chunkManager
     this.cloudsInstance.update(elapsedTime, cameraPosition); // Update clouds
