@@ -5,7 +5,6 @@ import { Grass, GrassOptions } from './grass';
 import { Rocks, RockOptions } from './rocks';
 import { Trees, TreesOptions } from './trees'; // Import Trees
 import { Flowers, FlowerOptions } from './flowers'; // Import Flowers
-import { Clouds } from './clouds'; // Import Clouds
 import { ChunkManager } from '../../chunk/ChunkManager';
 import { RENDER_DISTANCE_CHUNKS } from '../../chunkUtils';
 import { getDevicePerformanceConfig } from '../../utils';
@@ -18,7 +17,6 @@ export class Environment extends THREE.Object3D {
   private rocksInstance: Rocks;
   private treesInstance: Trees; // Add treesInstance
   private flowersInstance: Flowers; // Add flowersInstance
-  private cloudsInstance: Clouds; // Add cloudsInstance
 
   constructor() {
     super();
@@ -49,7 +47,6 @@ export class Environment extends THREE.Object3D {
     this.rocksInstance = new Rocks(rockOptions);
     this.treesInstance = new Trees(treeOptions);
     this.flowersInstance = new Flowers(flowerOptions);
-    this.cloudsInstance = new Clouds();
 
     console.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? 'mobile' : 'desktop'}:`, {
       grass: grassOptions.instanceCountPerChunk,
@@ -61,7 +58,6 @@ export class Environment extends THREE.Object3D {
     // Create ChunkManager and pass the object generators
     this.chunkManager = new ChunkManager(this.grassInstance, this.rocksInstance, this.treesInstance, this.flowersInstance);
     this.add(this.chunkManager);
-    this.add(this.cloudsInstance);
 
     // Note: Assets are preloaded in useGameAssetLoader, so fetchAssets will use cached data
     // If not preloaded, they will be loaded on-demand (though not recommended)
@@ -85,8 +81,8 @@ export class Environment extends THREE.Object3D {
       this.skybox.position.copy(cameraPosition); // Make skybox follow camera
       this.ground.position.set(cameraPosition.x, 0, cameraPosition.z); // Make ground follow camera
     }
+    this.skybox.update(elapsedTime); // Update sky rotation
     this.chunkManager.updateModern(elapsedTime); // Pass elapsedTime to chunkManager
-    this.cloudsInstance.update(elapsedTime, cameraPosition); // Update clouds
   }
 
   /**

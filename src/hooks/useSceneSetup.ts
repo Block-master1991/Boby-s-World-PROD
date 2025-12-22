@@ -38,8 +38,7 @@ export const useSceneSetup = ({
     const perfConfig = getDevicePerformanceConfig();
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.Fog(0xffffff, 173, 174); // جدار زجاجي أبيض حاد عند 140 وحدة
+    scene.fog = new THREE.Fog(0xffffff, 154, 155); // جدار زجاجي أبيض حاد عند 140 وحدة
     sceneRef.current = scene;
 
     // Configure renderer based on device
@@ -51,6 +50,10 @@ export const useSceneSetup = ({
 
     renderer.setSize(currentMount.clientWidth || window.innerWidth, currentMount.clientHeight || window.innerHeight);
     renderer.setPixelRatio(perfConfig.renderer.pixelRatio);
+
+    // HDR Tone Mapping
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0;
 
     renderer.shadowMap.enabled = !perfConfig.isMobile; // Disable shadows on mobile for performance
     if (!perfConfig.isMobile) {
@@ -71,23 +74,8 @@ export const useSceneSetup = ({
     const octree = new Octree<GameObject>(worldBounds);
     octreeRef.current = octree;
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7);
-    scene.add(ambientLight);
-
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 1.2);
-    directionalLight.position.set(100, 200, 150);
-    directionalLight.castShadow = !perfConfig.isMobile;
-    if (!perfConfig.isMobile) {
-      directionalLight.shadow.mapSize.width = perfConfig.renderer.shadowMapSize;
-      directionalLight.shadow.mapSize.height = perfConfig.renderer.shadowMapSize;
-      directionalLight.shadow.camera.near = 50;
-      directionalLight.shadow.camera.far = perfConfig.isMobile ? 200 : 500; // Reduced shadow distance on mobile
-      directionalLight.shadow.camera.left = perfConfig.isMobile ? -100 : -250;
-      directionalLight.shadow.camera.right = perfConfig.isMobile ? 100 : 250;
-      directionalLight.shadow.camera.top = perfConfig.isMobile ? 100 : 250;
-      directionalLight.shadow.camera.bottom = perfConfig.isMobile ? -100 : -250;
-    }
-    scene.add(directionalLight);
+    // Note: Lights and Background are now managed by Skybox/Environment
+    // which is added to the scene in GameCanvas.
 
     // Simplified setup: We removed the basic ground plane from here 
     // because Environment.ts adds a more advanced Ground with shaders.
