@@ -39,7 +39,7 @@ export const useSceneSetup = ({
 
     const scene = new THREE.Scene();
     scene.background = new THREE.Color(0x87CEEB);
-    scene.fog = new THREE.FogExp2(0x87CEEB, 0.0001); // Even more subtle fog for better distance viewing
+    scene.fog = new THREE.Fog(0xffffff, 173, 174); // جدار زجاجي أبيض حاد عند 140 وحدة
     sceneRef.current = scene;
 
     // Configure renderer based on device

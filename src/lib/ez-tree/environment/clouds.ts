@@ -39,7 +39,8 @@ export class Clouds extends THREE.Object3D {
             transparent: true,
             depthWrite: false,
             side: THREE.DoubleSide,
-            alphaTest: 0.01
+            alphaTest: 0.01,
+            fog: false // استثناء السحاب من الضباب ليبقى مرئياً في الأفق
         });
 
         this.instancedMesh = new THREE.InstancedMesh(geometry, material, this.count);

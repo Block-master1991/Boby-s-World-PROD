@@ -39,6 +39,7 @@ export class Skybox extends THREE.Object3D {
     this.sky = new Sky();
     this.sky.scale.setScalar(4000); // Scaled down to fit within Camera's Far Plane (5000)
     this.sky.frustumCulled = false; // Ensure it stays visible
+    this.sky.material.fog = false; // استثناء السماء من الضباب
     this.add(this.sky);
 
     // Create a directional light to act as the Sun's light source
