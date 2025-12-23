@@ -20,8 +20,8 @@ export class Skybox extends THREE.Object3D {
     this.sun = new THREE.DirectionalLight(0xffffff, 5);
     this.sun.castShadow = !perfConfig.isMobile;
 
-    // Expand shadow area massively to cover EVERYTHING dynamically
-    const SHADOW_SIZE = 1000; // Total 2000x2000 area - covers mountains and far objects
+    // Expand shadow area to cover full render distance dynamically
+    const SHADOW_SIZE = 200; // Total 400x400 area - Ultra sharp shadows
     this.sun.shadow.camera.left = -SHADOW_SIZE;
     this.sun.shadow.camera.right = SHADOW_SIZE;
     this.sun.shadow.camera.top = SHADOW_SIZE;
@@ -61,7 +61,7 @@ export class Skybox extends THREE.Object3D {
       texture.anisotropy = 16;
 
       // Create a large sphere for the sky
-      const geometry = new THREE.SphereGeometry(4500, 60, 40);
+      const geometry = new THREE.SphereGeometry(250, 60, 40);
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         side: THREE.BackSide,
@@ -110,7 +110,7 @@ export class Skybox extends THREE.Object3D {
   public update(elapsedTime: number, cameraPosition?: THREE.Vector3) {
     if (this.skyMesh) {
       // Very slow rotation to simulate cloud movement
-      this.skyMesh.rotation.y = elapsedTime * 0.005;
+      this.skyMesh.rotation.y = elapsedTime * 0.0025;
     }
 
     // Update sun position to follow camera for proper shadow rendering
