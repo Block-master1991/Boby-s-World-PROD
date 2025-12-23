@@ -11,6 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input'; // Import Input component
 import { Plus, Minus } from 'lucide-react'; // Removed Maximize icon, will use text
+import { useUserInventory, useConsumableItem } from '@/hooks/useGraphQL';
+import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { useToast } from '@/hooks/use-toast';
 
 interface AggregatedInventoryItem {
     definition: StoreItemDefinition;
@@ -32,29 +35,41 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     protectionBottleCount,
     coinMagnetTreatCount,
 }) => {
+    const { sessionPublicKey } = useSessionWallet();
     const [quantitiesToUse, setQuantitiesToUse] = useState<Record<string, number>>({});
 
-    // Aggregate inventory items based on passed counts
+    const { toast } = useToast();
+    // GraphQL inventory data (primary source)
+    const { data: inventoryData, loading: graphqlLoading, error: graphqlError, execute: refetchInventory } = useUserInventory(sessionPublicKey?.toBase58() || '');
+    const { useItem, loading: useItemLoading } = useConsumableItem();
+
+    // Extract counts from GraphQL data or fallback to props
+    const protectionBottleCountFinal = inventoryData?.userInventory?.protectionBottleCount ?? protectionBottleCount;
+    const guardianShieldCountFinal = inventoryData?.userInventory?.guardianShieldCount ?? guardianShieldCount;
+    const speedyPawsTreatCountFinal = inventoryData?.userInventory?.speedyPawsTreatCount ?? speedyPawsTreatCount;
+    const coinMagnetTreatCountFinal = inventoryData?.userInventory?.coinMagnetTreatCount ?? coinMagnetTreatCount;
+
+    // Aggregate inventory items based on counts (GraphQL preferred, props fallback)
     const aggregatedInventory = React.useMemo(() => {
         const items: AggregatedInventoryItem[] = [];
-        if (protectionBottleCount > 0) {
+        if (protectionBottleCountFinal > 0) {
             const def = storeItems.find(item => item.id === '1');
-            if (def) items.push({ definition: def, count: protectionBottleCount });
+            if (def) items.push({ definition: def, count: protectionBottleCountFinal });
         }
-        if (guardianShieldCount > 0) {
+        if (guardianShieldCountFinal > 0) {
             const def = storeItems.find(item => item.id === '2');
-            if (def) items.push({ definition: def, count: guardianShieldCount });
+            if (def) items.push({ definition: def, count: guardianShieldCountFinal });
         }
-        if (speedyPawsTreatCount > 0) {
+        if (speedyPawsTreatCountFinal > 0) {
             const def = storeItems.find(item => item.id === '3');
-            if (def) items.push({ definition: def, count: speedyPawsTreatCount });
+            if (def) items.push({ definition: def, count: speedyPawsTreatCountFinal });
         }
-        if (coinMagnetTreatCount > 0) {
+        if (coinMagnetTreatCountFinal > 0) {
             const def = storeItems.find(item => item.id === '4');
-            if (def) items.push({ definition: def, count: coinMagnetTreatCount });
+            if (def) items.push({ definition: def, count: coinMagnetTreatCountFinal });
         }
         return items;
-    }, [protectionBottleCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
+    }, [protectionBottleCountFinal, guardianShieldCountFinal, speedyPawsTreatCountFinal, coinMagnetTreatCountFinal]);
 
     // Initialize quantitiesToUse when aggregatedInventory changes
     useEffect(() => {
@@ -64,17 +79,17 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
         });
         setQuantitiesToUse(initialQuantities);
     }, [aggregatedInventory]);
-    
-    // Helper to get current count for a specific item ID from props
+
+    // Helper to get current count for a specific item ID
     const getItemCount = useCallback((itemId: string) => {
         switch (itemId) {
-            case '1': return protectionBottleCount;
-            case '2': return guardianShieldCount;
-            case '3': return speedyPawsTreatCount;
-            case '4': return coinMagnetTreatCount;
+            case '1': return protectionBottleCountFinal;
+            case '2': return guardianShieldCountFinal;
+            case '3': return speedyPawsTreatCountFinal;
+            case '4': return coinMagnetTreatCountFinal;
             default: return 0;
         }
-    }, [protectionBottleCount, guardianShieldCount, speedyPawsTreatCount, coinMagnetTreatCount]);
+    }, [protectionBottleCountFinal, guardianShieldCountFinal, speedyPawsTreatCountFinal, coinMagnetTreatCountFinal]);
 
     // Handlers for quantity input
     const handleQuantityChange = useCallback((itemId: string, value: number) => {
@@ -130,13 +145,13 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                             return (
                                 <Card key={itemGroup.definition.id} className="flex flex-col">
                                     <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
-                                        <Image 
-                                            src={itemGroup.definition.image || 'https://placehold.co/60x60.png'} 
-                                            alt={itemGroup.definition.name} 
-                                            width={48} 
-                                            height={48} 
+                                        <Image
+                                            src={itemGroup.definition.image || 'https://placehold.co/60x60.png'}
+                                            alt={itemGroup.definition.name}
+                                            width={48}
+                                            height={48}
                                             className="rounded-md border"
-                                            data-ai-hint={itemGroup.definition.dataAiHint || 'item placeholder'} 
+                                            data-ai-hint={itemGroup.definition.dataAiHint || 'item placeholder'}
                                         />
                                         <div>
                                             <CardTitle className="text-lg">{itemGroup.definition.name}</CardTitle>
@@ -145,57 +160,75 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                                     </CardHeader>
                                     {itemGroup.definition.description && (
                                         <CardContent className="p-4 pt-0 flex flex-col flex-grow">
-                                        <CardDescription className="text-xs mb-2">{itemGroup.definition.description}</CardDescription>
-                                        {isConsumable && currentCount > 0 && (
-                                            <>
-                                                <div className="flex items-center justify-center space-x-2 mt-4">
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon" 
-                                                        className="h-9 w-9" // Standardized height and width
-                                                        onClick={() => handleDecrement(itemGroup.definition.id)}
-                                                        disabled={quantity <= 1}
+                                            <CardDescription className="text-xs mb-2">{itemGroup.definition.description}</CardDescription>
+                                            {isConsumable && currentCount > 0 && (
+                                                <>
+                                                    <div className="flex items-center justify-center space-x-2 mt-4">
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9" // Standardized height and width
+                                                            onClick={() => handleDecrement(itemGroup.definition.id)}
+                                                            disabled={quantity <= 1}
+                                                        >
+                                                            <Minus className="h-4 w-4" />
+                                                        </Button>
+                                                        <Input
+                                                            type="number"
+                                                            value={quantity}
+                                                            onChange={(e) => handleQuantityChange(itemGroup.definition.id, parseInt(e.target.value))}
+                                                            className="w-24 text-center no-spinners flex-grow h-9" // Added h-9 to match button height
+                                                            min={1}
+                                                            max={currentCount}
+                                                        />
+                                                        <Button
+                                                            variant="outline"
+                                                            size="icon"
+                                                            className="h-9 w-9" // Standardized height and width
+                                                            onClick={() => handleIncrement(itemGroup.definition.id)}
+                                                            disabled={quantity >= currentCount}
+                                                        >
+                                                            <Plus className="h-4 w-4" />
+                                                        </Button>
+                                                        <Button
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="h-9 text-xs px-2 py-1" // Standardized height, kept text-xs and padding
+                                                            onClick={() => handleMaximize(itemGroup.definition.id)}
+                                                            disabled={quantity === currentCount}
+                                                        >
+                                                            Max
+                                                        </Button>
+                                                    </div>
+                                                    <Button
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="mt-4 w-full text-xs px-2 py-1" // Changed mt-3 to mt-4
+                                                        onClick={async () => {
+                                                            try {
+                                                                // Use the prop method because it triggers game effects (speed boost, shield, etc.)
+                                                                // and handles optimistic updates in GameUI.
+                                                                await onUseConsumableItem(itemGroup.definition.id, quantity);
+
+                                                                // Also manually trigger a refetch of GraphQL data to keep it in sync
+                                                                if (sessionPublicKey) {
+                                                                    await refetchInventory();
+                                                                }
+                                                            } catch (error) {
+                                                                console.error('[PlayerInventory] Failed to use item:', error);
+                                                                toast({
+                                                                    title: 'Error',
+                                                                    description: error instanceof Error ? error.message : 'Unknown error',
+                                                                    variant: 'destructive',
+                                                                });
+                                                            }
+                                                        }}
+                                                        disabled={quantity === 0 || useItemLoading}
                                                     >
-                                                        <Minus className="h-4 w-4" />
+                                                        {useItemLoading ? 'Using...' : `Use ${quantity} Item(s)`}
                                                     </Button>
-                                                    <Input
-                                                        type="number"
-                                                        value={quantity}
-                                                        onChange={(e) => handleQuantityChange(itemGroup.definition.id, parseInt(e.target.value))}
-                                                        className="w-24 text-center no-spinners flex-grow h-9" // Added h-9 to match button height
-                                                        min={1}
-                                                        max={currentCount}
-                                                    />
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="icon" 
-                                                        className="h-9 w-9" // Standardized height and width
-                                                        onClick={() => handleIncrement(itemGroup.definition.id)}
-                                                        disabled={quantity >= currentCount}
-                                                    >
-                                                        <Plus className="h-4 w-4" />
-                                                    </Button>
-                                                    <Button 
-                                                        variant="outline" 
-                                                        size="sm" 
-                                                        className="h-9 text-xs px-2 py-1" // Standardized height, kept text-xs and padding
-                                                        onClick={() => handleMaximize(itemGroup.definition.id)}
-                                                        disabled={quantity === currentCount}
-                                                    >
-                                                        Max
-                                                    </Button>
-                                                </div>
-                                                <Button 
-                                                    variant="default" 
-                                                    size="sm" 
-                                                    className="mt-4 w-full text-xs px-2 py-1" // Changed mt-3 to mt-4
-                                                    onClick={() => onUseConsumableItem(itemGroup.definition.id, quantity)}
-                                                    disabled={quantity === 0}
-                                                >
-                                                    Use {quantity} Item(s)
-                                                </Button>
-                                            </>
-                                        )}
+                                                </>
+                                            )}
                                         </CardContent>
                                     )}
                                 </Card>
@@ -204,7 +237,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                     )}
                 </div>
             </ScrollArea>
-             <SheetFooter className="p-4 border-t mt-auto">
+            <SheetFooter className="p-4 border-t mt-auto">
                 {/* The requested text to remove was here. It is now gone. */}
             </SheetFooter>
         </>

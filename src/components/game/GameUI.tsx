@@ -19,6 +19,7 @@ import { useToast } from '@/hooks/use-toast';
 import { storeItems, type StoreItemDefinition } from '@/lib/items'; // Assuming '@/lib/items' defines store items
 import { ENEMY_COLLISION_PENALTY_USDT } from '@/lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
+import { useFetchPlayerData, useAddCoins, useWithdrawUSDT } from '@/hooks/useGraphQL'; // GraphQL hooks
 
 // Game Constants
 const USDT_PER_COIN = 0.001;
@@ -55,7 +56,7 @@ interface GameUIProps {
     onLoadComplete: (success: boolean) => void;
 }
 
-const GameUI: React.FC<GameUIProps> = ({ 
+const GameUI: React.FC<GameUIProps> = ({
     octreeRef,
     onLoadStart,
     onLoadProgress,
@@ -75,6 +76,11 @@ const GameUI: React.FC<GameUIProps> = ({
     const { toast } = useToast();
     const { apiFetch } = useApiFetch(); // Moved to top level
 
+    // GraphQL hooks
+    const { data: playerData, loading: playerDataLoading, fetchData } = useFetchPlayerData();
+    const { addCoins, loading: addCoinsLoading } = useAddCoins();
+    const { withdrawUSDT, loading: withdrawLoading } = useWithdrawUSDT();
+
     // UI State
     const [isStoreOpen, setIsStoreOpen] = useState(false);
     const [isInventoryOpen, setIsInventoryOpen] = useState(false);
@@ -87,12 +93,12 @@ const GameUI: React.FC<GameUIProps> = ({
     const [isWalletLoading, setIsWalletLoading] = useState(false);
 
     /**
-     * Fetches player data from the backend API.
+     * Fetches player data using GraphQL.
      */
     const fetchPlayerData = useCallback(async (showLoadingState = false) => {
         if (!isAuthenticated || !authUser?.publicKey) {
             setIsFetchingPlayerUSDT(false);
-            return null; // Return null if not authenticated
+            return null;
         }
 
         // Set loading states if requested
@@ -104,38 +110,24 @@ const GameUI: React.FC<GameUIProps> = ({
 
         setIsFetchingPlayerUSDT(true);
 
-        // Show loading states for sheets when requested
-        if (showLoadingState) {
-            setIsStoreLoading(true);
-            setIsInventoryLoading(true);
-            setIsWalletLoading(true);
-        }
-
-        const controller = new AbortController();
-        const signal = controller.signal;
-
         try {
-            const response = await apiFetch('/api/game/fetchPlayerData', { // استخدام apiFetch
-                method: 'GET',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${authUser.publicKey}`
-                },
-                signal: signal
-            });
-            const data = await response.json();
+            // Use GraphQL hook to fetch player data
+            const result = await fetchData(authUser.publicKey);
 
-            if (response.ok) {
-                setPlayerGameUSDT(data.gameUSDTBalance || 0);
-                const rawInventory = data.inventory || [];
+            if (result?.success && result.playerData) {
+                const { playerData } = result;
+                setPlayerGameUSDT(playerData.coins || 0);
+
+                // Count inventory items
+                const inventory = playerData.inventory || [];
                 let speedyCount = 0, shieldCount = 0, pBottleCount = 0, magnetCount = 0;
-                rawInventory.forEach((item: { id: string }) => {
-                    const itemId = typeof item === 'object' && item.id ? item.id : item;
-                    if (itemId === '1') pBottleCount++;
-                    if (itemId === '2') shieldCount++;
-                    if (itemId === '3') speedyCount++;
-                    if (itemId === '4') magnetCount++;
+                inventory.forEach((item: any) => {
+                    if (item.id === '1') pBottleCount += item.quantity || 1;
+                    if (item.id === '2') shieldCount += item.quantity || 1;
+                    if (item.id === '3') speedyCount += item.quantity || 1;
+                    if (item.id === '4') magnetCount += item.quantity || 1;
                 });
+
                 setProtectionBottleCount(pBottleCount);
                 setGuardianShieldCount(shieldCount);
                 setSpeedyPawsTreatCount(speedyCount);
@@ -146,22 +138,20 @@ const GameUI: React.FC<GameUIProps> = ({
                 setIsInventoryLoading(false);
                 setIsWalletLoading(false);
             } else {
-                console.error("Backend error fetching player data:", data.error || 'Failed to fetch player data.');
-
+                console.error("GraphQL error fetching player data:", result?.error || 'Failed to fetch player data.');
                 // Reset loading states for sheets even on error
                 setIsStoreLoading(false);
                 setIsInventoryLoading(false);
                 setIsWalletLoading(false);
             }
         } catch (error) {
-            console.error("Network or unexpected error fetching player data from backend:", error);
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.debug('[GameUI] fetchPlayerData aborted.'); // Changed to console.debug
-            } else {
-                console.debug("Network or unexpected error fetching player data from backend:", error); // Changed to console.debug
-                toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
-                setProtectionBottleCount(0); setGuardianShieldCount(0); setSpeedyPawsTreatCount(0); setCoinMagnetTreatCount(0); setPlayerGameUSDT(0);
-            }
+            console.error("Network or unexpected error fetching player data via GraphQL:", error);
+            toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
+            setProtectionBottleCount(0);
+            setGuardianShieldCount(0);
+            setSpeedyPawsTreatCount(0);
+            setCoinMagnetTreatCount(0);
+            setPlayerGameUSDT(0);
 
             // Reset loading states for sheets even on error
             setIsStoreLoading(false);
@@ -170,8 +160,7 @@ const GameUI: React.FC<GameUIProps> = ({
         } finally {
             setIsFetchingPlayerUSDT(false);
         }
-        return controller; // Return the controller
-    }, [isAuthenticated, authUser?.publicKey, toast, apiFetch]); // Added apiFetch to dependencies
+    }, [isAuthenticated, authUser?.publicKey, toast, fetchData]);
 
     // New State for pending optimistic updates
     const [optimisticUpdates, setOptimisticUpdates] = useState<OptimisticUpdate[]>([]);
@@ -212,13 +201,13 @@ const GameUI: React.FC<GameUIProps> = ({
 
 
     // Joystick State
-    const [joystickMovement, setJoystickMovement] = useState<{x: number, y: number} | null>(null);
+    const [joystickMovement, setJoystickMovement] = useState<{ x: number, y: number } | null>(null);
     const [dynamicJoystickState, setDynamicJoystickState] = useState({
-      visible: false,
-      baseScreenX: 0,
-      baseScreenY: 0,
-      knobOffsetX: 0,
-      knobOffsetY: 0,
+        visible: false,
+        baseScreenX: 0,
+        baseScreenY: 0,
+        knobOffsetX: 0,
+        knobOffsetY: 0,
     });
 
     // Item Definitions (from '@/lib/items')
@@ -358,7 +347,7 @@ const GameUI: React.FC<GameUIProps> = ({
      */
     const handleCoinCollected = useCallback(async () => {
         setSessionCollectedUSDT(prev => prev + USDT_PER_COIN);
-        
+
         if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey) {
             toast({ title: 'Action Blocked', description: 'Please ensure your wallet is connected and authenticated to collect coins.', variant: 'destructive' });
             return;
@@ -422,7 +411,7 @@ const GameUI: React.FC<GameUIProps> = ({
             } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
                 errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
             }
-            
+
             if (error instanceof Error && error.name === 'AbortError') {
                 console.log('[GameUI] handleCoinCollected aborted.');
             } else {
@@ -448,17 +437,11 @@ const GameUI: React.FC<GameUIProps> = ({
      * This runs on component mount and when authentication or user public key changes.
      */
     useEffect(() => {
-        let currentFetchController: AbortController | null = null;
-
         const cleanup = () => {
             if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);
             if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
             if (coinMagnetIntervalRef.current) clearInterval(coinMagnetIntervalRef.current);
-            
-            if (currentFetchController) {
-                console.log('[GameUI useEffect Cleanup] Aborting ongoing fetchPlayerData request.');
-                currentFetchController.abort();
-            }
+
             setOptimisticUpdates([]);
             BottleConsumptionQueueRef.current = [];
             isProcessingBottleQueueRef.current = false;
@@ -466,9 +449,7 @@ const GameUI: React.FC<GameUIProps> = ({
 
         // Only fetch player data if authenticated
         if (isAuthenticated) {
-            fetchPlayerData().then(controller => {
-                currentFetchController = controller;
-            });
+            fetchPlayerData();
         } else if (!isAuthenticated) {
             // If not authenticated and auth loading is complete, clear game data
             cleanup();
@@ -646,14 +627,14 @@ const GameUI: React.FC<GameUIProps> = ({
             activationFunction = activateCoinMagnet;
             currentItemCount = displayedCoinMagnetTreatCount;
         } else {
-            toast({ title: 'Unknown Item', description: 'This item cannot be used this way.', variant: 'destructive'}); return;
+            toast({ title: 'Unknown Item', description: 'This item cannot be used this way.', variant: 'destructive' }); return;
         }
 
         if (!itemDefinition) {
-             toast({ title: 'Item Error', description: 'Item definition not found.', variant: 'destructive'}); return;
+            toast({ title: 'Item Error', description: 'Item definition not found.', variant: 'destructive' }); return;
         }
         if (currentItemCount < amountToUse) {
-            toast({ title: 'No Items Left', description: `You don't have enough ${itemDefinition.name}. You have ${currentItemCount}, but tried to use ${amountToUse}.`, variant: 'destructive'}); return;
+            toast({ title: 'No Items Left', description: `You don't have enough ${itemDefinition.name}. You have ${currentItemCount}, but tried to use ${amountToUse}.`, variant: 'destructive' }); return;
         }
 
         let rollbackEffect: (() => void) | undefined;
@@ -721,7 +702,7 @@ const GameUI: React.FC<GameUIProps> = ({
             } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
                 errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
             }
-            
+
             if (error instanceof Error && error.name === 'AbortError') {
                 console.log('[GameUI] handleUseConsumableItem aborted.');
             } else {
@@ -732,7 +713,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 if (rollbackEffect) rollbackEffect(); // Call rollback effect
             }
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData, apiFetch ]); // Added apiFetch to dependencies
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, displayedSpeedyPawsTreatCount, displayedGuardianShieldCount, displayedCoinMagnetTreatCount, activateSpeedBoost, activateGuardianShield, activateCoinMagnet, speedyPawsTreatDef, guardianShieldDef, coinMagnetTreatDef, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
 
     /**
      * Handles the withdrawal of USDT from the player's game balance via backend API.
@@ -1088,7 +1069,7 @@ const GameUI: React.FC<GameUIProps> = ({
                                 onClick={() => setIsStoreOpen(true)}
                                 disabled={(isGameEffectivelyPaused && !isStoreOpen) || isWalletMismatch}
                                 className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
-                               
+
                             >
                                 <Image src="/GameStore-lg.png" alt="Game Store" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
@@ -1142,14 +1123,14 @@ const GameUI: React.FC<GameUIProps> = ({
                             </div>
                         </SheetContent>
                     </Sheet>
-                    
+
                     <Sheet open={isInventoryOpen} onOpenChange={setIsInventoryOpen}>
                         <SheetTrigger asChild>
                             <Button
                                 onClick={() => setIsInventoryOpen(true)}
                                 disabled={(isGameEffectivelyPaused && !isInventoryOpen) || isWalletMismatch}
                                 className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
-                            > 
+                            >
                                 <Image src="/PlayerInventory.png" alt="Player Inventory" width={48} height={48} className="h-full w-full object-contain" />
                             </Button>
                         </SheetTrigger>

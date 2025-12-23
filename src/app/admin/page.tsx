@@ -8,6 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PawPrint, LogOut, Trash2, Search } from 'lucide-react';
 import { useApiFetch } from '@/utils/api';
+import { useUserStats } from '@/hooks/useGraphQL';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
@@ -67,6 +68,9 @@ export default function AdminPage() {
   // User Statistics
   const [userStats, setUserStats] = useState<{ totalUsers: number, onlineUsers: number, offlineUsers: number } | null>(null);
   const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
+  const { data: graphqlUserStats, loading: graphqlLoading, error: graphqlError } = useUserStats();
+
+
 
   // Search & Pagination
   const [search, setSearch] = useState('');
@@ -316,9 +320,22 @@ export default function AdminPage() {
                           <CardTitle className="text-lg">User Statistics</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <p className="text-sm text-muted-foreground">Total Players: {userStats?.totalUsers ?? 'Fetching...'}</p>
-                          <p className="text-sm text-muted-foreground">Online Now: {userStats?.onlineUsers ?? 'Fetching...'}</p>
-                          <p className="text-sm text-muted-foreground">Offline: {userStats?.offlineUsers ?? 'Fetching...'}</p>
+                          {graphqlLoading ? (
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-3/4" />
+                              <Skeleton className="h-4 w-1/2" />
+                              <Skeleton className="h-4 w-2/3" />
+                            </div>
+                          ) : graphqlError ? (
+                            <p className="text-sm text-destructive">Error loading GraphQL stats: {graphqlError}</p>
+                          ) : (
+                            <>
+                              <p className="text-sm text-muted-foreground">Total Players: {graphqlUserStats?.userStats?.totalUsers ?? 'N/A'}</p>
+                              <p className="text-sm text-muted-foreground">Online Now: {graphqlUserStats?.userStats?.onlineUsers ?? 'N/A'}</p>
+                              <p className="text-sm text-muted-foreground">Offline: {graphqlUserStats?.userStats?.offlineUsers ?? 'N/A'}</p>
+                              <Badge variant="secondary" className="mt-2 text-xs">Via GraphQL</Badge>
+                            </>
+                          )}
                         </CardContent>
                       </Card>
                       <Card className="bg-card/50">

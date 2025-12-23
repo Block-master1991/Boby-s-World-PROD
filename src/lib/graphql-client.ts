@@ -29,17 +29,14 @@ export class GraphQLError extends Error {
 
 // Configuration for different environments
 const getGraphQLConfig = () => {
-    const isDevelopment = process.env.NODE_ENV === 'development';
-
+    // Always use the Next.js API route for GraphQL
     return {
-        url: isDevelopment
-            ? 'http://localhost:4000/graphql' // Development GraphQL endpoint
-            : '/api/graphql', // Production endpoint
+        url: '/api/graphql', // Always use Next.js API
         timeout: 30000, // 30 seconds
     };
 };
 
-// Create the main GraphQL client with basic setup
+// Create the main GraphQL client with authentication
 const createGraphQLClient = (): Client => {
     const config = getGraphQLConfig();
 
@@ -49,20 +46,71 @@ const createGraphQLClient = (): Client => {
             cacheExchange,
             fetchExchange,
         ],
-        // Custom fetch implementation with timeout
-        fetch: (input, init) => {
+        // Custom fetch implementation with timeout and auth
+        fetch: async (input, init) => {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), config.timeout);
 
-            return fetch(input, {
-                ...init,
-                headers: {
-                    'Content-Type': 'application/json',
-                    ...init?.headers,
-                },
-            }).finally(() => {
+            // Get auth token from cookies
+            let authHeaders: Record<string, string> = {
+                'Content-Type': 'application/json',
+            };
+
+            // Try to get access token from cookies
+            // NOTE: If accessToken cookie is httpOnly, it won't be accessible via document.cookie.
+            // In that case, the browser will send the cookie automatically in the request headers,
+            // and the server should extract and verify it from there.
+            if (typeof window !== 'undefined') {
+                const cookies = document.cookie.split(';');
+                const accessTokenCookie = cookies.find(cookie => cookie.trim().startsWith('accessToken='));
+
+                if (accessTokenCookie) {
+                    const token = accessTokenCookie.split('=')[1];
+                    authHeaders['Authorization'] = `Bearer ${token}`;
+                }
+            }
+
+            try {
+                const response = await fetch(input, {
+                    ...init,
+                    headers: {
+                        ...authHeaders,
+                        ...init?.headers,
+                    },
+                });
+
+                // Handle token refresh on 401
+                if (response.status === 401 && typeof window !== 'undefined') {
+                    // Try to refresh token
+                    try {
+                        const refreshResponse = await fetch('/api/auth/refresh', {
+                            method: 'POST',
+                            credentials: 'include',
+                        });
+
+                        if (refreshResponse.ok) {
+                            const refreshData = await refreshResponse.json();
+                            if (refreshData.accessToken) {
+                                // Retry the original request with new token
+                                authHeaders['Authorization'] = `Bearer ${refreshData.accessToken}`;
+                                return fetch(input, {
+                                    ...init,
+                                    headers: {
+                                        ...authHeaders,
+                                        ...init?.headers,
+                                    },
+                                });
+                            }
+                        }
+                    } catch (refreshError) {
+                        console.warn('[GraphQL] Token refresh failed:', refreshError);
+                    }
+                }
+
+                return response;
+            } finally {
                 clearTimeout(timeoutId);
-            });
+            }
         },
     });
 

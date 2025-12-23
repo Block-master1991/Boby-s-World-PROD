@@ -24,6 +24,8 @@ import { storeItems, type StoreItemDefinition } from '@/lib/items';
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
+import { useMarketData, useGraphQLMutation } from '@/hooks/useGraphQL';
+import { GAME_MUTATIONS } from '@/lib/graphql-client';
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -50,6 +52,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     } = useSessionWallet();
     const { toast } = useToast();
     const isMobile = useIsMobile();
+    const { apiFetch } = useApiFetch();
 
     const [isLoading, setIsLoading] = useState<string | null>(null); // For individual item purchase loading
     const [quantities, setQuantities] = useState<Record<string, number>>(() => {
@@ -58,54 +61,20 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         return initialQuantities;
     });
 
-    const [bobyUsdPrice, setBobyUsdPrice] = useState<number | null>(null);
-    const [isBobyPriceLoading, setIsBobyPriceLoading] = useState<boolean>(true);
-    const [bobyPriceError, setBobyPriceError] = useState<string | null>(null);
-    const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
+    // Using secure GraphQL hook with useApiFetch integration
+    const { data: marketData, loading: isBobyPriceLoading, error: bobyPriceError, execute: fetchBobyUsdPrice } = useMarketData();
 
-    const fetchBobyUsdPrice = useCallback(async (isInitialLoad = false) => {
-        if (!isInitialLoad) {
-            setIsBobyPriceLoading(true);
-        }
-        setBobyPriceError(null);
-        try {
-            // Fetch from API endpoint
-            const response = await apiFetch('/api/boby-price-jup'); // استخدام apiFetch
-            if (!response.ok) {
-                let errorMsg = 'Failed to fetch Boby price for store';
-                let errorDetails = `Status: ${response.status}`;
-                try {
-                    const errorData = await response.json();
-                    errorMsg = errorData.error || errorMsg;
-                    errorDetails = errorData.details || errorDetails;
-                    if (errorData.statusCode === 429 || response.status === 429) {
-                        errorMsg = 'Price API rate limit. Try later.';
-                    }
-                } catch {
-                    if (response.status === 429) {
-                        errorMsg = 'Price API rate limit. Try later.';
-                    }
-                }
-                throw new Error(`${errorMsg} (${errorDetails})`);
-            }
-            const data = await response.json();
-            if (typeof data.price === 'number') {
-                setBobyUsdPrice(data.price);
-            } else {
-                throw new Error('Invalid price data received for store.');
-            }
-        } catch (error) {
-            console.error("[InGameStore] Error fetching Boby/USD price for store:", error);
-            setBobyPriceError(error instanceof Error ? error.message : 'Could not load Boby price for store.');
-            setBobyUsdPrice(null);
-        } finally {
-            setIsBobyPriceLoading(false);
-        }
-    }, [apiFetch]);
+    // Extract price data from GraphQL response
+    const bobyUsdPrice = marketData?.marketData?.bobyPrice || null;
 
     useEffect(() => {
-        fetchBobyUsdPrice(true); // Initial fetch
-        const intervalId = setInterval(() => fetchBobyUsdPrice(false), 5000); // Refresh every 5 seconds
+        // Fetch price on mount
+        fetchBobyUsdPrice();
+
+        // Set up refresh interval
+        const intervalId = setInterval(() => {
+            fetchBobyUsdPrice();
+        }, 5000); // Refresh every 5 seconds
         return () => clearInterval(intervalId);
     }, [fetchBobyUsdPrice]);
 
@@ -388,7 +357,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     {bobyPriceError && (
                         <div className="flex flex-col items-center justify-center py-4 text-sm text-destructive">
                             <p className="flex items-center text-center"><AlertCircle className="h-4 w-4 mr-2 rtl:ml-2" /> {bobyPriceError}</p>
-                            <Button variant="link" size="sm" onClick={() => fetchBobyUsdPrice(false)} className="text-destructive hover:text-destructive/80">
+                            <Button variant="link" size="sm" onClick={() => fetchBobyUsdPrice()} className="text-destructive hover:text-destructive/80">
                                 <RefreshCw className="h-3 w-3 mr-1 rtl:ml-1" /> Try Again
                             </Button>
                         </div>
@@ -396,7 +365,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     {bobyUsdPrice !== null && bobyUsdPrice > 0 && (
                         <div className="text-xs text-muted-foreground text-center mb-3 p-2 bg-secondary/30 rounded-md flex items-center justify-center">
                             Current Price: 1 BOBY = ${bobyUsdPrice.toLocaleString(undefined, { minimumFractionDigits: 6, maximumFractionDigits: 10 })} USD
-                            <Button variant="ghost" size="icon" onClick={() => fetchBobyUsdPrice(false)} className="ml-2 rtl:mr-2 h-5 w-5 text-muted-foreground hover:text-primary">
+                            <Button variant="ghost" size="icon" onClick={() => fetchBobyUsdPrice()} className="ml-2 rtl:mr-2 h-5 w-5 text-muted-foreground hover:text-primary">
                                 {isBobyPriceLoading ? <PawPrint className="h-3 w-3 animate-pulse" /> : <RefreshCw className="h-3 w-3" />}
                                 <span className="sr-only">Refresh Price</span>
                             </Button>
