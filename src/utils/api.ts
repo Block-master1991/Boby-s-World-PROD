@@ -1,4 +1,6 @@
 import { fetchWithCsrf } from '@/lib/utils';
+import { initializeConnectionPooling, pooledFetch } from '@/lib/connection-pool';
+import { swrBackgroundSync } from '@/lib/swr-config';
 import { useAuthContext } from '@/contexts/AuthContext';
 import { useCallback, useEffect } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -143,6 +145,8 @@ export const apiFetch: FetchFunction = async (input, init) => {
           return attemptFetch();
         }
         console.error(`[apiFetch] Max retries reached for server error: ${url}`);
+        // Queue for background retry
+        swrBackgroundSync.addToSyncQueue(url);
       }
 
       // تحقق من صحة الاستجابة
@@ -183,6 +187,7 @@ export const useApiFetch = () => {
 
   // Set the global functions when the component mounts or dependencies change
   useEffect(() => {
+    initializeConnectionPooling();
     setGlobalTriggerSessionRefresh(triggerSessionRefresh);
     setGlobalToast(toast);
   }, [triggerSessionRefresh, toast]); // Dependency array ensures it updates if functions change

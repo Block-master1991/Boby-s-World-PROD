@@ -550,6 +550,7 @@ class PriorityAssetLoader {
 }
 import { useFloatingEffects } from '@/hooks/useFloatingEffects'; // New import
 import { useDogParticles } from '@/hooks/useDogParticles'; // New import
+import { useAnalytics } from '@/hooks/useAnalytics'; // Analytics integration
 import DogSpeedBeam from '@/components/game/DogSpeedBeam'; // New import
 import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
 import { assetPreloader } from '@/lib/assetPreloader'; // Asset preloader
@@ -789,6 +790,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         sceneRef, dogMeshRef, dogSpeed, isRunning // Pass dog's speed and running state
     });
 
+    const { trackPerformance, trackGameEvent, trackUserAction, trackError } = useAnalytics();
+
+    // Performance tracking
+    const lastPerformanceUpdateRef = useRef<number>(0);
+    const frameCountRef = useRef<number>(0);
+
     const { initializeCoins, updateCoins, coinMeshesRef, loadedCoinChunks, forceLoadAreaCoins } = useCoinLogic({ // Capture coinMeshesRef and loadedCoinChunks
         sceneRef, dogModelRef, isCoinMagnetActiveRef, COIN_MAGNET_RADIUS, COIN_COUNT,
         onCoinCollected: () => onCoinCollectedCallbackRef.current(),
@@ -875,6 +882,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             return;
         }
         lastFrameTimeRef.current = currentTime;
+
+        // Performance tracking
+        frameCountRef.current++;
+        if (currentTime - lastPerformanceUpdateRef.current > 5000) { // Every 5 seconds
+            const fps = frameCountRef.current / ((currentTime - lastPerformanceUpdateRef.current) / 1000);
+            frameCountRef.current = 0;
+            lastPerformanceUpdateRef.current = currentTime;
+
+            // Track performance metrics
+            if (rendererRef.current?.info) {
+                trackPerformance({
+                    fps: Math.round(fps),
+                    memoryUsage: (performance as any).memory?.usedJSHeapSize || 0,
+                    drawCalls: rendererRef.current.info.render.calls,
+                });
+            }
+        }
 
         animationFrameId.current = requestAnimationFrame(animate);
 

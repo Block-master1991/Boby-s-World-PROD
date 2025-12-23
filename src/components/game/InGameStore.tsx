@@ -23,6 +23,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { storeItems, type StoreItemDefinition } from '@/lib/items';
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 import { useIsMobile } from '@/hooks/use-mobile';
+import { Badge } from '@/components/ui/badge';
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -425,7 +426,10 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         return (
                             <Card key={item.id} className="flex flex-col"> {/* Added flex flex-col */}
                                 <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
-                                    <Image src={item.image} alt={item.name} width={60} height={60} className="rounded-md border" data-ai-hint={item.dataAiHint} priority={item.id === '1'} />
+                                    <div className="relative">
+                                        <Image src={item.image} alt={item.name} width={60} height={60} className="rounded-md border" data-ai-hint={item.dataAiHint} priority={item.id === '1'} />
+                                        {item.id === '1' && <Badge className="absolute -top-2 -right-2 text-xs">New</Badge>}
+                                    </div>
                                     <div>
                                         <CardTitle className="text-lg">{item.name}</CardTitle> {/* Changed h3 to CardTitle */}
                                         <CardDescription className="text-xs">{item.description}</CardDescription> {/* Changed p to CardDescription */}

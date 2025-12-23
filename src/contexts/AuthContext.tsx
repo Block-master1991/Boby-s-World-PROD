@@ -4,6 +4,8 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { useWallet } from '@solana/wallet-adapter-react';
 import type { WalletSignMessageError } from '@solana/wallet-adapter-base';
 import { useToast } from '@/hooks/use-toast';
+import { initializeOfflineCapabilities, initializeBackgroundProcessing } from '@/lib/offline-manager';
+import { cacheManager, backgroundSync, performanceMonitor } from '@/lib/advanced-service-worker';
 
 
 // --- Types for AuthState and AuthContext ---
@@ -369,6 +371,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Initial session check on mount and periodic refresh
   useEffect(() => {
+    // Initialize offline capabilities
+    initializeOfflineCapabilities();
+    initializeBackgroundProcessing();
+
     let sessionCheckInterval: NodeJS.Timeout | null = null; // Initialize with null
 
     const startSessionCheckInterval = () => {

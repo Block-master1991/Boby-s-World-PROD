@@ -4,16 +4,7 @@ import { logRateLimitExceeded } from './log-rate-limit';
 import { sendSlackAlert } from './slack-alert';
 import { performance } from 'perf_hooks';
 import { isIpInList } from './ip-list';
-
-
-// استخراج IP من الطلب
-function getClientIp(request: Request): string {
-  const xff = request.headers.get('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  const realIp = request.headers.get('x-real-ip');
-  if (realIp) return realIp;
-  return 'unknown';
-}
+import { getClientIp } from './request-utils';
 
 // تصفية user-agent
 function sanitizeUserAgent(userAgentRaw: string | null): string {

@@ -1,11 +1,14 @@
 'use client';
 
 import React, { useEffect } from 'react';
+import { SWRConfig } from 'swr';
 import { Toaster } from "@/components/ui/toaster";
 import WalletContextProvider from '@/components/wallet/WalletContextProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AudioProvider, useAudio } from '@/contexts/AudioContext';
 import SoundManager from '@/components/game/SoundManager';
+import { swrConfig } from '@/lib/swr-config';
+import { performanceMonitor } from '@/lib/advanced-service-worker';
 
 function AudioInitializer() {
   const { soundManagerRef, isMuted, hasUserInteracted } = useAudio();
@@ -30,7 +33,7 @@ export default function RootLayoutClient({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  // Register Service Worker for asset caching
+  // Register Service Worker and initialize advanced features
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
@@ -43,18 +46,22 @@ export default function RootLayoutClient({
     } else {
       console.warn('[SW] Service Workers not supported');
     }
+
+    // Record initial load time
+    performanceMonitor.recordLoadTime(performance.now());
   }, []);
 
   return (
-
-    <WalletContextProvider>
-      <AuthProvider>
-        <AudioProvider>
-          {children}
-          <Toaster />
-          <AudioInitializer />
-        </AudioProvider>
-      </AuthProvider>
-    </WalletContextProvider>
+    <SWRConfig value={swrConfig}>
+      <WalletContextProvider>
+        <AuthProvider>
+          <AudioProvider>
+            {children}
+            <Toaster />
+            <AudioInitializer />
+          </AudioProvider>
+        </AuthProvider>
+      </WalletContextProvider>
+    </SWRConfig>
   );
 }

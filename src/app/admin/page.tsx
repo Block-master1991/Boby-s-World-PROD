@@ -9,6 +9,10 @@ import { Button } from '@/components/ui/button';
 import { PawPrint, LogOut, Trash2, Search } from 'lucide-react';
 import { useApiFetch } from '@/utils/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Sidebar, SidebarContent, SidebarHeader, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
+import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { db } from '@/lib/firebase';
 import { collection, getDocs, setDoc, deleteDoc, doc, query, orderBy } from 'firebase/firestore';
@@ -25,18 +29,18 @@ export default function AdminPage() {
   const pathname = usePathname();
 
   // Lists
-  const [whitelist, setWhitelist] = useState<{ip: string, addedAt?: string}[]>([]);
-  const [blacklist, setBlacklist] = useState<{ip: string, addedAt?: string}[]>([]);
+  const [whitelist, setWhitelist] = useState<{ ip: string, addedAt?: string }[]>([]);
+  const [blacklist, setBlacklist] = useState<{ ip: string, addedAt?: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Input
   const [newIp, setNewIp] = useState('');
-  const [targetList, setTargetList] = useState<'whitelist'|'blacklist'>('blacklist');
-  const [message, setMessage] = useState<{type: 'success'|'error', text: string}|null>(null);
-  const [confirmDelete, setConfirmDelete] = useState<{ip: string, list: 'whitelist'|'blacklist'}|null>(null);
+  const [targetList, setTargetList] = useState<'whitelist' | 'blacklist'>('blacklist');
+  const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
+  const [confirmDelete, setConfirmDelete] = useState<{ ip: string, list: 'whitelist' | 'blacklist' } | null>(null);
 
   // User Statistics
-  const [userStats, setUserStats] = useState<{totalUsers: number, onlineUsers: number, offlineUsers: number}|null>(null);
+  const [userStats, setUserStats] = useState<{ totalUsers: number, onlineUsers: number, offlineUsers: number } | null>(null);
   const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
 
   // Search & Pagination
@@ -52,7 +56,7 @@ export default function AdminPage() {
   async function fetchLists() {
     setLoading(true);
     try {
-      const dbQuery = (list: 'whitelist'|'blacklist') =>
+      const dbQuery = (list: 'whitelist' | 'blacklist') =>
         query(
           collection(db, `ratelimit_${list}`),
           orderBy('addedAt', 'desc'),
@@ -77,8 +81,8 @@ export default function AdminPage() {
       }
 
       // Pagination
-      setWhitelist(whiteListData.slice((whitePage-1)*PAGE_SIZE, whitePage*PAGE_SIZE));
-      setBlacklist(blackListData.slice((blackPage-1)*PAGE_SIZE, blackPage*PAGE_SIZE));
+      setWhitelist(whiteListData.slice((whitePage - 1) * PAGE_SIZE, whitePage * PAGE_SIZE));
+      setBlacklist(blackListData.slice((blackPage - 1) * PAGE_SIZE, blackPage * PAGE_SIZE));
     } catch {
       setMessage({ type: 'error', text: 'Failed to fetch lists.' });
     }
@@ -131,7 +135,7 @@ export default function AdminPage() {
   }
 
   // Delete IP
-  async function handleDeleteIp(ip: string, list: 'whitelist'|'blacklist') {
+  async function handleDeleteIp(ip: string, list: 'whitelist' | 'blacklist') {
     setLoading(true);
     try {
       await deleteDoc(doc(db, `ratelimit_${list}`, ip));
@@ -205,7 +209,7 @@ export default function AdminPage() {
           <CardHeader>
             <CardTitle>Overview</CardTitle>
             <CardDescription>Admin panel content for Boby World.</CardDescription>
-          <CardTitle>Manage IP Whitelist & Blacklist</CardTitle>
+            <CardTitle>Manage IP Whitelist & Blacklist</CardTitle>
             <CardDescription>
               Add or remove IPs from the whitelist or blacklist. Only valid IPv4 addresses are accepted.
             </CardDescription>
@@ -213,24 +217,24 @@ export default function AdminPage() {
           <CardContent>
             <p>Manage game settings, view player statistics, and oversee the Boby ecosystem.</p>
             <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-                <Card className="bg-card/50">
-                    <CardHeader>
-                        <CardTitle className="text-lg">User Statistics</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground">Total Players: {userStats?.totalUsers ?? 'Fetching...'}</p>
-                        <p className="text-sm text-muted-foreground">Online Now: {userStats?.onlineUsers ?? 'Fetching...'}</p>
-                        <p className="text-sm text-muted-foreground">Offline: {userStats?.offlineUsers ?? 'Fetching...'}</p>
-                    </CardContent>
-                </Card>
-                 <Card className="bg-card/50">
-                    <CardHeader>
-                        <CardTitle className="text-lg">Game Settings</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                        <p className="text-sm text-muted-foreground">Modify game parameters here.</p>
-                    </CardContent>
-                </Card>
+              <Card className="bg-card/50">
+                <CardHeader>
+                  <CardTitle className="text-lg">User Statistics</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Total Players: {userStats?.totalUsers ?? 'Fetching...'}</p>
+                  <p className="text-sm text-muted-foreground">Online Now: {userStats?.onlineUsers ?? 'Fetching...'}</p>
+                  <p className="text-sm text-muted-foreground">Offline: {userStats?.offlineUsers ?? 'Fetching...'}</p>
+                </CardContent>
+              </Card>
+              <Card className="bg-card/50">
+                <CardHeader>
+                  <CardTitle className="text-lg">Game Settings</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">Modify game parameters here.</p>
+                </CardContent>
+              </Card>
             </div>
 
             {/* Notification messages */}
@@ -262,7 +266,7 @@ export default function AdminPage() {
                 className="border rounded px-2 py-1"
                 disabled={loading}
               />
-              <select value={targetList} onChange={e => setTargetList(e.target.value as 'whitelist'|'blacklist')} className="border rounded px-2 py-1" disabled={loading}>
+              <select value={targetList} onChange={e => setTargetList(e.target.value as 'whitelist' | 'blacklist')} className="border rounded px-2 py-1" disabled={loading}>
                 <option value="whitelist">Whitelist</option>
                 <option value="blacklist">Blacklist</option>
               </select>
@@ -274,72 +278,84 @@ export default function AdminPage() {
               {/* Whitelist */}
               <div>
                 <h2 className="font-bold mb-2">Whitelist</h2>
-                {loading ? <PawPrint className="animate-pulse" /> : (
-                  <>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr>
-                        <th className="text-left">IP</th>
-                        <th className="text-left">Added At</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {whitelist.map(({ip, addedAt}) => (
-                        <tr key={ip}>
-                          <td>{ip}</td>
-                          <td>{addedAt || '-'}</td>
-                          <td>
-                            <Button variant="ghost" size="icon" onClick={() => setConfirmDelete({ip, list: 'whitelist'})} disabled={loading}>
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {/* Pagination */}
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="outline" size="sm" disabled={whitePage === 1} onClick={() => setWhitePage(p => p-1)}>Previous</Button>
-                    <span>Page {whitePage}</span>
-                    <Button variant="outline" size="sm" disabled={whitelist.length < PAGE_SIZE} onClick={() => setWhitePage(p => p+1)}>Next</Button>
+                {loading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
                   </div>
+                ) : (
+                  <>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr>
+                          <th className="text-left">IP</th>
+                          <th className="text-left">Added At</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {whitelist.map(({ ip, addedAt }) => (
+                          <tr key={ip}>
+                            <td>{ip}</td>
+                            <td>{addedAt || '-'}</td>
+                            <td>
+                              <Button variant="ghost" size="icon" onClick={() => setConfirmDelete({ ip, list: 'whitelist' })} disabled={loading}>
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {/* Pagination */}
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" size="sm" disabled={whitePage === 1} onClick={() => setWhitePage(p => p - 1)}>Previous</Button>
+                      <span>Page {whitePage}</span>
+                      <Button variant="outline" size="sm" disabled={whitelist.length < PAGE_SIZE} onClick={() => setWhitePage(p => p + 1)}>Next</Button>
+                    </div>
                   </>
                 )}
               </div>
               {/* Blacklist */}
               <div>
                 <h2 className="font-bold mb-2">Blacklist</h2>
-                {loading ? <PawPrint className="animate-pulse" /> : (
-                  <>
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr>
-                        <th className="text-left">IP</th>
-                        <th className="text-left">Added At</th>
-                        <th></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {blacklist.map(({ip, addedAt}) => (
-                        <tr key={ip}>
-                          <td>{ip}</td>
-                          <td>{addedAt || '-'}</td>
-                          <td>
-                            <Button variant="ghost" size="icon" onClick={() => setConfirmDelete({ip, list: 'blacklist'})} disabled={loading}>
-                              <Trash2 className="w-4 h-4 text-red-500" />
-                            </Button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                  {/* Pagination */}
-                  <div className="flex gap-2 mt-2">
-                    <Button variant="outline" size="sm" disabled={blackPage === 1} onClick={() => setBlackPage(p => p-1)}>Previous</Button>
-                    <span>Page {blackPage}</span>
-                    <Button variant="outline" size="sm" disabled={blacklist.length < PAGE_SIZE} onClick={() => setBlackPage(p => p+1)}>Next</Button>
+                {loading ? (
+                  <div className="space-y-2">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-4 w-1/2" />
                   </div>
+                ) : (
+                  <>
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr>
+                          <th className="text-left">IP</th>
+                          <th className="text-left">Added At</th>
+                          <th></th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {blacklist.map(({ ip, addedAt }) => (
+                          <tr key={ip}>
+                            <td>{ip}</td>
+                            <td>{addedAt || '-'}</td>
+                            <td>
+                              <Button variant="ghost" size="icon" onClick={() => setConfirmDelete({ ip, list: 'blacklist' })} disabled={loading}>
+                                <Trash2 className="w-4 h-4 text-red-500" />
+                              </Button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {/* Pagination */}
+                    <div className="flex gap-2 mt-2">
+                      <Button variant="outline" size="sm" disabled={blackPage === 1} onClick={() => setBlackPage(p => p - 1)}>Previous</Button>
+                      <span>Page {blackPage}</span>
+                      <Button variant="outline" size="sm" disabled={blacklist.length < PAGE_SIZE} onClick={() => setBlackPage(p => p + 1)}>Next</Button>
+                    </div>
                   </>
                 )}
               </div>

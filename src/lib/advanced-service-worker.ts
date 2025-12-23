@@ -88,6 +88,7 @@ class AdvancedCacheManager {
 
         if (!config) return null;
 
+        if (typeof window === 'undefined') return null;
         const cache = await caches.open(config.name);
         const cacheKey = this.getCacheKey(request);
 
@@ -167,6 +168,7 @@ class AdvancedCacheManager {
         const config = this.caches.get(cacheType);
         if (!config) return;
 
+        if (typeof window === 'undefined') return;
         const cache = await caches.open(config.name);
         const entries = this.cacheEntries.get(cacheType)!;
 
@@ -197,6 +199,7 @@ class AdvancedCacheManager {
         if (!config) return;
 
         const entries = this.cacheEntries.get(cacheType)!;
+        if (typeof window === 'undefined') return;
         const cache = await caches.open(config.name);
 
         // Remove expired entries
@@ -244,6 +247,7 @@ class AdvancedCacheManager {
                     typeEntries!.delete(key);
                     const typeConfig = this.caches.get(type);
                     if (typeConfig) {
+                        if (typeof window === 'undefined') break;
                         const cache = await caches.open(typeConfig.name);
                         await cache.delete(key);
                     }
@@ -324,6 +328,7 @@ class AdvancedCacheManager {
 
     // Clear all caches
     async clearAllCaches(): Promise<void> {
+        if (typeof window === 'undefined') return;
         const clearPromises: Promise<boolean>[] = [];
 
         for (const config of this.caches.values()) {
@@ -358,6 +363,9 @@ class BackgroundSyncManager {
     }
 
     private initializeBackgroundSync(): void {
+        // Only run on client-side
+        if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
+
         // Register background sync if available
         if ('serviceWorker' in navigator && 'sync' in (window as any).ServiceWorkerRegistration?.prototype) {
             navigator.serviceWorker.ready.then((registration: ServiceWorkerRegistration) => {
@@ -372,9 +380,11 @@ class BackgroundSyncManager {
         }
 
         // Periodic cleanup of old operations
-        setInterval(() => {
-            this.cleanupOldOperations();
-        }, 30000); // Every 30 seconds
+        if (typeof window !== 'undefined') {
+            setInterval(() => {
+                this.cleanupOldOperations();
+            }, 30000); // Every 30 seconds
+        }
     }
 
     // Add operation to background sync queue
