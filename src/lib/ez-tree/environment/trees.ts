@@ -3,6 +3,7 @@ import { Tree } from '../tree';
 import TreeOptions from '../options';
 import { TreePreset, loadPreset } from '../presets';
 import { CHUNK_SIZE } from '../../chunkUtils';
+import { DOG_SPAWN_PROTECTION_RADIUS } from '../../constants';
 
 export class TreesOptions {
   public treeCountPerChunk: number = 2; // Number of trees per chunk
@@ -63,6 +64,11 @@ export class Trees extends THREE.Object3D {
 
       const p = new THREE.Vector3(worldX, 0, worldZ);
 
+      // Skip trees near the spawn point (0,0)
+      if (p.length() < DOG_SPAWN_PROTECTION_RADIUS) {
+        continue;
+      }
+
       // Simple patchiness check, can be improved with noise
       if (Math.random() > this.options.patchiness) { continue; }
 
@@ -111,6 +117,13 @@ export class Trees extends THREE.Object3D {
     const count = positions.length / 3;
 
     for (let i = 0; i < count; i++) {
+      const position = new THREE.Vector3().fromArray(positions, i * 3);
+
+      // Skip trees near the spawn point (0,0)
+      if (position.length() < DOG_SPAWN_PROTECTION_RADIUS) {
+        continue;
+      }
+
       const randomPresetName = presetNames[Math.floor(Math.random() * presetNames.length)];
       const treeOptions = this.loadedPresets.get(randomPresetName);
 
