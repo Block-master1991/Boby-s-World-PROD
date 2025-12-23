@@ -57,6 +57,33 @@ class IntelligentAssetPreloader {
             preloadDistance: 30,
         });
 
+        this.registerAsset({
+            id: 'rock1-model',
+            url: '/models/rock1.glb',
+            type: 'model',
+            priority: 7,
+            estimatedSize: 300,
+            preloadDistance: 0,
+        });
+
+        this.registerAsset({
+            id: 'rock2-model',
+            url: '/models/rock2.glb',
+            type: 'model',
+            priority: 7,
+            estimatedSize: 300,
+            preloadDistance: 0,
+        });
+
+        this.registerAsset({
+            id: 'rock3-model',
+            url: '/models/rock3.glb',
+            type: 'model',
+            priority: 7,
+            estimatedSize: 300,
+            preloadDistance: 0,
+        });
+
         // Register environment assets for different chunks
         for (let x = -10; x <= 10; x++) {
             for (let z = -10; z <= 10; z++) {
@@ -70,18 +97,9 @@ class IntelligentAssetPreloader {
                     chunkCoords: { x, z },
                     preloadDistance: 40,
                 });
-
-                this.registerAsset({
-                    id: `rocks_${x}_${z}`,
-                    url: `/models/rocks.glb?chunk=${chunkId}`,
-                    type: 'model',
-                    priority: 4,
-                    estimatedSize: 300,
-                    chunkCoords: { x, z },
-                    preloadDistance: 35,
-                });
             }
         }
+
     }
 
     private registerAsset(metadata: Omit<AssetMetadata, 'lastAccessed'>) {

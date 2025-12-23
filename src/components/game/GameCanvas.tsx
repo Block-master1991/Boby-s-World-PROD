@@ -555,6 +555,7 @@ import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
 import { assetPreloader } from '@/lib/assetPreloader'; // Asset preloader
 import { initializeGPUInstancing, getGPUInstancingManager } from '@/lib/gpu-instancing'; // GPU instancing
 import { initializeLODManager, getLODManager } from '@/lib/lod-manager'; // LOD manager
+import { initializeObjectPooling, getMemoryMonitor, getObjectPoolingStats } from '@/lib/object-pooling'; // Object pooling
 // CDN Integration System
 class CDNManager {
     private userRegion: string = 'US';
@@ -906,6 +907,12 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 if (gpuInstancing) {
                     gpuInstancing.updateInstances();
                 }
+
+                // Record memory usage for monitoring
+                const memoryMonitor = getMemoryMonitor();
+                if (memoryMonitor) {
+                    memoryMonitor.recordMemoryUsage();
+                }
             }
 
             // Update continuous effects (Speed Beam, Shield)
@@ -995,6 +1002,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             // Initialize LOD manager
             initializeLODManager();
             console.log('[GameCanvas] LOD Manager initialized');
+
+            // Initialize object pooling
+            initializeObjectPooling();
+            console.log('[GameCanvas] Object Pooling initialized');
         }
     }, []);
 

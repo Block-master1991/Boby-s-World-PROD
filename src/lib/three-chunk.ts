@@ -38,6 +38,8 @@ export {
     Group,
     Object3D,
     Mesh,
+    Points,
+    PointsMaterial,
     InstancedMesh,
     BufferGeometry,
     BufferAttribute,
