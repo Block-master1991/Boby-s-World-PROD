@@ -883,8 +883,8 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             try {
                 if (environmentRef.current && dogModelRef.current && cameraRef.current) {
                     const currentDogPos = dogModelRef.current.position;
-                    // Update environment continuously, passing camera position for clouds
-                    environmentRef.current.update(clockRef.current.getElapsedTime(), cameraRef.current.position);
+                    // Update environment continuously, passing DOG position for stable shadows
+                    environmentRef.current.update(clockRef.current.getElapsedTime(), currentDogPos);
 
                     // Update last position for chunk management, not for wind animation
                     lastDogPositionRef.current = { x: currentDogPos.x, z: currentDogPos.z };

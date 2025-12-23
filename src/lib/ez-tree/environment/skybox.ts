@@ -20,24 +20,25 @@ export class Skybox extends THREE.Object3D {
     this.sun = new THREE.DirectionalLight(0xffffff, 5);
     this.sun.castShadow = !perfConfig.isMobile;
 
-    // Expand shadow area to cover full render distance dynamically
-    const SHADOW_SIZE = 400; // Total 800x800 area
+    // Expand shadow area massively to cover EVERYTHING dynamically
+    const SHADOW_SIZE = 1000; // Total 2000x2000 area - covers mountains and far objects
     this.sun.shadow.camera.left = -SHADOW_SIZE;
     this.sun.shadow.camera.right = SHADOW_SIZE;
     this.sun.shadow.camera.top = SHADOW_SIZE;
     this.sun.shadow.camera.bottom = -SHADOW_SIZE;
 
-    // Increase far plane to catch distant mountains and trees
-    this.sun.shadow.camera.far = 2000;
+    // Massive far plane to prevent clipping at any distance
+    this.sun.shadow.camera.far = 5000;
 
     this.sun.shadow.mapSize.set(perfConfig.renderer.shadowMapSize, perfConfig.renderer.shadowMapSize);
-    this.sun.shadow.bias = -0.0001; // Slightly adjust bias for larger area
+    this.sun.shadow.bias = -0.0005;
+    this.sun.shadow.normalBias = 0.05; // Critical for quality with large shadow maps
     this.add(this.sun);
     this.add(this.sun.target); // Add sun target to the scene for proper shadow following
 
     // Initial sun position (pushed further back for consistency)
     this.sunPosition.set(100, 200, 150).normalize();
-    this.sun.position.copy(this.sunPosition).multiplyScalar(500); // Increased distance
+    this.sun.position.copy(this.sunPosition).multiplyScalar(1000); // Increased distance to match scale
 
     // Ambient light to ensure objects aren't pitch black if HDR environment isn't applied yet
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
@@ -113,17 +114,13 @@ export class Skybox extends THREE.Object3D {
     }
 
     // Update sun position to follow camera for proper shadow rendering
-    if (cameraPosition) {
-      // Position the sun relative to the camera position
-      this.sun.position.set(
-        cameraPosition.x + this.sunPosition.x * 500,
-        this.sunPosition.y * 500,
-        cameraPosition.z + this.sunPosition.z * 500
-      );
-      // Update sun target to point at camera position
-      this.sun.target.position.set(cameraPosition.x, 0, cameraPosition.z);
-      this.sun.target.updateMatrixWorld();
-    }
+    // NOTE: Skybox parent is already moved to cameraPosition in Environment.ts
+    // So we just set local position relative to 0,0,0
+    this.sun.position.copy(this.sunPosition).multiplyScalar(1000);
+
+    // Target is always the center of the skybox (where the player is)
+    this.sun.target.position.set(0, 0, 0);
+    this.sun.target.updateMatrixWorld();
   }
 
   // Compatibility stubs for any external calls to procedural sky methods
