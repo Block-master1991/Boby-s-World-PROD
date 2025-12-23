@@ -376,24 +376,29 @@ export class ChunkManager extends THREE.Object3D {
 
     chunk.objects.forEach(obj => {
       this.add(obj);
-      console.log(`[ChunkManager] Added object ${obj.name || 'unnamed'} to scene`);
-    });
 
-    this.traverse((child) => {
-      if (child instanceof THREE.Mesh) {
-        child.castShadow = true;
-        child.receiveShadow = true;
-        child.frustumCulled = true;
+      // Apply shadow settings specifically to the new object
+      if (obj instanceof THREE.InstancedMesh) {
+        obj.castShadow = true;
+        obj.receiveShadow = true;
+        obj.frustumCulled = true;
+      } else {
+        // Recursively enable shadows for all Meshes in Groups (like Trees)
+        obj.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+            child.frustumCulled = true;
 
-        if (child.material) {
-          const materials = Array.isArray(child.material) ? child.material : [child.material];
-          materials.forEach(mat => {
-            if (mat instanceof THREE.Material) {
-              mat.needsUpdate = true;
+            if (child.material) {
+              const materials = Array.isArray(child.material) ? child.material : [child.material];
+              materials.forEach(mat => mat.needsUpdate = true);
             }
-          });
-        }
+          }
+        });
       }
+
+      console.log(`[ChunkManager] Added object ${obj.name || 'unnamed'} to scene`);
     });
   }
 

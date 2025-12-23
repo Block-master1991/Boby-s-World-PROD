@@ -127,6 +127,13 @@ export class Trees extends THREE.Object3D {
         tree.scale.fromArray(scales, i * 3);
         tree.quaternion.fromArray(quaternions, i * 4);
 
+        tree.traverse((child) => {
+          if ((child as THREE.Mesh).isMesh) {
+            child.castShadow = true;
+            child.receiveShadow = true;
+          }
+        });
+
         treesGroup.add(tree);
       }
     }

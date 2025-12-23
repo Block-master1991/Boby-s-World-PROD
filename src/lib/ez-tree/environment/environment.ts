@@ -81,7 +81,7 @@ export class Environment extends THREE.Object3D {
       this.skybox.position.copy(cameraPosition); // Make skybox follow camera
       this.ground.position.set(cameraPosition.x, 0, cameraPosition.z); // Make ground follow camera
     }
-    this.skybox.update(elapsedTime); // Update sky rotation
+    this.skybox.update(elapsedTime, cameraPosition); // Update sky rotation and shadow following
     this.chunkManager.updateModern(elapsedTime); // Pass elapsedTime to chunkManager
   }
 
