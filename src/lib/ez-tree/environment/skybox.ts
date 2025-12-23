@@ -50,18 +50,20 @@ export class Skybox extends THREE.Object3D {
   private loadHDR() {
     const loader = new RGBELoader();
     // Default HDR file specified by the user
-    const hdrUrl = '/textures/qwantani_moon_noon_puresky_8k.hdr';
+    const hdrUrl = '/textures/hdr/citrus_orchard_road_puresky_8k.hdr';
 
     loader.load(hdrUrl, (texture) => {
       texture.mapping = THREE.EquirectangularReflectionMapping;
 
-      // Improve quality/clarity of the 1k texture
+      // Professional quality settings for 8K HDR
       texture.minFilter = THREE.LinearFilter;
       texture.magFilter = THREE.LinearFilter;
+      texture.generateMipmaps = false; // Prevents blurring, keeps 8K sharp
       texture.anisotropy = 16;
+      texture.needsUpdate = true;
 
-      // Create a large sphere for the sky
-      const geometry = new THREE.SphereGeometry(250, 60, 40);
+      // Create an ultra-smooth sphere for the sky
+      const geometry = new THREE.SphereGeometry(250, 90, 64);
       const material = new THREE.MeshBasicMaterial({
         map: texture,
         side: THREE.BackSide,
