@@ -5,7 +5,7 @@ import { Billboard, TreeType } from './enums';
 import TreeOptions from './options';
 import { loadPreset } from './presets/index';
 import { getBarkTexture, getLeafTexture } from './textures';
-import { appendWindShader } from './shaders/windShaderUtils'; // Import the new utility
+import { appendWindShader, applyProfessionalFade } from './shaders/windShaderUtils'; // Import utilities
 import { TreesOptions } from './environment/trees'; // Import TreesOptions for wind parameters
 import { GrassOptions } from './environment/grass'; // Import GrassOptions for wind parameters
 
@@ -489,7 +489,9 @@ export class Tree extends THREE.Group {
       mat.roughnessMap = getBarkTexture(this.options.bark.type, 'roughness', this.options.bark.textureScale);
     }
 
-    // Do not apply wind shader to branches
+    // Apply professional colorless fade to branches
+    applyProfessionalFade(mat);
+
     this.branchesMesh.geometry.dispose();
     (this.branchesMesh.material as THREE.Material).dispose();
 
@@ -524,8 +526,8 @@ export class Tree extends THREE.Group {
       dithering: true
     });
 
-    // Apply wind shader to leaves
-    appendWindShader(mat, this.options as unknown as GrassOptions, false);
+    // Apply wind shader with integrated fade to leaves
+    appendWindShader(mat, this.options as unknown as GrassOptions, false, true);
 
     this.leavesMesh.geometry.dispose();
     (this.leavesMesh.material as THREE.Material).dispose();

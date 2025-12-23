@@ -38,7 +38,7 @@ export const useSceneSetup = ({
     const perfConfig = getDevicePerformanceConfig();
 
     const scene = new THREE.Scene();
-    scene.fog = new THREE.Fog(0xffffff, 154, 155); // جدار زجاجي أبيض حاد عند 140 وحدة
+    // Professional Colorless Fog is now implemented via Bayer Matrix dither fade in material shaders.
     sceneRef.current = scene;
 
     // Configure renderer based on device

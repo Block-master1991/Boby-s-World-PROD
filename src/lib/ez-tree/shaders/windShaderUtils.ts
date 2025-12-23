@@ -10,7 +10,14 @@ export interface WindOptions {
   scale?: number; // Optional, as not all objects might use it for wind
 }
 
-export function appendWindShader(material: THREE.Material | THREE.Material[], options: WindOptions, instanced: boolean = false): void {
+export function appendWindShader(
+  material: THREE.Material | THREE.Material[],
+  options: WindOptions,
+  instanced: boolean = false,
+  enableFade: boolean = false,
+  fadeStart: number = 135.0,
+  fadeEnd: number = 155.0
+): void {
   if (!material) return;
 
   const materials = Array.isArray(material) ? material : [material];
@@ -31,25 +38,44 @@ export function appendWindShader(material: THREE.Material | THREE.Material[], op
       return;
     }
 
-    mat.onBeforeCompile = (shader: { uniforms: Record<string, { value: number | THREE.Vector3 | boolean }>; vertexShader: string }) => {
+    mat.onBeforeCompile = (shader: { uniforms: Record<string, { value: number | THREE.Vector3 | boolean }>; vertexShader: string; fragmentShader: string }) => {
       if (!shader) return;
 
       shader.uniforms = shader.uniforms || {};
       shader.uniforms.uTime = { value: 0 };
-      shader.uniforms.uWindStrength = { value: new THREE.Vector3(
-        options.windStrength.x,
-        options.windStrength.y,
-        options.windStrength.z
-      ) };
-      shader.uniforms.uWindFrequency = { value: 0.5 }; // Using frequency from tree.js and grass.js
-      shader.uniforms.uWindScale = { value: 70.0 }; // Using scale from tree.js
+      shader.uniforms.uWindStrength = {
+        value: new THREE.Vector3(
+          options.windStrength.x,
+          options.windStrength.y,
+          options.windStrength.z
+        )
+      };
+      shader.uniforms.uWindFrequency = { value: 0.5 };
+      shader.uniforms.uWindScale = { value: 70.0 };
+
+      // Add fade uniforms if enabled
+      if (enableFade) {
+        shader.uniforms.uFadeStart = { value: fadeStart };
+        shader.uniforms.uFadeEnd = { value: fadeEnd };
+      }
 
       shader.vertexShader = `
       uniform float uTime;
       uniform vec3 uWindStrength;
       uniform float uWindFrequency;
       uniform float uWindScale;
+      ${enableFade ? 'varying float vDist;' : ''}
       ` + shader.vertexShader;
+
+      // Add fade shader code if enabled
+      if (enableFade) {
+        shader.fragmentShader = `
+        uniform float uFadeStart;
+        uniform float uFadeEnd;
+        varying float vDist;
+        ${PROFESSIONAL_DITHER_GLSL}
+        ` + shader.fragmentShader;
+      }
 
       // Store a reference to the shader on the material for later updates
       mat.userData.shader = shader;
@@ -303,7 +329,107 @@ export function appendWindShader(material: THREE.Material | THREE.Material[], op
 
       shader.vertexShader = shader.vertexShader.replace(
         `#include <project_vertex>`,
-        vertexShaderCode
+        (enableFade ? `\n        // Calculate fade distance from ORIGINAL position (before wind)\n        vec4 fadeWorldPos = modelMatrix * vec4(transformed, 1.0);\n        vDist = length(fadeWorldPos.xyz - cameraPosition);\n        ` : '') + vertexShaderCode
+      );
+
+      // Add fade logic to fragment shader if enabled
+      if (enableFade) {
+        shader.fragmentShader = shader.fragmentShader.replace(
+          `void main() {`,
+          `void main() {\n          if (vDist < uFadeStart) {\n            // No fade\n          } else if (vDist >= uFadeEnd) {\n            discard;\n          } else {\n            float fade = smoothstep(uFadeStart, uFadeEnd, vDist);\n            if (interleavedGradientNoise(gl_FragCoord.xy) < fade) discard;\n          }\n          `
+        );
+      }
+
+      mat.userData = mat.userData || {};
+      mat.userData.shader = shader;
+    };
+  });
+}
+
+/**
+ * Optimized professional dithering using Interleaved Gradient Noise (IGN).
+ * Balanced for quality and performance - suitable for mobile and low-end devices.
+ */
+const PROFESSIONAL_DITHER_GLSL = `
+  // Optimized Interleaved Gradient Noise
+  // Simplified version for better performance
+  float interleavedGradientNoise(vec2 uv) {
+    // Optimized magic numbers
+    vec2 magic = vec2(0.06711056, 0.00583715);
+    return fract(52.9829189 * fract(dot(uv, magic)));
+  }
+`;
+
+/**
+ * Applies professional screen-space dithered fade effect to materials.
+ * Uses Interleaved Gradient Noise (IGN) for AAA-quality transparency.
+ * @param material - Material or array of materials to apply fade to
+ * @param fadeStart - Distance where fade begins (default: 135 for smoother transition)
+ * @param fadeEnd - Distance where fade completes (default: 155)
+ */
+export function applyProfessionalFade(
+  material: THREE.Material | THREE.Material[],
+  fadeStart: number = 135.0,
+  fadeEnd: number = 155.0
+): void {
+  if (!material) return;
+  const materials = Array.isArray(material) ? material : [material];
+
+  materials.forEach((mat) => {
+    if (!mat) return;
+
+    const originalOnBeforeCompile = mat.onBeforeCompile;
+
+    mat.onBeforeCompile = (shader: { uniforms: Record<string, any>; vertexShader: string; fragmentShader: string }) => {
+      // Call original onBeforeCompile if exists
+      if (originalOnBeforeCompile) {
+        originalOnBeforeCompile.call(mat, shader as any, undefined as any);
+      }
+
+      shader.uniforms = shader.uniforms || {};
+      shader.uniforms.uFadeStart = { value: fadeStart };
+      shader.uniforms.uFadeEnd = { value: fadeEnd };
+      shader.uniforms.uTime = { value: 0.0 }; // Required by ChunkManager
+
+      // Add vDist varying to vertex shader
+      shader.vertexShader = `
+      varying float vDist;
+      ` + shader.vertexShader;
+
+      // Add fragment shader header with professional dithering and uniforms
+      shader.fragmentShader = `
+      uniform float uFadeStart;
+      uniform float uFadeEnd;
+      uniform float uTime;
+      varying float vDist;
+      ${PROFESSIONAL_DITHER_GLSL}
+      ` + shader.fragmentShader;
+
+      // Calculate distance in vertex shader
+      shader.vertexShader = shader.vertexShader.replace(
+        `#include <project_vertex>`,
+        `#include <project_vertex>
+        vec4 fadeWorldPos = modelMatrix * vec4(transformed, 1.0);
+        vDist = length(fadeWorldPos.xyz - cameraPosition);
+        `
+      );
+
+      // Apply optimized dithered fade in fragment shader
+      shader.fragmentShader = shader.fragmentShader.replace(
+        `void main() {`,
+        `void main() {
+        // Early exit if far from fade zone (performance optimization)
+        if (vDist < uFadeStart) {
+          // No fade needed
+        } else if (vDist >= uFadeEnd) {
+          discard; // Fully faded, discard immediately
+        } else {
+          // In fade zone - apply dithering
+          float fade = smoothstep(uFadeStart, uFadeEnd, vDist);
+          float ditherPattern = interleavedGradientNoise(gl_FragCoord.xy);
+          if (ditherPattern < fade) discard;
+        }
+        `
       );
 
       mat.userData = mat.userData || {};
