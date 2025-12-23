@@ -1,5 +1,6 @@
 
 import type { NextConfig } from 'next';
+import withBundleAnalyzer from '@next/bundle-analyzer';
 
 const nextConfig: NextConfig = {
   typescript: {
@@ -59,8 +60,8 @@ const nextConfig: NextConfig = {
     ];
   },
 
-  // Only add this in development mode if NEXT_PUBLIC_DEV_ORIGIN is set
-  webpack: (config, { isServer }) => {
+  // Performance optimizations for webpack
+  webpack: (config, { isServer, dev }) => {
     // Add a rule to handle JSON files properly
     config.module.rules.push({
       test: /\.json$/,
@@ -91,8 +92,71 @@ const nextConfig: NextConfig = {
       use: ['raw-loader'],
     });
 
+    // Performance optimizations for client-side bundles
+    if (!isServer) {
+      // Optimize chunks for better code splitting
+      config.optimization = {
+        ...config.optimization,
+        splitChunks: {
+          chunks: 'all',
+          cacheGroups: {
+            // Three.js core chunk
+            three: {
+              test: /[\\/]node_modules[\\/]three[\\/]/,
+              name: 'three-core',
+              priority: 20,
+              enforce: true,
+            },
+            // React and related libraries
+            framework: {
+              test: /[\\/]node_modules[\\/](react|react-dom|next|@radix-ui)[\\/]/,
+              name: 'framework',
+              priority: 15,
+            },
+            // Solana and crypto libraries
+            crypto: {
+              test: /[\\/]node_modules[\\/](@solana|tweetnacl)[\\/]/,
+              name: 'crypto',
+              priority: 10,
+            },
+            // Firebase
+            firebase: {
+              test: /[\\/]node_modules[\\/]firebase[\\/]/,
+              name: 'firebase',
+              priority: 10,
+            },
+            // Other vendor libraries
+            vendor: {
+              test: /[\\/]node_modules[\\/]/,
+              name: 'vendor',
+              priority: 5,
+            },
+          },
+        },
+        // Enable more aggressive optimizations in production
+        ...(dev ? {} : {
+          moduleIds: 'deterministic',
+          chunkIds: 'deterministic',
+          minimize: true,
+          minimizer: [
+            ...config.optimization.minimizer,
+          ],
+        }),
+      };
+
+      // Add performance hints
+      config.performance = {
+        hints: dev ? false : 'warning',
+        maxEntrypointSize: 512000, // 512KB
+        maxAssetSize: 512000, // 512KB
+      };
+    }
+
     return config;
   },
 };
 
-export default nextConfig;
+export default process.env.ANALYZE === 'true' ? withBundleAnalyzer({
+  enabled: true,
+  openAnalyzer: false,
+})(nextConfig) : nextConfig;

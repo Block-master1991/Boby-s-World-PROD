@@ -1,8 +1,18 @@
 'use client';
 
-import * as THREE from 'three';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js'; // Import GLTF type
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import {
+    THREE,
+    GLTFLoader,
+    DRACOLoader,
+    Scene,
+    Group,
+    AnimationMixer,
+    BoxGeometry,
+    MeshStandardMaterial,
+    Mesh,
+    Color,
+} from '@/lib/three-chunk';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
 import { Octree } from '../lib/Octree'; // Import Octree

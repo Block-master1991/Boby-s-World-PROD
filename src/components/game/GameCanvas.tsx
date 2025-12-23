@@ -1,8 +1,22 @@
 'use client';
 
 import React, { useEffect, useRef, useCallback } from 'react';
-import * as THREE from 'three';
 import type { PublicKey } from '@solana/web3.js';
+import {
+    THREE,
+    Scene,
+    PerspectiveCamera,
+    WebGLRenderer,
+    Clock,
+    Vector3,
+    AnimationMixer,
+    Mesh,
+    Group,
+    Object3D,
+    BoxGeometry,
+    MeshStandardMaterial,
+    Color,
+} from '@/lib/three-chunk';
 
 import { Octree } from '@/lib/Octree'; // Import Octree
 import { GameObject } from '@/types/game';
@@ -538,6 +552,9 @@ import { useFloatingEffects } from '@/hooks/useFloatingEffects'; // New import
 import { useDogParticles } from '@/hooks/useDogParticles'; // New import
 import DogSpeedBeam from '@/components/game/DogSpeedBeam'; // New import
 import DogShieldEffect from '@/components/game/DogShieldEffect'; // New import
+import { assetPreloader } from '@/lib/assetPreloader'; // Asset preloader
+import { initializeGPUInstancing, getGPUInstancingManager } from '@/lib/gpu-instancing'; // GPU instancing
+import { initializeLODManager, getLODManager } from '@/lib/lod-manager'; // LOD manager
 // CDN Integration System
 class CDNManager {
     private userRegion: string = 'US';
@@ -700,6 +717,10 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
     // FPS limiter for performance optimization
     const lastFrameTimeRef = useRef<number>(0);
+
+    // Asset preloading timing
+    const lastPreloadTimeRef = useRef<number>(0);
+    const preloadIntervalRef = useRef<number>(1000); // Preload every 1 second
 
     const handleKeyDownCbRef = useRef<((event: KeyboardEvent) => void) | null>(null);
     const handleKeyUpCbRef = useRef<((event: KeyboardEvent) => void) | null>(null);
@@ -871,6 +892,22 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             updateFloatingEffects(); // Update floating effects
             updateParticles(); // Update dust particles
 
+            // Update performance systems
+            if (cameraRef.current) {
+                // Update LOD manager with camera position
+                const lodManager = getLODManager();
+                if (lodManager) {
+                    lodManager.updateCameraPosition(cameraRef.current.position);
+                    lodManager.update(clampedDelta);
+                }
+
+                // Update GPU instancing
+                const gpuInstancing = getGPUInstancingManager();
+                if (gpuInstancing) {
+                    gpuInstancing.updateInstances();
+                }
+            }
+
             // Update continuous effects (Speed Beam, Shield)
             if (speedBeamRef.current) {
                 speedBeamRef.current.update(isSpeedBoostActiveRef.current, dogModelRef.current.position, dogModelRef.current.rotation);
@@ -908,6 +945,25 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
             // Call cleanupModelPool periodically
             cleanupModelPool(60000, 5); // Clean up models idle for 60s or if pool size > 5
+
+            // Intelligent asset preloading based on player position and movement
+            const currentTime = performance.now();
+            if (currentTime - lastPreloadTimeRef.current > preloadIntervalRef.current) {
+                lastPreloadTimeRef.current = currentTime;
+
+                // Calculate player velocity for predictive loading
+                const velocity = {
+                    x: (dogModelRef.current.position.x - lastDogPositionRef.current.x) / clampedDelta,
+                    z: (dogModelRef.current.position.z - lastDogPositionRef.current.z) / clampedDelta,
+                };
+
+                // Preload assets for current position and predicted movement
+                assetPreloader.preloadForPosition(
+                    dogModelRef.current.position.x,
+                    dogModelRef.current.position.z,
+                    velocity
+                ).catch(console.warn); // Don't let preloading errors break the game
+            }
         }
 
         try {
@@ -928,6 +984,19 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         }
     }, [sessionPublicKey, updateDog, updateCoins, updateEnemies, updateCamera, dogModelRef, cleanupModelPool, updateFloatingEffects, updateParticles]);
 
+
+    // Initialize performance systems
+    useEffect(() => {
+        if (cameraRef.current) {
+            // Initialize GPU instancing
+            initializeGPUInstancing(cameraRef.current);
+            console.log('[GameCanvas] GPU Instancing initialized');
+
+            // Initialize LOD manager
+            initializeLODManager();
+            console.log('[GameCanvas] LOD Manager initialized');
+        }
+    }, []);
 
     // Main useEffect for initialization and re-initialization on session change
     useEffect(() => {
