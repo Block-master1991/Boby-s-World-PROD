@@ -17,8 +17,11 @@ export function withCsrfProtection(handler: (req: NextRequest) => Promise<NextRe
       // 1. استخراج Access Token للحصول على sessionId (publicKey)
       const accessToken = request.cookies.get('accessToken')?.value;
       if (!accessToken) {
-        console.warn('[CSRFMiddleware] No access token found for CSRF check. Denying request.');
-        return NextResponse.json({ error: 'Access token required for CSRF validation.' }, { status: 401 });
+        // CSRF protection is only necessary for authenticated requests.
+        // If there's no access token, there's no session to hijack via CSRF.
+        // The individual handlers will still enforce authentication if needed.
+        console.log('[CSRFMiddleware] No access token found. Skipping CSRF check for unauthenticated request.');
+        return handler(request);
       }
 
       const userAgent = request.headers.get('user-agent') || 'unknown';

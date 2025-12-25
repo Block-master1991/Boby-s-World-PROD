@@ -36,25 +36,49 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     }
 
     const data = docSnap.data()!;
-    let inventory: { id: string }[] = data.inventory || [];
+    let inventory: { id: string; quantity?: number }[] = data.inventory || [];
 
-    // Count how many of the requested item the player actually has
-    const currentItemCount = inventory.filter(entry => entry?.id === itemId).length;
+    // Find the item in inventory and check total quantity
+    let totalItemCount = 0;
+    let itemIndex = -1;
 
-    if (currentItemCount < amount) {
-      return NextResponse.json({ error: `You do not have enough ${itemId} to use. You have ${currentItemCount}, but requested ${amount}.` }, { status: 400 });
-    }
-
-    // Remove 'amount' number of items from the inventory
-    let itemsRemoved = 0;
-    const newInventory: { id: string }[] = [];
-    for (const entry of inventory) {
-      if (entry?.id === itemId && itemsRemoved < amount) {
-        itemsRemoved++;
-      } else {
-        newInventory.push(entry);
+    for (let i = 0; i < inventory.length; i++) {
+      const entry = inventory[i];
+      if (entry?.id === itemId) {
+        totalItemCount += entry.quantity || 1;
+        if (itemIndex === -1) itemIndex = i; // Get first instance index
       }
     }
+
+    if (totalItemCount < amount) {
+      return NextResponse.json({ error: `You do not have enough ${itemId} to use. You have ${totalItemCount}, but requested ${amount}.` }, { status: 400 });
+    }
+
+    // Update inventory - reduce quantity or remove item
+    const newInventory = [...inventory];
+    let remainingToRemove = amount;
+
+    for (let i = 0; i < newInventory.length; i++) {
+      const entry = newInventory[i];
+      if (entry?.id === itemId && remainingToRemove > 0) {
+        const currentQuantity = entry.quantity || 1;
+
+        if (currentQuantity <= remainingToRemove) {
+          // Remove this entire entry
+          newInventory.splice(i, 1);
+          remainingToRemove -= currentQuantity;
+          i--; // Adjust index after splice
+        } else {
+          // Reduce quantity of this entry
+          newInventory[i] = {
+            ...entry,
+            quantity: currentQuantity - remainingToRemove
+          };
+          remainingToRemove = 0;
+        }
+      }
+    }
+
     inventory = newInventory;
 
     await playerDocRef.update({
@@ -62,7 +86,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
       lastInteraction: FieldValue.serverTimestamp(),
     });
 
-    const response = NextResponse.json({ success: true, itemsUsed: itemsRemoved });
+    const response = NextResponse.json({ success: true, itemsUsed: amount });
 
     // إصدار CSRF Token جديد بعد الطلب الناجح
     const requestHost = request.headers.get('host') || undefined;

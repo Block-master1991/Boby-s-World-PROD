@@ -16,7 +16,7 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { GameObject } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast';
-import { storeItems, type StoreItemDefinition } from '@/lib/items'; // Assuming '@/lib/items' defines store items
+import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from '@/lib/items'; // Get store items with icons
 import { ENEMY_COLLISION_PENALTY_USDT } from '@/lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 import { useFetchPlayerData, useAddCoins, useWithdrawUSDT } from '@/hooks/useGraphQL'; // GraphQL hooks
@@ -184,6 +184,9 @@ const GameUI: React.FC<GameUIProps> = ({
     const coinMagnetIntervalRef = useRef<NodeJS.Timeout | null>(null);
     const [shouldShowCoinMagnetWoreOffToast, setShouldShowCoinMagnetWoreOffToast] = useState(false);
 
+    // Store Items (loaded from database)
+    const [storeItemsData, setStoreItemsData] = useState<StoreItemDefinition[]>([]);
+
     // Inventory Item Counts (will be populated from backend data)
     const [speedyPawsTreatCount, setSpeedyPawsTreatCount] = useState(0);
     const [guardianShieldCount, setGuardianShieldCount] = useState(0);
@@ -210,11 +213,11 @@ const GameUI: React.FC<GameUIProps> = ({
         knobOffsetY: 0,
     });
 
-    // Item Definitions (from '@/lib/items')
-    const speedyPawsTreatDef = storeItems.find(item => item.id === '3');
-    const guardianShieldDef = storeItems.find(item => item.id === '2');
-    const protectionBottleDef = storeItems.find(item => item.id === '1');
-    const coinMagnetTreatDef = storeItems.find(item => item.id === '4');
+    // Item Definitions (loaded from database)
+    const speedyPawsTreatDef = storeItemsData.find(item => item.id === '3');
+    const guardianShieldDef = storeItemsData.find(item => item.id === '2');
+    const protectionBottleDef = storeItemsData.find(item => item.id === '1');
+    const coinMagnetTreatDef = storeItemsData.find(item => item.id === '4');
 
     // Derived State for game pausing
     const isGameEffectivelyPaused = isMenuOpen || isStoreOpen || isInventoryOpen || isWalletOpen || isWalletMismatch;
@@ -436,6 +439,75 @@ const GameUI: React.FC<GameUIProps> = ({
      * useEffect hook for managing player data fetch from backend.
      * This runs on component mount and when authentication or user public key changes.
      */
+    // Load store items on component mount with fallback and retry logic
+    useEffect(() => {
+        let retryCount = 0;
+        const maxRetries = 3;
+        const retryDelay = 2000; // 2 seconds
+        let retryInterval: NodeJS.Timeout;
+
+        async function loadStoreItems() {
+            try {
+                console.log('[GameUI] Attempting to load store items from database...');
+                const items = await getStoreItemsActiveWithIcons();
+
+                if (items && items.length > 0) {
+                    setStoreItemsData(items);
+                    console.log('[GameUI] Store items loaded successfully from database:', items.length);
+                    return true; // Success
+                } else {
+                    throw new Error('No items returned from database');
+                }
+            } catch (error) {
+                console.warn(`[GameUI] Database load attempt ${retryCount + 1}/${maxRetries + 1} failed:`, error);
+
+                // Try fallback data
+                try {
+                    console.log('[GameUI] Loading fallback store items...');
+                    const { fallbackStoreItems } = await import('@/lib/items');
+
+                    // Add icons to fallback items
+                    const { Droplet, Shield, Zap, Magnet } = await import('lucide-react');
+                    const iconMap = { '1': Droplet, '2': Shield, '3': Zap, '4': Magnet };
+
+                    const itemsWithIcons = fallbackStoreItems.map(item => ({
+                        ...item,
+                        icon: iconMap[item.id as keyof typeof iconMap] || Droplet
+                    }));
+
+                    setStoreItemsData(itemsWithIcons);
+                    console.log('[GameUI] Fallback store items loaded successfully with icons');
+                    return true; // Success with fallback
+                } catch (fallbackError) {
+                    console.error('[GameUI] Failed to load fallback items:', fallbackError);
+                    setStoreItemsData([]);
+                    return false; // Failure
+                }
+            }
+        }
+
+        // Initial load
+        loadStoreItems().then((success) => {
+            // Only set up retry if initial load failed
+            if (!success) {
+                retryInterval = setInterval(() => {
+                    if (retryCount < maxRetries) {
+                        retryCount++;
+                        console.log(`[GameUI] Retrying store items load (attempt ${retryCount + 1}/${maxRetries})...`);
+                        loadStoreItems();
+                    } else {
+                        clearInterval(retryInterval);
+                    }
+                }, retryDelay);
+            }
+        });
+
+        // Cleanup
+        return () => {
+            if (retryInterval) clearInterval(retryInterval);
+        };
+    }, []);
+
     useEffect(() => {
         const cleanup = () => {
             if (speedBoostIntervalRef.current) clearInterval(speedBoostIntervalRef.current);

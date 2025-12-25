@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/com
 import { PackageSearch } from 'lucide-react';
 import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { storeItems, type StoreItemDefinition } from '@/lib/items';
+import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from '@/lib/items';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input'; // Import Input component
@@ -37,8 +37,22 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
 }) => {
     const { sessionPublicKey } = useSessionWallet();
     const [quantitiesToUse, setQuantitiesToUse] = useState<Record<string, number>>({});
+    const [storeItemsData, setStoreItemsData] = useState<StoreItemDefinition[]>([]);
 
     const { toast } = useToast();
+
+    // Load store items on component mount
+    useEffect(() => {
+        async function loadStoreItems() {
+            try {
+                const items = await getStoreItemsActiveWithIcons();
+                setStoreItemsData(items);
+            } catch (error) {
+                console.error('Error loading store items:', error);
+            }
+        }
+        loadStoreItems();
+    }, []);
     // GraphQL inventory data (primary source)
     const { data: inventoryData, loading: graphqlLoading, error: graphqlError, execute: refetchInventory } = useUserInventory(sessionPublicKey?.toBase58() || '');
     const { useItem, loading: useItemLoading } = useConsumableItem();
@@ -53,23 +67,23 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     const aggregatedInventory = React.useMemo(() => {
         const items: AggregatedInventoryItem[] = [];
         if (protectionBottleCountFinal > 0) {
-            const def = storeItems.find(item => item.id === '1');
+            const def = storeItemsData.find(item => item.id === '1');
             if (def) items.push({ definition: def, count: protectionBottleCountFinal });
         }
         if (guardianShieldCountFinal > 0) {
-            const def = storeItems.find(item => item.id === '2');
+            const def = storeItemsData.find(item => item.id === '2');
             if (def) items.push({ definition: def, count: guardianShieldCountFinal });
         }
         if (speedyPawsTreatCountFinal > 0) {
-            const def = storeItems.find(item => item.id === '3');
+            const def = storeItemsData.find(item => item.id === '3');
             if (def) items.push({ definition: def, count: speedyPawsTreatCountFinal });
         }
         if (coinMagnetTreatCountFinal > 0) {
-            const def = storeItems.find(item => item.id === '4');
+            const def = storeItemsData.find(item => item.id === '4');
             if (def) items.push({ definition: def, count: coinMagnetTreatCountFinal });
         }
         return items;
-    }, [protectionBottleCountFinal, guardianShieldCountFinal, speedyPawsTreatCountFinal, coinMagnetTreatCountFinal]);
+    }, [protectionBottleCountFinal, guardianShieldCountFinal, speedyPawsTreatCountFinal, coinMagnetTreatCountFinal, storeItemsData]);
 
     // Initialize quantitiesToUse when aggregatedInventory changes
     useEffect(() => {
@@ -129,14 +143,37 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
             </SheetHeader>
             <ScrollArea className="flex-grow">
                 <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {aggregatedInventory.length === 0 && (
+                    {/* Show loading state while fetching GraphQL data */}
+                    {graphqlLoading && aggregatedInventory.length === 0 && (
+                        <div className="text-center py-8 sm:col-span-2">
+                            <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                <p className="text-muted-foreground">Loading inventory...</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Show error state */}
+                    {graphqlError && !graphqlLoading && (
+                        <div className="text-center py-8 sm:col-span-2">
+                            <p className="text-destructive mb-4">Failed to load inventory</p>
+                            <Button onClick={() => refetchInventory()} variant="outline">
+                                Retry
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Show empty state only after loading is complete */}
+                    {!graphqlLoading && !graphqlError && aggregatedInventory.length === 0 && (
                         <div className="text-center py-8 sm:col-span-2">
                             <PackageSearch className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
                             <p className="text-muted-foreground">Your inventory is currently empty.</p>
                             <p className="text-xs text-muted-foreground mt-1">Visit the store to buy some items!</p>
                         </div>
                     )}
-                    {aggregatedInventory.length > 0 && (
+
+                    {/* Render inventory items only after loading is complete and no errors */}
+                    {!graphqlLoading && !graphqlError && aggregatedInventory.length > 0 && (
                         aggregatedInventory.map((itemGroup) => {
                             const currentCount = getItemCount(itemGroup.definition.id);
                             const isConsumable = ['1', '2', '3', '4'].includes(itemGroup.definition.id); // Check if item is consumable

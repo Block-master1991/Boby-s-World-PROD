@@ -5,34 +5,58 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { AlertCircle, PawPrint, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { useMarketData } from '@/hooks/useGraphQL';
+import { useMarketData, useBobyPriceUpdates } from '@/hooks/useGraphQL';
 
 const BobyPriceDisplay: React.FC = () => {
     // Maintain same variable names and structure
     const [price, setPrice] = useState<number | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [errorInfo, setErrorInfo] = useState<{ message: string, details?: string, cause?: unknown, status?: number } | null>(null);
+    const [priceChange, setPriceChange] = useState<{ percent: number, direction: 'up' | 'down' | 'same' } | null>(null);
 
     // Use GraphQL hook instead of REST API (same functionality)
     const { data: marketData, loading: graphqlLoading, error: graphqlError, execute: refreshPrice } = useMarketData();
 
+    // Real-time price updates subscription
+    const { data: priceUpdates, error: subscriptionError } = useBobyPriceUpdates();
+
     // Extract price maintaining same logic
     const currentPrice = marketData?.marketData?.bobyPrice || null;
+
+    // Handle real-time price updates from subscription
+    useEffect(() => {
+        if (priceUpdates) {
+            const newPrice = priceUpdates.price;
+            const changePercent = priceUpdates.changePercent;
+
+            // Update price and change indicator
+            setPrice(newPrice);
+            setPriceChange({
+                percent: Math.abs(changePercent),
+                direction: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'same'
+            });
+
+            // Clear any existing errors
+            setErrorInfo(null);
+        }
+    }, [priceUpdates]);
 
     // Update state when GraphQL data changes (same effect as fetchPrice)
     useEffect(() => {
         setIsLoading(graphqlLoading);
-        if (graphqlError) {
+        if (graphqlError || subscriptionError) {
+            const errorMessage = graphqlError || subscriptionError;
             setErrorInfo({
-                message: graphqlError,
+                message: errorMessage || 'Failed to fetch price',
                 details: 'Failed to fetch price via GraphQL'
             });
             setPrice(null);
-        } else if (currentPrice !== null) {
+        } else if (currentPrice !== null && !priceUpdates) { // Only set from marketData if no subscription data
             setPrice(currentPrice);
             setErrorInfo(null);
+            setPriceChange(null); // Clear change indicator for initial load
         }
-    }, [currentPrice, graphqlLoading, graphqlError]);
+    }, [currentPrice, graphqlLoading, graphqlError, subscriptionError, priceUpdates]);
 
     // Maintain same fetchPrice function interface for refresh button
     const fetchPrice = useCallback(async (isInitialLoad = false) => {

@@ -35,19 +35,18 @@ export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit
     const csrfToken = getCookie('csrfToken');
 
     if (!csrfToken) {
-      console.error('CSRF token not found. Cannot send request securely.');
-      // Optionally, throw an error or return a specific response
-      throw new Error('CSRF token missing. Please ensure you are logged in and the token is available.');
+      console.warn('[fetchWithCsrf] CSRF token not found in cookies. This is normal for unauthenticated requests, but will fail for protected routes.');
+      // Don't throw here, let the request proceed. The server will reject it if CSRF is required.
+    } else {
+      const headers = new Headers(init?.headers);
+      headers.set('X-CSRF-Token', csrfToken);
+
+      return fetch(input, {
+        ...init,
+        headers,
+        signal: init?.signal,
+      });
     }
-
-    const headers = new Headers(init?.headers);
-    headers.set('X-CSRF-Token', csrfToken);
-
-    return fetch(input, {
-      ...init,
-      headers,
-      signal: init?.signal,
-    });
   }
 
   // For GET and other methods, just use native fetch

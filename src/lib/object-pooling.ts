@@ -2,6 +2,7 @@
 // Reuses objects instead of creating/destroying them frequently
 
 import { THREE, Mesh, Points, Vector3, BufferGeometry, MeshStandardMaterial, PointsMaterial, BufferAttribute } from '@/lib/three-chunk';
+import { isMobileDevice } from './utils';
 
 interface PoolConfig {
     initialSize: number;
@@ -329,8 +330,8 @@ class Vector3Pool extends ObjectPool<THREE.Vector3> {
 class MemoryMonitor {
     private memoryHistory: number[] = [];
     private maxHistorySize = 100;
-    private warningThreshold = 400 * 1024 * 1024; // 400MB (default)
-    private criticalThreshold = 600 * 1024 * 1024; // 600MB (default)
+    private warningThreshold = isMobileDevice() ? 350 * 1024 * 1024 : 800 * 1024 * 1024; // 350MB mobile, 800MB desktop
+    private criticalThreshold = isMobileDevice() ? 500 * 1024 * 1024 : 1200 * 1024 * 1024; // 500MB mobile, 1.2GB desktop
 
     constructor(warningThreshold?: number, criticalThreshold?: number) {
         if (warningThreshold) this.warningThreshold = warningThreshold;
@@ -376,19 +377,26 @@ class MemoryMonitor {
             // Check thresholds
             if (memory.used > this.criticalThreshold) {
                 console.error(`[MemoryMonitor] CRITICAL: Memory usage ${this.formatBytes(memory.used)} exceeds critical threshold`);
-                this.triggerGarbageCollection();
+                this.triggerEmergencyCleanup();
             } else if (memory.used > this.warningThreshold) {
                 console.warn(`[MemoryMonitor] WARNING: Memory usage ${this.formatBytes(memory.used)} exceeds warning threshold`);
+                this.triggerGarbageCollection();
             }
         }
     }
 
     private triggerGarbageCollection(): void {
         // Force garbage collection if available (Chrome DevTools only)
-        if ('gc' in window) {
+        if (typeof window !== 'undefined' && 'gc' in window) {
             (window as any).gc();
             console.log('[MemoryMonitor] Forced garbage collection');
         }
+    }
+
+    private triggerEmergencyCleanup(): void {
+        console.warn('[MemoryMonitor] EMERGENCY: Triggering full object pool disposal');
+        disposeAllPools();
+        this.triggerGarbageCollection();
     }
 
     private formatBytes(bytes: number): string {

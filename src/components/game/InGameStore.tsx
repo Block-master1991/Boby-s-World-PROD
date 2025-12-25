@@ -20,12 +20,13 @@ import {
 } from '@solana/spl-token';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { storeItems, type StoreItemDefinition } from '@/lib/items';
+import { useActiveStoreItems } from '@/hooks/useStoreItems';
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
 import { useMarketData, useGraphQLMutation } from '@/hooks/useGraphQL';
 import { GAME_MUTATIONS } from '@/lib/graphql-client';
+import { StoreItemDefinition } from '@/lib/server-items';
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -54,10 +55,19 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     const isMobile = useIsMobile();
     const { apiFetch } = useApiFetch();
 
+    const { items: storeItems, loading: itemsLoading, error: itemsError } = useActiveStoreItems();
+
+    // Debug logs (remove in production)
+    // console.log('[InGameStore] storeItems:', storeItems?.length || 0, 'itemsLoading:', itemsLoading, 'itemsError:', itemsError);
+    // console.log('[InGameStore] isAuthenticated:', isAuthenticated, 'isWalletConnectedAndMatching:', isWalletConnectedAndMatching);
+
     const [isLoading, setIsLoading] = useState<string | null>(null); // For individual item purchase loading
     const [quantities, setQuantities] = useState<Record<string, number>>(() => {
         const initialQuantities: Record<string, number> = {};
-        storeItems.forEach(item => { initialQuantities[item.id] = 1; });
+        // Initialize quantities when items are loaded
+        if (storeItems && storeItems.length > 0) {
+            storeItems.forEach(item => { initialQuantities[item.id] = 1; });
+        }
         return initialQuantities;
     });
 
@@ -236,8 +246,12 @@ const InGameStore: React.FC<InGameStoreProps> = ({
 
                 toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0, 10)}... Processing inventory update.` });
 
+                // Wait a bit longer for transaction confirmation before calling backend API
+                console.log('[Purchase] Waiting 10 seconds for transaction confirmation...');
+                await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+
                 // Call backend API to update inventory with timeout
-                const apiTimeoutMs = isMobile ? 30000 : 15000; // 30 seconds for mobile, 15 for desktop
+                const apiTimeoutMs = isMobile ? 45000 : 30000; // 45 seconds for mobile, 30 for desktop
                 const controller = new AbortController();
                 const apiTimeout = setTimeout(() => controller.abort(), apiTimeoutMs);
 
@@ -266,7 +280,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         console.log(`Transaction not found, retrying... (${retryCount + 1}/${maxRetries})`);
                         retryCount++;
                         toast({ title: 'Retrying...', description: 'Transaction verification in progress. Please wait.' });
-                        await new Promise(resolve => setTimeout(resolve, 3000)); // Wait 3 seconds
+                        await new Promise(resolve => setTimeout(resolve, 8000)); // Wait 8 seconds
                         return attemptPurchase(); // Retry
                     }
                     throw new Error(inventoryUpdateData.error || 'Failed to update inventory after purchase.');
@@ -385,8 +399,35 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                         </div>
                     )}
 
-                    {/* Render store items only if authenticated and wallet is connected and matching */}
-                    {isAuthenticated && isWalletConnectedAndMatching && storeItems.map((item) => {
+                    {/* Show loading state while fetching items */}
+                    {isAuthenticated && isWalletConnectedAndMatching && itemsLoading && storeItems.length === 0 && (
+                        <div className="text-center py-8 sm:col-span-2">
+                            <div className="flex items-center justify-center gap-2">
+                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                                <p className="text-muted-foreground">Loading store items...</p>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Show error state */}
+                    {isAuthenticated && isWalletConnectedAndMatching && itemsError && !itemsLoading && (
+                        <div className="text-center py-8 sm:col-span-2">
+                            <p className="text-destructive mb-4">Failed to load store items</p>
+                            <Button onClick={() => window.location.reload()} variant="outline">
+                                Retry
+                            </Button>
+                        </div>
+                    )}
+
+                    {/* Show empty state only after loading is complete */}
+                    {isAuthenticated && isWalletConnectedAndMatching && !itemsLoading && !itemsError && storeItems.length === 0 && (
+                        <div className="text-center py-8 sm:col-span-2">
+                            <p className="text-muted-foreground">No items available at the moment</p>
+                        </div>
+                    )}
+
+                    {/* Render store items only if authenticated, wallet is connected and matching, and items are loaded */}
+                    {isAuthenticated && isWalletConnectedAndMatching && !itemsLoading && !itemsError && storeItems.map((item) => {
                         const quantity = quantities[item.id] || 1;
                         const totalUsdPrice = item.price * quantity;
                         const calculatedBobyPricePerUnit = bobyUsdPrice && bobyUsdPrice > 0 ? (item.price / bobyUsdPrice) : null;

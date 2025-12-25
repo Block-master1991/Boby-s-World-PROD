@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import { useApiFetch } from '@/utils/api';
 import { getGraphQLClient, GAME_QUERIES, GAME_MUTATIONS } from '@/lib/graphql-client';
 
@@ -9,46 +9,118 @@ interface GraphQLHookResult<T> {
     execute: (variables?: any) => Promise<void>;
 }
 
+// Cache for GraphQL results to prevent duplicate requests
+const graphqlCache = new Map<string, { data: any; timestamp: number; ttl: number }>();
+const pendingRequests = new Map<string, Promise<any>>();
+const DEFAULT_CACHE_TTL = 30000; // 30 seconds
+
 export const useGraphQL = <T = any>(
     query: string,
     options?: {
         variables?: any;
         skip?: boolean;
+        cacheTTL?: number; // Custom TTL in milliseconds
     }
 ): GraphQLHookResult<T> => {
     const [data, setData] = useState<T | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const cacheKey = useMemo(() => {
+        const variables = options?.variables || {};
+        return `${query.trim()}-${JSON.stringify(variables)}`;
+    }, [query, options?.variables]);
+
+    const cacheTTL = options?.cacheTTL || DEFAULT_CACHE_TTL;
+
     const execute = useCallback(async (variables?: any) => {
-        setLoading(true);
-        setError(null);
+        // Check cache first
+        const now = Date.now();
+        const cached = graphqlCache.get(cacheKey);
+        if (cached && (now - cached.timestamp) < cacheTTL) {
+            console.log(`[useGraphQL] Using cached result for: ${cacheKey.substring(0, 50)}...`);
+            setData(cached.data);
+            setError(null);
+            return cached.data;
+        }
+
+        // Check if there's a pending request for the same query
+        if (pendingRequests.has(cacheKey)) {
+            console.log(`[useGraphQL] Waiting for pending request: ${cacheKey.substring(0, 50)}...`);
+            try {
+                const result = await pendingRequests.get(cacheKey);
+                setData(result);
+                setError(null);
+                return result;
+            } catch (err) {
+                // If pending request failed, we'll try again
+                console.log(`[useGraphQL] Pending request failed, retrying: ${cacheKey.substring(0, 50)}...`);
+            }
+        }
+
+        // Create new request
+        const requestPromise = (async () => {
+            setLoading(true);
+            setError(null);
+
+            try {
+                const client = getGraphQLClient();
+                const result = await client.query(query, variables || options?.variables || {}, {
+                    requestPolicy: 'network-only', // Always fetch fresh data
+                }).toPromise();
+
+                if (result.error) {
+                    throw new Error(result.error.message);
+                }
+
+                // Cache the result
+                graphqlCache.set(cacheKey, {
+                    data: result.data,
+                    timestamp: now,
+                    ttl: cacheTTL
+                });
+
+                // Set TTL cleanup
+                setTimeout(() => {
+                    graphqlCache.delete(cacheKey);
+                }, cacheTTL);
+
+                return result.data;
+            } catch (err) {
+                const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                setError(errorMessage);
+                console.error('[useGraphQL] Query failed:', errorMessage);
+                throw err; // Re-throw to be caught by caller
+            } finally {
+                setLoading(false);
+                pendingRequests.delete(cacheKey);
+            }
+        })();
+
+        // Store pending request
+        pendingRequests.set(cacheKey, requestPromise);
 
         try {
-            const client = getGraphQLClient();
-            const result = await client.query(query, variables || options?.variables || {}, {
-                requestPolicy: 'network-only', // Always fetch fresh data
-            }).toPromise();
-
-            if (result.error) {
-                throw new Error(result.error.message);
-            }
-
-            setData(result.data);
+            const result = await requestPromise;
+            setData(result);
+            return result;
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            setError(errorMessage);
-            console.error('[useGraphQL] Query failed:', errorMessage);
-        } finally {
-            setLoading(false);
+            // Error already handled above
+            return null;
         }
-    }, [query, options?.variables]);
+    }, [query, options?.variables, cacheKey, cacheTTL]);
 
     useEffect(() => {
         if (!options?.skip) {
             execute();
         }
-    }, [execute, options?.skip]);
+
+        // Cleanup function
+        return () => {
+            // Clean up cache after unmount if needed
+            // This prevents memory leaks in long-running apps
+        };
+    }, [options?.skip]); // Remove execute from dependencies to prevent re-executions
 
     return {
         data,
@@ -199,9 +271,19 @@ export const useUserStats = () => {
 
             setData(result.data);
         } catch (err) {
-            const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            console.error('[useUserStats] Error:', errorMessage);
-            setError(errorMessage);
+            // تحسين error handling للـ network errors
+            if (err instanceof Error &&
+                (err.message?.includes('NetworkError') ||
+                    err.message?.includes('Failed to fetch') ||
+                    err.message?.includes('fetch resource'))) {
+                // Network error - لا نعرض خطأ للمستخدم، فقط نسجل
+                console.warn('[useUserStats] Network error (will retry):', err.message);
+                setError(null); // Clear error to avoid showing to user
+            } else {
+                const errorMessage = err instanceof Error ? err.message : 'Unknown error';
+                console.error('[useUserStats] Error:', errorMessage);
+                setError(errorMessage);
+            }
         } finally {
             setLoading(false);
         }
@@ -533,5 +615,268 @@ export const useWithdrawUSDT = () => {
         loading,
         error,
         withdrawUSDT,
+    };
+};
+
+// GraphQL Subscription Hooks
+export const useBobyPriceUpdates = () => {
+    const { apiFetch } = useApiFetch();
+    const [data, setData] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isSubscribed = true;
+
+        const subscribeToPriceUpdates = async () => {
+            try {
+                // For now, we'll use polling since we don't have WebSocket client set up yet
+                // In production, this would use a WebSocket connection
+                const pollPrice = async () => {
+                    try {
+                        const response = await apiFetch('/api/graphql', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                query: `
+                                    subscription BobyPriceUpdates {
+                                        bobyPriceUpdates {
+                                            price
+                                            changePercent
+                                            timestamp
+                                        }
+                                    }
+                                `,
+                            }),
+                        });
+
+                        if (response.ok && isSubscribed) {
+                            const result = await response.json();
+                            if (result.data?.bobyPriceUpdates) {
+                                setData(result.data.bobyPriceUpdates);
+                                setError(null);
+                            }
+                        }
+                    } catch (err) {
+                        if (isSubscribed) {
+                            const errorMessage = err instanceof Error ? err.message : 'Subscription error';
+                            setError(errorMessage);
+                            console.error('[useBobyPriceUpdates] Error:', errorMessage);
+                        }
+                    }
+                };
+
+                // Poll every 30 seconds (matching server interval)
+                const intervalId = setInterval(pollPrice, 30000);
+
+                // Initial poll
+                pollPrice();
+
+                return () => {
+                    clearInterval(intervalId);
+                };
+            } catch (err) {
+                if (isSubscribed) {
+                    const errorMessage = err instanceof Error ? err.message : 'Failed to setup subscription';
+                    setError(errorMessage);
+                    console.error('[useBobyPriceUpdates] Setup error:', errorMessage);
+                }
+            }
+        };
+
+        subscribeToPriceUpdates();
+
+        return () => {
+            isSubscribed = false;
+        };
+    }, [apiFetch]);
+
+    return {
+        data,
+        error,
+    };
+};
+
+export const useUserActivityUpdates = () => {
+    const { apiFetch } = useApiFetch();
+    const [data, setData] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        let isSubscribed = true;
+
+        const subscribeToActivityUpdates = async () => {
+            try {
+                // Check if user is authenticated (has CSRF token)
+                const hasCsrfToken = document.cookie.includes('csrfToken');
+                if (!hasCsrfToken) {
+                    console.log('[useUserActivityUpdates] No CSRF token found, user likely logged out. Stopping activity updates.');
+                    return;
+                }
+
+                // Polling implementation (would be WebSocket in production)
+                const pollActivity = async () => {
+                    try {
+                        // Check CSRF token before each request
+                        const currentHasCsrfToken = document.cookie.includes('csrfToken');
+                        if (!currentHasCsrfToken) {
+                            console.log('[useUserActivityUpdates] CSRF token lost during polling, stopping activity updates.');
+                            return;
+                        }
+
+                        const response = await apiFetch('/api/graphql', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                query: `
+                                    query UserActivityUpdates {
+                                        userActivityUpdates @client {
+                                            onlineUsers
+                                            activeGames
+                                            timestamp
+                                        }
+                                    }
+                                `,
+                            }),
+                        });
+
+                        if (response.ok && isSubscribed) {
+                            const result = await response.json();
+                            if (result.data?.userActivityUpdates) {
+                                setData(result.data.userActivityUpdates);
+                                setError(null);
+                            }
+                        }
+                    } catch (err) {
+                        if (isSubscribed) {
+                            // تحسين error handling للـ network errors
+                            if (err instanceof Error &&
+                                (err.message?.includes('NetworkError') ||
+                                    err.message?.includes('Failed to fetch') ||
+                                    err.message?.includes('fetch resource'))) {
+                                // Network error - لا نعرض خطأ للمستخدم، فقط نسجل
+                                console.warn('[useUserActivityUpdates] Network error (will retry):', err.message);
+                                setError(null); // Clear error to avoid showing to user
+                            } else {
+                                const errorMessage = err instanceof Error ? err.message : 'Activity subscription error';
+                                setError(errorMessage);
+                                console.error('[useUserActivityUpdates] Error:', errorMessage);
+                            }
+                        }
+                    }
+                };
+
+                // Poll every 10 seconds (matching server interval)
+                const intervalId = setInterval(pollActivity, 10000);
+
+                // Initial poll
+                pollActivity();
+
+                return () => {
+                    clearInterval(intervalId);
+                };
+            } catch (err) {
+                if (isSubscribed) {
+                    const errorMessage = err instanceof Error ? err.message : 'Failed to setup activity subscription';
+                    setError(errorMessage);
+                    console.error('[useUserActivityUpdates] Setup error:', errorMessage);
+                }
+            }
+        };
+
+        subscribeToActivityUpdates();
+
+        return () => {
+            isSubscribed = false;
+        };
+    }, [apiFetch]);
+
+    return {
+        data,
+        error,
+    };
+};
+
+export const useGameEvents = (userId: string) => {
+    const { apiFetch } = useApiFetch();
+    const [data, setData] = useState<any>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    useEffect(() => {
+        if (!userId) return;
+
+        let isSubscribed = true;
+
+        const subscribeToGameEvents = async () => {
+            try {
+                // Polling implementation (would be WebSocket in production)
+                const pollEvents = async () => {
+                    try {
+                        const response = await apiFetch('/api/graphql', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                                query: `
+                                    subscription GameEvents($userId: ID!) {
+                                        gameEvents(userId: $userId) {
+                                            eventType
+                                            data
+                                            timestamp
+                                        }
+                                    }
+                                `,
+                                variables: { userId }
+                            }),
+                        });
+
+                        if (response.ok && isSubscribed) {
+                            const result = await response.json();
+                            if (result.data?.gameEvents) {
+                                setData(result.data.gameEvents);
+                                setError(null);
+                            }
+                        }
+                    } catch (err) {
+                        if (isSubscribed) {
+                            const errorMessage = err instanceof Error ? err.message : 'Game events subscription error';
+                            setError(errorMessage);
+                            console.error('[useGameEvents] Error:', errorMessage);
+                        }
+                    }
+                };
+
+                // Poll every 30 seconds (matching server interval)
+                const intervalId = setInterval(pollEvents, 30000);
+
+                // Initial poll
+                pollEvents();
+
+                return () => {
+                    clearInterval(intervalId);
+                };
+            } catch (err) {
+                if (isSubscribed) {
+                    const errorMessage = err instanceof Error ? err.message : 'Failed to setup game events subscription';
+                    setError(errorMessage);
+                    console.error('[useGameEvents] Setup error:', errorMessage);
+                }
+            }
+        };
+
+        subscribeToGameEvents();
+
+        return () => {
+            isSubscribed = false;
+        };
+    }, [userId, apiFetch]);
+
+    return {
+        data,
+        error,
     };
 };

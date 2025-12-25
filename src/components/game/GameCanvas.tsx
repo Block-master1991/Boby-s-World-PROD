@@ -283,6 +283,14 @@ class PriorityAssetLoader {
                 estimatedSize: 500,
                 loadFunction: async () => this.loadDog()
             },
+            {
+                id: 'skyboxHDR',
+                name: 'Atmospheric HDR Sky',
+                type: 'texture' as const,
+                priority: AssetPriority.CRITICAL,
+                estimatedSize: 2000, // 8K HDR is large
+                loadFunction: async () => this.loadSkyboxHDR()
+            },
 
             // HIGH PRIORITY ASSETS - Important for core gameplay
             {
@@ -345,6 +353,12 @@ class PriorityAssetLoader {
 
     private async loadDog(): Promise<void> {
         await this.initializeDog();
+    }
+
+    private async loadSkyboxHDR(): Promise<void> {
+        // This is a placeholder since the actual loading happens in Environment initialization
+        // We will wait for it in the setupGameWorldAndComplete function
+        return Promise.resolve();
     }
 
     private async loadCoin(): Promise<void> {
@@ -568,7 +582,15 @@ class CDNManager {
     private async detectUserRegion() {
         try {
             // Try to detect user's region via Cloudflare's geo service or similar
-            const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace');
+            // Added timeout to prevent hanging indefinitely
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+            const response = await fetch('https://www.cloudflare.com/cdn-cgi/trace', {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
+
             const text = await response.text();
             const matched = text.match(/loc=([A-Z]{2})/);
             if (matched) {
@@ -932,9 +954,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                     gpuInstancing.updateInstances();
                 }
 
-                // Record memory usage for monitoring
+                // Record memory usage for monitoring - Throttled to once every 120 frames (approx 2s at 60fps)
                 const memoryMonitor = getMemoryMonitor();
-                if (memoryMonitor) {
+                if (memoryMonitor && Math.floor(performance.now() / 16.6) % 120 === 0) {
                     memoryMonitor.recordMemoryUsage();
                 }
             }
@@ -1081,6 +1103,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
                 // After all assets are loaded, set up camera and chunks and preload world
                 const setupGameWorldAndComplete = async () => {
+                    // 🌌 Wait for 8K HDR Skybox to complete loading if environment exists
+                    if (environmentRef.current?.skybox.loadingPromise) {
+                        console.log("[GameCanvas] 🌌 Waiting for 8K HDR Skybox to complete loading...");
+                        await environmentRef.current.skybox.loadingPromise;
+                        console.log("[GameCanvas] 🌌 8K HDR Skybox READY.");
+                    }
+
                     if (dogModelRef.current) {
                         console.log("[GameCanvas] 🐶 Dog model available, setting up game world...");
 
@@ -1097,13 +1126,16 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                             try {
                                 // Professional solution: Simplified approach using timeout with proper interval cleanup
                                 const preloadTimeoutPromise = new Promise<boolean>((resolve) => {
-                                    // Start the preload (don't wait for its promise since it's broken)
-                                    const preloadPromise = environmentRef.current!.preloadInitialScene(dogPos);
+                                    // Start the preload with a catch to prevent unhandled rejection errors
+                                    const preloadPromise = environmentRef.current!.preloadInitialScene(dogPos).catch(err => {
+                                        console.warn("[GameCanvas] ⚠️ Initial scene preload had errors, but continuing game start:", err);
+                                        return; // Ensure it resolves even on error
+                                    });
 
-                                    // Use a professional timeout-based approach
+                                    // Use a professional timeout-based approach (increased for 8K HDR stability)
                                     setTimeout(() => {
                                         resolve(true);
-                                    }, 6000);
+                                    }, 20000);
                                 });
 
                                 // Smooth progress during preload
@@ -1161,10 +1193,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                             onLoadComplete(false);
                         }
                     } else {
-                        console.log("[GameCanvas] ⏳ Waiting for dog model to be ready...");
+                        console.log("[GameCanvas] ⏳ Waiting for dog model and skybox to be ready...");
                         setTimeout(setupGameWorldAndComplete, 100);
                     }
                 };
+
                 await setupGameWorldAndComplete();
 
             } catch (error) {
@@ -1251,6 +1284,20 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             window.removeEventListener('resize', handleResize);
         };
     }, [handleResize]);
+
+    // Effect for handling global unhandled rejections for better debugging
+    useEffect(() => {
+        const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
+            console.error('[GameCanvas] Unhandled Promise Rejection:', event.reason);
+            const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
+            trackError(error, { type: 'unhandled_rejection' });
+        };
+
+        window.addEventListener('unhandledrejection', handleUnhandledRejection);
+        return () => {
+            window.removeEventListener('unhandledrejection', handleUnhandledRejection);
+        };
+    }, [trackError]);
 
     // Effect for full cleanup on component unmount
     useEffect(() => {

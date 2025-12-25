@@ -8,7 +8,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { PawPrint, LogOut, Trash2, Search } from 'lucide-react';
 import { useApiFetch } from '@/utils/api';
-import { useUserStats } from '@/hooks/useGraphQL';
+import { useUserStats, useUserActivityUpdates } from '@/hooks/useAdminStats';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
@@ -37,7 +37,8 @@ import {
   Home,
   TrendingUp,
   Activity,
-  Database
+  Database,
+  Package
 } from 'lucide-react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { db } from '@/lib/firebase';
@@ -49,7 +50,7 @@ function isValidIp(ip: string) {
 }
 
 export default function AdminPage() {
-  const { isLoading: isAuthHookLoading, user, logout: logoutAuthHook } = useAuth();
+  const { isAuthenticated, isLoading: isAuthHookLoading, user, logout: logoutAuthHook } = useAuth();
   const { disconnectFromSession } = useSessionWallet();
   const router = useRouter();
   const pathname = usePathname();
@@ -69,6 +70,9 @@ export default function AdminPage() {
   const [userStats, setUserStats] = useState<{ totalUsers: number, onlineUsers: number, offlineUsers: number } | null>(null);
   const { apiFetch } = useApiFetch(); // Get apiFetch from the hook
   const { data: graphqlUserStats, loading: graphqlLoading, error: graphqlError } = useUserStats();
+
+  // Real-time user activity updates
+  const { data: liveActivityData, error: activityError } = useUserActivityUpdates();
 
 
 
@@ -183,13 +187,22 @@ export default function AdminPage() {
     setConfirmDelete(null);
   }
 
-  // Access protection
+  // Access protection - handle token expiration like regular users
   useEffect(() => {
     if (isAuthHookLoading) return;
-    if (user?.publicKey !== ADMIN_WALLET_ADDRESS && pathname !== '/') {
+
+    // First check if user is authenticated
+    if (!isAuthenticated) {
       router.push('/');
+      return;
     }
-  }, [isAuthHookLoading, user, pathname, router]);
+
+    // Then check if user is admin
+    if (user?.publicKey !== ADMIN_WALLET_ADDRESS) {
+      router.push('/');
+      return;
+    }
+  }, [isAuthenticated, isAuthHookLoading, user, pathname, router]);
 
   useEffect(() => {
     if (message) {
@@ -207,11 +220,11 @@ export default function AdminPage() {
     );
   }
 
-  if (user?.publicKey !== ADMIN_WALLET_ADDRESS) {
+  if (!isAuthenticated || user?.publicKey !== ADMIN_WALLET_ADDRESS) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8">
         <PawPrint className="h-16 w-16 animate-pulse text-primary mb-4" />
-        <p className="text-xl">Redirecting...</p>
+        <p className="text-xl">{!isAuthenticated ? 'Session expired. Redirecting...' : 'Access denied. Redirecting...'}</p>
       </div>
     );
   }
@@ -234,6 +247,7 @@ export default function AdminPage() {
   const menuItems = [
     { id: 'overview', label: 'Overview', icon: Home },
     { id: 'users', label: 'Users', icon: Users },
+    { id: 'items', label: 'Items', icon: Package },
     { id: 'security', label: 'Security', icon: Shield },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
@@ -257,7 +271,13 @@ export default function AdminPage() {
                   {menuItems.map((item) => (
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
-                        onClick={() => setActiveSection(item.id)}
+                        onClick={() => {
+                          if (item.id === 'items') {
+                            router.push('/admin/items');
+                          } else {
+                            setActiveSection(item.id);
+                          }
+                        }}
                         isActive={activeSection === item.id}
                       >
                         <item.icon className="h-4 w-4" />
@@ -314,7 +334,7 @@ export default function AdminPage() {
                   </CardHeader>
                   <CardContent>
                     <p>Manage game settings, view player statistics, and oversee the Boby ecosystem.</p>
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
                       <Card className="bg-card/50">
                         <CardHeader>
                           <CardTitle className="text-lg">User Statistics</CardTitle>
@@ -334,6 +354,30 @@ export default function AdminPage() {
                               <p className="text-sm text-muted-foreground">Online Now: {graphqlUserStats?.userStats?.onlineUsers ?? 'N/A'}</p>
                               <p className="text-sm text-muted-foreground">Offline: {graphqlUserStats?.userStats?.offlineUsers ?? 'N/A'}</p>
                               <Badge variant="secondary" className="mt-2 text-xs">Via GraphQL</Badge>
+                            </>
+                          )}
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-card/50 border-green-500/20">
+                        <CardHeader>
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            Live Activity
+                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                          {activityError ? (
+                            <p className="text-sm text-destructive">Live updates unavailable</p>
+                          ) : (
+                            <>
+                              <p className="text-2xl font-bold text-green-600">{liveActivityData?.onlineUsers ?? 0}</p>
+                              <p className="text-sm text-muted-foreground">Users Online Now</p>
+                              <p className="text-sm text-muted-foreground mt-2">
+                                {liveActivityData?.activeGames ?? 0} Active Games
+                              </p>
+                              <Badge variant="outline" className="mt-2 text-xs border-green-500/30 text-green-600">
+                                Real-time
+                              </Badge>
                             </>
                           )}
                         </CardContent>

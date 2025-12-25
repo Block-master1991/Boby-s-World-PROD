@@ -108,6 +108,12 @@ const createGraphQLClient = (): Client => {
                 }
 
                 return response;
+            } catch (error) {
+                if (error instanceof Error && error.name === 'AbortError') {
+                    console.error('[GraphQL] Request timed out:', input);
+                    throw new Error('Request timed out. Please check your connection.');
+                }
+                throw error;
             } finally {
                 clearTimeout(timeoutId);
             }

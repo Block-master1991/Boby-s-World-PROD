@@ -13,6 +13,8 @@ interface AssetMetadata {
     preloadDistance: number; // How far ahead to preload
 }
 
+import { isMobileDevice } from './utils';
+
 interface PreloadZone {
     centerX: number;
     centerZ: number;
@@ -27,9 +29,9 @@ class IntelligentAssetPreloader {
     private preloadedAssets = new Set<string>();
     private preloadZones = new Map<string, PreloadZone>();
     private activePreloads = new Map<string, Promise<any>>();
-    private maxConcurrentLoads = 2;
+    private maxConcurrentLoads = isMobileDevice() ? 1 : 2;
     private preloadDistance = 50; // units ahead of player
-    private cacheSize = 100 * 1024 * 1024; // 100MB cache
+    private cacheSize = isMobileDevice() ? 30 * 1024 * 1024 : 100 * 1024 * 1024; // 30MB mobile, 100MB desktop
     private currentCacheSize = 0;
 
     constructor() {
@@ -255,11 +257,19 @@ class IntelligentAssetPreloader {
         const cached = await this.getCachedAsset(asset.id);
         if (cached) return cached;
 
-        // Load from network
-        const response = await fetch(asset.url);
-        if (!response.ok) throw new Error(`Failed to load ${asset.url}`);
+        // Load from network with timeout
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
 
-        const data = await response.arrayBuffer();
+        let data: ArrayBuffer;
+        try {
+            const response = await fetch(asset.url, { signal: controller.signal });
+            if (!response.ok) throw new Error(`Failed to load ${asset.url}`);
+
+            data = await response.arrayBuffer();
+        } finally {
+            clearTimeout(timeoutId);
+        }
 
         // Cache the asset
         await this.cacheAsset(asset.id, data, asset.estimatedSize);

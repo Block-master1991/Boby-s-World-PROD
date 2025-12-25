@@ -165,6 +165,21 @@ export const apiFetch: FetchFunction = async (input, init) => {
           showErrorToast("انتهت مهلة الطلب", "استغرق الطلب وقتًا طويلاً. يرجى المحاولة مرة أخرى.");
           throw new Error("Request timeout");
         }
+
+        // تحسين error handling للـ network errors
+        if (error.message?.includes('NetworkError') ||
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('fetch resource')) {
+
+          console.error(`[apiFetch] Network error for ${url}:`, error.message);
+
+          // لا نعرض toast للـ network errors لأنها قد تكون مؤقتة
+          // والـ hooks ستتعامل معها بشكل أفضل
+
+          // نعيد throw الخطأ كما هو
+          throw error;
+        }
+
         console.error(`[apiFetch] Fetch error for ${url}:`, error.message);
         throw error;
       } else {
@@ -174,7 +189,21 @@ export const apiFetch: FetchFunction = async (input, init) => {
     }
   };
 
-  return attemptFetch();
+  try {
+    return await attemptFetch();
+  } catch (error) {
+    // إذا كان network error، نعيد throw للـ caller ليتعامل معه
+    if (error instanceof Error &&
+      (error.message?.includes('NetworkError') ||
+        error.message?.includes('Failed to fetch') ||
+        error.message?.includes('fetch resource'))) {
+      throw error;
+    }
+
+    // للأخطاء الأخرى، نعرض toast ونعيد throw
+    showErrorToast("خطأ في الطلب", "حدث خطأ أثناء معالجة الطلب. يرجى المحاولة مرة أخرى.");
+    throw error;
+  }
 };
 
 /**

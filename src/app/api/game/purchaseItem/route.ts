@@ -5,7 +5,7 @@ import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
 import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
 import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
-import { storeItems } from '@/lib/items'; // To validate item existence
+import { getActiveStoreItems } from '@/lib/server-items'; // To validate item existence
 import { Connection, PublicKey } from '@solana/web3.js';
 import { clusterApiUrl } from '@solana/web3.js';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
@@ -36,7 +36,8 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     }
 
     // Validate item existence
-    const itemDefinition = storeItems.find(item => item.id === itemId);
+    const allItems = await getActiveStoreItems();
+    const itemDefinition = allItems.find((item: any) => item.id === itemId);
     if (!itemDefinition) {
       return NextResponse.json({ error: 'Invalid item ID.' }, { status: 400 });
     }
@@ -59,11 +60,12 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     const connection = new Connection(DEDICATED_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed');
 
     console.log(`[API] Verifying transaction signature: ${transactionSignature}`);
+    console.log(`[API] Starting transaction verification with maxAttempts: 6, delay: 5000ms`);
 
     let transaction = null;
     let attempts = 0;
-    const maxAttempts = 3;
-    const delayBetweenAttempts = 2000; // 2 seconds
+    const maxAttempts = 6; // زيادة إلى 6 محاولات كما كان سابقاً
+    const delayBetweenAttempts = 5000; // زيادة إلى 5 ثوانٍ كما كان سابقاً
 
     while (attempts < maxAttempts && !transaction) {
       try {
@@ -121,23 +123,31 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     let amountTransferred = 0;
     let tokenMint = '';
 
-    // البحث عن تحويلات SPL Token أو SOL
+    console.log(`[API] Analyzing transaction balances for receiver: ${expectedReceiverPublicKey.toBase58()}`);
+
+    // البحث عن تحويلات SPL Token أو SOL مع تحسين التحليل
     if (transaction.meta?.postTokenBalances && transaction.meta.preTokenBalances) {
+      console.log(`[API] Found ${transaction.meta.postTokenBalances.length} post balances and ${transaction.meta.preTokenBalances.length} pre balances`);
+
       // تحقق من تحويلات SPL Token
       for (const postBalance of transaction.meta.postTokenBalances) {
         const preBalance = transaction.meta.preTokenBalances.find(pb => pb.accountIndex === postBalance.accountIndex);
         if (preBalance && postBalance.uiTokenAmount && preBalance.uiTokenAmount) {
           if (postBalance.uiTokenAmount.uiAmount !== null && preBalance.uiTokenAmount.uiAmount !== null) {
             const diff = postBalance.uiTokenAmount.uiAmount - preBalance.uiTokenAmount.uiAmount;
+            console.log(`[API] Account ${postBalance.accountIndex}: owner=${postBalance.owner}, mint=${postBalance.mint}, diff=${diff}`);
+
             if (diff > 0 && postBalance.owner === expectedReceiverPublicKey.toBase58()) {
               amountTransferred = diff;
               tokenMint = postBalance.mint;
+              console.log(`[API] Found transfer to treasury: ${amountTransferred} tokens, mint: ${tokenMint}`);
               break;
             }
           }
         }
       }
-
+    } else {
+      console.warn(`[API] Transaction missing token balance data. postTokenBalances: ${!!transaction.meta?.postTokenBalances}, preTokenBalances: ${!!transaction.meta?.preTokenBalances}`);
     }
 
     if (sender !== userPublicKey) {

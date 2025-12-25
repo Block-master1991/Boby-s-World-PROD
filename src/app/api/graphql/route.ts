@@ -5,7 +5,9 @@ import { JWTManager } from '@/lib/jwt-utils';
 import { getClientIp } from '@/lib/request-utils';
 import { rateLimit } from '@/lib/rate-limit';
 import { validateTokenFromRequest } from '@/lib/auth-middleware';
+import { CreateItemInput, UpdateItemInput } from '@/lib/server-items';
 import jwt from 'jsonwebtoken';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
 
 // GraphQL Type Definitions
 const typeDefs = `
@@ -16,6 +18,12 @@ const typeDefs = `
     gameWorld(chunkX: Int!, chunkZ: Int!, radius: Int): GameWorld
     marketData: MarketData
     userStats: UserStats
+
+    # Item management queries
+    storeItems: [StoreItem!]!
+    storeItem(id: ID!): StoreItem
+    activeStoreItems: [StoreItem!]!
+    storeItemsStats: StoreItemsStats!
   }
 
   type Mutation {
@@ -36,11 +44,32 @@ const typeDefs = `
     consumeProtectionBottle(userId: ID!): ItemResult!
     applyPenalty(userId: ID!, amount: Int!): PenaltyResult!
     withdrawUSDT(userId: ID!, amount: Float!): WithdrawalResult!
+
+    # Item management mutations
+    createStoreItem(input: CreateItemInput!): ItemResult!
+    updateStoreItem(id: ID!, input: UpdateItemInput!): ItemResult!
+    updateItemPrice(id: ID!, price: Int!): ItemResult!
+    toggleItemStatus(id: ID!, isActive: Boolean!): ItemResult!
+    deleteStoreItem(id: ID!): ItemResult!
+    reinitializeStoreItems: ItemResult!
   }
 
   type Subscription {
-    marketUpdates: MarketData!
+    bobyPriceUpdates: PriceUpdate!
+    userActivityUpdates: UserActivityUpdate!
     gameEvents(userId: ID!): GameEvent!
+  }
+
+  type PriceUpdate {
+    price: Float!
+    changePercent: Float!
+    timestamp: String!
+  }
+
+  type UserActivityUpdate {
+    onlineUsers: Int!
+    activeGames: Int!
+    timestamp: String!
   }
 
   type User {
@@ -221,6 +250,83 @@ const typeDefs = `
     amount: Float!
     error: String
   }
+
+  # Store Item Management Types
+  type StoreItem {
+    id: ID!
+    name: String!
+    description: String!
+    price: Int!
+    usdPrice: Float!
+    image: String!
+    dataAiHint: String!
+    type: ItemType!
+    rarity: ItemRarity!
+    isActive: Boolean!
+    createdAt: String!
+    updatedAt: String!
+  }
+
+  enum ItemType {
+    consumable
+    permanent
+  }
+
+  enum ItemRarity {
+    common
+    rare
+    epic
+    legendary
+  }
+
+  type ItemResult {
+    success: Boolean!
+    item: StoreItem
+    message: String!
+  }
+
+  input CreateItemInput {
+    name: String!
+    description: String!
+    price: Int!
+    usdPrice: Float!
+    image: String!
+    dataAiHint: String!
+    type: ItemType!
+    rarity: ItemRarity!
+  }
+
+  input UpdateItemInput {
+    name: String
+    description: String
+    price: Int
+    usdPrice: Float
+    image: String
+    dataAiHint: String
+    type: ItemType
+    rarity: ItemRarity
+    isActive: Boolean
+  }
+
+  type StoreItemsStats {
+    total: Int!
+    active: Int!
+    inactive: Int!
+    byType: StoreItemsByType!
+    byRarity: StoreItemsByRarity!
+  }
+
+  type StoreItemsByType {
+    consumable: Int!
+    permanent: Int!
+  }
+
+  type StoreItemsByRarity {
+    common: Int!
+    rare: Int!
+    epic: Int!
+    legendary: Int!
+  }
 `;
 
 // GraphQL Resolvers
@@ -287,11 +393,15 @@ const resolvers = {
             }
         },
 
-        marketData: async () => {
+        marketData: async (_: any, __: any, context: any) => {
             try {
+                // Get dynamic base URL from request
+                const request = context?.request;
+                const baseUrl = request ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : 'http://localhost:3000';
+
                 // Fetch real Boby price from Jupiter API
                 console.log('[GraphQL] Fetching market data from Jupiter API...');
-                const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/boby-price-jup`, {
+                const response = await fetch(`${baseUrl}/api/boby-price-jup`, {
                     method: 'GET',
                 });
 
@@ -421,13 +531,69 @@ const resolvers = {
                 };
             }
         },
+
+        // ===== Item Management Queries =====
+        storeItems: async (_: any, __: any, context: any) => {
+            const { getAllStoreItems } = await import('@/lib/server-items');
+            return await getAllStoreItems();
+        },
+
+        storeItem: async (_: any, { id }: { id: string }, context: any) => {
+            const { getStoreItemById } = await import('@/lib/server-items');
+            return await getStoreItemById(id);
+        },
+
+        activeStoreItems: async (_: any, __: any, context: any) => {
+            const { getActiveStoreItems } = await import('@/lib/server-items');
+            return await getActiveStoreItems();
+        },
+
+        storeItemsStats: async (_: any, __: any, context: any) => {
+            const { getStoreItemsStats } = await import('@/lib/server-items');
+            return await getStoreItemsStats();
+        },
     },
 
     Mutation: {
-        generateAuthNonce: async (_: any, { publicKey }: { publicKey: string }) => {
+        // ===== Item Management Mutations =====
+        createStoreItem: async (_: any, { input }: { input: CreateItemInput }, context: any) => {
+            const { createStoreItem } = await import('@/lib/server-items');
+            return await createStoreItem(input);
+        },
+
+        updateStoreItem: async (_: any, { id, input }: { id: string, input: UpdateItemInput }, context: any) => {
+            const { updateStoreItem } = await import('@/lib/server-items');
+            return await updateStoreItem(id, input);
+        },
+
+        updateItemPrice: async (_: any, { id, price }: { id: string, price: number }, context: any) => {
+            const { updateItemPrice } = await import('@/lib/server-items');
+            return await updateItemPrice(id, price);
+        },
+
+        toggleItemStatus: async (_: any, { id, isActive }: { id: string, isActive: boolean }, context: any) => {
+            const { toggleItemStatus } = await import('@/lib/server-items');
+            return await toggleItemStatus(id, isActive);
+        },
+
+        deleteStoreItem: async (_: any, { id }: { id: string }, context: any) => {
+            const { deleteStoreItem } = await import('@/lib/server-items');
+            return await deleteStoreItem(id);
+        },
+
+        reinitializeStoreItems: async (_: any, __: any, context: any) => {
+            const { reinitializeStoreItems } = await import('@/lib/server-items');
+            return await reinitializeStoreItems();
+        },
+
+        generateAuthNonce: async (_: any, { publicKey }: { publicKey: string }, context: any) => {
             try {
+                // Get dynamic base URL from request
+                const request = context?.request;
+                const baseUrl = request ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : 'http://localhost:3000';
+
                 // Delegate to existing REST API
-                const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/login?publicKey=${encodeURIComponent(publicKey)}`, {
+                const response = await fetch(`${baseUrl}/api/auth/login?publicKey=${encodeURIComponent(publicKey)}`, {
                     method: 'GET',
                 });
 
@@ -455,8 +621,12 @@ const resolvers = {
 
         login: async (_: any, { input }: { input: { publicKey: string, signature: string, nonce: string } }, context: any) => {
             try {
+                // Get dynamic base URL from request
+                const request = context?.request;
+                const baseUrl = request ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : 'http://localhost:3000';
+
                 // Delegate to existing REST API
-                const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/login`, {
+                const response = await fetch(`${baseUrl}/api/auth/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -532,44 +702,71 @@ const resolvers = {
                     throw new Error('Unauthorized');
                 }
 
-                // Mock purchase logic
+                // Get item data from database
+                const { getStoreItemById } = await import('@/lib/server-items');
+                const itemData = await getStoreItemById(itemId);
+
+                if (!itemData || !itemData.isActive) {
+                    throw new Error('Item not found or not available for purchase');
+                }
+
+                // Calculate total price
+                const totalPrice = itemData.price * quantity;
+
                 const userRef = db.collection('players').doc(userId);
                 const userDoc = await userRef.get();
                 const userData = userDoc.data();
 
-                if (!userData?.gameStats?.coins || userData.gameStats.coins < 100) {
-                    throw new Error('Insufficient coins');
+                if (!userData) {
+                    throw new Error('User data not found');
                 }
 
-                // Update inventory and coins
-                await userRef.update({
-                    'gameStats.coins': userData.gameStats.coins - 100,
-                    'inventory': [
-                        ...(userData.inventory || []),
+                const userBalance = userData.gameUSDTBalance || 0;
+                if (userBalance < totalPrice) {
+                    throw new Error(`Insufficient coins. Required: ${totalPrice}, Available: ${userBalance}`);
+                }
+
+                // Check if user already has this item in inventory
+                const existingInventory = userData.inventory || [];
+                const existingItemIndex = existingInventory.findIndex((item: any) => String(item.id) === String(itemId));
+
+                let updatedInventory;
+                if (existingItemIndex >= 0) {
+                    // Update existing item quantity
+                    updatedInventory = [...existingInventory];
+                    updatedInventory[existingItemIndex] = {
+                        ...updatedInventory[existingItemIndex],
+                        quantity: updatedInventory[existingItemIndex].quantity + quantity
+                    };
+                } else {
+                    // Add new item to inventory
+                    updatedInventory = [
+                        ...existingInventory,
                         {
                             id: itemId,
-                            itemType: 'consumable',
-                            name: 'Test Item',
+                            itemType: itemData.type,
+                            name: itemData.name,
                             quantity,
-                            rarity: 'common',
+                            rarity: itemData.rarity,
+                            image: itemData.image,
                         }
-                    ],
+                    ];
+                }
+
+                // Update user data
+                await userRef.update({
+                    gameUSDTBalance: userData.gameUSDTBalance - totalPrice,
+                    inventory: updatedInventory,
                     lastUpdated: new Date(),
+                    lastInteraction: FieldValue.serverTimestamp()
                 });
+
+                console.log(`[Purchase] User ${userId} purchased ${quantity}x ${itemData.name} for ${totalPrice} coins`);
 
                 return {
                     success: true,
-                    remainingCoins: userData.gameStats.coins - 100,
-                    inventory: [
-                        ...(userData.inventory || []),
-                        {
-                            id: itemId,
-                            itemType: 'consumable',
-                            name: 'Test Item',
-                            quantity,
-                            rarity: 'common',
-                        }
-                    ],
+                    remainingCoins: userData.gameUSDTBalance - totalPrice,
+                    inventory: updatedInventory,
                 };
             } catch (error) {
                 console.error('[GraphQL] Error purchasing item:', error);
@@ -997,10 +1194,164 @@ const resolvers = {
             return parent.inventory || [];
         },
     },
+
+    Subscription: {
+        bobyPriceUpdates: {
+            subscribe: async function* (root: any, args: any, context: any) {
+                // Price update subscription - emits price changes every few seconds
+
+                // Get dynamic base URL from request context
+                const request = context?.request;
+                const baseUrl = request ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : 'http://localhost:3000';
+
+                // Initialize with real current price from API
+                let lastPrice = 0.00001234; // fallback default
+
+                try {
+                    console.log('[Subscription] Fetching initial price for bobyPriceUpdates...');
+                    const initResponse = await fetch(`${baseUrl}/api/boby-price-jup`, {
+                        method: 'GET',
+                    });
+
+                    if (initResponse.ok) {
+                        const initData = await initResponse.json();
+                        if (initData.price && typeof initData.price === 'number') {
+                            lastPrice = initData.price;
+                            console.log(`[Subscription] Initialized with real price: ${lastPrice}`);
+                        } else {
+                            console.warn('[Subscription] Invalid price format from API, using fallback');
+                        }
+                    } else {
+                        console.warn('[Subscription] Failed to fetch initial price, using fallback');
+                    }
+                } catch (error) {
+                    console.error('[Subscription] Error fetching initial price:', error);
+                    console.log('[Subscription] Using fallback price:', lastPrice);
+                }
+
+                while (true) {
+                    try {
+                        // Fetch current price from Jupiter API
+                        const response = await fetch(`${baseUrl}/api/boby-price-jup`, {
+                            method: 'GET',
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            const currentPrice = data.price;
+
+                            if (currentPrice && typeof currentPrice === 'number') {
+                                // Calculate price change percentage
+                                const changePercent = lastPrice > 0 ? ((currentPrice - lastPrice) / lastPrice) * 100 : 0;
+
+                                // Only emit if price actually changed significantly
+                                if (Math.abs(changePercent) > 0.01) { // 0.01% threshold to avoid noise
+                                    console.log(`[Subscription] Price change detected: ${lastPrice} -> ${currentPrice} (${changePercent.toFixed(4)}%)`);
+
+                                    yield {
+                                        bobyPriceUpdates: {
+                                            price: currentPrice,
+                                            changePercent,
+                                            timestamp: new Date().toISOString(),
+                                        }
+                                    };
+                                    lastPrice = currentPrice;
+                                }
+                            } else {
+                                console.warn('[Subscription] Invalid price format in update');
+                            }
+                        } else {
+                            console.warn(`[Subscription] API returned status ${response.status}`);
+                        }
+                    } catch (error) {
+                        console.error('[GraphQL Subscription] Error fetching price update:', error);
+                    }
+
+                    // Wait 30 seconds before next update
+                    await new Promise(resolve => setTimeout(resolve, 30000));
+                }
+            }
+        },
+
+        userActivityUpdates: {
+            subscribe: async function* () {
+                // User activity subscription - emits user activity stats every 10 seconds
+                while (true) {
+                    try {
+                        await initializeAdminApp();
+                        const db = getFirestore();
+
+                        // Get online users (users with recent activity - last 10 minutes)
+                        const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+                        const recentUsersQuery = db.collection('players').where('lastLogin', '>', tenMinutesAgo);
+                        const recentUsersSnapshot = await recentUsersQuery.get();
+                        const onlineUsers = recentUsersSnapshot.size;
+
+                        // Get active games (users who have played in the last 5 minutes)
+                        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+                        const activeGamesQuery = db.collection('gameSessions').where('createdAt', '>', fiveMinutesAgo);
+                        const activeGamesSnapshot = await activeGamesQuery.get();
+                        const activeGames = activeGamesSnapshot.size;
+
+                        yield {
+                            userActivityUpdates: {
+                                onlineUsers,
+                                activeGames,
+                                timestamp: new Date().toISOString(),
+                            }
+                        };
+                    } catch (error) {
+                        console.error('[GraphQL Subscription] Error fetching user activity:', error);
+                        // Emit default values on error
+                        yield {
+                            userActivityUpdates: {
+                                onlineUsers: 0,
+                                activeGames: 0,
+                                timestamp: new Date().toISOString(),
+                            }
+                        };
+                    }
+
+                    // Wait 10 seconds before next update
+                    await new Promise(resolve => setTimeout(resolve, 10000));
+                }
+            }
+        },
+
+        gameEvents: {
+            subscribe: (_: any, { userId }: { userId: string }, context: any) => {
+                // Game events subscription for specific user
+                // This would typically use a pub/sub system like Redis
+                // For now, we'll simulate with a simple generator
+                return (async function* () {
+                    // Verify authentication
+                    if (!context.user?.id || context.user.id !== userId) {
+                        throw new Error('Unauthorized');
+                    }
+
+                    while (true) {
+                        // In a real implementation, this would listen to a pub/sub channel
+                        // for game events specific to this user
+                        // For now, we'll just emit a heartbeat every 30 seconds
+                        yield {
+                            gameEvents: {
+                                eventType: 'heartbeat',
+                                data: 'User is active',
+                                timestamp: new Date().toISOString(),
+                            }
+                        };
+
+                        // Wait 30 seconds
+                        await new Promise(resolve => setTimeout(resolve, 30000));
+                    }
+                })();
+            }
+        }
+    },
 };
 
 // Simple GraphQL endpoint using existing URQL client
-export async function POST(request: NextRequest) {
+export const POST = withCsrfProtection(async (request: NextRequest) => {
     try {
         const { query, variables } = await request.json();
         console.log('[GraphQL] --- START REQUEST ---');
@@ -1496,16 +1847,80 @@ export async function POST(request: NextRequest) {
                 result = { data: { withdrawUSDT: { success: false, error: 'Failed to withdraw USDT' } } };
             }
         } else if (query.includes('marketData')) {
-            result = {
-                data: {
-                    marketData: {
-                        bobyPrice: 0.00001234,
-                        volume24h: 1234567.89,
-                        priceChange24h: 5.67,
-                        lastUpdated: new Date().toISOString(),
+            console.log('[GraphQL] Processing marketData query');
+            // Use the proper resolver instead of hardcoded data
+            try {
+                const marketDataResult = await resolvers.Query.marketData(null, null, { request });
+                result = {
+                    data: {
+                        marketData: marketDataResult
                     }
-                }
-            };
+                };
+                console.log('[GraphQL] marketData resolved successfully:', marketDataResult);
+            } catch (error) {
+                console.error('[GraphQL] Error in marketData resolver:', error);
+                result = {
+                    data: {
+                        marketData: {
+                            bobyPrice: 0.00001234, // fallback
+                            volume24h: 0,
+                            priceChange24h: 0,
+                            lastUpdated: new Date().toISOString(),
+                        }
+                    }
+                };
+            }
+        } else if (query.includes('storeItems')) {
+            console.log('[GraphQL] Processing storeItems query');
+            try {
+                const storeItems = await resolvers.Query.storeItems(null, null, { user });
+                result = {
+                    data: {
+                        storeItems
+                    }
+                };
+            } catch (error) {
+                console.error('[GraphQL] Error in storeItems query:', error);
+                result = {
+                    data: {
+                        storeItems: []
+                    }
+                };
+            }
+        } else if (query.includes('activeStoreItems')) {
+            console.log('[GraphQL] Processing activeStoreItems query');
+            try {
+                const activeStoreItems = await resolvers.Query.activeStoreItems(null, null, { user });
+                result = {
+                    data: {
+                        activeStoreItems
+                    }
+                };
+            } catch (error) {
+                console.error('[GraphQL] Error in activeStoreItems query:', error);
+                result = {
+                    data: {
+                        activeStoreItems: []
+                    }
+                };
+            }
+        } else if (query.includes('storeItem(') && variables?.id) {
+            console.log('[GraphQL] Processing storeItem query for ID:', variables.id);
+            try {
+                const storeItem = await resolvers.Query.storeItem(null, { id: variables.id }, { user });
+                result = {
+                    data: {
+                        storeItem
+                    }
+                };
+            } catch (error) {
+                console.error('[GraphQL] Error in storeItem query:', error);
+                result = {
+                    data: {
+                        storeItem: null
+                    }
+                };
+            }
         } else {
             console.log('[GraphQL] No matching handler found for query. User authenticated:', !!user);
             const isAuthIssue = (query.includes('user(') || query.includes('userInventory') || query.includes('useConsumableItem')) && !user;
@@ -1525,7 +1940,7 @@ export async function POST(request: NextRequest) {
             errors: [{ message: 'Internal server error' }]
         }, { status: 500 });
     }
-}
+});
 
 export async function GET() {
     // Simple health check
