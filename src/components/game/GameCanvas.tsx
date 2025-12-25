@@ -1221,7 +1221,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             if (sceneInitialized && cameraRef.current && rendererRef.current && sceneRef.current) {
                 // Initialize ez-tree environment
                 try {
-                    environmentRef.current = new Environment();
+                    environmentRef.current = new Environment(rendererRef.current);
                     sceneRef.current.add(environmentRef.current);
                     console.log("[GameCanvas] ez-tree Environment Initialized.");
                 } catch (error) {

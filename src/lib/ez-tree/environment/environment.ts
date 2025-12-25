@@ -18,13 +18,13 @@ export class Environment extends THREE.Object3D {
   private treesInstance: Trees; // Add treesInstance
   private flowersInstance: Flowers; // Add flowersInstance
 
-  constructor() {
+  constructor(renderer?: THREE.WebGLRenderer) {
     super();
 
     this.ground = new Ground();
     this.add(this.ground);
 
-    this.skybox = new Skybox();
+    this.skybox = new Skybox(renderer);
     this.add(this.skybox);
 
     // Get performance config for density adjustment

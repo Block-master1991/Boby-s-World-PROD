@@ -73,7 +73,7 @@ self.onmessage = async (e: MessageEvent) => {
             width: result.width,
             height: result.height,
             data: result.data,
-            isHalf: true
+            isHalf: false
         }, [result.data.buffer]);
 
     } catch (error) {
@@ -114,11 +114,11 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
 
     if (width <= 0 || height <= 0 || width > 16384 || height > 16384) return null;
 
-    const rgbaHalf = new Uint16Array(width * height * 4);
+    const rgbaFloat = new Float32Array(width * height * 4);
     let offset = 0;
 
-    // Constants for HalfFloat
-    const halfOne = toHalf(1.0);
+    // Constants for Float
+    const floatOne = 1.0;
     const scanline = new Uint8Array(4 * width);
 
     // Yield every CHUNK_SIZE rows to avoid blocking the worker event loop
@@ -168,18 +168,18 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
 
             if (e > 0) {
                 const f = EXPO_TABLE[e];
-                rgbaHalf[offset++] = toHalf(r * f);
-                rgbaHalf[offset++] = toHalf(g * f);
-                rgbaHalf[offset++] = toHalf(b * f);
-                rgbaHalf[offset++] = halfOne;
+                rgbaFloat[offset++] = r * f;
+                rgbaFloat[offset++] = g * f;
+                rgbaFloat[offset++] = b * f;
+                rgbaFloat[offset++] = floatOne;
             } else {
-                rgbaHalf[offset++] = 0;
-                rgbaHalf[offset++] = 0;
-                rgbaHalf[offset++] = 0;
-                rgbaHalf[offset++] = halfOne;
+                rgbaFloat[offset++] = 0;
+                rgbaFloat[offset++] = 0;
+                rgbaFloat[offset++] = 0;
+                rgbaFloat[offset++] = floatOne;
             }
         }
     }
 
-    return { width, height, data: rgbaHalf };
+    return { width, height, data: rgbaFloat };
 }

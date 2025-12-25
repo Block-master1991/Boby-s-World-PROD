@@ -11,9 +11,11 @@ export class Skybox extends THREE.Object3D {
   public loadingPromise: Promise<void>;
   private resolveLoading!: () => void;
   private rejectLoading!: (reason?: any) => void;
+  private renderer: THREE.WebGLRenderer | null = null;
 
-  constructor() {
+  constructor(renderer?: THREE.WebGLRenderer) {
     super();
+    this.renderer = renderer || null;
     this.name = 'Skybox';
 
     this.loadingPromise = new Promise((resolve, reject) => {
@@ -89,9 +91,9 @@ export class Skybox extends THREE.Object3D {
           texture.mapping = THREE.EquirectangularReflectionMapping;
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
-          texture.generateMipmaps = false;
-          texture.anisotropy = perfConfig.isMobile ? 1 : 16; // Extreme quality for PC
-          texture.colorSpace = THREE.SRGBColorSpace; // Restoration of vibrant quality
+          texture.generateMipmaps = false; // Disable mipmaps to prevent artifacts
+          texture.anisotropy = 1; // Disable anisotropy completely to prevent artifacts
+          texture.colorSpace = THREE.LinearSRGBColorSpace; // Proper HDR color space for accurate lighting
           texture.flipY = false;
           texture.needsUpdate = true;
 
@@ -136,8 +138,10 @@ export class Skybox extends THREE.Object3D {
   }
 
   private setupSkyMesh(texture: THREE.Texture, perfConfig: any) {
-    const segments = perfConfig.isMobile ? 32 : 48;
-    const rings = perfConfig.isMobile ? 16 : 32;
+    // Professional quality: higher resolution geometry for better sky quality
+    const isHighEndGPU = perfConfig.renderer.shadowMapSize >= 2048;
+    const segments = perfConfig.isMobile ? 64 : (isHighEndGPU ? 128 : 96);
+    const rings = perfConfig.isMobile ? 32 : (isHighEndGPU ? 64 : 48);
     const geometry = new THREE.SphereGeometry(250, segments, rings);
 
     const material = new THREE.MeshBasicMaterial({
@@ -176,9 +180,11 @@ export class Skybox extends THREE.Object3D {
   }
 
   /**
-   * Automatically find the scene and apply the HDR as background and environment.
+   * Automatically find the scene and apply the HDR as background and environment using PMREMGenerator.
    */
   private applyToScene(texture: THREE.Texture) {
+    const perfConfig = getDevicePerformanceConfig();
+
     const findAndApply = () => {
       let current: THREE.Object3D | null = this;
       while (current && !(current instanceof THREE.Scene)) {
@@ -186,12 +192,32 @@ export class Skybox extends THREE.Object3D {
       }
 
       if (current instanceof THREE.Scene) {
-        // Optimization: Don't set background if we use skyMesh (saves a full screen pass)
-        current.background = null;
-        current.environment = texture;
+        // Professional HDR environment mapping using PMREMGenerator
+        if (this.renderer) {
+          try {
+            const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
+            pmremGenerator.compileEquirectangularShader();
+            // Use PMREMGenerator with default high quality settings
+            const envMap = pmremGenerator.fromEquirectangular(texture);
+            pmremGenerator.dispose();
 
-        // Professional tip: PMREMGenerator is handled internally by Three.js 
-        // when texture.mapping is EquirectangularReflectionMapping
+            // Apply the properly processed environment map
+            current.background = null;
+            current.environment = envMap.texture;
+
+            console.log('[Skybox] PMREM environment map applied successfully');
+          } catch (error) {
+            console.warn('[Skybox] PMREMGenerator failed, falling back to direct texture:', error);
+            // Fallback to direct texture if PMREM fails
+            current.background = null;
+            current.environment = texture;
+          }
+        } else {
+          console.warn('[Skybox] No renderer available, using direct texture');
+          // Fallback when no renderer is available
+          current.background = null;
+          current.environment = texture;
+        }
       } else {
         // Retry shortly if not yet added to scene
         setTimeout(findAndApply, 100);
