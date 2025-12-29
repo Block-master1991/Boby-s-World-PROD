@@ -1,7 +1,7 @@
 
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'crypto';
-import { TokenBlacklistManager } from './token-blacklist'; 
+import { TokenBlacklistManager } from './token-blacklist';
 import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './server-constants'; // Moved to server-side constants
 import { createHash } from 'crypto';
 
@@ -63,9 +63,9 @@ export class JWTManager {
     return true;
   }
 
-  private static readonly ACCESS_TOKEN_SECRET = JWT_ACCESS_SECRET || 'access-secret-dev-for-boby-world-app-CHANGE-IN-PROD'; 
+  private static readonly ACCESS_TOKEN_SECRET = JWT_ACCESS_SECRET || 'access-secret-dev-for-boby-world-app-CHANGE-IN-PROD';
   private static readonly REFRESH_TOKEN_SECRET = JWT_REFRESH_SECRET || 'refresh-secret-dev-for-boby-world-app-CHANGE-IN-PROD';
-  
+
   // Expiry times in seconds for consistency
   private static readonly ACCESS_TOKEN_EXPIRY_SECONDS = 15 * 60; // 15 minutes
   private static readonly REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60; // 7 days
@@ -74,38 +74,38 @@ export class JWTManager {
     const { publicKey, nonce, userAgentHash, ipHash } = params;
     const nowSeconds = Math.floor(Date.now() / 1000);
     const payload: JWTPayload = {
-        sub: publicKey,
-        iat: nowSeconds,
-        exp: nowSeconds + this.ACCESS_TOKEN_EXPIRY_SECONDS, 
-        jti: randomBytes(16).toString('hex'),
-        type: 'access',
-        nonce,
-        userAgentHash,
-        ipHash,
-      };
-      console.log(`[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
-      return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { algorithm: 'HS256' });
-    }
+      sub: publicKey,
+      iat: nowSeconds,
+      exp: nowSeconds + this.ACCESS_TOKEN_EXPIRY_SECONDS,
+      jti: randomBytes(16).toString('hex'),
+      type: 'access',
+      nonce,
+      userAgentHash,
+      ipHash,
+    };
+    console.log(`[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
+    return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { algorithm: 'HS256' });
+  }
 
   static createRefreshToken(params: CreateTokenParams): string {
     const { publicKey, nonce, userAgentHash, ipHash } = params;
-      const nowSeconds = Math.floor(Date.now() / 1000);
-      const payload: JWTPayload = {
-        sub: publicKey,
-        iat: nowSeconds,
-        exp: nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS, 
-        jti: randomBytes(16).toString('hex'),
-        type: 'refresh',
-        nonce,
-        userAgentHash,
-        ipHash,
-      };
-      console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
-      return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { algorithm: 'HS256' });
-    }
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const payload: JWTPayload = {
+      sub: publicKey,
+      iat: nowSeconds,
+      exp: nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS,
+      jti: randomBytes(16).toString('hex'),
+      type: 'refresh',
+      nonce,
+      userAgentHash,
+      ipHash,
+    };
+    console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
+    return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { algorithm: 'HS256' });
+  }
 
 
-static async verifyAccessToken(token: string, userAgent: string, ip: string): Promise<JWTPayload | null> { 
+  static async verifyAccessToken(token: string, userAgent: string, ip: string): Promise<JWTPayload | null> {
     let decodedForLog: JWTPayload | null = null;
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null; // Decode for logging before verification
@@ -114,14 +114,14 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
 
       const decoded = jwt.verify(token, this.ACCESS_TOKEN_SECRET) as JWTPayload;
       console.log(`[JWTManager] Access token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
-      
+
       if (await TokenBlacklistManager.isBlacklisted(decoded.jti)) {
         console.warn(`[JWTManager] Access token ${decoded.jti} is blacklisted.`);
         return null;
       }
 
       if (decoded.type !== 'access') {
-         console.warn(`[JWTManager] Invalid token type for access token ${decoded.jti}. Expected 'access', got '${decoded.type}'.`);
+        console.warn(`[JWTManager] Invalid token type for access token ${decoded.jti}. Expected 'access', got '${decoded.type}'.`);
         return null;
       }
       // jwt.verify already checks 'exp'
@@ -155,7 +155,7 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
 
       const decoded = jwt.verify(token, this.REFRESH_TOKEN_SECRET) as JWTPayload;
       console.log(`[JWTManager] Refresh token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
-      
+
       if (await TokenBlacklistManager.isBlacklisted(decoded.jti)) {
         console.warn(`[JWTManager] Refresh token ${decoded.jti} is blacklisted.`);
         return null;
@@ -165,12 +165,12 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
         console.warn(`[JWTManager] Invalid token type for refresh token ${decoded.jti}. Expected 'refresh', got '${decoded.type}'.`);
         return null;
       }
-       if (decoded.exp * 1000 < Date.now()) {
+      if (decoded.exp * 1000 < Date.now()) {
         console.warn(`[JWTManager] Refresh token ${decoded.jti} has expired (checked explicitly post-verification). Blacklisting.`);
-        await TokenBlacklistManager.addToBlacklist(decoded.jti, decoded.exp, 'expired'); 
-        return null; 
+        await TokenBlacklistManager.addToBlacklist(decoded.jti, decoded.exp, 'expired');
+        return null;
       }
-      
+
       if (!this.verifyFingerprint(decoded, userAgent, ip)) return null;
 
       console.log(`[JWTManager] Refresh token ${decoded.jti} verified successfully (not blacklisted, correct type, not expired).`);
@@ -192,42 +192,42 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null;
       if (!decodedForLog || !decodedForLog.jti || !decodedForLog.exp) {
-        console.warn('[JWTManager] Failed to decode token for revocation or missing jti/exp. Token (first 20 chars):', token.substring(0,20), 'Attempting verification to get details...');
-        let verifiedDecoded : JWTPayload | null = null;
+        console.warn('[JWTManager] Failed to decode token for revocation or missing jti/exp. Token (first 20 chars):', token.substring(0, 20), 'Attempting verification to get details...');
+        let verifiedDecoded: JWTPayload | null = null;
         try {
-             const secretToUse = decodedForLog?.type === 'access' ? this.ACCESS_TOKEN_SECRET : this.REFRESH_TOKEN_SECRET;
-             if(decodedForLog?.type) { // Only try to verify if we have a hint of the type
-                verifiedDecoded = jwt.verify(token, secretToUse ) as JWTPayload;
-             }
-       } catch (e: unknown) { 
-            const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
-            console.warn('[JWTManager] Verification attempt during revocation also failed:', errorMessage);
-       }
+          const secretToUse = decodedForLog?.type === 'access' ? this.ACCESS_TOKEN_SECRET : this.REFRESH_TOKEN_SECRET;
+          if (decodedForLog?.type) { // Only try to verify if we have a hint of the type
+            verifiedDecoded = jwt.verify(token, secretToUse) as JWTPayload;
+          }
+        } catch (e: unknown) {
+          const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
+          console.warn('[JWTManager] Verification attempt during revocation also failed:', errorMessage);
+        }
 
 
         if (verifiedDecoded && verifiedDecoded.jti && verifiedDecoded.exp) {
-             console.log(`[JWTManager] Token for revocation was verifiable (JTI: ${verifiedDecoded.jti}, Type: ${verifiedDecoded.type}). Adding to blacklist.`);
-             await TokenBlacklistManager.addToBlacklist(verifiedDecoded.jti, verifiedDecoded.exp, reason);
-             return true;
+          console.log(`[JWTManager] Token for revocation was verifiable (JTI: ${verifiedDecoded.jti}, Type: ${verifiedDecoded.type}). Adding to blacklist.`);
+          await TokenBlacklistManager.addToBlacklist(verifiedDecoded.jti, verifiedDecoded.exp, reason);
+          return true;
         } else {
-             console.warn('[JWTManager] Token for revocation still missing JTI/exp even after verification attempt. Cannot blacklist.');
-             return false;
+          console.warn('[JWTManager] Token for revocation still missing JTI/exp even after verification attempt. Cannot blacklist.');
+          return false;
         }
       }
       console.log(`[JWTManager] Revoking token JTI: ${decodedForLog.jti}, Type: ${decodedForLog.type}, Reason: ${reason}, Original Exp: ${new Date(decodedForLog.exp * 1000).toISOString()}`);
-      await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, reason); 
+      await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, reason);
       return true;
-      } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-        const errorStack = error instanceof Error ? error.stack : undefined;
-        console.error('[JWTManager] Unexpected error during token revocation logic:', errorMessage, errorStack);
-        return false;
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
+      const errorStack = error instanceof Error ? error.stack : undefined;
+      console.error('[JWTManager] Unexpected error during token revocation logic:', errorMessage, errorStack);
+      return false;
     }
 
   }
 
   static async refreshAccessToken(refreshTokenValue: string, userAgent: string, ip: string): Promise<{ accessToken: string; newRefreshToken: string } | null> {
-    console.log(`[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0,20)}...`);
+    console.log(`[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0, 20)}...`);
     const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
     if (!decodedRefreshToken) {
       console.warn('[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed.');
@@ -239,7 +239,7 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
     // This prevents replay of the same refresh token if something goes wrong after this point.
     console.log(`[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`);
     await this.revokeToken(refreshTokenValue, 'expired'); // Mark as 'expired' because it's consumed
-    
+
     const userAgentHash = userAgent ? createHash('sha256').update(userAgent).digest('base64') : '';
     const ipHash = ip ? createHash('sha256').update(ip).digest('base64') : '';
 
@@ -248,14 +248,14 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
       nonce: decodedRefreshToken.nonce,
       userAgentHash,
       ipHash,
-    } );
+    });
 
     const newRefreshToken = this.createRefreshToken({
       publicKey: decodedRefreshToken.sub,
       nonce: decodedRefreshToken.nonce,
       userAgentHash,
       ipHash,
-    } );
+    });
 
 
     const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;
@@ -306,7 +306,7 @@ static async verifyAccessToken(token: string, userAgent: string, ip: string): Pr
       secure: secureCookie,
       sameSite: sameSiteValue,
       maxAge: maxAgeSeconds,
-      path: '/', 
+      path: '/',
     };
 
     if (cookieDomain) {

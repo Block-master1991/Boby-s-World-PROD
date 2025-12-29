@@ -76,14 +76,39 @@ export class Skybox extends THREE.Object3D {
         }
 
         if (status === 'success') {
+          console.log(`[Skybox] Worker returned data: width=${width}, height=${height}, dataLength=${data.length}, dataType=${data.constructor.name}`);
+
+          // Check WebGL texture size limits before creating texture
+          const maxTextureSize = this.renderer?.capabilities.maxTextureSize || 4096;
+          console.log(`[Skybox] WebGL Max Texture Size: ${maxTextureSize}, HDR Size: ${width}x${height}`);
+
+          // If HDR exceeds WebGL limits, we need to handle it
+          let finalWidth = width;
+          let finalHeight = height;
+          let finalData = data;
+
+          if (width > maxTextureSize || height > maxTextureSize) {
+            console.warn(`[Skybox] HDR size (${width}x${height}) exceeds WebGL limit (${maxTextureSize}). Downscaling for compatibility.`);
+
+            // Calculate downscaled dimensions that fit within WebGL limits
+            const scaleFactor = Math.min(maxTextureSize / width, maxTextureSize / height);
+            finalWidth = Math.floor(width * scaleFactor);
+            finalHeight = Math.floor(height * scaleFactor);
+
+            // Simple bilinear downscaling for HDR data
+            finalData = downscaleHDRData(data, width, height, finalWidth, finalHeight);
+
+            console.log(`[Skybox] Downscaled HDR from ${width}x${height} to ${finalWidth}x${finalHeight}`);
+          }
+
           // Create DataTexture from the worker's data
           // If isHalf is true, data is a Uint16Array representing HalfFloat
           const type = e.data.isHalf ? THREE.HalfFloatType : THREE.FloatType;
 
           const texture = new THREE.DataTexture(
-            data,
-            width,
-            height,
+            finalData,
+            finalWidth,
+            finalHeight,
             THREE.RGBAFormat,
             type
           );
@@ -92,10 +117,19 @@ export class Skybox extends THREE.Object3D {
           texture.minFilter = THREE.LinearFilter;
           texture.magFilter = THREE.LinearFilter;
           texture.generateMipmaps = false; // Disable mipmaps to prevent artifacts
-          texture.anisotropy = 1; // Disable anisotropy completely to prevent artifacts
-          texture.colorSpace = THREE.LinearSRGBColorSpace; // Proper HDR color space for accurate lighting
+
+          // High-quality anisotropy based on device capability for 8K HDR
+          const perfConfig = getDevicePerformanceConfig();
+          const maxAnisotropy = this.renderer?.capabilities.getMaxAnisotropy() || 16;
+          texture.anisotropy = perfConfig.isMobile ?
+            Math.min(maxAnisotropy, perfConfig.performanceLevel === 'high' ? 8 : 4) :
+            Math.min(maxAnisotropy, 32); // Maximum quality for desktop
+
+          texture.colorSpace = THREE.LinearSRGBColorSpace; // Original HDR color space for true colors
           texture.flipY = false;
           texture.needsUpdate = true;
+
+          console.log(`[Skybox] Texture created: ${finalWidth}x${finalHeight}, anisotropy=${texture.anisotropy}, colorSpace=${texture.colorSpace}`);
 
           // Apply to sky sphere
           this.setupSkyMesh(texture, perfConfig);
@@ -162,6 +196,14 @@ export class Skybox extends THREE.Object3D {
     this.skyMesh = new THREE.Mesh(geometry, material);
     this.skyMesh.name = 'SkySphereMesh';
     this.add(this.skyMesh);
+
+    console.log(`[Skybox] Mesh created and added: geometry segments=${segments}, material has texture=${!!material.map}`);
+    console.log(`[Skybox] Mesh details: position=${this.skyMesh.position.toArray()}, visible=${this.skyMesh.visible}, renderOrder=${this.skyMesh.renderOrder}`);
+    console.log(`[Skybox] Material details: transparent=${material.transparent}, depthWrite=${material.depthWrite}, fog=${material.fog}, side=${material.side}`);
+
+    // Force high render order to ensure sky renders last
+    this.skyMesh.renderOrder = 1000;
+    console.log(`[Skybox] Set renderOrder to 1000 for sky mesh`);
   }
 
   /**
@@ -197,7 +239,9 @@ export class Skybox extends THREE.Object3D {
           try {
             const pmremGenerator = new THREE.PMREMGenerator(this.renderer);
             pmremGenerator.compileEquirectangularShader();
-            // Use PMREMGenerator with default high quality settings
+
+            // High-quality PMREM generation for 8K HDR
+            // Use default high-quality settings (Three.js automatically chooses optimal resolution)
             const envMap = pmremGenerator.fromEquirectangular(texture);
             pmremGenerator.dispose();
 
@@ -205,7 +249,11 @@ export class Skybox extends THREE.Object3D {
             current.background = null;
             current.environment = envMap.texture;
 
-            console.log('[Skybox] PMREM environment map applied successfully');
+            console.log(`[Skybox] High-quality PMREM environment map applied successfully: texture size=${envMap.texture.image?.width}x${envMap.texture.image?.height}`);
+
+            // Log scene lighting status
+            console.log(`[Skybox] Scene lighting: background=${current.background}, environment=${!!current.environment}`);
+            console.log(`[Skybox] Scene children count: ${current.children.length}`);
           } catch (error) {
             console.warn('[Skybox] PMREMGenerator failed, falling back to direct texture:', error);
             // Fallback to direct texture if PMREM fails
@@ -252,4 +300,54 @@ export class Skybox extends THREE.Object3D {
   set sunElevation(v: number) { }
   get sunAzimuth() { return 180; }
   set sunAzimuth(v: number) { }
+}
+
+/**
+ * Downscale HDR data using bilinear interpolation for better quality than WebGL automatic scaling
+ */
+function downscaleHDRData(data: Float32Array, srcWidth: number, srcHeight: number, dstWidth: number, dstHeight: number): Float32Array {
+  const dstData = new Float32Array(dstWidth * dstHeight * 4);
+
+  const scaleX = srcWidth / dstWidth;
+  const scaleY = srcHeight / dstHeight;
+
+  for (let dstY = 0; dstY < dstHeight; dstY++) {
+    for (let dstX = 0; dstX < dstWidth; dstX++) {
+      // Calculate source coordinates
+      const srcX = dstX * scaleX;
+      const srcY = dstY * scaleY;
+
+      // Get integer and fractional parts
+      const x0 = Math.floor(srcX);
+      const y0 = Math.floor(srcY);
+      const x1 = Math.min(x0 + 1, srcWidth - 1);
+      const y1 = Math.min(y0 + 1, srcHeight - 1);
+
+      const wx = srcX - x0;
+      const wy = srcY - y0;
+
+      // Bilinear interpolation for each channel
+      for (let c = 0; c < 4; c++) {
+        const idx00 = (y0 * srcWidth + x0) * 4 + c;
+        const idx10 = (y0 * srcWidth + x1) * 4 + c;
+        const idx01 = (y1 * srcWidth + x0) * 4 + c;
+        const idx11 = (y1 * srcWidth + x1) * 4 + c;
+
+        const val00 = data[idx00];
+        const val10 = data[idx10];
+        const val01 = data[idx01];
+        const val11 = data[idx11];
+
+        // Bilinear interpolation
+        const val = val00 * (1 - wx) * (1 - wy) +
+          val10 * wx * (1 - wy) +
+          val01 * (1 - wx) * wy +
+          val11 * wx * wy;
+
+        dstData[(dstY * dstWidth + dstX) * 4 + c] = val;
+      }
+    }
+  }
+
+  return dstData;
 }

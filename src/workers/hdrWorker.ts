@@ -73,7 +73,10 @@ self.onmessage = async (e: MessageEvent) => {
             width: result.width,
             height: result.height,
             data: result.data,
-            isHalf: false
+            isHalf: false,
+            // Add quality metadata for better handling
+            quality: 'full',
+            format: 'float32'
         }, [result.data.buffer]);
 
     } catch (error) {
@@ -112,7 +115,12 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
     const height = parseInt(match[1]);
     const width = parseInt(match[2]);
 
-    if (width <= 0 || height <= 0 || width > 16384 || height > 16384) return null;
+    if (width <= 0 || height <= 0 || width > 16384 || height > 16384) {
+        console.error(`[HDRWorker] Invalid dimensions: ${width}x${height}`);
+        return null;
+    }
+
+    console.log(`[HDRWorker] Parsing HDR: ${width}x${height} (${(width * height * 4 * 4 / 1024 / 1024).toFixed(1)}MB)`);
 
     const rgbaFloat = new Float32Array(width * height * 4);
     let offset = 0;

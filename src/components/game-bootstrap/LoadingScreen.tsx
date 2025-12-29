@@ -272,74 +272,144 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
             transform: translateY(-10px) translateX(-5px) rotate(180deg) scale(0.8);
           }
         }
+
+        @keyframes disassembleReassemble {
+          0%, 100% {
+            transform: translate(0, 0) rotate(0deg) scale(1);
+            opacity: 1;
+          }
+          25% {
+            transform: translate(-20px, -15px) rotate(-15deg) scale(0.9);
+            opacity: 0.8;
+          }
+          50% {
+            transform: translate(25px, 10px) rotate(20deg) scale(0.85);
+            opacity: 0.6;
+          }
+          75% {
+            transform: translate(-15px, 20px) rotate(-10deg) scale(0.95);
+            opacity: 0.9;
+          }
+        }
+
+        @keyframes disassembleReassemble2 {
+          0%, 100% {
+            transform: translate(0, 0) rotate(0deg) scale(1);
+            opacity: 1;
+          }
+          20% {
+            transform: translate(18px, -12px) rotate(12deg) scale(0.92);
+            opacity: 0.85;
+          }
+          45% {
+            transform: translate(-22px, 18px) rotate(-18deg) scale(0.88);
+            opacity: 0.7;
+          }
+          70% {
+            transform: translate(12px, -8px) rotate(8deg) scale(0.97);
+            opacity: 0.95;
+          }
+        }
+
+        @keyframes disassembleReassemble3 {
+          0%, 100% {
+            transform: translate(0, 0) rotate(0deg) scale(1);
+            opacity: 1;
+          }
+          15% {
+            transform: translate(-16px, 14px) rotate(14deg) scale(0.93);
+            opacity: 0.82;
+          }
+          40% {
+            transform: translate(20px, -16px) rotate(-16deg) scale(0.87);
+            opacity: 0.65;
+          }
+          65% {
+            transform: translate(-10px, 12px) rotate(6deg) scale(0.98);
+            opacity: 0.92;
+          }
+        }
+
+        @keyframes logoPulse {
+          0%, 100% {
+            transform: scale(1) translateZ(0);
+          }
+          50% {
+            transform: scale(1.1) translateZ(0);
+          }
+        }
       `}</style>
 
-      <div className="flex flex-col items-center justify-center min-h-screen bg-gradient-to-br from-background via-background to-primary/5 text-foreground p-6 text-center relative overflow-hidden">
-        {/* Enhanced Background decorative elements with animations */}
-        <div className="absolute inset-0 opacity-10">
-          <div className="absolute top-20 left-10 w-32 h-32 border border-primary/20 rounded-full animate-pulse"
-            style={{ animationDelay: '0s', animationDuration: '3s' }}></div>
-          <div className="absolute bottom-20 right-10 w-24 h-24 border border-primary/20 rounded-full animate-pulse"
-            style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
-          <div className="absolute top-1/2 left-1/4 w-16 h-16 border border-primary/20 rounded-full animate-pulse"
-            style={{ animationDelay: '2s', animationDuration: '5s' }}></div>
-          <div className="absolute top-1/3 right-1/4 w-20 h-20 border border-primary/20 rounded-full animate-pulse"
-            style={{ animationDelay: '0.5s', animationDuration: '3.5s' }}></div>
-          <div className="absolute bottom-1/3 left-1/3 w-12 h-12 border border-primary/20 rounded-full animate-pulse"
-            style={{ animationDelay: '1.5s', animationDuration: '4.5s' }}></div>
-        </div>
+      <div className={`flex flex-col items-center justify-center min-h-screen text-foreground p-6 text-center relative overflow-hidden ${variant === 'indeterminate' ? 'bg-background' : 'bg-gradient-to-br from-background via-background to-primary/5'}`}>
+        {variant !== 'indeterminate' && (
+          <>
+            {/* Enhanced Background decorative elements with animations */}
+            <div className="absolute inset-0 opacity-10">
+              <div className="absolute top-20 left-10 w-32 h-32 border border-primary/20 rounded-full animate-pulse"
+                style={{ animationDelay: '0s', animationDuration: '3s' }}></div>
+              <div className="absolute bottom-20 right-10 w-24 h-24 border border-primary/20 rounded-full animate-pulse"
+                style={{ animationDelay: '1s', animationDuration: '4s' }}></div>
+              <div className="absolute top-1/2 left-1/4 w-16 h-16 border border-primary/20 rounded-full animate-pulse"
+                style={{ animationDelay: '2s', animationDuration: '5s' }}></div>
+              <div className="absolute top-1/3 right-1/4 w-20 h-20 border border-primary/20 rounded-full animate-pulse"
+                style={{ animationDelay: '0.5s', animationDuration: '3.5s' }}></div>
+              <div className="absolute bottom-1/3 left-1/3 w-12 h-12 border border-primary/20 rounded-full animate-pulse"
+                style={{ animationDelay: '1.5s', animationDuration: '4.5s' }}></div>
+            </div>
 
-        {/* Enhanced Floating particles effect */}
-        <div className="absolute inset-0 overflow-hidden">
-          {/* Large floating particles */}
-          {[...Array(5)].map((_, i) => (
-            <div
-              key={`large-${i}`}
-              className="absolute w-2 h-2 bg-gradient-to-r from-primary/30 to-primary/10 rounded-full blur-sm"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 8}s`,
-                animationDuration: `${8 + Math.random() * 6}s`,
-                animation: `floatParticle${i % 2 + 1} ${8 + Math.random() * 6}s ease-in-out infinite`
-              }}
-            />
-          ))}
+            {/* Enhanced Floating particles effect */}
+            <div className="absolute inset-0 overflow-hidden">
+              {/* Large floating particles */}
+              {[...Array(5)].map((_, i) => (
+                <div
+                  key={`large-${i}`}
+                  className="absolute w-2 h-2 bg-gradient-to-r from-primary/30 to-primary/10 rounded-full blur-sm"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 8}s`,
+                    animationDuration: `${8 + Math.random() * 6}s`,
+                    animation: `floatParticle${i % 2 + 1} ${8 + Math.random() * 6}s ease-in-out infinite`
+                  }}
+                />
+              ))}
 
-          {/* Medium particles */}
-          {[...Array(12)].map((_, i) => (
-            <div
-              key={`medium-${i}`}
-              className="absolute w-1 h-1 bg-primary/40 rounded-full"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 6}s`,
-                animationDuration: `${4 + Math.random() * 4}s`,
-                animation: `floatParticle${(i % 3) + 1} ${4 + Math.random() * 4}s ease-in-out infinite`
-              }}
-            />
-          ))}
+              {/* Medium particles */}
+              {[...Array(12)].map((_, i) => (
+                <div
+                  key={`medium-${i}`}
+                  className="absolute w-1 h-1 bg-primary/40 rounded-full"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 6}s`,
+                    animationDuration: `${4 + Math.random() * 4}s`,
+                    animation: `floatParticle${(i % 3) + 1} ${4 + Math.random() * 4}s ease-in-out infinite`
+                  }}
+                />
+              ))}
 
-          {/* Small twinkling particles */}
-          {[...Array(20)].map((_, i) => (
-            <div
-              key={`small-${i}`}
-              className="absolute w-0.5 h-0.5 bg-primary rounded-full animate-pulse"
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-                animationDelay: `${Math.random() * 10}s`,
-                animationDuration: `${2 + Math.random() * 3}s`
-              }}
-            />
-          ))}
-        </div>
+              {/* Small twinkling particles */}
+              {[...Array(20)].map((_, i) => (
+                <div
+                  key={`small-${i}`}
+                  className="absolute w-0.5 h-0.5 bg-primary rounded-full animate-pulse"
+                  style={{
+                    left: `${Math.random() * 100}%`,
+                    top: `${Math.random() * 100}%`,
+                    animationDelay: `${Math.random() * 10}s`,
+                    animationDuration: `${2 + Math.random() * 3}s`
+                  }}
+                />
+              ))}
+            </div>
+          </>
+        )}
 
-        {showLogo && (
+        {showLogo && variant === 'default' && (
           <div className="relative mb-8 z-10 group">
             <div
-              className="rounded-lg shadow-xl transform transition-all duration-700 ease-out hover:scale-105"
+              className="rounded-lg transform transition-all duration-700 ease-out hover:scale-105"
               style={{
                 animation: !isError ? 'logoFloat 6s ease-in-out infinite' : undefined,
                 transform: 'translateZ(0)', // Force hardware acceleration
@@ -386,74 +456,95 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
           </div>
         )}
 
-        {!isError ? (
+        {!isError && variant !== 'indeterminate' && (
           <div className="relative z-10 mb-6">
             <div className={`h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center animate-pulse ${phase === 'world' ? 'animate-bounce' : ''}`}>
               {phaseInfo.icon}
             </div>
           </div>
-        ) : (
+        )}
+
+        {isError && (
           <AlertTriangle className="h-16 w-16 text-destructive mb-6 animate-pulse z-10 relative" />
         )}
 
         <div className="max-w-md w-full z-10">
-          <h1 className={`text-2xl font-bold mb-2 font-headline ${isError ? 'text-destructive' : 'text-primary'}`}>
-            {isError ? 'Loading Error' : phaseInfo.name}
-          </h1>
+          {variant !== 'indeterminate' && (
+            <>
+              <h1 className={`text-2xl font-bold mb-2 font-headline ${isError ? 'text-destructive' : 'text-primary'}`}>
+                {isError ? 'Loading Error' : phaseInfo.name}
+              </h1>
 
-          <p className={`text-sm mb-4 ${isError ? 'text-destructive/80' : 'text-muted-foreground'}`}>
-            {message || phaseInfo.description}
-          </p>
+              <p className={`text-sm mb-4 ${isError ? 'text-destructive/80' : 'text-muted-foreground'}`}>
+                {message || phaseInfo.description}
+              </p>
+            </>
+          )}
 
-          {!isError && (
+          {!isError && variant === 'default' && (
             <Card className="mb-6 bg-card/50 backdrop-blur-sm border-primary/20">
               <CardContent className="p-4">
-                {variant === 'default' ? (
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center text-xs text-muted-foreground">
-                      <span>Overall Progress</span>
-                      <span>{Math.round(displayProgress)}%</span>
-                    </div>
-                    <Progress
-                      value={displayProgress}
-                      className="w-full h-2"
-                    />
-                    <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
-                      <div className={`w-2 h-2 rounded-full ${displayProgress < 25 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center text-xs text-muted-foreground">
+                    <span>Overall Progress</span>
+                    <span>{Math.round(displayProgress)}%</span>
+                  </div>
+                  <Progress
+                    value={displayProgress}
+                    className="w-full h-2"
+                  />
+                  <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+                    <div className={`w-2 h-2 rounded-full ${displayProgress < 25 ? 'bg-red-500 animate-pulse' : 'bg-green-500'}`}></div>
+                    <span>
+                      {displayProgress < 25 ? 'Initializing...' :
+                        displayProgress < 50 ? 'Loading assets...' :
+                          displayProgress < 75 ? 'Preparing world...' :
+                            'Almost ready!'}
+                    </span>
+                  </div>
+
+                  {/* Time estimation */}
+                  {estimatedTimeLeft !== null && estimatedTimeLeft > 0 && !isError && (
+                    <div className="flex items-center justify-center gap-2 text-xs text-primary/80 mt-1">
+                      <span>⏱️</span>
                       <span>
-                        {displayProgress < 25 ? 'Initializing...' :
-                          displayProgress < 50 ? 'Loading assets...' :
-                            displayProgress < 75 ? 'Preparing world...' :
-                              'Almost ready!'}
+                        {estimatedTimeLeft < 1
+                          ? 'Less than a second'
+                          : estimatedTimeLeft === 1
+                            ? '1 second left'
+                            : `${estimatedTimeLeft} seconds left`
+                        }
                       </span>
                     </div>
-
-                    {/* Time estimation */}
-                    {estimatedTimeLeft !== null && estimatedTimeLeft > 0 && !isError && (
-                      <div className="flex items-center justify-center gap-2 text-xs text-primary/80 mt-1">
-                        <span>⏱️</span>
-                        <span>
-                          {estimatedTimeLeft < 1
-                            ? 'Less than a second'
-                            : estimatedTimeLeft === 1
-                              ? '1 second left'
-                              : `${estimatedTimeLeft} seconds left`
-                          }
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="flex flex-col items-center justify-center py-4 space-y-3">
-                    <Loader2 className="h-8 w-8 text-primary animate-spin" />
-                    <p className="text-xs text-muted-foreground animate-pulse">Please wait...</p>
-                  </div>
-                )}
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
 
-          {currentAsset && loadedAssets !== undefined && totalAssets !== undefined && !isError && (
+          {!isError && variant === 'indeterminate' && (
+            <div className="relative flex flex-col items-center justify-center py-4">
+              <div
+                style={{
+                  animation: 'logoPulse 2s ease-in-out infinite',
+                  transform: 'translateZ(0)',
+                  willChange: 'transform'
+                }}
+              >
+                <Image
+                  src="/Boby-logo.png"
+                  alt="Boby World Logo"
+                  width={100}
+                  height={100}
+                  className="rounded-lg"
+                  priority
+                  style={{ transform: 'translateZ(0)' }}
+                />
+              </div>
+            </div>
+          )}
+
+          {currentAsset && loadedAssets !== undefined && totalAssets !== undefined && !isError && variant !== 'indeterminate' && (
             <Card className="mb-4 bg-card/40 backdrop-blur-sm border-primary/10">
               <CardContent className="p-3">
                 <div className="flex items-center justify-between text-xs">
@@ -470,7 +561,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
             </Card>
           )}
 
-          {showTips && currentTip && !isError && (
+          {showTips && currentTip && !isError && variant !== 'indeterminate' && (
             <Card className="bg-card/30 backdrop-blur-sm border-primary/10">
               <CardContent className="p-4">
                 <div className="flex items-start gap-3">

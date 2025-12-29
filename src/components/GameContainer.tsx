@@ -1,45 +1,43 @@
 'use client';
 
-'use client';
-
-import React, { useState, useEffect, useCallback, useRef, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Octree } from '@/lib/Octree';
 
 // Lazy load heavy components
+const LoadingScreen = dynamic(() => import('@/components/game-bootstrap/LoadingScreen'), {
+    ssr: false,
+    loading: () => <LoadingScreen variant="indeterminate" />
+});
+
 const GameUI = dynamic(() => import('@/components/game/GameUI'), {
     ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading Game UI...</div>
+    loading: () => <LoadingScreen variant="indeterminate" />
 });
 
 const GameMainMenu = dynamic(() => import('@/components/game/GameMainMenu'), {
     ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading Menu...</div>
+    loading: () => <LoadingScreen variant="indeterminate" />
 });
 
 const RunningGameUI = dynamic(() => import('@/components/game/RunningGameUI'), {
     ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading Running Game...</div>
+    loading: () => <LoadingScreen variant="indeterminate" />
 });
 
 const CaptchaScreen = dynamic(() => import('@/components/game-bootstrap/CaptchaScreen'), {
     ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading Security...</div>
+    loading: () => <LoadingScreen variant="indeterminate" />
 });
 
 const AuthenticationScreen = dynamic(() => import('@/components/game-bootstrap/AuthenticationScreen'), {
     ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading Authentication...</div>
-});
-
-const LoadingScreen = dynamic(() => import('@/components/game-bootstrap/LoadingScreen'), {
-    ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading...</div>
+    loading: () => <LoadingScreen variant="indeterminate" />
 });
 
 const GameLoadingOverlay = dynamic(() => import('@/components/game-bootstrap/GameLoadingOverlay'), {
     ssr: false,
-    loading: () => <div className="text-white text-center p-4">Loading Game...</div>
+    loading: () => <LoadingScreen variant="indeterminate" />
 });
 // import { useGameAssetLoader } from '@/hooks/useGameAssetLoader'; // No longer needed here
 
