@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GrassOptions } from './grass'; // Import GrassOptions for type reference
+import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
 
 let loaded = false;
 let _grassTexture: THREE.Texture | null = null;
@@ -11,17 +12,53 @@ async function fetchAssets(): Promise<void> {
 
   const textureLoader = new THREE.TextureLoader();
 
-  _grassTexture = await textureLoader.loadAsync('/grass.jpg'); // Assuming textures are in public/
+  // Helper function to load texture with caching
+  const loadTextureWithCache = async (texturePath: string, textureName: string): Promise<THREE.Texture> => {
+    try {
+      // Try to load from IndexedDB first
+      const cachedData = await getModel(textureName);
+      if (cachedData) {
+        console.log(`[Ground] Loading ${textureName} from IndexedDB`);
+        // Create blob URL from cached data
+        const blob = new Blob([cachedData], { type: 'image/jpeg' });
+        const blobUrl = URL.createObjectURL(blob);
+        const texture = await textureLoader.loadAsync(blobUrl);
+        URL.revokeObjectURL(blobUrl); // Clean up blob URL
+        return texture;
+      } else {
+        console.log(`[Ground] Fetching ${textureName} from network: ${texturePath}`);
+        // Fetch from network and cache
+        const response = await fetch(texturePath);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        await putModel(textureName, arrayBuffer);
+
+        // Create blob URL and load texture
+        const blob = new Blob([arrayBuffer], { type: 'image/jpeg' });
+        const blobUrl = URL.createObjectURL(blob);
+        const texture = await textureLoader.loadAsync(blobUrl);
+        URL.revokeObjectURL(blobUrl); // Clean up blob URL
+        return texture;
+      }
+    } catch (error) {
+      console.error(`[Ground] Error loading or caching ${textureName}:`, error);
+      // Fallback to direct network load
+      console.log(`[Ground] Falling back to direct network load for: ${texturePath}`);
+      return await textureLoader.loadAsync(texturePath);
+    }
+  };
+
+  _grassTexture = await loadTextureWithCache('/grass.jpg', 'grass_texture');
   _grassTexture.wrapS = THREE.RepeatWrapping;
   _grassTexture.wrapT = THREE.RepeatWrapping;
   _grassTexture.colorSpace = THREE.SRGBColorSpace;
 
-  _dirtTexture = await textureLoader.loadAsync('/dirt_color.jpg'); // Assuming textures are in public/
+  _dirtTexture = await loadTextureWithCache('/dirt_color.jpg', 'dirt_color_texture');
   _dirtTexture.wrapS = THREE.RepeatWrapping;
   _dirtTexture.wrapT = THREE.RepeatWrapping;
   _dirtTexture.colorSpace = THREE.SRGBColorSpace;
 
-  _dirtNormal = await textureLoader.loadAsync('/dirt_normal.jpg'); // Assuming textures are in public/
+  _dirtNormal = await loadTextureWithCache('/dirt_normal.jpg', 'dirt_normal_texture');
   _dirtNormal.wrapS = THREE.RepeatWrapping;
   _dirtNormal.wrapT = THREE.RepeatWrapping;
 

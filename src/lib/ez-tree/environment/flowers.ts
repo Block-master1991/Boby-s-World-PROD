@@ -5,6 +5,7 @@ import { CHUNK_SIZE } from '../../chunkUtils';
 import { simplex2d } from './noise';
 import { appendWindShader } from '../shaders/windShaderUtils';
 import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
+import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
 
 let loaded = false;
 let _flowerBlueMesh: THREE.Mesh | null = null;
@@ -55,13 +56,50 @@ export class Flowers extends THREE.Group {
     dracoLoader.setDecoderPath('/libs/draco/');
     gltfLoader.setDRACOLoader(dracoLoader);
 
+    // Helper function to find the first mesh in a GLTF scene
+    const findMesh = (scene: THREE.Group): THREE.Mesh | null => {
+      let mesh: THREE.Mesh | null = null;
+      scene.traverse((child) => {
+        if (child instanceof THREE.Mesh) {
+          mesh = child;
+        }
+      });
+      return mesh;
+    };
+
+    const loadModel = async (modelPath: string, modelName: string): Promise<THREE.Group> => {
+      try {
+        // Try to load from IndexedDB first
+        const cachedData = await getModel(modelName);
+        if (cachedData) {
+          console.log(`[Flowers] Loading ${modelName} from IndexedDB`);
+          const gltf = await gltfLoader.parseAsync(cachedData, '');
+          return gltf.scene;
+        } else {
+          console.log(`[Flowers] Fetching ${modelName} from network: ${modelPath}`);
+          const response = await fetch(modelPath);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          await putModel(modelName, arrayBuffer); // Store in IndexedDB
+          const gltf = await gltfLoader.parseAsync(arrayBuffer, '');
+          return gltf.scene;
+        }
+      } catch (error) {
+        console.error(`[Flowers] Error loading or caching model ${modelName}:`, error);
+        // Fallback to direct network load if IndexedDB fails
+        console.log(`[Flowers] Falling back to direct network load for: ${modelPath}`);
+        const gltf = await gltfLoader.loadAsync(modelPath);
+        return gltf.scene;
+      }
+    };
+
     try {
       console.log('[Flowers] Loading flower models...');
 
-      // تحميل نماذج الأزهار كما في grass.js
-      _flowerBlueMesh = (await gltfLoader.loadAsync('/models/flower_blue.glb')).scene.children[0] as THREE.Mesh;
-      _flowerWhiteMesh = (await gltfLoader.loadAsync('/models/flower_white.glb')).scene.children[0] as THREE.Mesh;
-      _flowerYellowMesh = (await gltfLoader.loadAsync('/models/flower_yellow.glb')).scene.children[0] as THREE.Mesh;
+      // تحميل نماذج الأزهار كما في grass.js مع IndexedDB caching
+      _flowerBlueMesh = (await loadModel('/models/flower_blue.glb', 'flower_blue_model')).children[0] as THREE.Mesh;
+      _flowerWhiteMesh = (await loadModel('/models/flower_white.glb', 'flower_white_model')).children[0] as THREE.Mesh;
+      _flowerYellowMesh = (await loadModel('/models/flower_yellow.glb', 'flower_yellow_model')).children[0] as THREE.Mesh;
 
       // تطبيق نفس معالجة المواد كما في grass.js
       [_flowerWhiteMesh, _flowerBlueMesh, _flowerYellowMesh].forEach((mesh) => {

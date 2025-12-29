@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { CHUNK_SIZE } from '../../chunkUtils';
 import { simplex2d } from './noise';
+import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
 
 let loaded = false;
 let _rock1Mesh: THREE.Mesh | null = null;
@@ -46,9 +47,39 @@ export class Rocks extends THREE.Group {
       return mesh;
     };
 
-    _rock1Mesh = findMesh((await gltfLoader.loadAsync('/models/rock1.glb')).scene);
-    _rock2Mesh = findMesh((await gltfLoader.loadAsync('/models/rock2.glb')).scene);
-    _rock3Mesh = findMesh((await gltfLoader.loadAsync('/models/rock3.glb')).scene);
+    const loadModel = async (modelPath: string, modelName: string): Promise<THREE.Group> => {
+      try {
+        // Try to load from IndexedDB first
+        const cachedData = await getModel(modelName);
+        if (cachedData) {
+          console.log(`[Rocks] Loading ${modelName} from IndexedDB`);
+          const gltf = await gltfLoader.parseAsync(cachedData, '');
+          return gltf.scene;
+        } else {
+          console.log(`[Rocks] Fetching ${modelName} from network: ${modelPath}`);
+          const response = await fetch(modelPath);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          await putModel(modelName, arrayBuffer); // Store in IndexedDB
+          const gltf = await gltfLoader.parseAsync(arrayBuffer, '');
+          return gltf.scene;
+        }
+      } catch (error) {
+        console.error(`[Rocks] Error loading or caching model ${modelName}:`, error);
+        // Fallback to direct network load if IndexedDB fails
+        console.log(`[Rocks] Falling back to direct network load for: ${modelPath}`);
+        const gltf = await gltfLoader.loadAsync(modelPath);
+        return gltf.scene;
+      }
+    };
+
+    const rock1Scene = await loadModel('/models/rock1.glb', 'rock1_model');
+    const rock2Scene = await loadModel('/models/rock2.glb', 'rock2_model');
+    const rock3Scene = await loadModel('/models/rock3.glb', 'rock3_model');
+
+    _rock1Mesh = findMesh(rock1Scene);
+    _rock2Mesh = findMesh(rock2Scene);
+    _rock3Mesh = findMesh(rock3Scene);
 
     loaded = true;
   }

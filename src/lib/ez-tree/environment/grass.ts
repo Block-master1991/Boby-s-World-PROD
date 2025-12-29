@@ -4,6 +4,7 @@ import { simplex2d } from './noise';
 import { CHUNK_SIZE } from '../../chunkUtils';
 import { appendWindShader } from '../shaders/windShaderUtils'; // Import the new utility and WindOptions
 import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
+import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
 
 let loaded = false;
 let _grassMesh: THREE.Mesh | null = null;
@@ -74,8 +75,37 @@ export class Grass extends THREE.Object3D {
       return mesh;
     };
 
-    const grassGltf = await gltfLoader.loadAsync('/models/grass.glb');
-    _grassMesh = findMesh(grassGltf.scene);
+    const modelPath = '/models/grass.glb';
+    const modelName = 'grass_model';
+
+    const loadModel = async (): Promise<THREE.Group> => {
+      try {
+        // Try to load from IndexedDB first
+        const cachedData = await getModel(modelName);
+        if (cachedData) {
+          console.log(`[Grass] Loading grass model from IndexedDB: ${modelName}`);
+          const gltf = await gltfLoader.parseAsync(cachedData, '');
+          return gltf.scene;
+        } else {
+          console.log(`[Grass] Fetching grass model from network: ${modelPath}`);
+          const response = await fetch(modelPath);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          await putModel(modelName, arrayBuffer); // Store in IndexedDB
+          const gltf = await gltfLoader.parseAsync(arrayBuffer, '');
+          return gltf.scene;
+        }
+      } catch (error) {
+        console.error(`[Grass] Error loading or caching model ${modelName}:`, error);
+        // Fallback to direct network load if IndexedDB fails
+        console.log(`[Grass] Falling back to direct network load for: ${modelPath}`);
+        const gltf = await gltfLoader.loadAsync(modelPath);
+        return gltf.scene;
+      }
+    };
+
+    const grassScene = await loadModel();
+    _grassMesh = findMesh(grassScene);
 
     loaded = true;
   }

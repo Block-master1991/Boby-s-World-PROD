@@ -63,17 +63,46 @@ export class Environment extends THREE.Object3D {
     // If not preloaded, they will be loaded on-demand (though not recommended)
     console.log("Environment: Fetching/caching assets for world objects...");
 
-    Promise.all([
-      Grass.fetchAssets(),
-      Rocks.fetchAssets(),
-      this.treesInstance.fetchAssets(),
-      Flowers.fetchAssets()
-    ]).then(() => {
-      console.log("Environment: All assets loaded successfully");
-      this.chunkManager.setGeneratorsReady();
-    }).catch(error => {
-      console.error("Environment: Failed to load assets:", error);
-    });
+    // FORCE SUCCESS - Retry until all assets are loaded
+    const loadAssetsWithRetry = async (maxAttempts: number = 20) => {
+      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+          console.log(`[Environment] Asset loading attempt ${attempt}/${maxAttempts}`);
+
+          await Promise.all([
+            Grass.fetchAssets(),
+            Rocks.fetchAssets(),
+            this.treesInstance.fetchAssets(),
+            Flowers.fetchAssets()
+          ]);
+
+          console.log("Environment: All assets loaded successfully on attempt", attempt);
+          this.chunkManager.setGeneratorsReady();
+          return; // Success - exit loop
+
+        } catch (error) {
+          console.warn(`[Environment] Asset loading failed on attempt ${attempt}:`, error);
+
+          if (attempt < maxAttempts) {
+            // Wait before retry with exponential backoff
+            const delay = Math.min(2000 * Math.pow(1.2, attempt - 1), 15000);
+            console.log(`[Environment] Retrying in ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+          } else {
+            // Final attempt - force success with fallbacks
+            console.error("[Environment] All attempts failed, forcing success with fallbacks");
+
+            // Force set generators ready even if some assets failed
+            // The generators will handle missing assets gracefully
+            this.chunkManager.setGeneratorsReady();
+            return;
+          }
+        }
+      }
+    };
+
+    // Start loading with forced success
+    loadAssetsWithRetry();
   }
 
   public update(elapsedTime: number, cameraPosition: THREE.Vector3): void {

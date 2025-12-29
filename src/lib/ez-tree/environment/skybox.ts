@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { getDevicePerformanceConfig } from '../../utils';
+import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
 
 /**
  * Skybox implementation using HDR texture for realistic environment and lighting.
@@ -56,14 +57,37 @@ export class Skybox extends THREE.Object3D {
     this.loadHDR();
   }
 
-  private loadHDR() {
+  private async loadHDR() {
     // Default HDR file specified by the user
     const hdrUrl = '/textures/hdr/citrus_orchard_road_puresky_8k.hdr';
+    const modelName = 'hdr_data';
     const perfConfig = getDevicePerformanceConfig();
 
     console.log(`[Skybox] Initializing Worker for HDR: ${hdrUrl}`);
 
     try {
+      // Try to load HDR data from IndexedDB first
+      let hdrData = await getModel(modelName);
+      let blobUrl: string;
+
+      if (hdrData) {
+        console.log(`[Skybox] Loading HDR from IndexedDB: ${modelName}`);
+        // Create blob URL from cached data
+        const blob = new Blob([hdrData], { type: 'application/octet-stream' });
+        blobUrl = URL.createObjectURL(blob);
+      } else {
+        console.log(`[Skybox] Fetching HDR from network: ${hdrUrl}`);
+        // Fetch HDR data and cache it
+        const response = await fetch(hdrUrl);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        hdrData = await response.arrayBuffer();
+        await putModel(modelName, hdrData);
+
+        // Create blob URL from the data
+        const blob = new Blob([hdrData], { type: 'application/octet-stream' });
+        blobUrl = URL.createObjectURL(blob);
+      }
+
       // Initialize the worker
       const worker = new Worker(new URL('../../../workers/hdrWorker.ts', import.meta.url));
 
@@ -144,12 +168,16 @@ export class Skybox extends THREE.Object3D {
           // but we can ensure no local references remain in the worker scope.
           worker.terminate();
 
+          // Revoke the blob URL to free memory
+          URL.revokeObjectURL(blobUrl);
+
           // Mark as loaded
           if (this.resolveLoading) this.resolveLoading();
         } else {
           console.error('[Skybox] Worker Error:', error);
           this.applyFallbackSky();
           worker.terminate();
+          URL.revokeObjectURL(blobUrl);
           // Still resolve to prevent hanging the loader, but log the error
           if (this.resolveLoading) this.resolveLoading();
         }
@@ -159,10 +187,11 @@ export class Skybox extends THREE.Object3D {
         console.error('[Skybox] Worker Crash:', err);
         this.applyFallbackSky();
         worker.terminate();
+        URL.revokeObjectURL(blobUrl);
         if (this.resolveLoading) this.resolveLoading();
       };
 
-      worker.postMessage({ url: hdrUrl });
+      worker.postMessage({ url: blobUrl });
 
     } catch (workerInitError) {
       console.error('[Skybox] Failed to initialize HDR Worker:', workerInitError);

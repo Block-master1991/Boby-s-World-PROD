@@ -8,6 +8,7 @@ import { Octree } from '../lib/Octree';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS, ENEMY_COLLISION_PENALTY_USDT } from '../lib/constants';
 import { GameObject, BaseGameObject } from '@/types/game';
+import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 // import FloatingEffect from '@/components/game/FloatingEffect'; // Import FloatingEffect for type hinting
 // import { useFloatingEffects } from './useFloatingEffects'; // Import useFloatingEffects hook
 
@@ -89,7 +90,7 @@ export const useCoinLogic = ({
 
   const coinModelPromiseRef = useRef<Promise<void> | null>(null);
 
-  // Load the coin model
+  // Load the coin model with IndexedDB caching
   const loadCoinModel = useCallback(async () => {
     if (isCoinModelLoadedRef.current || !sceneRef.current) return;
 
@@ -104,13 +105,47 @@ export const useCoinLogic = ({
           gltfLoaderRef.current = new GLTFLoader();
         }
 
-        const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
-        coinModelRef.current = gltf.scene;
-        isCoinModelLoadedRef.current = true;
-        console.log('[CoinLogic] Coin model loaded successfully (Singleton)');
+        const modelName = 'coin_model';
+
+        // Ensure gltfLoader is initialized
+        if (!gltfLoaderRef.current) {
+          gltfLoaderRef.current = new GLTFLoader();
+        }
+
+        // Try to load from IndexedDB first
+        const cachedData = await getModel(modelName);
+        if (cachedData) {
+          console.log(`[CoinLogic] Loading coin model from IndexedDB: ${modelName}`);
+          const gltf = await gltfLoaderRef.current.parseAsync(cachedData, '');
+          coinModelRef.current = gltf.scene;
+          isCoinModelLoadedRef.current = true;
+          console.log('[CoinLogic] Coin model loaded successfully from IndexedDB (Singleton)');
+        } else {
+          console.log(`[CoinLogic] Fetching coin model from network: ${COIN_MODEL_PATH}`);
+          const response = await fetch(COIN_MODEL_PATH);
+          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+          const arrayBuffer = await response.arrayBuffer();
+          await putModel(modelName, arrayBuffer); // Store in IndexedDB
+          const gltf = await gltfLoaderRef.current.parseAsync(arrayBuffer, '');
+          coinModelRef.current = gltf.scene;
+          isCoinModelLoadedRef.current = true;
+          console.log('[CoinLogic] Coin model loaded successfully from network and cached (Singleton)');
+        }
       } catch (error) {
-        console.error('[CoinLogic] Error loading coin model:', error);
-        coinModelPromiseRef.current = null; // Reset on failure so we can try again
+        console.error(`[CoinLogic] Error loading or caching coin model:`, error);
+        // Fallback to direct network load if IndexedDB fails
+        console.log(`[CoinLogic] Falling back to direct network load for: ${COIN_MODEL_PATH}`);
+        try {
+          if (gltfLoaderRef.current) {
+            const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
+            coinModelRef.current = gltf.scene;
+            isCoinModelLoadedRef.current = true;
+            console.log('[CoinLogic] Coin model loaded successfully via fallback (Singleton)');
+          }
+        } catch (fallbackError) {
+          console.error('[CoinLogic] Fallback load also failed:', fallbackError);
+          coinModelPromiseRef.current = null; // Reset on failure so we can try again
+        }
       }
     })();
 

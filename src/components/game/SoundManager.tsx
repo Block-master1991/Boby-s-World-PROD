@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState, useImperativeHandle, forwardRef } from 'react';
+import { getModel, putModel } from '../../lib/indexedDB'; // Import IndexedDB utilities
 
 export interface SoundManagerRef {
   toggleMute: () => void;
@@ -35,18 +36,59 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
     }
   }, [volume]);
 
-  const setAudioSource = useCallback((src: string, loop: boolean = true) => {
+  const setAudioSource = useCallback(async (src: string, loop: boolean = true) => {
     if (audioRef.current) {
       if (currentTrackSrc.current === src) {
         console.log(`[SoundManager] Track already set to: ${src}. No change needed.`);
         return;
       }
+
+      // Helper function to load audio with caching
+      const loadAudioWithCache = async (audioPath: string, audioName: string): Promise<string> => {
+        try {
+          // Try to load from IndexedDB first
+          const cachedData = await getModel(audioName);
+          if (cachedData) {
+            console.log(`[SoundManager] Loading ${audioName} from IndexedDB`);
+            // Create blob URL from cached data
+            const blob = new Blob([cachedData], { type: 'audio/mpeg' });
+            return URL.createObjectURL(blob);
+          } else {
+            console.log(`[SoundManager] Fetching ${audioName} from network: ${audioPath}`);
+            // Fetch from network and cache
+            const response = await fetch(audioPath);
+            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+            const arrayBuffer = await response.arrayBuffer();
+            await putModel(audioName, arrayBuffer);
+
+            // Create blob URL
+            const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
+            return URL.createObjectURL(blob);
+          }
+        } catch (error) {
+          console.error(`[SoundManager] Error loading or caching ${audioName}:`, error);
+          // Fallback to direct URL
+          console.log(`[SoundManager] Falling back to direct URL for: ${audioPath}`);
+          return audioPath;
+        }
+      };
+
+      // Clean up previous blob URL if it exists
+      if (currentTrackSrc.current && currentTrackSrc.current.startsWith('blob:')) {
+        URL.revokeObjectURL(currentTrackSrc.current);
+      }
+
       audioRef.current.pause();
-      audioRef.current.src = src;
+
+      // Load audio with caching
+      const audioName = src.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'unknown';
+      const blobUrl = await loadAudioWithCache(src, `audio_${audioName}`);
+
+      audioRef.current.src = blobUrl;
       audioRef.current.loop = loop;
-      currentTrackSrc.current = src;
+      currentTrackSrc.current = blobUrl;
       setIsAudioReady(false); // Reset ready state when source changes
-      console.log(`[SoundManager] Setting audio source to: ${src}`);
+      console.log(`[SoundManager] Setting audio source to: ${blobUrl}`);
     }
   }, []);
 
@@ -54,6 +96,12 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+
+      // Clean up blob URL if it exists
+      if (currentTrackSrc.current && currentTrackSrc.current.startsWith('blob:')) {
+        URL.revokeObjectURL(currentTrackSrc.current);
+      }
+
       currentTrackSrc.current = null;
       setIsAudioReady(false);
       console.log("[SoundManager] Audio stopped.");

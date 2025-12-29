@@ -2,6 +2,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
+import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 
 type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array;
 
@@ -787,22 +788,52 @@ class RetryManager {
   }
 
   private async loadModelInternal(path: string, compress: boolean, priority: LoadPriority, signal: AbortSignal): Promise<THREE.Group> {
+    const modelName = path.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'unknown';
+
+    // Try to load from IndexedDB first
+    const cachedData = await getModel(modelName);
+    if (cachedData) {
+      console.log(`[RetryManager] Loading model from IndexedDB: ${modelName}`);
+      const loader = new GLTFLoader();
+      if (this._dracoLoader) {
+        loader.setDRACOLoader(this._dracoLoader);
+      }
+      const gltf = await loader.parseAsync(cachedData, path);
+      let model = gltf.scene;
+      if (compress) {
+        const level = compressionManager.getCompressionLevel(path);
+        model = await compressionManager.compressModel(model, level);
+      }
+      return model;
+    }
+
+    // Load from network and cache
+    console.log(`[RetryManager] Fetching model from network: ${path}`);
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+    const arrayBuffer = await response.arrayBuffer();
+
+    // Cache in IndexedDB
+    await putModel(modelName, arrayBuffer);
+
+    // Parse the model
     const loader = new GLTFLoader();
-    console.log(`[RetryManager] Attempting to load model: ${path}. DracoLoader instance:`, this._dracoLoader);
-    // Set DRACOLoader if available
-    if (this._dracoLoader) { // Access the dracoLoader from the private property
+    if (this._dracoLoader) {
       loader.setDRACOLoader(this._dracoLoader);
       console.log(`[RetryManager] DRACOLoader set on GLTFLoader for ${path}.`);
     } else {
       console.warn(`[RetryManager] DRACOLoader is null for ${path}.`);
     }
-    const gltf = await loader.loadAsync(path);
+
     signal.throwIfAborted();
+    const gltf = await loader.parseAsync(arrayBuffer, path);
     let model = gltf.scene;
+
     if (compress) {
       const level = compressionManager.getCompressionLevel(path);
       model = await compressionManager.compressModel(model, level);
     }
+
     return model;
   }
 }
