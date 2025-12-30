@@ -94,7 +94,7 @@ export function getDevicePerformanceConfig() {
     // Environment density multipliers
     environmentDensity: {
       grassMultiplier: isMobile ? (performanceLevel === 'low' ? 0.1 : 0.2) : 1.0,
-      treeMultiplier: isMobile ? (performanceLevel === 'low' ? 0.5 : 0.7) : 1.0,
+      treeMultiplier: isMobile ? (performanceLevel === 'low' ? 0.5 : 1.0) : 1.0,
       rocksMultiplier: isMobile ? (performanceLevel === 'low' ? 0.3 : 0.5) : 1.0,
       flowersMultiplier: isMobile ? (performanceLevel === 'low' ? 0.2 : 0.4) : 1.0,
     },

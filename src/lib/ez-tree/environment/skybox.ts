@@ -38,7 +38,7 @@ export class Skybox extends THREE.Object3D {
     this.sun.shadow.camera.bottom = -SHADOW_SIZE;
 
     // Massive far plane to prevent clipping at any distance
-    this.sun.shadow.camera.far = 5000;
+    this.sun.shadow.camera.far = 2500;
 
     this.sun.shadow.mapSize.set(perfConfig.renderer.shadowMapSize, perfConfig.renderer.shadowMapSize);
     this.sun.shadow.bias = -0.0005;
@@ -147,10 +147,10 @@ export class Skybox extends THREE.Object3D {
           const maxAnisotropy = this.renderer?.capabilities.getMaxAnisotropy() || 16;
           texture.anisotropy = perfConfig.isMobile ?
             Math.min(maxAnisotropy, perfConfig.performanceLevel === 'high' ? 8 : 4) :
-            Math.min(maxAnisotropy, 32); // Maximum quality for desktop
+            Math.min(maxAnisotropy, 16); // Maximum quality for desktop
 
           texture.colorSpace = THREE.LinearSRGBColorSpace; // Original HDR color space for true colors
-          texture.flipY = false;
+          texture.flipY = true;
           texture.needsUpdate = true;
 
           console.log(`[Skybox] Texture created: ${finalWidth}x${finalHeight}, anisotropy=${texture.anisotropy}, colorSpace=${texture.colorSpace}`);

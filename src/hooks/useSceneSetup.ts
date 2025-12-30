@@ -51,9 +51,9 @@ export const useSceneSetup = ({
     renderer.setSize(currentMount.clientWidth || window.innerWidth, currentMount.clientHeight || window.innerHeight);
     renderer.setPixelRatio(perfConfig.renderer.pixelRatio);
 
-    // HDR Tone Mapping - No tone mapping for original HDR colors
-    renderer.toneMapping = THREE.NoToneMapping;
-    renderer.toneMappingExposure = 1.0; // Original exposure for true HDR colors
+    // HDR Tone Mapping - Use ACES Filmic for proper HDR display
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.0; // Exposure can be adjusted for brightness
 
     renderer.shadowMap.enabled = !perfConfig.isMobile; // Disable shadows on mobile for performance
     if (!perfConfig.isMobile) {

@@ -32,7 +32,7 @@ export const useCameraLogic = ({
       50,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.5,
-      5000 // Increased significantly to 5000 to match the world and cloud layer
+      450 // Limited to skybox range + margin to hide chunk boundaries
     );
     cameraRef.current = camera;
     camera.position.set(0, 5, 5);
