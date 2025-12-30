@@ -36,11 +36,17 @@ export const useSessionWallet = (): SessionWallet => {
   }, [actualWallet.connected, actualWallet.publicKey, sessionPublicKey]);
 
   const disconnectFromSession = useCallback(async () => {
-    await actualWallet.disconnect();
-    setSessionPublicKey(null); // Explicitly clear session on our disconnect call
-    // Clear wallet preference from localStorage to prevent remembering
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem('walletName');
+    try {
+      if (typeof window !== 'undefined') {
+        // Remove from storage first to prevent auto-reconnect
+        localStorage.removeItem('walletName');
+        console.log('[useSessionWallet] Cleared walletName from localStorage');
+      }
+      await actualWallet.disconnect();
+    } catch (error) {
+      console.error('[useSessionWallet] Error disconnecting:', error);
+    } finally {
+      setSessionPublicKey(null);
     }
   }, [actualWallet]);
 

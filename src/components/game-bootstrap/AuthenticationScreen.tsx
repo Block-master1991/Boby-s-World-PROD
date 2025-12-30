@@ -32,31 +32,32 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
       loginAttemptedRef.current = false;
     }
 
-    // Attempt automatic login if captcha is verified, wallet is connected,
-    // and we are not already authenticated with the connected wallet.
-    // Also, ensure we are not already in an auth loading state and haven't attempted login yet.
+    // DESKTOP ONLY: Attempt automatic login if conditions are met.
+    // We skip this on mobile to avoid triggering popup blockers.
     if (
+      !isMobile && // ONLY on desktop
       captchaVerified &&
       wallet.connected &&
       !wallet.disconnecting &&
       wallet.publicKey &&
       !isLoadingAuth &&
-      (!isAuthenticated || !isWalletConnectedAndMatching) && // If not authenticated OR authenticated but wallet mismatch
-      !loginAttemptedRef.current // Only attempt if not already attempted
+      (!isAuthenticated || !isWalletConnectedAndMatching) &&
+      !loginAttemptedRef.current
     ) {
-      console.log("[AuthenticationScreen] Wallet connected, captcha verified, and conditions met for automatic login attempt.");
-      loginAttemptedRef.current = true; // Mark as attempted
+      console.log("[AuthenticationScreen] Desktop detected. Attempting auto-login.");
+      loginAttemptedRef.current = true;
       onLoginAttempt();
     }
   }, [
+    isMobile, // Added dependency
     captchaVerified,
     wallet.connected,
-    wallet.disconnecting,
-    wallet.publicKey,
-    isLoadingAuth,
+    wallet.disconnecting, // Added dependency
+    wallet.publicKey, // Added dependency
+    isLoadingAuth, // Added dependency
     isAuthenticated,
-    isWalletConnectedAndMatching,
-    onLoginAttempt
+    isWalletConnectedAndMatching, // Added dependency
+    onLoginAttempt // Added dependency
   ]);
 
   // Display loading screen if authentication is in progress
@@ -156,15 +157,25 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
               <p className="text-md text-muted-foreground mb-8">
                 Please disconnect the current wallet and connect with your authenticated wallet, or log in with the current wallet.
               </p>
-              <Button onClick={onLoginAttempt} className="mb-3">
+              <Button onClick={onLoginAttempt} className="mb-3 w-full max-w-sm" size="lg">
                 <ShieldCheck className="mr-2 h-5 w-5" /> Authenticate with Current Wallet
               </Button>
             </>
           ) : (
-            <p className="text-lg text-muted-foreground mb-8">
-              <PawPrint className="inline-block mr-2 h-5 w-5 animate-pulse" />
-              Authenticating... Please check your wallet if prompted.
-            </p>
+            <div className="flex flex-col items-center gap-4 mb-8">
+              <p className="text-lg text-muted-foreground max-w-md">
+                <ShieldCheck className="inline-block mr-2 h-5 w-5" />
+                Wallet connected. Please sign in to verify ownership.
+              </p>
+              <Button onClick={onLoginAttempt} className="w-full max-w-sm animate-pulse hover:animate-none" size="lg">
+                <PawPrint className="mr-2 h-5 w-5" /> Sign In with Wallet
+              </Button>
+              {isMobile && (
+                <p className="text-xs text-muted-foreground">
+                  This will open your wallet app to sign a message.
+                </p>
+              )}
+            </div>
           )}
           <Button onClick={onRequestDisconnect} variant="outline" className="mt-3">
             <LogOutIcon className="mr-2 h-5 w-5" /> Disconnect Wallet

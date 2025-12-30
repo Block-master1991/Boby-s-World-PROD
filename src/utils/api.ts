@@ -30,7 +30,7 @@ export const setGlobalToast = (func: ReturnType<typeof useToast>['toast']) => {
 // ===== إعدادات عامة =====
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
-const REQUEST_TIMEOUT_MS = 30000; // 30 ثانية
+const REQUEST_TIMEOUT_MS = 60000; // 60 ثانية (increased for mobile/dev)
 
 // ===== دوال مساعدة =====
 

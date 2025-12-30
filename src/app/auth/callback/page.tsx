@@ -14,122 +14,55 @@ export default function AuthCallback() {
     const [hasAttemptedLogin, setHasAttemptedLogin] = useState(false);
     const [loginAttempted, setLoginAttempted] = useState(false);
 
-    useEffect(() => {
-        const handleCallback = async () => {
-            // If already authenticated, redirect to game
-            if (isAuthenticated) {
-                console.log('[AuthCallback] User already authenticated, redirecting to game');
+    // Manual Trigger for Callback
+    const handleManualLogin = async () => {
+        if (!connected || !publicKey) return;
+        setLoginAttempted(true);
+        try {
+            const loginSuccess = await login();
+            if (loginSuccess) {
                 router.push('/');
-                return;
             }
+        } catch (error) {
+            console.error('Login failed:', error);
+        }
+    };
 
-            // If wallet is connected and we haven't attempted login yet
-            if (connected && publicKey && !loginAttempted && !isAuthLoading) {
-                console.log('[AuthCallback] Wallet connected, attempting automatic login');
-                setLoginAttempted(true);
-                setHasAttemptedLogin(true);
+    // Auto-login REMOVED for stability.
+    // If a user lands here, we show them a button to finish.
 
-                try {
-                    const loginSuccess = await login();
-                    if (loginSuccess) {
-                        console.log('[AuthCallback] Login successful, redirecting to game');
-                        router.push('/');
-                    } else {
-                        console.warn('[AuthCallback] Login failed, redirecting to home');
-                        // Redirect after a delay to show error
-                        setTimeout(() => router.push('/'), 3000);
-                    }
-                } catch (error) {
-                    console.error('[AuthCallback] Login error:', error);
-                    // Redirect after a delay to show error
-                    setTimeout(() => router.push('/'), 3000);
-                }
-            }
-            // If wallet not connected, wait longer for reconnection (especially for Trust Wallet)
-            else if (!connected && !hasAttemptedLogin) {
-                console.log('[AuthCallback] Wallet not immediately connected, waiting for reconnection...');
-
-                // Wait up to 10 seconds for wallet to reconnect (for Trust Wallet and others)
-                let attempts = 0;
-                const checkConnection = () => {
-                    attempts++;
-
-                    if (connected && publicKey && !loginAttempted && !isAuthLoading) {
-                        console.log('[AuthCallback] Wallet reconnected, attempting login');
-                        setLoginAttempted(true);
-                        setHasAttemptedLogin(true);
-
-                        login().then(loginSuccess => {
-                            if (loginSuccess) {
-                                console.log('[AuthCallback] Login successful after reconnection');
-                                router.push('/');
-                            } else {
-                                console.warn('[AuthCallback] Login failed after reconnection');
-                                setTimeout(() => router.push('/'), 3000);
-                            }
-                        }).catch(error => {
-                            console.error('[AuthCallback] Login error after reconnection:', error);
-                            setTimeout(() => router.push('/'), 3000);
-                        });
-                    } else if (attempts >= 10) { // After 10 seconds
-                        console.log('[AuthCallback] Wallet still not connected after 10 attempts, redirecting');
-                        router.push('/');
-                    } else {
-                        // Check again in 1 second
-                        setTimeout(checkConnection, 1000);
-                    }
-                };
-
-                setTimeout(checkConnection, 1000);
-            }
-        };
-
-        handleCallback();
-    }, [connected, publicKey, isAuthenticated, isAuthLoading, login, loginAttempted, hasAttemptedLogin, router]);
-
-    // Determine what to show based on current state
     const getContent = () => {
-        if (isAuthLoading || (connected && !isAuthenticated && !authError)) {
-            return {
-                icon: <PawPrint className="h-12 w-12 animate-pulse text-primary mb-4" />,
-                title: "Processing authentication...",
-                message: "Please wait while we complete your login.",
-                subtitle: "Check your wallet if prompted for approval."
-            };
-        }
-
-        if (authError) {
-            return {
-                icon: <AlertTriangle className="h-12 w-12 text-destructive mb-4" />,
-                title: "Authentication Failed",
-                message: authError,
-                subtitle: "Redirecting back to login..."
-            };
-        }
-
         if (isAuthenticated) {
             return {
                 icon: <PawPrint className="h-12 w-12 text-green-500 mb-4" />,
                 title: "Login Successful!",
-                message: "Welcome to Boby World! Redirecting to game...",
-                subtitle: ""
+                message: "Welcome back!",
+                subtitle: "Redirecting..."
             };
         }
 
-        if (!connected) {
+        if (connected && !isAuthenticated) {
             return {
-                icon: <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />,
-                title: "Wallet Not Connected",
-                message: "Please connect your wallet to continue.",
-                subtitle: "Redirecting back to login..."
+                icon: <PawPrint className="h-12 w-12 text-primary mb-4" />,
+                title: "Almost There!",
+                message: "Wallet connected successfully.",
+                subtitle: "Click below to sign in.",
+                action: (
+                    <button
+                        onClick={handleManualLogin}
+                        className="mt-4 px-6 py-3 bg-primary text-primary-foreground rounded-lg font-bold animate-pulse hover:animate-none"
+                    >
+                        Complete Login
+                    </button>
+                )
             };
         }
 
         return {
-            icon: <PawPrint className="h-12 w-12 animate-pulse text-primary mb-4" />,
-            title: "Processing...",
-            message: "Completing authentication...",
-            subtitle: ""
+            icon: <AlertTriangle className="h-12 w-12 text-yellow-500 mb-4" />,
+            title: "Connecting...",
+            message: "Waiting for wallet reconnection...",
+            subtitle: "Please wait."
         };
     };
 
@@ -157,6 +90,13 @@ export default function AuthCallback() {
                 <p className="text-sm text-muted-foreground text-center max-w-md">
                     {content.subtitle}
                 </p>
+            )}
+
+            {/* Render Action Button if present (for manual login) */}
+            {(content as any).action && (
+                <div className="mt-4">
+                    {(content as any).action}
+                </div>
             )}
         </div>
     );

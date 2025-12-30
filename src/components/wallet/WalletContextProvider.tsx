@@ -40,11 +40,7 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
                             name: 'Bobys World',
                             description: 'Boby\'s World Game',
                             url: appUrl,
-                            icons: [`${appUrl}/Boby-logo.png`],
-                            redirect: {
-                                native: `${appUrl}/auth/callback`,
-                                universal: `${appUrl}/auth/callback`
-                            }
+                            icons: [`${appUrl}/Boby-logo.png`]
                         }
                     }
                 }),

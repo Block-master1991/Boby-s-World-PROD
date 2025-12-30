@@ -45,7 +45,7 @@ function buildSignMessage(nonce: string): string {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { publicKey: adapterPublicKey, signMessage: walletSignMessage, connected, disconnect: adapterDisconnect, wallet } = useWallet();
+  const { publicKey: adapterPublicKey, signMessage: walletSignMessage, connected, connecting, disconnect: adapterDisconnect, wallet } = useWallet();
   const { toast } = useToast();
 
   const [authState, setAuthState] = useState<AuthState>({
@@ -55,12 +55,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     error: null
   });
   const [retryRequested, setRetryRequested] = useState(false);
+  const [isGracePeriod, setIsGracePeriod] = useState(true); // Grace period for initial wallet connection
 
   // Derived state: Is the wallet connected AND does its public key match the authenticated user's public key?
   const isWalletConnectedAndMatching = useMemo(() => {
     // Ensure 'connected' is treated as a boolean, as useWallet's 'connected' can sometimes be null/undefined during initial render
     return !!connected && !!adapterPublicKey && authState.user?.publicKey === adapterPublicKey.toBase58();
   }, [connected, adapterPublicKey, authState.user?.publicKey]);
+
+  // Grace period timer logic
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsGracePeriod(false);
+      console.log('[AuthContext] Initial grace period ended.');
+    }, 5000); // 5 second grace period for autoConnect (increased for mobile)
+    return () => clearTimeout(timer);
+  }, []);
 
   const logout = useCallback(async (): Promise<void> => {
     const currentPK = authState.user?.publicKey;
@@ -347,7 +357,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
         }
         toast({ variant: 'destructive', title: 'Login Failed', description: errMsg });
-        setAuthState(prev => ({ ...prev, isLoading: false, error: errMsg }));
+        setAuthState(prev => ({ ...prev, isLoading: false, error: fallbackError }));
         throw new Error(errMsg);
       }
       if (loginData.success && loginData.publicKey) {
@@ -423,14 +433,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
 
     // NEW LOGIC: Force logout if authenticated but wallet is mismatched
-    if (authState.isAuthenticated && authState.user && !isWalletConnectedAndMatching) {
+    // SKIPPED if connecting or during grace period
+    if (authState.isAuthenticated && authState.user && !isWalletConnectedAndMatching && !connecting && !isGracePeriod) {
       console.warn("[AuthContext] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout.");
-      console.log(`[AuthContext useEffect] isWalletConnectedAndMatching: ${isWalletConnectedAndMatching}. Triggering logoutAndRedirect from useEffect.`);
+      console.log(`[AuthContext useEffect] isWalletConnectedAndMatching: ${isWalletConnectedAndMatching}, connecting: ${connecting}, gracePeriod: ${isGracePeriod}. Triggering logoutAndRedirect.`);
       logoutAndRedirect('/'); // Redirect to home without a flag
       toast({ variant: 'destructive', title: 'Wallet Mismatch', description: 'Your connected wallet does not match the session.' });
 
     }
-  }, [connected, authState.isAuthenticated, authState.isLoading, authState.user, isWalletConnectedAndMatching, logoutAndRedirect, toast]);
+  }, [connected, connecting, isGracePeriod, authState.isAuthenticated, authState.isLoading, authState.user, isWalletConnectedAndMatching, logoutAndRedirect, toast]);
 
   const contextValue: AuthContextType = {
     ...authState,
