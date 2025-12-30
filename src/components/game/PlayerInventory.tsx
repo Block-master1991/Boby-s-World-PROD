@@ -8,6 +8,7 @@ import Image from 'next/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from '@/lib/items';
 import { Badge } from '@/components/ui/badge';
+import InventoryItemSkeleton from '@/components/shared/InventoryItemSkeleton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input'; // Import Input component
 import { Plus, Minus } from 'lucide-react'; // Removed Maximize icon, will use text
@@ -38,6 +39,8 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     const { sessionPublicKey } = useSessionWallet();
     const [quantitiesToUse, setQuantitiesToUse] = useState<Record<string, number>>({});
     const [storeItemsData, setStoreItemsData] = useState<StoreItemDefinition[]>([]);
+    const [storeItemsLoaded, setStoreItemsLoaded] = useState(false);
+    const [showSkeletons, setShowSkeletons] = useState(true);
 
     const { toast } = useToast();
 
@@ -47,8 +50,10 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
             try {
                 const items = await getStoreItemsActiveWithIcons();
                 setStoreItemsData(items);
+                setStoreItemsLoaded(true);
             } catch (error) {
                 console.error('Error loading store items:', error);
+                setStoreItemsLoaded(true); // Even on error, consider it loaded
             }
         }
         loadStoreItems();
@@ -56,6 +61,19 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
     // GraphQL inventory data (primary source)
     const { data: inventoryData, loading: graphqlLoading, error: graphqlError, execute: refetchInventory } = useUserInventory(sessionPublicKey?.toBase58() || '');
     const { useItem, loading: useItemLoading } = useConsumableItem();
+
+    // Control skeleton display with smooth transition
+    useEffect(() => {
+        if (!graphqlLoading && storeItemsLoaded) {
+            // Add a small delay before hiding skeletons for smooth transition
+            const timer = setTimeout(() => {
+                setShowSkeletons(false);
+            }, 300);
+            return () => clearTimeout(timer);
+        } else {
+            setShowSkeletons(true);
+        }
+    }, [graphqlLoading, storeItemsLoaded]);
 
     // Extract counts from GraphQL data or fallback to props
     const protectionBottleCountFinal = inventoryData?.userInventory?.protectionBottleCount ?? protectionBottleCount;
@@ -144,13 +162,13 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
             <ScrollArea className="flex-grow">
                 <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
                     {/* Show loading state while fetching GraphQL data */}
-                    {graphqlLoading && aggregatedInventory.length === 0 && (
-                        <div className="text-center py-8 sm:col-span-2">
-                            <div className="flex items-center justify-center gap-2">
-                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                <p className="text-muted-foreground">Loading inventory...</p>
-                            </div>
-                        </div>
+                    {showSkeletons && (
+                        <>
+                            <InventoryItemSkeleton />
+                            <InventoryItemSkeleton />
+                            <InventoryItemSkeleton />
+                            <InventoryItemSkeleton />
+                        </>
                     )}
 
                     {/* Show error state */}
@@ -164,7 +182,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                     )}
 
                     {/* Show empty state only after loading is complete */}
-                    {!graphqlLoading && !graphqlError && aggregatedInventory.length === 0 && (
+                    {!graphqlLoading && !graphqlError && storeItemsLoaded && aggregatedInventory.length === 0 && (
                         <div className="text-center py-8 sm:col-span-2">
                             <PackageSearch className="h-12 w-12 mx-auto text-muted-foreground mb-2" />
                             <p className="text-muted-foreground">Your inventory is currently empty.</p>
@@ -173,7 +191,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                     )}
 
                     {/* Render inventory items only after loading is complete and no errors */}
-                    {!graphqlLoading && !graphqlError && aggregatedInventory.length > 0 && (
+                    {!graphqlLoading && !graphqlError && storeItemsLoaded && aggregatedInventory.length > 0 && (
                         aggregatedInventory.map((itemGroup) => {
                             const currentCount = getItemCount(itemGroup.definition.id);
                             const isConsumable = ['1', '2', '3', '4'].includes(itemGroup.definition.id); // Check if item is consumable

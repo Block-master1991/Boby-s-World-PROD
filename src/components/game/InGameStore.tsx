@@ -24,6 +24,7 @@ import { useActiveStoreItems } from '@/hooks/useStoreItems';
 import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
+import StoreItemSkeleton from '@/components/shared/StoreItemSkeleton';
 import { useMarketData, useGraphQLMutation } from '@/hooks/useGraphQL';
 import { GAME_MUTATIONS } from '@/lib/graphql-client';
 import { StoreItemDefinition } from '@/lib/server-items';
@@ -62,6 +63,8 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     // console.log('[InGameStore] isAuthenticated:', isAuthenticated, 'isWalletConnectedAndMatching:', isWalletConnectedAndMatching);
 
     const [isLoading, setIsLoading] = useState<string | null>(null); // For individual item purchase loading
+    const [showSkeletons, setShowSkeletons] = useState(true);
+    const [storeItemsLoaded, setStoreItemsLoaded] = useState(false);
     const [quantities, setQuantities] = useState<Record<string, number>>(() => {
         const initialQuantities: Record<string, number> = {};
         // Initialize quantities when items are loaded
@@ -76,6 +79,26 @@ const InGameStore: React.FC<InGameStoreProps> = ({
 
     // Extract price data from GraphQL response
     const bobyUsdPrice = marketData?.marketData?.bobyPrice || null;
+
+    // Track store items loading state
+    useEffect(() => {
+        if (!itemsLoading) {
+            setStoreItemsLoaded(true);
+        }
+    }, [itemsLoading]);
+
+    // Control skeleton display with smooth transition
+    useEffect(() => {
+        if (!itemsLoading && storeItemsLoaded) {
+            // Add a small delay before hiding skeletons for smooth transition
+            const timer = setTimeout(() => {
+                setShowSkeletons(false);
+            }, 300);
+            return () => clearTimeout(timer);
+        } else {
+            setShowSkeletons(true);
+        }
+    }, [itemsLoading, storeItemsLoaded]);
 
     useEffect(() => {
         // Fetch price on mount
@@ -400,13 +423,13 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     )}
 
                     {/* Show loading state while fetching items */}
-                    {isAuthenticated && isWalletConnectedAndMatching && itemsLoading && storeItems.length === 0 && (
-                        <div className="text-center py-8 sm:col-span-2">
-                            <div className="flex items-center justify-center gap-2">
-                                <div className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-                                <p className="text-muted-foreground">Loading store items...</p>
-                            </div>
-                        </div>
+                    {isAuthenticated && isWalletConnectedAndMatching && showSkeletons && storeItems.length === 0 && (
+                        <>
+                            <StoreItemSkeleton />
+                            <StoreItemSkeleton />
+                            <StoreItemSkeleton />
+                            <StoreItemSkeleton />
+                        </>
                     )}
 
                     {/* Show error state */}
@@ -420,14 +443,14 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     )}
 
                     {/* Show empty state only after loading is complete */}
-                    {isAuthenticated && isWalletConnectedAndMatching && !itemsLoading && !itemsError && storeItems.length === 0 && (
+                    {isAuthenticated && isWalletConnectedAndMatching && !itemsLoading && !itemsError && storeItemsLoaded && storeItems.length === 0 && (
                         <div className="text-center py-8 sm:col-span-2">
                             <p className="text-muted-foreground">No items available at the moment</p>
                         </div>
                     )}
 
                     {/* Render store items only if authenticated, wallet is connected and matching, and items are loaded */}
-                    {isAuthenticated && isWalletConnectedAndMatching && !itemsLoading && !itemsError && storeItems.map((item) => {
+                    {isAuthenticated && isWalletConnectedAndMatching && !itemsLoading && !itemsError && storeItemsLoaded && storeItems.map((item) => {
                         const quantity = quantities[item.id] || 1;
                         const totalUsdPrice = item.price * quantity;
                         const calculatedBobyPricePerUnit = bobyUsdPrice && bobyUsdPrice > 0 ? (item.price / bobyUsdPrice) : null;
