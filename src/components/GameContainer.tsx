@@ -97,6 +97,7 @@ const GameContainer: React.FC = () => {
     const [showEnableSoundButton, setShowEnableSoundButton] = useState(false); // New state for fallback UI
     const [isSoundPlaying, setIsSoundPlaying] = useState(false); // Track if sound is actively playing
     const [assetPreloadComplete, setAssetPreloadComplete] = useState(false); // Track if initial asset preload is complete
+    const [areSheetsOpen, setAreSheetsOpen] = useState(false); // Track if any sheets are open in GameUI
 
     // GameUI loading states
     const [isGameUILoading, setIsGameUILoading] = useState(false);
@@ -306,6 +307,11 @@ const GameContainer: React.FC = () => {
         }
     }, [soundManagerRef]);
 
+    // Callback to handle sheets state changes from GameUI
+    const handleSheetsStateChange = useCallback((isAnySheetOpen: boolean) => {
+        setAreSheetsOpen(isAnySheetOpen);
+    }, []);
+
     // Determine the current screen for SoundManager and update context
     useEffect(() => {
         let screen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin';
@@ -400,6 +406,7 @@ const GameContainer: React.FC = () => {
                     )}
                     <GameUI
                         octreeRef={octreeRef}
+                        onSheetsStateChange={handleSheetsStateChange}
                         onLoadStart={() => {
                             console.log('[GameContainer] GameUI loading started');
                             setIsGameUILoading(true);
@@ -435,34 +442,36 @@ const GameContainer: React.FC = () => {
 
     return (
         <>
-            {/* Sound Control Button - متجاوب */}
-            <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }} className="sm:top-6 sm:right-6 md:top-8 md:right-8">
-                <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => {
-                        if (!isSoundPlaying) {
-                            // بدء التشغيل لأول مرة
-                            soundManagerRef.current?.playCurrentTrack();
-                            setIsSoundPlaying(true); // ✅ غير حالة الزر
-                            setHasUserInteracted(true);
-                        } else {
-                            // تبديل كتم الصوت
-                            toggleMute();
-                        }
-                    }}
+            {/* Sound Control Button - متجاوب - مخفي عند فتح النوافذ */}
+            {!areSheetsOpen && (
+                <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }} className="sm:top-6 sm:right-6 md:top-8 md:right-8">
+                    <Button
+                        variant="outline"
+                        size="icon"
+                        onClick={() => {
+                            if (!isSoundPlaying) {
+                                // بدء التشغيل لأول مرة
+                                soundManagerRef.current?.playCurrentTrack();
+                                setIsSoundPlaying(true); // ✅ غير حالة الزر
+                                setHasUserInteracted(true);
+                            } else {
+                                // تبديل كتم الصوت
+                                toggleMute();
+                            }
+                        }}
 
-                    aria-label={!isSoundPlaying ? "Enable Sound" : (isMuted ? "Unmute" : "Mute")}
-                >
-                    {!isSoundPlaying ? (
-                        <VolumeX className="h-4 w-4" />
-                    ) : isMuted ? (
-                        <VolumeX className="h-4 w-4 text-gray-500" />
-                    ) : (
-                        <Volume2 className="h-4 w-4 text-green-500" />
-                    )}
-                </Button>
-            </div>
+                        aria-label={!isSoundPlaying ? "Enable Sound" : (isMuted ? "Unmute" : "Mute")}
+                    >
+                        {!isSoundPlaying ? (
+                            <VolumeX className="h-4 w-4" />
+                        ) : isMuted ? (
+                            <VolumeX className="h-4 w-4 text-gray-500" />
+                        ) : (
+                            <Volume2 className="h-4 w-4 text-green-500" />
+                        )}
+                    </Button>
+                </div>
+            )}
             {showEnableSoundButton && (
                 <div style={{ position: 'fixed', bottom: '80px', right: '20px', zIndex: 1000 }}>
                     <Button onClick={handleEnableSoundClick}>

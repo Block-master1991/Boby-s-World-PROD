@@ -52,6 +52,7 @@ import { Octree } from '@/lib/Octree'; // Import Octree
 
 interface GameUIProps {
     octreeRef: React.MutableRefObject<Octree<GameObject> | null>;
+    onSheetsStateChange?: (isAnySheetOpen: boolean) => void;
     onLoadStart: () => void;
     onLoadProgress: (progress: number) => void;
     onLoadComplete: (success: boolean) => void;
@@ -59,6 +60,7 @@ interface GameUIProps {
 
 const GameUI: React.FC<GameUIProps> = ({
     octreeRef,
+    onSheetsStateChange,
     onLoadStart,
     onLoadProgress,
     onLoadComplete,
@@ -530,6 +532,12 @@ const GameUI: React.FC<GameUIProps> = ({
 
         return cleanup;
     }, [isAuthenticated, authUser?.publicKey, fetchPlayerData]);
+
+    // Effect to notify GameContainer about sheets state changes
+    useEffect(() => {
+        const isAnySheetOpen = isStoreOpen || isInventoryOpen || isWalletOpen || isMenuOpen;
+        onSheetsStateChange?.(isAnySheetOpen);
+    }, [isStoreOpen, isInventoryOpen, isWalletOpen, isMenuOpen, onSheetsStateChange]);
 
     // Effect to show toast when Speed Boost wears off
     useEffect(() => {

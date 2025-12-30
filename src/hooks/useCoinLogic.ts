@@ -105,7 +105,7 @@ export const useCoinLogic = ({
           gltfLoaderRef.current = new GLTFLoader();
         }
 
-        const modelName = 'coin_model';
+        const modelName = 'coin-model';
 
         // Ensure gltfLoader is initialized
         if (!gltfLoaderRef.current) {
