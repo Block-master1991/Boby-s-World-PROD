@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { initialAssetPreloader, PreloadProgress } from '@/lib/initialAssetPreloader';
 import { MANIFEST_STATS } from '@/lib/gameAssetManifest';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 interface InitialAssetLoaderProps {
     onComplete: () => void;
@@ -136,151 +137,158 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
 
     const getPriorityText = (priority: 'critical' | 'high' | 'medium' | 'low'): string => {
         switch (priority) {
-            case 'critical': return 'الأصول الأساسية';
-            case 'high': return 'الأصول المهمة';
-            case 'medium': return 'الأصول المتوسطة';
-            case 'low': return 'الأصول الإضافية';
+            case 'critical': return 'Core Assets';
+            case 'high': return 'High Priority Assets';
+            case 'medium': return 'Medium Priority Assets';
+            case 'low': return 'Additional Assets';
             default: return priority;
         }
     };
 
     const getPhaseText = (phase: string): string => {
         switch (phase) {
-            case 'initializing': return 'جاري التهيئة...';
-            case 'checking': return 'جاري فحص الموارد...'; // Added checking phase
-            case 'Loading critical priority assets': return 'تحميل الأصول الأساسية...';
-            case 'Loading high priority assets': return 'تحميل الأصول المهمة...';
-            case 'Loading medium priority assets': return 'تحميل الأصول المتوسطة...';
-            case 'Loading low priority assets': return 'تحميل الأصول الإضافية...';
-            case 'Verifying preload completion': return 'التحقق من اكتمال التحميل...';
-            case 'completed': return 'اكتمل التحميل!';
-            case 'failed': return 'فشل التحميل';
+            case 'initializing': return 'Initializing...';
+            case 'checking': return 'Checking Assets...';
+            case 'Loading critical priority assets': return 'Loading Core Assets...';
+            case 'Loading high priority assets': return 'Loading High Priority Assets...';
+            case 'Loading medium priority assets': return 'Loading Medium Priority Assets...';
+            case 'Loading low priority assets': return 'Loading Additional Assets...';
+            case 'Verifying preload completion': return 'Verifying Completion...';
+            case 'completed': return 'Loading Complete!';
+            case 'failed': return 'Loading Failed';
             default: return phase;
         }
     };
 
     return (
-        <div className="fixed inset-0 bg-gradient-to-br from-blue-900 via-purple-900 to-indigo-900 flex items-center justify-center z-50">
-            <div className="bg-black/80 backdrop-blur-sm rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl border border-white/10">
-                {/* Header */}
-                <div className="text-center mb-8">
-                    <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                        </svg>
-                    </div>
-                    <h1 className="text-2xl font-bold text-white mb-2">تحميل اللعبة</h1>
-                    <p className="text-gray-300 text-sm">جاري تحضير عالم اللعبة...</p>
-                </div>
-
-                {/* Progress Bar */}
-                <div className="mb-6">
-                    <div className="flex justify-between text-sm text-gray-300 mb-2">
-                        <span>التقدم</span>
-                        <span>{getProgressPercentage().toFixed(1)}%</span>
-                    </div>
-                    <div className="w-full bg-gray-700 rounded-full h-3 overflow-hidden">
-                        <div
-                            className="h-full bg-gradient-to-r from-blue-500 to-purple-600 rounded-full transition-all duration-300 ease-out"
-                            style={{ width: `${getProgressPercentage()}%` }}
-                        />
-                    </div>
-                </div>
-
-                {/* Stats */}
-                <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
-                    <div className="text-center">
-                        <div className="text-white font-semibold">{progress.loadedAssets}</div>
-                        <div className="text-gray-400">من {progress.totalAssets}</div>
-                        <div className="text-xs text-gray-500">الملفات</div>
-                    </div>
-                    <div className="text-center">
-                        <div className="text-white font-semibold">{formatSize(progress.loadedSizeMB)}</div>
-                        <div className="text-gray-400">من {formatSize(progress.totalSizeMB)}</div>
-                        <div className="text-xs text-gray-500">الحجم</div>
-                    </div>
-                </div>
-
-                {/* Current Status */}
-                <div className="text-center mb-4">
-                    <div className="text-white font-medium mb-1">
-                        {getPhaseText(progress.phase)}
-                    </div>
-                    <div className="text-gray-400 text-sm">
-                        {getPriorityText(progress.currentPriority)}
-                    </div>
-                    {progress.currentAsset && (
-                        <div className="text-xs text-gray-500 mt-2 truncate" title={progress.currentAsset}>
-                            {progress.currentAsset.split('/').pop()}
-                        </div>
-                    )}
-                </div>
-
-                {/* Time Estimate */}
-                {estimatedTimeRemaining !== null && !progress.isComplete && (
-                    <div className="text-center mb-4">
-                        <div className="text-gray-300 text-sm">
-                            الوقت المتبقي: ≈{formatTime(estimatedTimeRemaining)}
-                        </div>
-                        {progress.downloadSpeed > 0 && (
-                            <div className="text-gray-400 text-xs mt-1">
-                                السرعة: {progress.downloadSpeed.toFixed(2)} MB/s
+        <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
+            <div className="flex items-center justify-center min-h-screen">
+                <Card className="w-full max-w-md md:max-w-2xl glass-card overflow-y-auto">
+                    <CardHeader>
+                        <CardTitle className="text-center text-2xl md:text-4xl text-foreground">
+                            <div className="w-16 h-16 mx-auto mb-4 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
+                                <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                                </svg>
                             </div>
-                        )}
-                    </div>
-                )}
+                            Game Loading
+                        </CardTitle>
+                        <CardDescription className="text-center text-base md:text-lg text-muted-foreground">
+                            Preparing Game World...
+                        </CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-6">
 
-                {/* Integrity Stats */}
-                {progress.verifiedAssets > 0 && (
-                    <div className="bg-blue-900/30 border border-blue-500/30 rounded-lg p-3 mb-4">
-                        <div className="text-blue-300 text-sm font-medium mb-1">
-                            التحقق من السلامة
+                        {/* Progress Bar */}
+                        <div className="mb-6">
+                            <div className="flex justify-between text-sm text-muted-foreground mb-2">
+                                <span>Progress</span>
+                                <span>{getProgressPercentage().toFixed(1)}%</span>
+                            </div>
+                            <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+                                <div
+                                    className="h-full bg-gradient-to-r from-primary to-primary/80 rounded-full transition-all duration-300 ease-out"
+                                    style={{ width: `${getProgressPercentage()}%` }}
+                                />
+                            </div>
                         </div>
-                        <div className="flex justify-between text-xs">
-                            <span className="text-green-400">✓ تم التحقق: {progress.verifiedAssets}</span>
-                            {progress.corruptedAssets > 0 && (
-                                <span className="text-red-400">✗ تالف: {progress.corruptedAssets}</span>
+
+                        {/* Stats */}
+                        <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
+                            <div className="text-center">
+                                <div className="text-foreground font-semibold">{progress.loadedAssets}</div>
+                                <div className="text-muted-foreground">of {progress.totalAssets}</div>
+                                <div className="text-xs text-muted-foreground">Files</div>
+                            </div>
+                            <div className="text-center">
+                                <div className="text-foreground font-semibold">{formatSize(progress.loadedSizeMB)}</div>
+                                <div className="text-muted-foreground">of {formatSize(progress.totalSizeMB)}</div>
+                                <div className="text-xs text-muted-foreground">Size</div>
+                            </div>
+                        </div>
+
+                        {/* Current Status */}
+                        <div className="text-center mb-4">
+                            <div className="text-foreground font-medium mb-1">
+                                {getPhaseText(progress.phase)}
+                            </div>
+                            <div className="text-muted-foreground text-sm">
+                                {getPriorityText(progress.currentPriority)}
+                            </div>
+                            {progress.currentAsset && (
+                                <div className="text-xs text-muted-foreground mt-2 truncate" title={progress.currentAsset}>
+                                    {progress.currentAsset.split('/').pop()}
+                                </div>
                             )}
                         </div>
-                    </div>
-                )}
 
-                {/* Errors */}
-                {progress.errors.length > 0 && (
-                    <div className="bg-red-900/50 border border-red-500/50 rounded-lg p-3 mb-4">
-                        <div className="text-red-300 text-sm font-medium mb-1">
-                            أخطاء التحميل ({progress.errors.length})
-                        </div>
-                        <div className="text-red-200 text-xs max-h-20 overflow-y-auto">
-                            {progress.errors.slice(-3).map((error, index) => (
-                                <div key={index} className="truncate" title={error}>
-                                    • {error}
+                        {/* Time Estimate */}
+                        {estimatedTimeRemaining !== null && !progress.isComplete && (
+                            <div className="text-center mb-4">
+                                <div className="text-muted-foreground text-sm">
+                                    Time Remaining: ≈{formatTime(estimatedTimeRemaining)}
                                 </div>
-                            ))}
+                                {progress.downloadSpeed > 0 && (
+                                    <div className="text-muted-foreground text-xs mt-1">
+                                        Speed: {progress.downloadSpeed.toFixed(2)} MB/s
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+                        {/* Integrity Stats */}
+                        {progress.verifiedAssets > 0 && (
+                            <div className="bg-accent/20 border border-accent/30 rounded-lg p-3 mb-4">
+                                <div className="text-accent-foreground text-sm font-medium mb-1">
+                                    Integrity Check
+                                </div>
+                                <div className="flex justify-between text-xs">
+                                    <span className="text-green-500">✓ Verified: {progress.verifiedAssets}</span>
+                                    {progress.corruptedAssets > 0 && (
+                                        <span className="text-destructive">✗ Corrupted: {progress.corruptedAssets}</span>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Errors */}
+                        {progress.errors.length > 0 && (
+                            <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3 mb-4">
+                                <div className="text-destructive text-sm font-medium mb-1">
+                                    Loading Errors ({progress.errors.length})
+                                </div>
+                                <div className="text-destructive/80 text-xs max-h-20 overflow-y-auto">
+                                    {progress.errors.slice(-3).map((error, index) => (
+                                        <div key={index} className="truncate" title={error}>
+                                            • {error}
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Loading Animation */}
+                        <div className="flex justify-center">
+                            <div className="flex space-x-1">
+                                {[0, 1, 2].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="w-2 h-2 bg-primary rounded-full animate-pulse"
+                                        style={{
+                                            animationDelay: `${i * 0.2}s`,
+                                            animationDuration: '1s'
+                                        }}
+                                    />
+                                ))}
+                            </div>
                         </div>
-                    </div>
-                )}
 
-                {/* Loading Animation */}
-                <div className="flex justify-center">
-                    <div className="flex space-x-1">
-                        {[0, 1, 2].map((i) => (
-                            <div
-                                key={i}
-                                className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"
-                                style={{
-                                    animationDelay: `${i * 0.2}s`,
-                                    animationDuration: '1s'
-                                }}
-                            />
-                        ))}
-                    </div>
-                </div>
-
-                {/* Footer */}
-                <div className="text-center mt-6 text-xs text-gray-500">
-                    يرجى الانتظار حتى اكتمال التحميل - اللعبة تعمل بدون اتصال بالإنترنت
-                </div>
+                        {/* Footer */}
+                        <div className="text-center mt-6 text-xs text-muted-foreground">
+                            Please wait until loading is complete - Game works offline
+                        </div>
+                    </CardContent>
+                </Card>
             </div>
         </div>
     );
