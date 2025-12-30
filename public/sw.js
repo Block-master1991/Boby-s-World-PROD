@@ -3,7 +3,6 @@ const CACHE_NAME = 'boby-world-assets-v1';
 
 const ASSETS_TO_CACHE = [
     // Textures
-    '/textures/coin-front.png',
     '/textures/ez-tree/bark/pine_normal_1k.jpg',
     '/textures/ez-tree/bark/pine_color_1k.jpg',
     '/textures/ez-tree/bark/oak_roughness_1k.jpg',
@@ -24,7 +23,12 @@ const ASSETS_TO_CACHE = [
     '/textures/ez-tree/leaves/pine_color.png',
     '/textures/ez-tree/leaves/oak_color.png',
     '/textures/ez-tree/leaves/ash_color.png',
-    '/textures/coin-back.png',
+    '/textures/ground/grass.jpg',
+    '/textures/ground/dirt_color.jpg',
+    '/textures/ground/dirt_normal.jpg',
+    '/textures/hdr/citrus_orchard_road_puresky_8k.hdr',
+    '/textures/hdr/qwantani_moon_noon_puresky_8k.hdr',
+
 
     // Models
     '/models/coin.glb',

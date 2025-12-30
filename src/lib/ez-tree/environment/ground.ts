@@ -48,17 +48,17 @@ async function fetchAssets(): Promise<void> {
     }
   };
 
-  _grassTexture = await loadTextureWithCache('/grass.jpg', 'grass_texture');
+  _grassTexture = await loadTextureWithCache('/textures/ground/grass.jpg', 'grass_texture');
   _grassTexture.wrapS = THREE.RepeatWrapping;
   _grassTexture.wrapT = THREE.RepeatWrapping;
   _grassTexture.colorSpace = THREE.SRGBColorSpace;
 
-  _dirtTexture = await loadTextureWithCache('/dirt_color.jpg', 'dirt_color_texture');
+  _dirtTexture = await loadTextureWithCache('/textures/ground/dirt_color.jpg', 'dirt_color_texture');
   _dirtTexture.wrapS = THREE.RepeatWrapping;
   _dirtTexture.wrapT = THREE.RepeatWrapping;
   _dirtTexture.colorSpace = THREE.SRGBColorSpace;
 
-  _dirtNormal = await loadTextureWithCache('/dirt_normal.jpg', 'dirt_normal_texture');
+  _dirtNormal = await loadTextureWithCache('/textures/ground/dirt_normal.jpg', 'dirt_normal_texture');
   _dirtNormal.wrapS = THREE.RepeatWrapping;
   _dirtNormal.wrapT = THREE.RepeatWrapping;
 
