@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { initialAssetPreloader, PreloadProgress } from '@/lib/initialAssetPreloader';
 import { MANIFEST_STATS } from '@/lib/gameAssetManifest';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
 
 interface InitialAssetLoaderProps {
     onComplete: () => void;
@@ -28,6 +29,9 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
 
     const [startTime] = useState(Date.now());
     const [estimatedTimeRemaining, setEstimatedTimeRemaining] = useState<number | null>(null);
+    const [isCheckOnly, setIsCheckOnly] = useState(false);
+    const [checkComplete, setCheckComplete] = useState(false);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
 
     useEffect(() => {
         let mounted = true;
@@ -42,22 +46,30 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
 
                 if (!mounted) return;
 
-                // If all assets are present, skip preload
+                // If all assets are present, stay with indeterminate loader (check-only mode)
                 if (checkResult.allPresent) {
                     console.log('[InitialAssetLoader] ✓ All assets already present in IndexedDB!');
-                    console.log(`[InitialAssetLoader] Skipping preload, showing menu directly.`);
+                    console.log(`[InitialAssetLoader] Staying with indeterminate loader for check-only.`);
 
-                    // Immediately mark as complete
+                    setIsCheckOnly(true);
+
+                    // Simulate a brief check delay for better UX
                     setTimeout(() => {
                         if (mounted) {
-                            onComplete();
+                            setCheckComplete(true);
+                            setTimeout(() => {
+                                if (mounted) {
+                                    onComplete();
+                                }
+                            }, 500);
                         }
-                    }, 500);
+                    }, 1500); // Show check animation for 1.5 seconds
                     return;
                 }
 
-                // Some assets are missing - start preload
-                console.log(`[InitialAssetLoader] ${checkResult.missingAssets.length} assets missing, starting preload...`);
+                // Some assets are missing - switch to full preload mode
+                console.log(`[InitialAssetLoader] ${checkResult.missingAssets.length} assets missing, switching to full preload mode...`);
+                setIsInitialLoading(false); // Switch to full loader
                 console.log('[InitialAssetLoader] Starting initial asset preload...');
                 console.log(`[InitialAssetLoader] Total assets to load: ${MANIFEST_STATS.totalAssets}`);
                 console.log(`[InitialAssetLoader] Estimated total size: ${MANIFEST_STATS.totalEstimatedSizeMB.toFixed(1)}MB (will show actual size during loading)`);
@@ -160,6 +172,19 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
         }
     };
 
+    // Show indeterminate loader by default (during initial check)
+    if (isInitialLoading || isCheckOnly) {
+        return (
+            <LoadingScreen
+                variant="indeterminate"
+                message={isCheckOnly ? "Checking Assets..." : "Preparing Game..."}
+                showLogo={true}
+                isError={false}
+            />
+        );
+    }
+
+    // Show full loader only when actual asset loading is happening
     return (
         <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
             <div className="flex items-center justify-center min-h-screen">
