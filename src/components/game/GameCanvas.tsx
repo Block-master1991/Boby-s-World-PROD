@@ -344,6 +344,43 @@ class PriorityAssetLoader {
         ];
     }
 
+    /**
+     * Smart loader: Try IndexedDB first, then network as fallback
+     */
+    private async loadFromIndexedDBOrNetwork(assetPath: string, assetType: string): Promise<any> {
+        try {
+            // Try IndexedDB first
+            const { getAsset } = await import('@/lib/indexedDB');
+            const cached = await getAsset(assetPath);
+
+            if (cached && cached.data) {
+                console.log(`[PriorityAssetLoader] ✓ Loaded ${assetPath} from IndexedDB`);
+                return cached.data;
+            }
+        } catch (error) {
+            console.log(`[PriorityAssetLoader] IndexedDB miss for ${assetPath}, fetching from network`);
+        }
+
+        // Fallback to network
+        console.log(`[PriorityAssetLoader] Fetching ${assetPath} from network`);
+        const response = await fetch(assetPath);
+
+        if (!response.ok) {
+            throw new Error(`Failed to fetch ${assetPath}: ${response.statusText}`);
+        }
+
+        // Return appropriate type based on asset type
+        if (assetType === 'arraybuffer') {
+            return await response.arrayBuffer();
+        } else if (assetType === 'blob') {
+            return await response.blob();
+        } else if (assetType === 'json') {
+            return await response.json();
+        } else {
+            return await response.text();
+        }
+    }
+
     private async loadModelLoader(): Promise<void> {
         if (!this.rendererRef.current || !this.cameraRef.current) {
             throw new Error("Renderer or Camera not available");
@@ -571,6 +608,7 @@ import { assetPreloader } from '@/lib/assetPreloader'; // Asset preloader
 import { initializeGPUInstancing, getGPUInstancingManager } from '@/lib/gpu-instancing'; // GPU instancing
 import { initializeLODManager, getLODManager } from '@/lib/lod-manager'; // LOD manager
 import { initializeObjectPooling, getMemoryMonitor, getObjectPoolingStats } from '@/lib/object-pooling'; // Object pooling
+import InitialAssetLoader from '@/components/InitialAssetLoader'; // Initial asset loader
 // CDN Integration System
 class CDNManager {
     private userRegion: string = 'US';

@@ -254,28 +254,42 @@ class IntelligentAssetPreloader {
     }
 
     private async loadAsset(asset: AssetMetadata): Promise<any> {
-        // Check cache first
+        // OFFLINE-FIRST: Always check IndexedDB first
         const cached = await this.getCachedAsset(asset.id);
-        if (cached) return cached;
-
-        // Load from network with timeout
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-        let data: ArrayBuffer;
-        try {
-            const response = await fetch(asset.url, { signal: controller.signal });
-            if (!response.ok) throw new Error(`Failed to load ${asset.url}`);
-
-            data = await response.arrayBuffer();
-        } finally {
-            clearTimeout(timeoutId);
+        if (cached) {
+            console.log(`[AssetPreloader] ✓ Loading from IndexedDB (offline-first): ${asset.id}`);
+            return cached;
         }
 
-        // Cache the asset
-        await this.cacheAsset(asset.id, data, asset.estimatedSize);
+        // EMERGENCY FALLBACK: Only in development mode
+        if (process.env.NODE_ENV === 'development') {
+            console.warn(`[AssetPreloader] ⚠️ Asset not found in IndexedDB, emergency network load: ${asset.id}`);
 
-        return data;
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
+
+            let data: ArrayBuffer;
+            try {
+                const response = await fetch(asset.url, { signal: controller.signal });
+                if (!response.ok) throw new Error(`Failed to load ${asset.url}`);
+
+                data = await response.arrayBuffer();
+
+                // Cache the asset for future use
+                await this.cacheAsset(asset.id, data, asset.estimatedSize);
+                console.log(`[AssetPreloader] ✓ Emergency load successful and cached: ${asset.id}`);
+
+                return data;
+            } catch (networkError) {
+                console.error(`[AssetPreloader] ✗ Emergency network load failed for: ${asset.id}`, networkError);
+                throw new Error(`Asset not available offline and network load failed: ${asset.id}`);
+            } finally {
+                clearTimeout(timeoutId);
+            }
+        }
+
+        // PRODUCTION: Asset must be preloaded, throw error if not found
+        throw new Error(`Asset not found in IndexedDB preload cache (offline-first mode): ${asset.id}`);
     }
 
     private async getCachedAsset(assetId: string): Promise<any | null> {

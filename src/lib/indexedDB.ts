@@ -13,15 +13,15 @@ const DB_CONFIG = {
   }
 };
 
-// Cache size limits (in bytes)
+// Cache size limits (in bytes) - Increased for game assets
 const CACHE_LIMITS = {
   mobile: {
-    maxSize: 50 * 1024 * 1024, // 50MB
-    maxItems: 100
+    maxSize: 300 * 1024 * 1024, // 300MB - increased to fit actual assets (200.62MB)
+    maxItems: 200
   },
   desktop: {
-    maxSize: 200 * 1024 * 1024, // 200MB
-    maxItems: 500
+    maxSize: 500 * 1024 * 1024, // 500MB - larger buffer for desktop
+    maxItems: 1000
   }
 };
 
@@ -280,15 +280,20 @@ function generateChecksum(data: any): string {
 }
 
 /**
- * Store asset with metadata
+ * Store asset in IndexedDB with metadata
  */
 export async function putAsset(asset: AssetMetadata & { data: any }): Promise<void> {
   const db = await getDatabase();
 
-  // Check size limits before storing
-  if (cacheStats.totalSize + asset.size > cacheStats.maxSize) {
-    await performLRUCleanup(asset.size);
-  }
+  // 🚫 LRU CLEANUP COMPLETELY DISABLED FOR GAME ASSETS
+  // All 56 game assets (~200MB) must remain cached permanently
+  // Reason: Game cannot function without these critical assets
+
+  // REMOVED: LRU cleanup logic
+  // const skipLRU = (globalThis as any).__INITIAL_PRELOAD_ACTIVE__ === true;
+  // if (!skipLRU && cacheStats.totalSize + asset.size > cacheStats.maxSize) {
+  //   await performLRUCleanup(asset.size);
+  // }
 
   return new Promise((resolve, reject) => {
     const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');

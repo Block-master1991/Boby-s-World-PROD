@@ -788,18 +788,19 @@ class RetryManager {
   }
 
   private async loadModelInternal(path: string, compress: boolean, priority: LoadPriority, signal: AbortSignal): Promise<THREE.Group> {
-    const modelName = path.split('/').pop()?.replace(/\.[^/.]+$/, '') || 'unknown';
-
-    // Try to load from IndexedDB first
-    const cachedData = await getModel(modelName);
+    // OFFLINE-FIRST: Always try IndexedDB first, never load from network during gameplay
+    const cachedData = await getModel(path); // Use full path as key for consistency
     if (cachedData) {
-      console.log(`[RetryManager] Loading model from IndexedDB: ${modelName}`);
+      console.log(`[RetryManager] ✓ Loading model from IndexedDB (offline-first): ${path}`);
       const loader = new GLTFLoader();
       if (this._dracoLoader) {
         loader.setDRACOLoader(this._dracoLoader);
       }
+
+      signal.throwIfAborted();
       const gltf = await loader.parseAsync(cachedData, path);
       let model = gltf.scene;
+
       if (compress) {
         const level = compressionManager.getCompressionLevel(path);
         model = await compressionManager.compressModel(model, level);
@@ -807,34 +808,41 @@ class RetryManager {
       return model;
     }
 
-    // Load from network and cache
-    console.log(`[RetryManager] Fetching model from network: ${path}`);
-    const response = await fetch(path);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const arrayBuffer = await response.arrayBuffer();
+    // EMERGENCY FALLBACK: Only in development or when asset is missing from preload
+    if (process.env.NODE_ENV === 'development') {
+      console.warn(`[RetryManager] ⚠️ Asset not found in IndexedDB, attempting emergency network load: ${path}`);
+      try {
+        const response = await fetch(path);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
 
-    // Cache in IndexedDB
-    await putModel(modelName, arrayBuffer);
+        // Cache for future use
+        await putModel(path, arrayBuffer);
 
-    // Parse the model
-    const loader = new GLTFLoader();
-    if (this._dracoLoader) {
-      loader.setDRACOLoader(this._dracoLoader);
-      console.log(`[RetryManager] DRACOLoader set on GLTFLoader for ${path}.`);
-    } else {
-      console.warn(`[RetryManager] DRACOLoader is null for ${path}.`);
+        const loader = new GLTFLoader();
+        if (this._dracoLoader) {
+          loader.setDRACOLoader(this._dracoLoader);
+        }
+
+        signal.throwIfAborted();
+        const gltf = await loader.parseAsync(arrayBuffer, path);
+        let model = gltf.scene;
+
+        if (compress) {
+          const level = compressionManager.getCompressionLevel(path);
+          model = await compressionManager.compressModel(model, level);
+        }
+
+        console.log(`[RetryManager] ✓ Emergency load successful and cached: ${path}`);
+        return model;
+      } catch (networkError) {
+        console.error(`[RetryManager] ✗ Emergency network load failed for: ${path}`, networkError);
+        throw new Error(`Asset not available offline and network load failed: ${path}`);
+      }
     }
 
-    signal.throwIfAborted();
-    const gltf = await loader.parseAsync(arrayBuffer, path);
-    let model = gltf.scene;
-
-    if (compress) {
-      const level = compressionManager.getCompressionLevel(path);
-      model = await compressionManager.compressModel(model, level);
-    }
-
-    return model;
+    // PRODUCTION: Asset must be preloaded, throw error if not found
+    throw new Error(`Asset not found in IndexedDB preload cache (offline-first mode): ${path}`);
   }
 }
 export const retryManager = RetryManager.getInstance();

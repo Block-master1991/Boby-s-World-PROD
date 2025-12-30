@@ -4,6 +4,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
 import { Octree } from '@/lib/Octree';
 
+import { initialAssetPreloader } from '@/lib/initialAssetPreloader';
+
 // Lazy load heavy components
 const LoadingScreen = dynamic(() => import('@/components/game-bootstrap/LoadingScreen'), {
     ssr: false,
@@ -11,6 +13,11 @@ const LoadingScreen = dynamic(() => import('@/components/game-bootstrap/LoadingS
 });
 
 const GameUI = dynamic(() => import('@/components/game/GameUI'), {
+    ssr: false,
+    loading: () => <LoadingScreen variant="indeterminate" />
+});
+
+const InitialAssetLoader = dynamic(() => import('@/components/InitialAssetLoader'), {
     ssr: false,
     loading: () => <LoadingScreen variant="indeterminate" />
 });
@@ -65,6 +72,7 @@ const GameContainer: React.FC = () => {
     } = useAuth();
 
     const {
+        sessionPublicKey,
         disconnectFromSession: disconnectWalletAdapterSession
     } = useSessionWallet();
 
@@ -88,6 +96,11 @@ const GameContainer: React.FC = () => {
     const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
     const [showEnableSoundButton, setShowEnableSoundButton] = useState(false); // New state for fallback UI
     const [isSoundPlaying, setIsSoundPlaying] = useState(false); // Track if sound is actively playing
+    const [assetPreloadComplete, setAssetPreloadComplete] = useState(false); // Track if initial asset preload is complete
+
+    // GameUI loading states
+    const [isGameUILoading, setIsGameUILoading] = useState(false);
+    const [gameUILoadProgress, setGameUILoadProgress] = useState(0);
 
     const { soundManagerRef, isMuted, toggleMute, setHasUserInteracted, setCurrentScreen } = useAudio(); // Use AudioContext
 
@@ -342,35 +355,77 @@ const GameContainer: React.FC = () => {
             mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo variant='indeterminate' />;
         }
     } else if (selectedGameMode === 'none') {
-        console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
-        mainContent = <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
+        // Show Initial Asset Loader only once before showing GameMainMenu
+        if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin && !assetPreloadComplete) {
+            console.log("[GameContainer] Displaying: Authenticated. Showing InitialAssetLoader before GameMainMenu.");
+            mainContent = (
+                <InitialAssetLoader
+                    onComplete={() => {
+                        console.log("[GameContainer] Initial asset preload completed, showing GameMainMenu.");
+                        // Update state to show GameMainMenu instead of reloading
+                        setAssetPreloadComplete(true);
+                    }}
+                    onError={(error) => {
+                        console.error("[GameContainer] Initial asset preload failed:", error);
+                        // Still show GameMainMenu but with error indication
+                        toast({
+                            title: "تحميل الموارد فشل",
+                            description: "سيتم عرض القائمة لكن بعض الموارد قد لا تعمل بشكل صحيح",
+                            variant: "destructive"
+                        });
+                        // Mark as complete even on error to show menu
+                        setAssetPreloadComplete(true);
+                    }}
+                />
+            );
+        } else if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin && selectedGameMode === 'none') {
+            // Show GameMainMenu after preload is complete
+            console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
+            mainContent = <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
+        }
     } else if (isGameUIVisible()) {
-        // This is the new logic: Render the game UI, and conditionally render the loading screen as an overlay.
+        // Render the game UI with loading overlay
         if (selectedGameMode === 'boby-world') {
             console.log("[GameContainer] Displaying: Boby World GameUI for regular user.");
             mainContent = (
                 <>
+                    {isGameUILoading && (
+                        <GameLoadingOverlay
+                            isLoading={true}
+                            progress={gameUILoadProgress}
+                            error={null}
+                            phase="Loading game world..."
+                            showTips={true}
+                        />
+                    )}
                     <GameUI
                         octreeRef={octreeRef}
-                        onLoadStart={handleLoadStart}
-                        onLoadProgress={handleLoadProgress}
-                        onLoadComplete={handleLoadComplete}
-                    />
-                    <GameLoadingOverlay
-                        isLoading={isLoadingGameResources}
-                        progress={loadProgress}
-                        error={assetLoadError}
-                        phase={loadPhase}
-                        showTips={true}
-                        currentAsset={currentAsset}
-                        loadedAssets={loadedAssetsCount}
-                        totalAssets={totalAssetsCount}
+                        onLoadStart={() => {
+                            console.log('[GameContainer] GameUI loading started');
+                            setIsGameUILoading(true);
+                            setGameUILoadProgress(0);
+                        }}
+                        onLoadProgress={(progress) => {
+                            console.log(`[GameContainer] GameUI loading progress: ${progress}%`);
+                            setGameUILoadProgress(progress);
+                        }}
+                        onLoadComplete={(success) => {
+                            console.log(`[GameContainer] GameUI loading complete: ${success}`);
+                            setIsGameUILoading(false);
+                            if (!success) {
+                                toast({
+                                    title: 'Loading Error',
+                                    description: 'Failed to load game world',
+                                    variant: 'destructive'
+                                });
+                            }
+                        }}
                     />
                 </>
             );
         } else if (selectedGameMode === 'running-game') {
             console.log("[GameContainer] Displaying: Running Game UI for regular user.");
-            mainContent = <RunningGameUI />; // Assuming this one doesn't need the loading logic for now
+            mainContent = <RunningGameUI />;
         }
     } else {
         // Fallback if no other condition is met. This might happen briefly during state transitions.
