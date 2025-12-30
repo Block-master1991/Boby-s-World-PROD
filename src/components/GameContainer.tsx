@@ -380,8 +380,8 @@ const GameContainer: React.FC = () => {
 
     return (
         <>
-            {/* Sound Control Button */}
-            <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }}>
+            {/* Sound Control Button - متجاوب */}
+            <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }} className="sm:top-6 sm:right-6 md:top-8 md:right-8">
                 <Button
                     variant="outline"
                     size="icon"

@@ -14,10 +14,10 @@ interface DisconnectButtonProps extends Omit<ButtonProps, 'onClick' | 'disabled'
   redirectPath?: string;     // Optional path to redirect to
 }
 
-const DisconnectButton: React.FC<DisconnectButtonProps> = ({ 
-  onDisconnect, 
-  redirectPath = '/', 
-  ...buttonProps 
+const DisconnectButton: React.FC<DisconnectButtonProps> = ({
+  onDisconnect,
+  redirectPath = '/',
+  ...buttonProps
 }) => {
   const { logout: logoutAuthHook } = useAuth();
   const { disconnectFromSession, sessionPublicKey } = useSessionWallet();
@@ -39,7 +39,7 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
       console.log("[DisconnectButton] Auth hook logout complete. Disconnecting wallet session...");
       await disconnectFromSession();
       console.log("[DisconnectButton] Wallet session disconnect complete.");
-      
+
       toast({ title: "Disconnected", description: "Session ended successfully.", duration: 3000 });
 
       if (onDisconnect) {
@@ -77,7 +77,7 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
       ) : (
         <LogOut className="mr-2 rtl:ml-2 h-5 w-5" />
       )}
-      {isDisconnecting ? 'Disconnecting...' : 'Disconnect Wallet'}
+      {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
     </Button>
   );
 };

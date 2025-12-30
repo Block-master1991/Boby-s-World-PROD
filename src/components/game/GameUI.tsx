@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetLoading } from '@/components/ui
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
+import DisconnectButton from '@/components/shared/DisconnectButton';
 import { GameObject } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast';
