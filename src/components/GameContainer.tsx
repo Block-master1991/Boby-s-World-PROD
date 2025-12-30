@@ -87,6 +87,7 @@ const GameContainer: React.FC = () => {
     const [isCheckingSession, setIsCheckingSession] = useState(true);
     const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
     const [showEnableSoundButton, setShowEnableSoundButton] = useState(false); // New state for fallback UI
+    const [isSoundPlaying, setIsSoundPlaying] = useState(false); // Track if sound is actively playing
 
     const { soundManagerRef, isMuted, toggleMute, setHasUserInteracted, setCurrentScreen } = useAudio(); // Use AudioContext
 
@@ -123,6 +124,7 @@ const GameContainer: React.FC = () => {
         setCaptchaVerified(true);
         setHasUserInteracted(true); // User interaction point
         soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
+        setIsSoundPlaying(true); // الزر يتحول للأزرق
         toast({ title: 'Verification Successful', description: 'You can now connect your wallet.', duration: 3000 });
     }, [toast, setHasUserInteracted, soundManagerRef]);
 
@@ -136,6 +138,7 @@ const GameContainer: React.FC = () => {
                 console.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
                 setHasUserInteracted(true); // User interaction point
                 soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
+                setIsSoundPlaying(true); // الزر يتحول للأزرق
                 toast({ title: "Login Successful", description: "Welcome to Boby World!", duration: 3000 });
             } else {
                 console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
@@ -170,6 +173,7 @@ const GameContainer: React.FC = () => {
             setIsRequestingNonce(false);
             setHasUserInteracted(false); // Reset user interaction state on disconnect
             setShowEnableSoundButton(false); // Reset sound button state
+            setIsSoundPlaying(false); // Reset sound playing state on disconnect
 
 
             toast({ title: "Disconnected", description: "Session ended. Please re-verify CAPTCHA to connect again.", duration: 3000 });
@@ -219,6 +223,7 @@ const GameContainer: React.FC = () => {
         setSelectedGameMode(mode);
         setHasUserInteracted(true); // User interaction point
         soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
+        setIsSoundPlaying(true); // عند اختيار وضع اللعب، الصوت سيبدأ تلقائياً
     }, [setHasUserInteracted, soundManagerRef]);
 
     // Callbacks to be passed down to the game component
@@ -246,12 +251,14 @@ const GameContainer: React.FC = () => {
             // A small delay to show 100% before hiding the screen
             setTimeout(() => {
                 setIsLoadingGameResources(false);
+                // بعد انتهاء التحميل - غير الشاشة لصوت اللعبة
+                setCurrentScreen(selectedGameMode as 'boby-world' | 'running-game');
             }, 500);
         } else {
             setAssetLoadError("Failed to load game assets. Please try refreshing the page.");
             setIsLoadingGameResources(false); // Stop loading on failure
         }
-    }, []);
+    }, [selectedGameMode, setCurrentScreen]);
 
     useEffect(() => {
         if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
@@ -264,6 +271,7 @@ const GameContainer: React.FC = () => {
     useEffect(() => {
         const handleInitialInteraction = () => {
             setHasUserInteracted(true);
+            setIsSoundPlaying(true); // عند التفاعل الأول، غير شكل الزر تلقائياً
             window.removeEventListener('click', handleInitialInteraction);
             window.removeEventListener('keydown', handleInitialInteraction);
         };
@@ -298,14 +306,14 @@ const GameContainer: React.FC = () => {
             screen = 'admin';
         } else if (selectedGameMode === 'none') {
             screen = 'mainMenu';
-        } else if (isLoadingGameResources) {
-            screen = 'loading';
         } else if (selectedGameMode === 'boby-world') {
-            screen = 'boby-world';
+            // أثناء التحميل - ابقِ على صوت القائمة
+            screen = 'mainMenu';
         } else if (selectedGameMode === 'running-game') {
-            screen = 'running-game';
+            // أثناء التحميل - ابقِ على صوت القائمة
+            screen = 'mainMenu';
         } else {
-            screen = 'loading'; // Fallback
+            screen = 'mainMenu';
         }
         setCurrentScreen(screen);
     }, [isCheckingSession, siteKey, captchaVerified, isAuthenticated, authUser, selectedGameMode, isLoadingGameResources, setCurrentScreen]);
@@ -372,15 +380,32 @@ const GameContainer: React.FC = () => {
 
     return (
         <>
-            {/* Mute/Unmute Button */}
-            <div style={{ position: 'fixed', bottom: '20px', right: '20px', zIndex: 1000 }}>
+            {/* Sound Control Button */}
+            <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }}>
                 <Button
                     variant="outline"
                     size="icon"
-                    onClick={toggleMute}
-                    aria-label={isMuted ? "Unmute" : "Mute"}
+                    onClick={() => {
+                        if (!isSoundPlaying) {
+                            // بدء التشغيل لأول مرة
+                            soundManagerRef.current?.playCurrentTrack();
+                            setIsSoundPlaying(true); // ✅ غير حالة الزر
+                            setHasUserInteracted(true);
+                        } else {
+                            // تبديل كتم الصوت
+                            toggleMute();
+                        }
+                    }}
+
+                    aria-label={!isSoundPlaying ? "Enable Sound" : (isMuted ? "Unmute" : "Mute")}
                 >
-                    {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                    {!isSoundPlaying ? (
+                        <VolumeX className="h-4 w-4" />
+                    ) : isMuted ? (
+                        <VolumeX className="h-4 w-4 text-gray-500" />
+                    ) : (
+                        <Volume2 className="h-4 w-4 text-green-500" />
+                    )}
                 </Button>
             </div>
             {showEnableSoundButton && (

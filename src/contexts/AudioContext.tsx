@@ -38,7 +38,15 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AudioContext.Provider value={{ soundManagerRef, currentScreen, setCurrentScreen, isMuted, toggleMute, hasUserInteracted, setHasUserInteracted }}>
+    <AudioContext.Provider value={{
+      soundManagerRef,
+      currentScreen,
+      setCurrentScreen,
+      isMuted,
+      toggleMute,
+      hasUserInteracted,
+      setHasUserInteracted
+    }}>
       {children}
     </AudioContext.Provider>
   );

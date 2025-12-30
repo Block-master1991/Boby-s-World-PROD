@@ -14,6 +14,7 @@ interface AssetMetadata {
 }
 
 import { isMobileDevice } from './utils';
+import { getModel, putModel } from './indexedDB';
 
 interface PreloadZone {
     centerX: number;
@@ -278,13 +279,28 @@ class IntelligentAssetPreloader {
     }
 
     private async getCachedAsset(assetId: string): Promise<any | null> {
-        // Implement IndexedDB or memory cache lookup
-        return null; // Placeholder
+        try {
+            const cachedData = await getModel(assetId);
+            if (cachedData) {
+                console.log(`[AssetPreloader] Loading ${assetId} from IndexedDB`);
+                return cachedData;
+            }
+        } catch (error) {
+            console.warn(`[AssetPreloader] Error loading ${assetId} from IndexedDB:`, error);
+        }
+        return null;
     }
 
     private async cacheAsset(assetId: string, data: ArrayBuffer, sizeKB: number): Promise<void> {
-        // Implement caching logic
-        this.currentCacheSize += sizeKB * 1024;
+        try {
+            await putModel(assetId, data);
+            this.currentCacheSize += sizeKB * 1024;
+            console.log(`[AssetPreloader] Cached ${assetId} (${sizeKB}KB) in IndexedDB`);
+        } catch (error) {
+            console.warn(`[AssetPreloader] Error caching ${assetId} in IndexedDB:`, error);
+            // Still count it in memory usage even if caching failed
+            this.currentCacheSize += sizeKB * 1024;
+        }
     }
 
     private cleanupDistantAssets(playerX: number, playerZ: number): void {
@@ -313,7 +329,15 @@ class IntelligentAssetPreloader {
     private unloadAsset(assetId: string): void {
         this.loadedAssets.delete(assetId);
         this.preloadedAssets.delete(assetId);
-        // Implement actual unloading (dispose resources, free memory)
+
+        // Get asset metadata to update cache size
+        const asset = this.assets.get(assetId);
+        if (asset) {
+            this.currentCacheSize -= asset.estimatedSize * 1024;
+        }
+
+        // Note: We don't remove from IndexedDB here as it serves as long-term cache
+        // Only remove from memory tracking
         console.log(`[AssetPreloader] Unloaded distant asset: ${assetId}`);
     }
 

@@ -20,6 +20,7 @@ export interface SoundManagerProps {
 const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, hasUserInteracted, onPlaybackBlocked }, ref) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const currentTrackSrc = useRef<string | null>(null);
+  const originalTrackSrc = useRef<string | null>(null); // Track the original audio path, not blob URL
   const [volume, setVolumeState] = useState(0.5); // Internal volume state
   const [isAudioReady, setIsAudioReady] = useState(false); // Track if audio element is ready to play
   const [internalCurrentScreen, setInternalCurrentScreen] = useState<SoundManagerProps['currentScreen'] | null>(null); // Internal state for currentScreen
@@ -38,8 +39,9 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
 
   const setAudioSource = useCallback(async (src: string, loop: boolean = true) => {
     if (audioRef.current) {
-      if (currentTrackSrc.current === src) {
-        console.log(`[SoundManager] Track already set to: ${src}. No change needed.`);
+      // Check if it's the same original track (not blob URL)
+      if (originalTrackSrc.current === src) {
+        console.log(`[SoundManager] Same track (${src}), continuing playback.`);
         return;
       }
 
@@ -87,6 +89,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       audioRef.current.src = blobUrl;
       audioRef.current.loop = loop;
       currentTrackSrc.current = blobUrl;
+      originalTrackSrc.current = src; // Track the original path
       setIsAudioReady(false); // Reset ready state when source changes
       console.log(`[SoundManager] Setting audio source to: ${blobUrl}`);
     }
@@ -103,6 +106,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       }
 
       currentTrackSrc.current = null;
+      originalTrackSrc.current = null; // Clear original track reference
       setIsAudioReady(false);
       console.log("[SoundManager] Audio stopped.");
     }
@@ -160,6 +164,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       case 'captcha':
       case 'authentication':
       case 'mainMenu':
+      case 'loading': // الحفاظ على الصوت الموسيقي أثناء التحميل والانتقالات
         audioToSet = preGameTrack;
         break;
       case 'boby-world':
@@ -168,27 +173,18 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       case 'running-game':
         audioToSet = '/audio/Boby_On_the_Run_road_run_bg_sound.mp3';
         break;
-      case 'loading':
       case 'admin':
-        // If current track is the pre-game track, don't stop it.
-        // Otherwise, stop if it's a screen that should have no music.
-        if (currentTrackSrc.current === preGameTrack) {
-          console.log(`[SoundManager] On ${internalCurrentScreen} screen, keeping pre-game track playing.`);
-          // Do nothing, let it continue
-        } else {
-          stopAudio();
-        }
+        // إيقاف الصوت في صفحة الإدارة
+        stopAudio();
         break;
       default:
+        // إيقاف الصوت في الحالات غير المعروفة
         stopAudio();
         break;
     }
 
     if (audioToSet) {
       setAudioSource(audioToSet);
-    } else if (internalCurrentScreen !== 'loading' && internalCurrentScreen !== 'admin') {
-      // Only stop if no audio is set AND it's not a loading/admin screen that might transition back to pre-game music
-      stopAudio();
     }
   }, [internalCurrentScreen, setAudioSource, stopAudio]);
 
