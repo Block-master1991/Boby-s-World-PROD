@@ -55,6 +55,9 @@ export const useSceneSetup = ({
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     renderer.toneMappingExposure = 1.0; // Exposure can be adjusted for brightness
 
+    // Output color space for proper color display
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+
     renderer.shadowMap.enabled = !perfConfig.isMobile; // Disable shadows on mobile for performance
     if (!perfConfig.isMobile) {
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;

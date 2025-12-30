@@ -149,7 +149,8 @@ export class Skybox extends THREE.Object3D {
             Math.min(maxAnisotropy, perfConfig.performanceLevel === 'high' ? 8 : 4) :
             Math.min(maxAnisotropy, 16); // Maximum quality for desktop
 
-          texture.colorSpace = THREE.LinearSRGBColorSpace; // Original HDR color space for true colors
+          // Remove colorSpace for HDR textures to preserve linear color values
+          // texture.colorSpace = THREE.LinearSRGBColorSpace; // Commented out to preserve HDR colors
           texture.flipY = true;
           texture.needsUpdate = true;
 
