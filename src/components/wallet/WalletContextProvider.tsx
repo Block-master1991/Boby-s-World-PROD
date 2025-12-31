@@ -2,14 +2,12 @@
 'use client';
 
 import type { FC, ReactNode } from 'react';
-import React, { useMemo } from 'react';
+import { useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
 import { WalletAdapter } from '@solana/wallet-adapter-base';
 import { WalletConnectWalletAdapter } from '@solana/wallet-adapter-walletconnect';
-import { PhantomWalletAdapter } from '@solana/wallet-adapter-phantom';
-import { SolflareWalletAdapter } from '@solana/wallet-adapter-solflare';
 import { SOL_NETWORK } from '@/lib/constants';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -30,8 +28,6 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
 
         if (isMobile) {
             return [
-                new PhantomWalletAdapter({ appUrl: 'phantom://' }),
-                new SolflareWalletAdapter(),
                 new WalletConnectWalletAdapter({
                     network: network,
                     options: {
