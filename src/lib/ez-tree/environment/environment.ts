@@ -6,7 +6,7 @@ import { Rocks, RockOptions } from './rocks';
 import { Trees, TreesOptions } from './trees'; // Import Trees
 import { Flowers, FlowerOptions } from './flowers'; // Import Flowers
 import { ChunkManager } from '../../chunk/ChunkManager';
-import { RENDER_DISTANCE_CHUNKS } from '../../chunkUtils';
+import { RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '../../chunkUtils';
 import { getDevicePerformanceConfig } from '../../utils';
 
 export class Environment extends THREE.Object3D {
@@ -21,7 +21,11 @@ export class Environment extends THREE.Object3D {
   constructor(renderer?: THREE.WebGLRenderer) {
     super();
 
-    this.ground = new Ground();
+    // Calculate dynamic ground size based on render distance
+    const groundSize = Math.ceil((RENDER_DISTANCE_CHUNKS * 2 + 1) * CHUNK_SIZE * 1.2); // 20% margin
+    console.log(`[Environment] Creating ground with dynamic size: ${groundSize}x${groundSize} (based on ${RENDER_DISTANCE_CHUNKS} chunk render distance)`);
+
+    this.ground = new Ground(new GrassOptions(), groundSize, groundSize);
     this.add(this.ground);
 
     this.skybox = new Skybox(renderer);

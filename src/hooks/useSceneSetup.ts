@@ -72,8 +72,8 @@ export const useSceneSetup = ({
     currentMount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    // Initialize Octree
-    const worldBounds = new THREE.Box3(new THREE.Vector3(-5000, -10, -5000), new THREE.Vector3(5000, 300, 5000));
+    // Initialize Octree with updated world bounds
+    const worldBounds = new THREE.Box3(new THREE.Vector3(-50000, -10, -50000), new THREE.Vector3(50000, 300, 50000));
     const octree = new Octree<GameObject>(worldBounds);
     octreeRef.current = octree;
 

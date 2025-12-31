@@ -68,7 +68,7 @@ async function fetchAssets(): Promise<void> {
 export class Ground extends THREE.Mesh {
   public options: GrassOptions; // Use GrassOptions for type
 
-  constructor(options: GrassOptions = new GrassOptions()) {
+  constructor(options: GrassOptions = new GrassOptions(), width: number = 10000, height: number = 10000) {
     super();
 
     this.options = options;
@@ -184,7 +184,7 @@ export class Ground extends THREE.Mesh {
         (this.material as THREE.MeshPhongMaterial).userData.shader = shader;
       };
 
-      this.geometry = new THREE.PlaneGeometry(10000, 10000);
+      this.geometry = new THREE.PlaneGeometry(width, height);
       this.rotation.x = -Math.PI / 2;
       this.receiveShadow = true;
     });

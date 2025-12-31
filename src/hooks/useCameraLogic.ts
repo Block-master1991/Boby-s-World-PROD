@@ -32,7 +32,7 @@ export const useCameraLogic = ({
       50,
       mountRef.current.clientWidth / mountRef.current.clientHeight,
       0.5,
-      450 // Limited to skybox range + margin to hide chunk boundaries
+      250 // Optimized for performance and HDR visibility
     );
     cameraRef.current = camera;
     camera.position.set(0, 5, 5);

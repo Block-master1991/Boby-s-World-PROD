@@ -35,8 +35,10 @@ export const FIREBASE_APP_ID = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 export const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
 
 // World boundaries and enemy protection radius
-export const WORLD_MIN_BOUND = -1000000;
-export const WORLD_MAX_BOUND = 1000000;
+// Note: World bounds optimized for performance while maintaining infinite feel
+// Chunk render distance: 3 (175 units max), Ground size: 420, Camera far: 250
+export const WORLD_MIN_BOUND = -50000;
+export const WORLD_MAX_BOUND = 50000;
 export const ENEMY_PROTECTION_RADIUS_VAL = 15;
 export const DOG_SPAWN_PROTECTION_RADIUS = 40; // Radius around dog's initial spawn where no coins/enemies should appear
 export const ENEMY_COLLISION_PENALTY_USDT = 0.001; // Penalty amount for enemy collision

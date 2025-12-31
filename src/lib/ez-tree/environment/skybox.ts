@@ -96,10 +96,14 @@ export class Skybox extends THREE.Object3D {
 
         if (status === 'progress') {
           // Progress reported from worker: e.data.progress (0.0 to 1.0)
+          console.log(`[Skybox] HDR Processing Progress: ${(e.data.progress * 100).toFixed(1)}%`);
           return;
         }
 
         if (status === 'success') {
+          // Clear timeout on success
+          clearTimeout(workerTimeout);
+
           console.log(`[Skybox] Worker returned data: width=${width}, height=${height}, dataLength=${data.length}, dataType=${data.constructor.name}`);
 
           // Check WebGL texture size limits before creating texture
@@ -138,7 +142,7 @@ export class Skybox extends THREE.Object3D {
           );
 
           texture.mapping = THREE.EquirectangularReflectionMapping;
-          texture.minFilter = THREE.LinearFilter;
+          texture.minFilter = THREE.LinearMipmapLinearFilter;
           texture.magFilter = THREE.LinearFilter;
           texture.generateMipmaps = false; // Disable mipmaps to prevent artifacts
 
@@ -147,7 +151,7 @@ export class Skybox extends THREE.Object3D {
           const maxAnisotropy = this.renderer?.capabilities.getMaxAnisotropy() || 16;
           texture.anisotropy = perfConfig.isMobile ?
             Math.min(maxAnisotropy, perfConfig.performanceLevel === 'high' ? 8 : 4) :
-            Math.min(maxAnisotropy, 16); // Maximum quality for desktop
+            Math.min(maxAnisotropy, 32); // Maximum quality for desktop
 
           // Remove colorSpace for HDR textures to preserve linear color values
           // texture.colorSpace = THREE.LinearSRGBColorSpace; // Commented out to preserve HDR colors
@@ -192,6 +196,15 @@ export class Skybox extends THREE.Object3D {
         if (this.resolveLoading) this.resolveLoading();
       };
 
+      // Add timeout for worker processing (60 seconds total)
+      const workerTimeout = setTimeout(() => {
+        console.error('[Skybox] HDR Worker timeout - terminating');
+        worker.terminate();
+        URL.revokeObjectURL(blobUrl);
+        this.applyFallbackSky();
+        if (this.resolveLoading) this.resolveLoading();
+      }, 60000);
+
       worker.postMessage({ url: blobUrl });
 
     } catch (workerInitError) {
@@ -204,9 +217,9 @@ export class Skybox extends THREE.Object3D {
   private setupSkyMesh(texture: THREE.Texture, perfConfig: any) {
     // Professional quality: higher resolution geometry for better sky quality
     const isHighEndGPU = perfConfig.renderer.shadowMapSize >= 2048;
-    const segments = perfConfig.isMobile ? 64 : (isHighEndGPU ? 128 : 96);
-    const rings = perfConfig.isMobile ? 32 : (isHighEndGPU ? 64 : 48);
-    const geometry = new THREE.SphereGeometry(250, segments, rings);
+    const segments = perfConfig.isMobile ? 96 : (isHighEndGPU ? 192 : 128);
+    const rings = perfConfig.isMobile ? 48 : (isHighEndGPU ? 96 : 64);
+    const geometry = new THREE.SphereGeometry(200, segments, rings);
 
     const material = new THREE.MeshBasicMaterial({
       map: texture,
@@ -241,7 +254,7 @@ export class Skybox extends THREE.Object3D {
    */
   private applyFallbackSky() {
     console.warn('[Skybox] Using fallback atmospheric sky');
-    const geometry = new THREE.SphereGeometry(250, 64, 32);
+    const geometry = new THREE.SphereGeometry(200, 64, 32);
     const material = new THREE.MeshBasicMaterial({
       color: 0x87CEEB, // Sky blue
       side: THREE.BackSide,

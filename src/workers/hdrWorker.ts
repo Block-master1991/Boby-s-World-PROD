@@ -122,6 +122,29 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
 
     console.log(`[HDRWorker] Parsing HDR: ${width}x${height} (${(width * height * 4 * 4 / 1024 / 1024).toFixed(1)}MB)`);
 
+    // Intelligent downscaling based on device capabilities and memory constraints
+    const shouldDownscale = width > 4096 || height > 4096;
+    let targetWidth = width;
+    let targetHeight = height;
+
+    if (shouldDownscale) {
+        // Estimate memory usage for full resolution
+        const estimatedMemoryMB = (width * height * 4 * 4) / (1024 * 1024);
+
+        if (estimatedMemoryMB > 150) { // Very high memory usage (>150MB)
+            targetWidth = Math.floor(width * 0.25); // 8K -> 2K (aggressive downscaling)
+            targetHeight = Math.floor(height * 0.25);
+            console.log(`[HDRWorker] Aggressive downscaling: ${width}x${height} → ${targetWidth}x${targetHeight} (${estimatedMemoryMB.toFixed(1)}MB → ${((targetWidth * targetHeight * 4 * 4) / (1024 * 1024)).toFixed(1)}MB)`);
+        } else if (estimatedMemoryMB > 75) { // High memory usage (>75MB)
+            targetWidth = Math.floor(width * 0.5); // 8K -> 4K (moderate downscaling)
+            targetHeight = Math.floor(height * 0.5);
+            console.log(`[HDRWorker] Moderate downscaling: ${width}x${height} → ${targetWidth}x${targetHeight} (${estimatedMemoryMB.toFixed(1)}MB → ${((targetWidth * targetHeight * 4 * 4) / (1024 * 1024)).toFixed(1)}MB)`);
+        } else {
+            console.log(`[HDRWorker] Keeping original resolution: ${width}x${height} (${estimatedMemoryMB.toFixed(1)}MB)`);
+        }
+    }
+
+    // Use original dimensions for parsing, downscale later if needed
     const rgbaFloat = new Float32Array(width * height * 4);
     let offset = 0;
 
@@ -130,10 +153,20 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
     const scanline = new Uint8Array(4 * width);
 
     // Yield every CHUNK_SIZE rows to avoid blocking the worker event loop
-    const CHUNK_SIZE = 512;
+    // Reduced chunk size for better performance on low-end devices
+    const CHUNK_SIZE = 256;
+
+    // Add timeout protection (45 seconds max)
+    const startTime = Date.now();
+    const MAX_PROCESSING_TIME = 45000; // 45 seconds
 
     for (let y = 0; y < height; y++) {
         if (y > 0 && y % CHUNK_SIZE === 0) {
+            // Check for timeout
+            if (Date.now() - startTime > MAX_PROCESSING_TIME) {
+                throw new Error(`HDR processing timeout after ${MAX_PROCESSING_TIME / 1000} seconds`);
+            }
+
             onProgress(y / height);
             // Yield to event loop
             await new Promise(resolve => setTimeout(resolve, 0));
@@ -189,5 +222,67 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
         }
     }
 
-    return { width, height, data: rgbaFloat };
+    // Apply downscaling if needed
+    let finalData = rgbaFloat;
+    let finalWidth = width;
+    let finalHeight = height;
+
+    if (shouldDownscale && (targetWidth !== width || targetHeight !== height)) {
+        console.log(`[HDRWorker] Applying downscaling: ${width}x${height} → ${targetWidth}x${targetHeight}`);
+        finalData = downscaleHDRData(rgbaFloat, width, height, targetWidth, targetHeight);
+        finalWidth = targetWidth;
+        finalHeight = targetHeight;
+    }
+
+    return { width: finalWidth, height: finalHeight, data: finalData };
+}
+
+/**
+ * Downscale HDR data using bilinear interpolation for better quality than WebGL automatic scaling
+ */
+function downscaleHDRData(data: Float32Array, srcWidth: number, srcHeight: number, dstWidth: number, dstHeight: number): Float32Array<ArrayBuffer> {
+    const dstData = new Float32Array(dstWidth * dstHeight * 4);
+
+    const scaleX = srcWidth / dstWidth;
+    const scaleY = srcHeight / dstHeight;
+
+    for (let dstY = 0; dstY < dstHeight; dstY++) {
+        for (let dstX = 0; dstX < dstWidth; dstX++) {
+            // Calculate source coordinates
+            const srcX = dstX * scaleX;
+            const srcY = dstY * scaleY;
+
+            // Get integer and fractional parts
+            const x0 = Math.floor(srcX);
+            const y0 = Math.floor(srcY);
+            const x1 = Math.min(x0 + 1, srcWidth - 1);
+            const y1 = Math.min(y0 + 1, srcHeight - 1);
+
+            const wx = srcX - x0;
+            const wy = srcY - y0;
+
+            // Bilinear interpolation for each channel
+            for (let c = 0; c < 4; c++) {
+                const idx00 = (y0 * srcWidth + x0) * 4 + c;
+                const idx10 = (y0 * srcWidth + x1) * 4 + c;
+                const idx01 = (y1 * srcWidth + x0) * 4 + c;
+                const idx11 = (y1 * srcWidth + x1) * 4 + c;
+
+                const val00 = data[idx00];
+                const val10 = data[idx10];
+                const val01 = data[idx01];
+                const val11 = data[idx11];
+
+                // Bilinear interpolation
+                const val = val00 * (1 - wx) * (1 - wy) +
+                    val10 * wx * (1 - wy) +
+                    val01 * (1 - wx) * wy +
+                    val11 * wx * wy;
+
+                dstData[(dstY * dstWidth + dstX) * 4 + c] = val;
+            }
+        }
+    }
+
+    return dstData;
 }
