@@ -16,23 +16,30 @@ export interface AssetCheckResult {
  * Check which assets are present in IndexedDB
  */
 export async function checkAssetAvailability(): Promise<AssetCheckResult> {
-    console.log('[AssetChecker] Starting asset availability check...');
+    console.log('[AssetChecker] Starting parallel asset availability check...');
     const startTime = performance.now();
+
+    // Parallel check using Promise.all for much faster execution
+    const checkPromises = GAME_ASSET_MANIFEST.map(async (asset) => {
+        try {
+            const cached = await getAsset(asset.path);
+            return { asset, present: !!(cached && cached.data) };
+        } catch (error) {
+            // Asset not found or error accessing it
+            return { asset, present: false };
+        }
+    });
+
+    const results = await Promise.all(checkPromises);
 
     const missingAssets: AssetInfo[] = [];
     let presentCount = 0;
 
-    for (const asset of GAME_ASSET_MANIFEST) {
-        try {
-            const cached = await getAsset(asset.path);
-            if (cached && cached.data) {
-                presentCount++;
-            } else {
-                missingAssets.push(asset);
-            }
-        } catch (error) {
-            // Asset not found or error accessing it
-            missingAssets.push(asset);
+    for (const result of results) {
+        if (result.present) {
+            presentCount++;
+        } else {
+            missingAssets.push(result.asset);
         }
     }
 
@@ -47,7 +54,7 @@ export async function checkAssetAvailability(): Promise<AssetCheckResult> {
         checkDuration: duration
     };
 
-    console.log(`[AssetChecker] Check complete in ${duration.toFixed(0)}ms:`);
+    console.log(`[AssetChecker] Parallel check complete in ${duration.toFixed(0)}ms:`);
     console.log(`  ✓ Present: ${presentCount}/${GAME_ASSET_MANIFEST.length}`);
     console.log(`  ✗ Missing: ${missingAssets.length}`);
 
