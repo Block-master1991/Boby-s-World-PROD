@@ -504,10 +504,73 @@ class PerformanceMonitor {
     }
 }
 
-// Singleton instances
-const cacheManager = new AdvancedCacheManager();
-const backgroundSync = new BackgroundSyncManager();
-const performanceMonitor = new PerformanceMonitor();
+// Lazy singleton instances to avoid SSR issues
+let _cacheManager: AdvancedCacheManager | null = null;
+let _backgroundSync: BackgroundSyncManager | null = null;
+let _performanceMonitor: PerformanceMonitor | null = null;
+
+// Lazy getters to prevent window access during SSR
+const getCacheManager = (): AdvancedCacheManager => {
+    if (!_cacheManager) {
+        _cacheManager = new AdvancedCacheManager();
+    }
+    return _cacheManager;
+};
+
+const getBackgroundSync = (): BackgroundSyncManager => {
+    if (!_backgroundSync) {
+        _backgroundSync = new BackgroundSyncManager();
+    }
+    return _backgroundSync;
+};
+
+const getPerformanceMonitor = (): PerformanceMonitor => {
+    if (!_performanceMonitor) {
+        _performanceMonitor = new PerformanceMonitor();
+    }
+    return _performanceMonitor;
+};
+
+// Proxy objects that lazily initialize the actual instances
+// This prevents "window is not defined" errors during SSR/prerendering
+const cacheManager = new Proxy({} as AdvancedCacheManager, {
+    get(_, prop) {
+        if (typeof window === 'undefined') {
+            // Return no-op functions for SSR
+            if (typeof getCacheManager.prototype?.[prop as keyof AdvancedCacheManager] === 'function') {
+                return () => Promise.resolve(null);
+            }
+            return undefined;
+        }
+        const instance = getCacheManager();
+        const value = instance[prop as keyof AdvancedCacheManager];
+        return typeof value === 'function' ? value.bind(instance) : value;
+    }
+});
+
+const backgroundSync = new Proxy({} as BackgroundSyncManager, {
+    get(_, prop) {
+        if (typeof window === 'undefined') {
+            // Return no-op functions for SSR
+            return () => { };
+        }
+        const instance = getBackgroundSync();
+        const value = instance[prop as keyof BackgroundSyncManager];
+        return typeof value === 'function' ? value.bind(instance) : value;
+    }
+});
+
+const performanceMonitor = new Proxy({} as PerformanceMonitor, {
+    get(_, prop) {
+        if (typeof window === 'undefined') {
+            // Return no-op functions for SSR
+            return () => { };
+        }
+        const instance = getPerformanceMonitor();
+        const value = instance[prop as keyof PerformanceMonitor];
+        return typeof value === 'function' ? value.bind(instance) : value;
+    }
+});
 
 // Export for use in service worker
 export { cacheManager, backgroundSync, performanceMonitor };
