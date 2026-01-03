@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 
@@ -35,12 +36,12 @@ export async function GET(request: NextRequest) {
     });
 
     await batch.commit();
-    
+
     const message = `Successfully deleted ${snapshot.size} expired CSRF tokens.`;
     return NextResponse.json({ success: true, message });
 
   } catch (error) {
-    console.error('[Cron Cleanup] Error cleaning up expired tokens:', error);
+    logger.error('[Cron Cleanup] Error cleaning up expired tokens:', error as Error);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({ error: 'Internal Server Error', details: errorMessage }, { status: 500 });
   }

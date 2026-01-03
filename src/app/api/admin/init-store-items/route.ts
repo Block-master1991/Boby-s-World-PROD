@@ -1,15 +1,21 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { getAllStoreItems, createStoreItem } from '@/lib/server-items';
+import { NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
+import { getFirestore } from 'firebase-admin/firestore';
+import { initializeAdminApp } from '@/lib/firebase-admin';
+import { getAllStoreItems, createStoreItem, updateStoreItem } from '@/lib/server-items';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
-// بيانات العناصر الأولية
+// Initial items data
 const initialItems = [
     {
         id: '1',
         name: 'Protection Bottle',
         description: 'Consumed instead of your coins, protecting your wealth.',
-        price: 50,
-        usdPrice: 0.001,
-        image: '/Boby-logo.png',
+        price: 0.001,
+        image: '/items/ProtectionBottle.png',
         dataAiHint: 'sturdy Bottle',
         type: 'consumable' as const,
         rarity: 'common' as const,
@@ -19,9 +25,8 @@ const initialItems = [
         id: '2',
         name: 'Guardian Shield',
         description: 'Provides temporary protection in fights.',
-        price: 75,
-        usdPrice: 0.001,
-        image: '/guardianShield.png',
+        price: 0.001,
+        image: '/items/guardianShield.png',
         dataAiHint: 'dog shield',
         type: 'consumable' as const,
         rarity: 'common' as const,
@@ -31,9 +36,8 @@ const initialItems = [
         id: '3',
         name: 'Speedy Paws',
         description: 'Boosts your running speed for a short time.',
-        price: 100,
-        usdPrice: 0.001,
-        image: '/speedyPawsTreat.png',
+        price: 0.001,
+        image: '/items/speedyPawsTreat.png',
         dataAiHint: 'dog treat',
         type: 'consumable' as const,
         rarity: 'common' as const,
@@ -43,9 +47,8 @@ const initialItems = [
         id: '4',
         name: 'Coin Magnet',
         description: 'When active, automatically collects nearby coins for a short duration.',
-        price: 150,
-        usdPrice: 0.001,
-        image: '/coinMagnetTreat.png',
+        price: 0.001,
+        image: '/items/coinMagnetTreat.png',
         dataAiHint: 'dog magnet',
         type: 'consumable' as const,
         rarity: 'common' as const,
@@ -53,39 +56,79 @@ const initialItems = [
     },
 ];
 
-export async function POST(request: NextRequest) {
+export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
     try {
-        console.log('🔍 Checking existing store items...');
+        await initializeAdminApp();
+        const db = getFirestore();
 
-        // جلب العناصر الموجودة
+        logger.log('🔍 Checking existing store items...');
+
+        // 1. ID Synchronization
+        // Ensure Document ID matches internal id field
+        logger.log('🔄 Checking for ID mismatches...');
+        const storeSnapshot = await db.collection('storeItems').get();
+
+        for (const doc of storeSnapshot.docs) {
+            const data = doc.data();
+            const documentId = doc.id;
+            const internalId = data.id;
+
+            if (internalId && documentId !== internalId) {
+                logger.log(`⚠️ ID Mismatch found: Document ID "${documentId}" != Internal ID "${internalId}"`);
+                logger.log(`🔄 Migrating document to correct ID...`);
+
+                // Create new document with correct ID
+                await db.collection('storeItems').doc(internalId).set(data);
+                // Delete old document with random ID
+                await db.collection('storeItems').doc(documentId).delete();
+
+                logger.log(`✅ Migration complete for ID "${internalId}"`);
+            }
+        }
+
+        // Get existing items after synchronization
         const existingItems = await getAllStoreItems();
         const existingIds = existingItems.map(item => item.id);
 
-        console.log(`📊 Found ${existingItems.length} existing items:`, existingIds);
+        logger.log(`📊 Found ${existingItems.length} existing items:`, existingIds);
 
-        // إضافة العناصر المفقودة
+        // Add missing items or update existing ones
         let addedCount = 0;
         const results = [];
 
         for (const item of initialItems) {
             if (!existingIds.includes(item.id)) {
-                console.log(`➕ Adding item: ${item.name} (ID: ${item.id})`);
+                logger.log(`➕ Adding item: ${item.name} (ID: ${item.id})`);
 
                 const newItem = await createStoreItem(item);
                 results.push(newItem);
                 addedCount++;
 
-                console.log(`✅ Successfully added: ${item.name}`);
+                logger.log(`✅ Successfully added: ${item.name}`);
             } else {
-                console.log(`📋 Item already exists: ${item.name} (ID: ${item.id})`);
+                logger.log(`🔄 Updating existing item: ${item.name} (ID: ${item.id})`);
+
+                // Update existing item with new values from initialItems
+                const updatedItem = await updateStoreItem(item.id, {
+                    name: item.name,
+                    description: item.description,
+                    price: item.price,
+                    image: item.image,
+                    type: item.type,
+                    rarity: item.rarity,
+                    isActive: item.isActive,
+                });
+
+                results.push(updatedItem);
+                logger.log(`✅ Successfully updated: ${item.name}`);
             }
         }
 
-        console.log(`\n🎉 Initialization complete!`);
-        console.log(`📊 Added ${addedCount} new items`);
-        console.log(`📊 Total items in store: ${existingItems.length + addedCount}`);
+        logger.log(`\n🎉 Initialization complete!`);
+        logger.log(`📊 Added ${addedCount} new items`);
+        logger.log(`📊 Total items in store: ${existingItems.length + addedCount}`);
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             message: `Successfully initialized store items`,
             stats: {
@@ -96,8 +139,12 @@ export async function POST(request: NextRequest) {
             addedItems: results,
         });
 
+        // Use unified helper to update CSRF
+        const requestHost = request.headers.get('host') || undefined;
+        return await setCsrfTokenResponse(response, request.user.sub, requestHost);
+
     } catch (error) {
-        console.error('❌ Error initializing store items:', error);
+        logger.error('❌ Error initializing store items:', error as Error);
         return NextResponse.json(
             {
                 success: false,
@@ -107,9 +154,9 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
-}
+}));
 
-export async function GET() {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
     try {
         const items = await getAllStoreItems();
 
@@ -119,7 +166,7 @@ export async function GET() {
             count: items.length,
         });
     } catch (error) {
-        console.error('❌ Error fetching store items:', error);
+        logger.error('❌ Error fetching store items:', error as Error);
         return NextResponse.json(
             {
                 success: false,
@@ -129,4 +176,4 @@ export async function GET() {
             { status: 500 }
         );
     }
-}
+});

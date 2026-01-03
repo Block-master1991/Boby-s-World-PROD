@@ -13,14 +13,114 @@ import { Sheet, SheetContent, SheetTrigger, SheetLoading } from '@/components/ui
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
-import DisconnectButton from '@/components/shared/DisconnectButton';
 import { GameObject } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast';
 import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from '@/lib/items'; // Get store items with icons
 import { ENEMY_COLLISION_PENALTY_USDT } from '@/lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
-import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
+import { useApiFetch } from '@/utils/api'; // Import useApiFetch
+import { logger } from '@/utils/logger'; // Import logger
 import { useFetchPlayerData, useAddCoins, useWithdrawUSDT } from '@/hooks/useGraphQL'; // GraphQL hooks
+import { encryptData, decryptData } from '@/utils/encryption'; // Secure encryption logic
+
+// Utility hook for batching frequent updates (like coin collection) to reduce network traffic
+function useBatchedUpdates<T>(
+    processBatch: (items: T[]) => Promise<void>,
+    delay: number = 500,
+    persistenceKey?: string // Add optional persistence key
+) {
+    const queueRef = useRef<T[]>([]);
+    const timerRef = useRef<NodeJS.Timeout | null>(null);
+
+    // === PERSISTENCE LOGIC START ===
+    // Load queue from localStorage on mount
+    useEffect(() => {
+        if (!persistenceKey) return;
+        try {
+            const stored = localStorage.getItem(persistenceKey);
+            if (stored) {
+                // Decrypting data securely
+                try {
+                    const parsed = decryptData(stored);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        logger.log(`[OfflineQueue] Recovered ${parsed.length} items from ${persistenceKey}`);
+                        // Merge recovered items into queue
+                        queueRef.current = [...queueRef.current, ...parsed];
+
+                        // Trigger immediate processing if not empty
+                        if (!timerRef.current) {
+                            timerRef.current = setTimeout(processQueue, 500); // Short delay to allow hydration
+                        }
+                    }
+                } catch {
+                    // Legacy format or corruption, remove
+                    localStorage.removeItem(persistenceKey);
+                }
+            }
+        } catch (e) {
+            logger.error('[OfflineQueue] Failed to load persistence:', e);
+            localStorage.removeItem(persistenceKey);
+        }
+    }, [persistenceKey]);
+
+    const saveQueue = () => {
+        if (!persistenceKey) return;
+        if (queueRef.current.length === 0) {
+            localStorage.removeItem(persistenceKey);
+            return;
+        }
+        try {
+            // Secure AES encryption
+            const encoded = encryptData(queueRef.current);
+            localStorage.setItem(persistenceKey, encoded);
+        } catch (e) {
+            logger.error('[OfflineQueue] Failed to save persistence:', e);
+        }
+    };
+
+    const processQueue = async () => {
+        const batch = [...queueRef.current];
+        if (batch.length === 0) {
+            timerRef.current = null;
+            return;
+        }
+
+        try {
+            await processBatch(batch);
+
+            // Remove sent items
+            // Slicing safest approach for single-threaded environment
+            const remaining = queueRef.current.slice(batch.length);
+            queueRef.current = remaining;
+            saveQueue(); // Update storage
+
+        } catch (error) {
+            logger.log('[OfflineQueue] Batch processing failed, retrying later:', error);
+            // On error, items remain in queueRef.current and localStorage
+        } finally {
+            timerRef.current = null;
+            // If items remain (failed retry or new items), schedule next
+            if (queueRef.current.length > 0) {
+                timerRef.current = setTimeout(processQueue, delay);
+            }
+        }
+    };
+    // === PERSISTENCE LOGIC END ===
+
+    const addUpdate = useCallback((item: T) => {
+        queueRef.current.push(item);
+        saveQueue(); // Save immediately on add
+
+        if (timerRef.current) return;
+
+        timerRef.current = setTimeout(processQueue, delay);
+    }, [delay, processBatch]); // Removed persistenceKey from deps to avoid re-creation
+
+    return { addUpdate };
+}
+
+// Initialize debounced update hook (not actually used in this component, but kept for future use)
+// const { setDebouncedState, debouncedSetOptimisticUpdates } = useDebouncedOptimisticUpdate(100);
 
 // Game Constants
 const USDT_PER_COIN = 0.001;
@@ -141,14 +241,14 @@ const GameUI: React.FC<GameUIProps> = ({
                 setIsInventoryLoading(false);
                 setIsWalletLoading(false);
             } else {
-                console.error("GraphQL error fetching player data:", result?.error || 'Failed to fetch player data.');
+                logger.error("GraphQL error fetching player data:", result?.error || 'Failed to fetch player data.');
                 // Reset loading states for sheets even on error
                 setIsStoreLoading(false);
                 setIsInventoryLoading(false);
                 setIsWalletLoading(false);
             }
         } catch (error) {
-            console.error("Network or unexpected error fetching player data via GraphQL:", error);
+            logger.error("Network or unexpected error fetching player data via GraphQL:", error);
             toast({ title: 'Network Error', description: `Could not fetch player data. Please check your internet connection.`, variant: 'destructive' });
             setProtectionBottleCount(0);
             setGuardianShieldCount(0);
@@ -351,84 +451,95 @@ const GameUI: React.FC<GameUIProps> = ({
      * Callback function for when a coin is collected in the game.
      * Increments session collected USDT and calls backend to update player's balance.
      */
-    const handleCoinCollected = useCallback(async () => {
-        setSessionCollectedUSDT(prev => prev + USDT_PER_COIN);
+    // Batched Coin Collection
+    const processCoinBatch = useCallback(async (amounts: number[]) => {
+        const totalAmount = amounts.reduce((sum, val) => sum + val, 0);
+        const updateId = `batch-${Date.now()}`;
 
-        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey) {
-            toast({ title: 'Action Blocked', description: 'Please ensure your wallet is connected and authenticated to collect coins.', variant: 'destructive' });
-            return;
-        }
-
-        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
         setOptimisticUpdates(prev => [...prev, {
             id: updateId,
             type: 'coin',
-            amount: USDT_PER_COIN,
+            amount: totalAmount,
             timestamp: Date.now(),
             status: 'pending'
         }]);
 
-        const controller = new AbortController();
-        const signal = controller.signal;
-
         try {
-            const response = await apiFetch('/api/game/addCoin', { // استخدام apiFetch
+            const response = await apiFetch('/api/game/addCoin', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ amount: USDT_PER_COIN }),
-                signal: signal
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: totalAmount }),
             });
-            let data;
-            try {
-                data = await response.json();
-            } catch (jsonError) {
-                console.error("Failed to parse JSON response:", jsonError);
-                // If JSON parsing fails, it means the response was not valid JSON.
-                // The apiFetch utility should ideally catch this and throw a specific error.
-                // For now, we'll treat it as a generic backend error.
-                setOptimisticUpdates(prev => prev.map(update =>
-                    update.id === updateId ? { ...update, status: 'failed' } : update
-                ));
-                toast({ title: 'Sync Error', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
-                return;
-            }
 
             if (response.ok) {
-                // On success, re-fetch data to sync, then remove the optimistic update
                 await fetchPlayerData();
-                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
+                setOptimisticUpdates(prev => prev.filter(u => u.id !== updateId));
             } else {
-                // On failure, mark as failed or remove and show error
-                setOptimisticUpdates(prev => prev.map(update =>
-                    update.id === updateId ? { ...update, status: 'failed' } : update
-                ));
-                console.error("Backend error adding coin:", data.error || 'Failed to add coin.'); // Log error instead of throwing
-                toast({ title: 'Sync Error', description: data.error || 'Failed to add coin to your balance.', variant: 'destructive' });
+                throw new Error('Failed to sync coin batch');
             }
         } catch (error) {
-            console.error("Network or unexpected error adding coin to backend:", error);
-            let errorMessage = `Could not update your total USDT balance: ${error instanceof Error ? error.message : String(error)}`;
-            if (error instanceof Error && error.message && error.message.includes('CSRF token missing')) {
-                errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-            } else if (error instanceof Error && error.message && error.message.includes('Non-JSON response')) {
-                errorMessage = 'Server returned an unexpected response format. Please try again later.';
-            } else if (error instanceof Error && error.message && error.message.includes('Failed to fetch')) {
-                errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
-            }
-
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[GameUI] handleCoinCollected aborted.');
-            } else {
-                toast({ title: 'Sync Error', description: errorMessage, variant: 'destructive' });
-                // Ensure rollback by marking as failed if an error occurs
-                setOptimisticUpdates(prev => prev.map(update =>
-                    update.id === updateId ? { ...update, status: 'failed' } : update
-                ));
-            }
+            logger.error("Batch sync error:", error);
+            setOptimisticUpdates(prev => prev.map(u => u.id === updateId ? { ...u, status: 'failed' } : u));
         }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
+    }, [apiFetch, fetchPlayerData]);
+
+    const { addUpdate: batchAddCoin } = useBatchedUpdates<number>(processCoinBatch, 300, 'offline_coin_queue_v1');
+
+    interface PenaltyQueueItem {
+        amount: number;
+        id: string;
+    }
+
+    /**
+     * Batched Penalty Application
+     * Similar to coins, we queue penalties to ensure they are applied even if the user reloads.
+     */
+    const processPenaltyBatch = useCallback(async (items: PenaltyQueueItem[]) => {
+        const totalAmount = items.reduce((sum, item) => sum + item.amount, 0);
+        // We don't create a new optimistic update here because they were created when added to the queue
+        // We just need to track which IDs we are processing to remove them on success
+
+        try {
+            const response = await apiFetch('/api/game/applyPenalty', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ amount: totalAmount }),
+            });
+
+            if (response.ok) {
+                await fetchPlayerData();
+                // Remove the specific optimistic updates that were part of this batch
+                const processedIds = new Set(items.map(i => i.id));
+                setOptimisticUpdates(prev => prev.filter(u => !processedIds.has(u.id)));
+            } else {
+                throw new Error('Failed to sync penalty batch');
+            }
+        } catch (error) {
+            logger.error("Penalty batch sync error:", error);
+            // On failure, we DO NOT remove the optimistic updates.
+            // They remain 'pending' so the user sees the balance deduction.
+            // The queue will retry automatically.
+            throw error; // Re-throw to let the queue know it failed and should retry
+        }
+    }, [apiFetch, fetchPlayerData]);
+
+    const { addUpdate: batchApplyPenalty } = useBatchedUpdates<PenaltyQueueItem>(processPenaltyBatch, 300, 'offline_penalty_queue_v1');
+
+    /**
+     * Callback function for when a coin is collected in the game.
+     */
+    const handleCoinCollected = useCallback(async () => {
+        if (!isAuthenticated || !isWalletConnectedAndMatching || !authUser?.publicKey) {
+            toast({ title: 'Action Blocked', description: 'Please ensure your wallet is connected and authenticated.', variant: 'destructive' });
+            return;
+        }
+
+        // 1. Immediate UI Feedback (Increment session counter)
+        setSessionCollectedUSDT(prev => prev + USDT_PER_COIN);
+
+        // 2. Queue for batched backend sync
+        batchAddCoin(USDT_PER_COIN);
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, batchAddCoin]);
 
     /**
      * Callback function for when the remaining coins on the map update.
@@ -451,22 +562,22 @@ const GameUI: React.FC<GameUIProps> = ({
 
         async function loadStoreItems() {
             try {
-                console.log('[GameUI] Attempting to load store items from database...');
+                logger.log('[GameUI] Attempting to load store items from database...');
                 const items = await getStoreItemsActiveWithIcons();
 
                 if (items && items.length > 0) {
                     setStoreItemsData(items);
-                    console.log('[GameUI] Store items loaded successfully from database:', items.length);
+                    logger.log('[GameUI] Store items loaded successfully from database:', items.length);
                     return true; // Success
                 } else {
                     throw new Error('No items returned from database');
                 }
             } catch (error) {
-                console.warn(`[GameUI] Database load attempt ${retryCount + 1}/${maxRetries + 1} failed:`, error);
+                logger.warn(`[GameUI] Database load attempt ${retryCount + 1}/${maxRetries + 1} failed:`, error);
 
                 // Try fallback data
                 try {
-                    console.log('[GameUI] Loading fallback store items...');
+                    logger.log('[GameUI] Loading fallback store items...');
                     const { fallbackStoreItems } = await import('@/lib/items');
 
                     // Add icons to fallback items
@@ -479,10 +590,10 @@ const GameUI: React.FC<GameUIProps> = ({
                     }));
 
                     setStoreItemsData(itemsWithIcons);
-                    console.log('[GameUI] Fallback store items loaded successfully with icons');
+                    logger.log('[GameUI] Fallback store items loaded successfully with icons');
                     return true; // Success with fallback
                 } catch (fallbackError) {
-                    console.error('[GameUI] Failed to load fallback items:', fallbackError);
+                    logger.error('[GameUI] Failed to load fallback items:', fallbackError);
                     setStoreItemsData([]);
                     return false; // Failure
                 }
@@ -496,7 +607,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 retryInterval = setInterval(() => {
                     if (retryCount < maxRetries) {
                         retryCount++;
-                        console.log(`[GameUI] Retrying store items load (attempt ${retryCount + 1}/${maxRetries})...`);
+                        logger.log(`[GameUI] Retrying store items load (attempt ${retryCount + 1}/${maxRetries})...`);
                         loadStoreItems();
                     } else {
                         clearInterval(retryInterval);
@@ -739,7 +850,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await apiFetch('/api/game/useItem', { // استخدام apiFetch
+            const response = await apiFetch('/api/game/useItem', { // Using apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -751,7 +862,7 @@ const GameUI: React.FC<GameUIProps> = ({
             try {
                 data = await response.json();
             } catch (jsonError) {
-                console.error("Failed to parse JSON response for useItem:", jsonError);
+                logger.error("Failed to parse JSON response for useItem:", jsonError);
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
@@ -770,11 +881,11 @@ const GameUI: React.FC<GameUIProps> = ({
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
                 if (rollbackEffect) rollbackEffect(); // Call rollback effect
-                console.error("Backend error using item:", data.error || `Failed to use ${itemDefinition.name}.`); // Log error instead of throwing
+                logger.error("Backend error using item:", data.error || `Failed to use ${itemDefinition.name}.`); // Log error instead of throwing
                 toast({ title: 'Failed to Use Item', description: data.error || `Failed to use ${itemDefinition.name}.`, variant: 'destructive' });
             }
         } catch (error) {
-            console.error("Network or unexpected error using item via backend:", error);
+            logger.error("Network or unexpected error using item via backend:", error);
             let errorMessage = `Could not consume ${itemDefinition?.name || 'item'}. Error: ${error instanceof Error ? error.message : String(error)}`;
             if (error instanceof Error && error.message && error.message.includes('CSRF token missing')) {
                 errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
@@ -785,7 +896,7 @@ const GameUI: React.FC<GameUIProps> = ({
             }
 
             if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[GameUI] handleUseConsumableItem aborted.');
+                logger.log('[GameUI] handleUseConsumableItem aborted.');
             } else {
                 toast({ title: 'Failed to Use Item', description: errorMessage, variant: 'destructive' });
                 setOptimisticUpdates(prev => prev.map(update =>
@@ -820,7 +931,7 @@ const GameUI: React.FC<GameUIProps> = ({
         const signal = controller.signal;
 
         try {
-            const response = await apiFetch('/api/game/withdrawUSDT', { // استخدام apiFetch
+            const response = await apiFetch('/api/game/withdrawUSDT', { // Using apiFetch
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -832,7 +943,7 @@ const GameUI: React.FC<GameUIProps> = ({
             try {
                 data = await response.json();
             } catch (jsonError) {
-                console.error("Failed to parse JSON response for withdrawUSDT:", jsonError);
+                logger.error("Failed to parse JSON response for withdrawUSDT:", jsonError);
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
@@ -848,14 +959,14 @@ const GameUI: React.FC<GameUIProps> = ({
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
-                console.error("Backend error withdrawing USDT:", data.error || 'Withdrawal failed.'); // Log error instead of throwing
+                logger.error("Backend error withdrawing USDT:", data.error || 'Withdrawal failed.'); // Log error instead of throwing
                 toast({ title: "Withdrawal Error", description: data.error || 'Withdrawal failed.', variant: "destructive" });
             }
         } catch (error) {
-            console.error("Network or unexpected error withdrawing USDT via backend:", error);
+            logger.error("Network or unexpected error withdrawing USDT via backend:", error);
             let errorMessage = `Withdrawal failed: ${error instanceof Error ? error.message : String(error)}`;
             if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[GameUI] handleWithdrawUSDT aborted.');
+                logger.log('[GameUI] handleWithdrawUSDT aborted.');
             } else {
                 if (error instanceof Error && error.message && error.message.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
@@ -892,7 +1003,7 @@ const GameUI: React.FC<GameUIProps> = ({
             const signal = controller.signal;
 
             try {
-                const response = await apiFetch('/api/game/consumeProtectionBottle', { // استخدام apiFetch
+                const response = await apiFetch('/api/game/consumeProtectionBottle', { // Using apiFetch
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -903,7 +1014,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 try {
                     data = await response.json();
                 } catch (jsonError) {
-                    console.error("Failed to parse JSON response for consumeProtectionBottle:", jsonError);
+                    logger.error("Failed to parse JSON response for consumeProtectionBottle:", jsonError);
                     setOptimisticUpdates(prev => prev.map(update =>
                         update.id === updateId ? { ...update, status: 'failed' } : update
                     ));
@@ -922,7 +1033,7 @@ const GameUI: React.FC<GameUIProps> = ({
                     setOptimisticUpdates(prev => prev.map(update =>
                         update.id === updateId ? { ...update, status: 'failed' } : update
                     ));
-                    console.error("Backend error consuming protection Bottle:", data.error || 'Failed to consume protection Bottle.');
+                    logger.error("Backend error consuming protection Bottle:", data.error || 'Failed to consume protection Bottle.');
                     const errorMessage = `Could not consume Protection Bottle. Backend error: ${data.error || 'Unknown error'}`;
                     toast({ title: 'Failed to Use Bottle', description: errorMessage, variant: 'destructive' });
                     resolve(false); // Indicate failure
@@ -931,7 +1042,7 @@ const GameUI: React.FC<GameUIProps> = ({
                 setOptimisticUpdates(prev => prev.map(update =>
                     update.id === updateId ? { ...update, status: 'failed' } : update
                 ));
-                console.error("Network or unexpected error consuming protection Bottle via backend:", error);
+                logger.error("Network or unexpected error consuming protection Bottle via backend:", error);
                 let errorMessage = `Could not consume Protection Bottle. Error: ${error instanceof Error ? error.message : String(error)}`;
                 if (error instanceof Error && error.message && errorMessage.includes('CSRF token missing')) {
                     errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
@@ -997,7 +1108,8 @@ const GameUI: React.FC<GameUIProps> = ({
             return;
         }
 
-        const updateId = Date.now().toString() + Math.random().toString(36).substring(2, 9);
+        // 1. Immediate UI Feedback (Optimistic Update)
+        const updateId = `penalty-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
         setOptimisticUpdates(prev => [...prev, {
             id: updateId,
             type: 'penalty',
@@ -1006,61 +1118,10 @@ const GameUI: React.FC<GameUIProps> = ({
             status: 'pending'
         }]);
 
-        const controller = new AbortController();
-        const signal = controller.signal;
+        logger.log('[GameUI] Queuing penalty...');
+        batchApplyPenalty({ amount: ENEMY_COLLISION_PENALTY_USDT, id: updateId });
 
-        try {
-            const response = await apiFetch('/api/game/applyPenalty', { // استخدام apiFetch
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ amount: ENEMY_COLLISION_PENALTY_USDT }),
-                signal: signal
-            });
-            let data;
-            try {
-                data = await response.json();
-            } catch (jsonError) {
-                console.error("Failed to parse JSON response for applyPenalty:", jsonError);
-                setOptimisticUpdates(prev => prev.map(update =>
-                    update.id === updateId ? { ...update, status: 'failed' } : update
-                ));
-                toast({ title: 'Penalty Error', description: 'Received an unreadable response from the server. Please try again.', variant: 'destructive' });
-                return;
-            }
-
-            if (response.ok) {
-                await fetchPlayerData(); // Await fetchPlayerData before removing optimistic update
-                setOptimisticUpdates(prev => prev.filter(update => update.id !== updateId));
-            } else {
-                setOptimisticUpdates(prev => prev.map(update =>
-                    update.id === updateId ? { ...update, status: 'failed' } : update
-                ));
-                console.error("Backend error applying enemy collision penalty:", data.error || 'Failed to apply penalty.'); // Log error instead of throwing
-                toast({ title: 'Penalty Error', description: data.error || 'Failed to apply penalty.', variant: 'destructive' });
-            }
-
-        } catch (error) {
-            console.error("Network or unexpected error applying enemy collision penalty via backend:", error);
-            let errorMessage = `Could not apply penalty. Error: ${error instanceof Error ? error.message : String(error)}`;
-            if (error instanceof Error && error.name === 'AbortError') {
-                console.log('[GameUI] handleEnemyCollisionPenalty aborted.');
-            } else {
-                if (error instanceof Error && error.message && errorMessage.includes('CSRF token missing')) {
-                    errorMessage = 'Security error: Missing CSRF token. Please try logging in again.';
-                } else if (error instanceof Error && error.message && errorMessage.includes('Non-JSON response')) {
-                    errorMessage = 'Server returned an unexpected response format. Please try again later.';
-                } else if (error instanceof Error && error.message && errorMessage.includes('Failed to fetch')) {
-                    errorMessage = 'Network error: Could not connect to the server. Please check your internet connection.';
-                }
-                toast({ title: 'Penalty Error', description: errorMessage, variant: 'destructive' });
-                setOptimisticUpdates(prev => prev.map(update =>
-                    update.id === updateId ? { ...update, status: 'failed' } : update
-                ));
-            }
-        }
-    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, fetchPlayerData, apiFetch]); // Added apiFetch to dependencies
+    }, [isAuthenticated, isWalletConnectedAndMatching, authUser?.publicKey, toast, batchApplyPenalty]);
 
 
     return (

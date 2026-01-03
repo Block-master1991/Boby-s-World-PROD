@@ -1,23 +1,19 @@
 import { NextResponse } from 'next/server';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
-import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
-import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 import { initializeAdminApp } from '@/lib/firebase-admin';
+import { logger } from '@/utils/logger';
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
-  console.log("[API] /api/game/withdrawUSDT called");
+  logger.log("[API] /api/game/withdrawUSDT called");
 
   try {
     await initializeAdminApp(); // Initialize inside the handler
     const db = getFirestore();
 
-    const userPublicKey = request.user?.sub; // Get public key from authenticated user
-
-    if (!userPublicKey) {
-      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-    }
+    const userPublicKey = request.user.sub;
 
     const { amount } = await request.json();
 
@@ -51,21 +47,11 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     const response = NextResponse.json({ success: true, newBalance });
 
-    // إصدار CSRF Token جديد بعد الطلب الناجح
+    // Use unified helper to update CSRF
     const requestHost = request.headers.get('host') || undefined;
-    const csrfToken = await CSRFManager.getOrCreateToken(userPublicKey);
-    response.cookies.set('csrfToken', csrfToken, {
-      httpOnly: false,
-      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-      maxAge: 30 * 60, // 30 دقيقة
-      path: '/',
-    });
-    console.log('[withdrawUSDT] New CSRF token issued and set in cookie.');
-
-    return response;
+    return await setCsrfTokenResponse(response, userPublicKey, requestHost);
   } catch (error: unknown) {
-    console.error('[withdrawUSDT] Error:', error);
+    logger.error('[withdrawUSDT] Error:', error as Error);
     let errorMessage = (error instanceof Error) ? error.message : 'Failed to withdraw USDT.';
     let statusCode = 500;
 

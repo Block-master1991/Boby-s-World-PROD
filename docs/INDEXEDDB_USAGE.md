@@ -1,42 +1,42 @@
-# دليل استخدام نظام IndexedDB المحسّن
+# Enhanced IndexedDB System Usage Guide
 
-## نظرة عامة
+## Overview
 
-هذا الدليل يشرح كيفية استخدام نظام IndexedDB المحسّن في مشروع Boby's World.
+This guide explains how to use the enhanced IndexedDB system in the Boby's World project.
 
 ---
 
-## 1. قياس موارد اللعبة
+## 1. Measuring Game Resources
 
-### الأمر الأساسي
+### Basic Command
 
 ```bash
-# قياس جميع الموارد
+# Measure all resources
 node scripts/measureAssets.js
 ```
 
-### النتائج
+### Results
 
-سيتم إنشاء ملف `scripts/measured-assets.json` يحتوي على:
-- SHA-256 checksum لكل ملف
-- الحجم الفعلي بالبايتات
-- تاريخ آخر تعديل
-- مقارنة مع الأحجام المقدّرة
+A file `scripts/measured-assets.json` will be created containing:
+- SHA-256 checksum for each file
+- Actual size in bytes
+- Last modification date
+- Comparison with estimated sizes
 
-### تحديث Manifest
+### Update Manifest
 
 ```bash
-# تحديث gameAssetManifest.ts بالبيانات الحقيقية
+# Update gameAssetManifest.ts with real data
 node scripts/updateManifest.js
 ```
 
-سيتم إنشاء نسخة احتياطية تلقائياً قبل التحديث.
+A backup will be created automatically before updating.
 
 ---
 
-## 2. التحقق من سلامة الملفات
+## 2. File Integrity Verification
 
-### الاستخدام البسيط
+### Simple Usage
 
 ```typescript
 import { verifyAssetIntegrity } from '@/lib/assetIntegrity';
@@ -46,17 +46,17 @@ const data = await fetch('/models/dog.glb').then(r => r.arrayBuffer());
 const check = await verifyAssetIntegrity(
     '/models/dog.glb',
     data,
-    'a3f5c9b2...', // SHA-256 (اختياري)
-    913555       // الحجم المتوقع بالبايتات (اختياري)
+    'a3f5c9b2...', // SHA-256 (optional)
+    913555       // Expected size in bytes (optional)
 );
 
 if (!check.isValid) {
-    console.error(`ملف تالف: ${check.error}`);
-    // إعادة تحميل أو إخطار المستخدم
+    console.error(`Corrupted file: ${check.error}`);
+    // Reload or notify user
 }
 ```
 
-### فحص متعدد
+### Multiple Verification
 
 ```typescript
 import { verifyMultipleAssets } from '@/lib/assetIntegrity';
@@ -66,15 +66,15 @@ const report = await verifyMultipleAssets([
     { path: '/models/coin.glb', data: buffer2, expectedSHA256: '...' },
 ]);
 
-console.log(`تم التحقق: ${report.passed}/${report.totalChecked}`);
-console.log(`فشل: ${report.failed}`);
+console.log(`Verified: ${report.passed}/${report.totalChecked}`);
+console.log(`Failed: ${report.failed}`);
 ```
 
 ---
 
-## 3. نظام الضغط
+## 3. Compression System
 
-### تخزين مع ضغط تلقائي
+### Storage with Automatic Compression
 
 ```typescript
 import { putAssetCompressed } from '@/lib/indexedDBCompression';
@@ -90,48 +90,48 @@ const asset = {
     data: data
 };
 
-// سيتم الضغط تلقائياً إذا كان الحجم > 5MB
+// Will be compressed automatically if size > 5MB
 await putAssetCompressed(asset, 5);
 ```
 
-### استرجاع مع فك ضغط تلقائي
+### Retrieval with Automatic Decompression
 
 ```typescript
 import { getAssetDecompressed } from '@/lib/indexedDBCompression';
 
 const asset = await getAssetDecompressed('/models/large-model.glb');
-// البيانات مفكوكة تلقائياً
+// Data is decompressed automatically
 ```
 
-### تحليل فوائد الضغط
+### Compression Benefits Analysis
 
 ```typescript
 import { calculateCompressionBenefit } from '@/lib/indexedDBCompression';
 
 const benefit = await calculateCompressionBenefit(arrayBuffer);
 
-console.log(`الحجم الأصلي: ${benefit.originalSizeMB}MB`);
-console.log(`بعد الضغط: ${benefit.compressedSizeMB}MB`);
-console.log(`التوفير: ${benefit.reductionPercent.toFixed(1)}%`);
-console.log(`يستحق الضغط: ${benefit.worthCompressing ? 'نعم' : 'لا'}`);
+console.log(`Original size: ${benefit.originalSizeMB}MB`);
+console.log(`After compression: ${benefit.compressedSizeMB}MB`);
+console.log(`Savings: ${benefit.reductionPercent.toFixed(1)}%`);
+console.log(`Worth compressing: ${benefit.worthCompressing ? 'Yes' : 'No'}`);
 ```
 
 ---
 
-## 4. نظام التحميل الأولي المحسّن
+## 4. Enhanced Initial Loading System
 
-### الاستخدام الأساسي
+### Basic Usage
 
 ```typescript
 import { initialAssetPreloader } from '@/lib/initialAssetPreloader';
 
 const success = await initialAssetPreloader.preloadAllAssets({
     onProgress: (progress) => {
-        console.log(`التقدم: ${progress.loadedAssets}/${progress.totalAssets}`);
-        console.log(`الحجم: ${progress.loadedSizeMB}/${progress.totalSizeMB}MB`);
-        console.log(`السرعة: ${progress.downloadSpeed.toFixed(2)}MB/s`);
-        console.log(`تم التحقق: ${progress.verifiedAssets}`);
-        console.log(`تالف: ${progress.corruptedAssets}`);
+        console.log(`Progress: ${progress.loadedAssets}/${progress.totalAssets}`);
+        console.log(`Size: ${progress.loadedSizeMB}/${progress.totalSizeMB}MB`);
+        console.log(`Speed: ${progress.downloadSpeed.toFixed(2)}MB/s`);
+        console.log(`Verified: ${progress.verifiedAssets}`);
+        console.log(`Corrupted: ${progress.corruptedAssets}`);
     },
     maxConcurrentLoads: 3,
     timeoutMs: 300000,
@@ -139,28 +139,28 @@ const success = await initialAssetPreloader.preloadAllAssets({
 });
 
 if (success) {
-    console.log('جميع الموارد محملة بنجاح!');
+    console.log('All resources loaded successfully!');
 } else {
-    console.error('فشل تحميل بعض الموارد');
+    console.error('Some resources failed to load');
 }
 ```
 
-### الحصول على الحالة
+### Get Status
 
 ```typescript
 const status = initialAssetPreloader.getPreloadStatus();
 const stats = initialAssetPreloader.getPreloadStats();
 
-console.log(`معدل الإنجاز: ${stats.completionRate}%`);
-console.log(`معدل النجاح: ${stats.successRate}%`);
-console.log(`الأخطاء: ${stats.errors}`);
+console.log(`Completion rate: ${stats.completionRate}%`);
+console.log(`Success rate: ${stats.successRate}%`);
+console.log(`Errors: ${stats.errors}`);
 ```
 
 ---
 
-## 5. IndexedDB الأساسي
+## 5. Basic IndexedDB
 
-### التخزين
+### Storage
 
 ```typescript
 import { putAsset } from './indexedDB';
@@ -179,7 +179,7 @@ const asset = {
 await putAsset(asset);
 ```
 
-### الاسترجاع
+### Retrieval
 
 ```typescript
 import { getAsset } from './indexedDB';
@@ -187,29 +187,29 @@ import { getAsset } from './indexedDB';
 const asset = await getAsset('/models/dog.glb');
 
 if (asset) {
-    console.log(`تم العثور على: ${asset.name}`);
-    // استخدم asset.data
+    console.log(`Found: ${asset.name}`);
+    // Use asset.data
 } else {
-    console.log('الملف غير موجود في الذاكرة المؤقتة');
+    console.log('File not in cache');
 }
 ```
 
-### إحصائيات الذاكرة المؤقتة
+### Cache Statistics
 
 ```typescript
 import { getCacheStats } from './indexedDB';
 
 const stats = await getCacheStats();
 
-console.log(`الملفات المخزنة: ${stats.totalItems}`);
-console.log(`المساحة المستخدمة: ${stats.totalSize / (1024*1024)}MB`);
-console.log(`الحد الأقصى: ${stats.maxSize / (1024*1024)}MB`);
-console.log(`معدل النجاح: ${(stats.hitRate * 100).toFixed(1)}%`);
+console.log(`Stored files: ${stats.totalItems}`);
+console.log(`Used space: ${stats.totalSize / (1024*1024)}MB`);
+console.log(`Maximum: ${stats.maxSize / (1024*1024)}MB`);
+console.log(`Hit rate: ${(stats.hitRate * 100).toFixed(1)}%`);
 ```
 
 ---
 
-## 6. واجهة المستخدم
+## 6. User Interface
 
 ### InitialAssetLoader Component
 
@@ -218,106 +218,106 @@ import InitialAssetLoader from '@/components/InitialAssetLoader';
 
 <InitialAssetLoader
     onComplete={() => {
-        console.log('التحميل اكتمل!');
-        // انتقل إلى اللعبة
+        console.log('Loading completed!');
+        // Navigate to game
     }}
     onError={(error) => {
-        console.error('فشل التحميل:', error);
-        // أظهر رسالة خطأ للمستخدم
+        console.error('Loading failed:', error);
+        // Show error message to user
     }}
 />
 ```
 
 ---
 
-## 7. استكشاف الأخطاء
+## 7. Troubleshooting
 
-### ملف مفقود
+### Missing File
 
 ```
 ✗ Error: File not found: /models/missing.glb
 ```
 
-**الحل**: تأكد من وجود الملف في `/public` وأنه مدرج في `gameAssetManifest.ts`
+**Solution**: Make sure the file exists in `/public` and is listed in `gameAssetManifest.ts`
 
-### فشل التحقق من السلامة
+### Integrity Verification Failure
 
 ```
 ⚠️ Integrity check failed: SHA-256 mismatch
 ```
 
-**الحل**: 
-1. احذف الملف من IndexedDB: `await deleteAsset(path)`
-2. أعد قياس الملف: `node scripts/measureAssets.js`
-3. حدّث manifest: `node scripts/updateManifest.js`
+**Solution**:
+1. Delete the file from IndexedDB: `await deleteAsset(path)`
+2. Re-measure the file: `node scripts/measureAssets.js`
+3. Update manifest: `node scripts/updateManifest.js`
 
-### ذاكرة ممتلئة
+### Full Memory
 
 ```
 [IndexedDB] Evicting asset: /models/old-model.glb
 ```
 
-**ملاحظة**: هذا طبيعي. النظام ينظف تلقائياً الملفات القديمة عند الحاجة.
+**Note**: This is normal. The system automatically cleans old files when needed.
 
-### فشل الضغط
+### Compression Failure
 
 ```
 [Compression] CompressionStream not supported
 ```
 
-**الحل**: المتصفح لا يدعم CompressionStream API. سيتم تخزين الملفات بدون ضغط.
+**Solution**: The browser doesn't support CompressionStream API. Files will be stored without compression.
 
 ---
 
-## 8. الأداء
+## 8. Performance
 
-### نصائح لتحسين الأداء
+### Performance Optimization Tips
 
-1. **استخدم الأولويات بحكمة**
-   - `critical`: الموارد الأساسية فقط
-   - `high`: موارد اللعبة الرئيسية
-   - `medium`: تحسينات بصرية
-   - `low`: إضافات اختيارية
+1. **Use Priorities Wisely**
+   - `critical`: Only essential resources
+   - `high`: Main game resources
+   - `medium`: Visual improvements
+   - `low`: Optional additions
 
-2. **اضبط التحميل المتوازي**
+2. **Adjust Parallel Loading**
    ```typescript
    maxConcurrentLoads: isMobile ? 2 : 4
    ```
 
-3. **استخدم الضغط للملفات الكبيرة**
+3. **Use Compression for Large Files**
    ```typescript
-   await putAssetCompressed(asset, 5); // فقط إذا > 5MB
+   await putAssetCompressed(asset, 5); // Only if > 5MB
    ```
 
-4. **راقب استخدام الذاكرة**
+4. **Monitor Memory Usage**
    ```typescript
    const stats = await getCacheStats();
    if (stats.totalSize > stats.maxSize * 0.8) {
-       console.warn('الذاكرة المؤقتة شبه ممتلئة');
+       console.warn('Cache almost full');
    }
    ```
 
 ---
 
-## 9. أمثلة متقدمة
+## 9. Advanced Examples
 
-### تحديث ملف قديم
+### Update Old File
 
 ```typescript
 import { getAsset, deleteAsset, putAsset } from '@/lib/indexedDB';
 import { verifyAssetIntegrity } from '@/lib/assetIntegrity';
 
 async function updateAsset(path: string, newData: ArrayBuffer, newSHA256: string) {
-    // احذف النسخة القديمة
+    // Delete old version
     await deleteAsset(path);
-    
-    // تحقق من السلامة
+
+    // Verify integrity
     const check = await verifyAssetIntegrity(path, newData, newSHA256);
     if (!check.isValid) {
-        throw new Error('البيانات الجديدة تالفة');
+        throw new Error('New data is corrupted');
     }
-    
-    // خزّن النسخة الجديدة
+
+    // Store new version
     await putAsset({
         id: path,
         name: path.split('/').pop(),
@@ -331,12 +331,12 @@ async function updateAsset(path: string, newData: ArrayBuffer, newSHA256: string
 }
 ```
 
-### تحميل انتقائي
+### Selective Loading
 
 ```typescript
 import { GAME_ASSET_MANIFEST } from '@/lib/gameAssetManifest';
 
-// حمّل فقط الموارد الحرجة والعالية الأولوية
+// Load only critical and high priority resources
 const priorityAssets = GAME_ASSET_MANIFEST.filter(
     asset => asset.priority === 'critical' || asset.priority === 'high'
 );
@@ -348,9 +348,9 @@ for (const asset of priorityAssets) {
 
 ---
 
-## 10. الدعم الفني
+## 10. Technical Support
 
-للمشاكل أو الأسئلة:
-1. راجع القسم "استكشاف الأخطاء" أعلاه
-2. تحقق من console logs للمعلومات التفصيلية
-3. راجع [walkthrough.md](file:///home/mohamed/.gemini/antigravity/brain/b87d1143-0323-4092-b094-43cc4bbb88aa/walkthrough.md) للتفاصيل الكاملة
+For issues or questions:
+1. Review the "Troubleshooting" section above
+2. Check console logs for detailed information
+3. Refer to [walkthrough.md](file:///home/mohamed/.gemini/antigravity/brain/b87d1143-0323-4092-b094-43cc4bbb88aa/walkthrough.md) for complete details

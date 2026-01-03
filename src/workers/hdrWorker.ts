@@ -4,6 +4,8 @@
  * Uses Transferable Objects for zero-copy memory transfer.
  */
 
+import { logger } from 'utils/logger';
+
 // Simple RGBE Parser (Minimal implementation of RGBELoader logic for Worker context)
 // This avoids importing the full Three.js library in the worker if possible,
 // or we can import RGBELoader if the build system supports it.
@@ -56,12 +58,12 @@ self.onmessage = async (e: MessageEvent) => {
     const { url } = e.data;
 
     try {
-        console.log(`[HDRWorker] Starting optimized fetch for: ${url}`);
+        logger.log(`[HDRWorker] Starting optimized fetch for: ${url}`);
         const response = await fetch(url);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
 
         const buffer = await response.arrayBuffer();
-        console.log(`[HDRWorker] Fetch complete (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB). Optimized Parsing...`);
+        logger.log(`[HDRWorker] Fetch complete (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB). Optimized Parsing...`);
 
         const result = await parseRGBEAsync(buffer, (progress) => {
             (self as any).postMessage({ status: 'progress', progress });
@@ -80,7 +82,7 @@ self.onmessage = async (e: MessageEvent) => {
         }, [result.data.buffer]);
 
     } catch (error) {
-        console.error(`[HDRWorker] Error:`, error);
+        logger.error(`[HDRWorker] Error:`, error as Error);
         self.postMessage({ status: 'error', error: (error as Error).message });
     }
 };
@@ -116,11 +118,11 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
     const width = parseInt(match[2]);
 
     if (width <= 0 || height <= 0 || width > 16384 || height > 16384) {
-        console.error(`[HDRWorker] Invalid dimensions: ${width}x${height}`);
+        logger.error(`[HDRWorker] Invalid dimensions: ${width}x${height}`);
         return null;
     }
 
-    console.log(`[HDRWorker] Parsing HDR: ${width}x${height} (${(width * height * 4 * 4 / 1024 / 1024).toFixed(1)}MB)`);
+    logger.log(`[HDRWorker] Parsing HDR: ${width}x${height} (${(width * height * 4 * 4 / 1024 / 1024).toFixed(1)}MB)`);
 
     // Intelligent downscaling based on device capabilities and memory constraints
     const shouldDownscale = width > 4096 || height > 4096;
@@ -134,13 +136,13 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
         if (estimatedMemoryMB > 150) { // Very high memory usage (>150MB)
             targetWidth = Math.floor(width * 0.25); // 8K -> 2K (aggressive downscaling)
             targetHeight = Math.floor(height * 0.25);
-            console.log(`[HDRWorker] Aggressive downscaling: ${width}x${height} → ${targetWidth}x${targetHeight} (${estimatedMemoryMB.toFixed(1)}MB → ${((targetWidth * targetHeight * 4 * 4) / (1024 * 1024)).toFixed(1)}MB)`);
+            logger.log(`[HDRWorker] Aggressive downscaling: ${width}x${height} → ${targetWidth}x${targetHeight} (${estimatedMemoryMB.toFixed(1)}MB → ${((targetWidth * targetHeight * 4 * 4) / (1024 * 1024)).toFixed(1)}MB)`);
         } else if (estimatedMemoryMB > 75) { // High memory usage (>75MB)
             targetWidth = Math.floor(width * 0.5); // 8K -> 4K (moderate downscaling)
             targetHeight = Math.floor(height * 0.5);
-            console.log(`[HDRWorker] Moderate downscaling: ${width}x${height} → ${targetWidth}x${targetHeight} (${estimatedMemoryMB.toFixed(1)}MB → ${((targetWidth * targetHeight * 4 * 4) / (1024 * 1024)).toFixed(1)}MB)`);
+            logger.log(`[HDRWorker] Moderate downscaling: ${width}x${height} → ${targetWidth}x${targetHeight} (${estimatedMemoryMB.toFixed(1)}MB → ${((targetWidth * targetHeight * 4 * 4) / (1024 * 1024)).toFixed(1)}MB)`);
         } else {
-            console.log(`[HDRWorker] Keeping original resolution: ${width}x${height} (${estimatedMemoryMB.toFixed(1)}MB)`);
+            logger.log(`[HDRWorker] Keeping original resolution: ${width}x${height} (${estimatedMemoryMB.toFixed(1)}MB)`);
         }
     }
 
@@ -228,7 +230,7 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
     let finalHeight = height;
 
     if (shouldDownscale && (targetWidth !== width || targetHeight !== height)) {
-        console.log(`[HDRWorker] Applying downscaling: ${width}x${height} → ${targetWidth}x${targetHeight}`);
+        logger.log(`[HDRWorker] Applying downscaling: ${width}x${height} → ${targetWidth}x${targetHeight}`);
         finalData = downscaleHDRData(rgbaFloat, width, height, targetWidth, targetHeight);
         finalWidth = targetWidth;
         finalHeight = targetHeight;

@@ -1,4 +1,5 @@
 // Asset Integrity Verification System
+import { logger } from 'utils/logger';
 // Ensures files are not corrupted and match expected checksums
 
 export interface IntegrityCheck {
@@ -31,7 +32,7 @@ export async function calculateSHA256(data: ArrayBuffer): Promise<string> {
         const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
         return hashHex;
     } catch (error) {
-        console.error('[AssetIntegrity] Failed to calculate SHA-256:', error);
+        logger.error('[AssetIntegrity] Failed to calculate SHA-256:', error);
         throw error;
     }
 }
@@ -63,7 +64,7 @@ export async function verifyAssetIntegrity(
             if (sizeDiffMB > 0.001) {
                 check.isValid = false;
                 check.error = `Size mismatch: expected ${expectedSize} bytes, got ${data.byteLength} bytes (diff: ${sizeDiffMB.toFixed(3)}MB)`;
-                console.warn(`[AssetIntegrity] ${check.error}`, path);
+                logger.warn(`[AssetIntegrity] ${check.error}`, path);
             }
         }
 
@@ -74,18 +75,18 @@ export async function verifyAssetIntegrity(
             if (check.actualSHA256 !== expectedSHA256) {
                 check.isValid = false;
                 check.error = `SHA-256 mismatch: expected ${expectedSHA256.substring(0, 16)}..., got ${check.actualSHA256.substring(0, 16)}...`;
-                console.error(`[AssetIntegrity] ${check.error}`, path);
+                logger.error(`[AssetIntegrity] ${check.error}`, path);
             }
         }
 
         if (check.isValid) {
-            console.log(`[AssetIntegrity] ✓ Verified: ${path} (${(data.byteLength / (1024 * 1024)).toFixed(2)}MB)`);
+            logger.log(`[AssetIntegrity] ✓ Verified: ${path} (${(data.byteLength / (1024 * 1024)).toFixed(2)}MB)`);
         }
 
     } catch (error) {
         check.isValid = false;
         check.error = error instanceof Error ? error.message : 'Unknown verification error';
-        console.error(`[AssetIntegrity] Verification failed for ${path}:`, error);
+        logger.error(`[AssetIntegrity] Verification failed for ${path}:`, error);
     }
 
     return check;
@@ -102,7 +103,7 @@ export async function verifyMultipleAssets(
         expectedSize?: number;
     }>
 ): Promise<IntegrityReport> {
-    console.log(`[AssetIntegrity] Starting verification of ${assets.length} assets...`);
+    logger.log(`[AssetIntegrity] Starting verification of ${assets.length} assets...`);
 
     const startTime = Date.now();
     const checks: IntegrityCheck[] = [];
@@ -129,12 +130,12 @@ export async function verifyMultipleAssets(
     };
 
     const duration = (Date.now() - startTime) / 1000;
-    console.log(`[AssetIntegrity] Verification complete in ${duration.toFixed(2)}s: ${passed} passed, ${failed} failed`);
+    logger.log(`[AssetIntegrity] Verification complete in ${duration.toFixed(2)}s: ${passed} passed, ${failed} failed`);
 
     if (failed > 0) {
-        console.warn(`[AssetIntegrity] ⚠️ ${failed} assets failed integrity check`);
+        logger.warn(`[AssetIntegrity] ⚠️ ${failed} assets failed integrity check`);
         checks.filter(c => !c.isValid).forEach(check => {
-            console.warn(`  - ${check.path}: ${check.error}`);
+            logger.warn(`  - ${check.path}: ${check.error}`);
         });
     }
 
@@ -178,7 +179,7 @@ export function cacheIntegrityCheck(check: IntegrityCheck): void {
         };
         localStorage.setItem(cacheKey, JSON.stringify(cacheData));
     } catch (error) {
-        console.warn('[AssetIntegrity] Failed to cache integrity check:', error);
+        logger.warn('[AssetIntegrity] Failed to cache integrity check:', error);
     }
 }
 
@@ -209,7 +210,7 @@ export function getCachedIntegrityCheck(path: string, maxAgeMs: number = 24 * 60
             lastChecked: data.timestamp
         };
     } catch (error) {
-        console.warn('[AssetIntegrity] Failed to retrieve cached check:', error);
+        logger.warn('[AssetIntegrity] Failed to retrieve cached check:', error);
         return null;
     }
 }
@@ -225,9 +226,9 @@ export function clearIntegrityCache(): void {
                 localStorage.removeItem(key);
             }
         });
-        console.log('[AssetIntegrity] Cache cleared');
+        logger.log('[AssetIntegrity] Cache cleared');
     } catch (error) {
-        console.warn('[AssetIntegrity] Failed to clear cache:', error);
+        logger.warn('[AssetIntegrity] Failed to clear cache:', error);
     }
 }
 
@@ -258,7 +259,7 @@ export function getIntegrityStats(): {
             newestCheck: timestamps.length > 0 ? Math.max(...timestamps) : null
         };
     } catch (error) {
-        console.warn('[AssetIntegrity] Failed to get stats:', error);
+        logger.warn('[AssetIntegrity] Failed to get stats:', error);
         return {
             cachedChecks: 0,
             oldestCheck: null,

@@ -1,7 +1,8 @@
 import * as admin from 'firebase-admin';
+import { logger } from 'utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import {FIREBASE_PROJECT_ID} from './constants';
-import {FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY} from './server-constants';
+import { FIREBASE_PROJECT_ID } from './constants';
+import { FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } from './server-constants';
 
 let app: admin.app.App;
 export let db: admin.firestore.Firestore;
@@ -13,10 +14,10 @@ export async function initializeAdminApp() {
     return app;
   }
 
-  console.log("[Firebase Admin Init] Checking environment variables...");
-  console.log("FIREBASE_PROJECT_ID:", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
-  console.log("FIREBASE_CLIENT_EMAIL:", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
-  console.log("FIREBASE_PRIVATE_KEY (first 20 chars):", FIREBASE_PRIVATE_KEY ? FIREBASE_PRIVATE_KEY.substring(0, 20) + "..." : "MISSING_OR_EMPTY");
+  logger.log("[Firebase Admin Init] Checking environment variables...");
+  logger.log("FIREBASE_PROJECT_ID:", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
+  logger.log("FIREBASE_CLIENT_EMAIL:", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
+  logger.log("FIREBASE_PRIVATE_KEY (first 20 chars):", FIREBASE_PRIVATE_KEY ? FIREBASE_PRIVATE_KEY.substring(0, 20) + "..." : "MISSING_OR_EMPTY");
 
   const privateKey = FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
 
@@ -26,18 +27,18 @@ export async function initializeAdminApp() {
     !privateKey ||
     privateKey === "YOUR_FIREBASE_PRIVATE_KEY_HERE_WITH_NEWLINES_AS_\\n" // Explicit check for placeholder
   ) {
-    console.error("Firebase Admin SDK environment variables are not set correctly or private key is placeholder. Firebase will not be initialized.");
-    console.error("FIREBASE_PROJECT_ID (Error Check):", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
-    console.error("FIREBASE_CLIENT_EMAIL (Error Check):", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
-    console.error("FIREBASE_PRIVATE_KEY (Error Check):", 
-      privateKey 
-        ? (privateKey === "YOUR_FIREBASE_PRIVATE_KEY_HERE_WITH_NEWLINES_AS_\\n" 
-            ? "IS_PLACEHOLDER_VALUE" 
-            : "Set (verify content and format)") 
+    logger.error("Firebase Admin SDK environment variables are not set correctly or private key is placeholder. Firebase will not be initialized.");
+    logger.error("FIREBASE_PROJECT_ID (Error Check):", FIREBASE_PROJECT_ID ? "Set" : "MISSING_OR_EMPTY");
+    logger.error("FIREBASE_CLIENT_EMAIL (Error Check):", FIREBASE_CLIENT_EMAIL ? "Set" : "MISSING_OR_EMPTY");
+    logger.error("FIREBASE_PRIVATE_KEY (Error Check):",
+      privateKey
+        ? (privateKey === "YOUR_FIREBASE_PRIVATE_KEY_HERE_WITH_NEWLINES_AS_\\n"
+          ? "IS_PLACEHOLDER_VALUE"
+          : "Set (verify content and format)")
         : "MISSING_OR_EMPTY"
     );
-    // لا ترمي خطأ هنا، بل عد بـ null للسماح للمعالج بالتعامل معها
-    return null; 
+    // Do not throw error here, return null to allow handler to deal with it
+    return null;
   }
 
   const credential = admin.credential.cert({

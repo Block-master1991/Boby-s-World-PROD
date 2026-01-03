@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { getDevicePerformanceConfig } from '../../utils';
 import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { logger } from 'utils/logger';
 
 /**
  * Skybox implementation using HDR texture for realistic environment and lighting.
@@ -63,7 +64,7 @@ export class Skybox extends THREE.Object3D {
     const modelName = 'hdr_data';
     const perfConfig = getDevicePerformanceConfig();
 
-    console.log(`[Skybox] Initializing Worker for HDR: ${hdrUrl}`);
+    logger.log(`[Skybox] Initializing Worker for HDR: ${hdrUrl}`);
 
     try {
       // Try to load HDR data from IndexedDB first
@@ -71,12 +72,12 @@ export class Skybox extends THREE.Object3D {
       let blobUrl: string;
 
       if (hdrData) {
-        console.log(`[Skybox] Loading HDR from IndexedDB: ${modelName}`);
+        logger.log(`[Skybox] Loading HDR from IndexedDB: ${modelName}`);
         // Create blob URL from cached data
         const blob = new Blob([hdrData], { type: 'application/octet-stream' });
         blobUrl = URL.createObjectURL(blob);
       } else {
-        console.log(`[Skybox] Fetching HDR from network: ${hdrUrl}`);
+        logger.log(`[Skybox] Fetching HDR from network: ${hdrUrl}`);
         // Fetch HDR data and cache it
         const response = await fetch(hdrUrl);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -96,7 +97,7 @@ export class Skybox extends THREE.Object3D {
 
         if (status === 'progress') {
           // Progress reported from worker: e.data.progress (0.0 to 1.0)
-          console.log(`[Skybox] HDR Processing Progress: ${(e.data.progress * 100).toFixed(1)}%`);
+          logger.log(`[Skybox] HDR Processing Progress: ${(e.data.progress * 100).toFixed(1)}%`);
           return;
         }
 
@@ -104,11 +105,11 @@ export class Skybox extends THREE.Object3D {
           // Clear timeout on success
           clearTimeout(workerTimeout);
 
-          console.log(`[Skybox] Worker returned data: width=${width}, height=${height}, dataLength=${data.length}, dataType=${data.constructor.name}`);
+          logger.log(`[Skybox] Worker returned data: width=${width}, height=${height}, dataLength=${data.length}, dataType=${data.constructor.name}`);
 
           // Check WebGL texture size limits before creating texture
           const maxTextureSize = this.renderer?.capabilities.maxTextureSize || 4096;
-          console.log(`[Skybox] WebGL Max Texture Size: ${maxTextureSize}, HDR Size: ${width}x${height}`);
+          logger.log(`[Skybox] WebGL Max Texture Size: ${maxTextureSize}, HDR Size: ${width}x${height}`);
 
           // If HDR exceeds WebGL limits, we need to handle it
           let finalWidth = width;
@@ -116,7 +117,7 @@ export class Skybox extends THREE.Object3D {
           let finalData = data;
 
           if (width > maxTextureSize || height > maxTextureSize) {
-            console.warn(`[Skybox] HDR size (${width}x${height}) exceeds WebGL limit (${maxTextureSize}). Downscaling for compatibility.`);
+            logger.warn(`[Skybox] HDR size (${width}x${height}) exceeds WebGL limit (${maxTextureSize}). Downscaling for compatibility.`);
 
             // Calculate downscaled dimensions that fit within WebGL limits
             const scaleFactor = Math.min(maxTextureSize / width, maxTextureSize / height);
@@ -126,7 +127,7 @@ export class Skybox extends THREE.Object3D {
             // Simple bilinear downscaling for HDR data
             finalData = downscaleHDRData(data, width, height, finalWidth, finalHeight);
 
-            console.log(`[Skybox] Downscaled HDR from ${width}x${height} to ${finalWidth}x${finalHeight}`);
+            logger.log(`[Skybox] Downscaled HDR from ${width}x${height} to ${finalWidth}x${finalHeight}`);
           }
 
           // Create DataTexture from the worker's data
@@ -158,7 +159,7 @@ export class Skybox extends THREE.Object3D {
           texture.flipY = true;
           texture.needsUpdate = true;
 
-          console.log(`[Skybox] Texture created: ${finalWidth}x${finalHeight}, anisotropy=${texture.anisotropy}, colorSpace=${texture.colorSpace}`);
+          logger.log(`[Skybox] Texture created: ${finalWidth}x${finalHeight}, anisotropy=${texture.anisotropy}, colorSpace=${texture.colorSpace}`);
 
           // Apply to sky sphere
           this.setupSkyMesh(texture, perfConfig);
@@ -166,7 +167,7 @@ export class Skybox extends THREE.Object3D {
           // Attempt to apply to the scene background and environment
           this.applyToScene(texture);
 
-          console.log(`[Skybox] Worker successful! 8K HDR Applied. (${perfConfig.isMobile ? 'Mobile' : 'Desktop'})`);
+          logger.log(`[Skybox] Worker successful! 8K HDR Applied. (${perfConfig.isMobile ? 'Mobile' : 'Desktop'})`);
 
           // CRITICAL MEMORY CLEANUP:
           // We can't null data immediately as Three.js might need it for a frame,
@@ -179,7 +180,7 @@ export class Skybox extends THREE.Object3D {
           // Mark as loaded
           if (this.resolveLoading) this.resolveLoading();
         } else {
-          console.error('[Skybox] Worker Error:', error);
+          logger.error('[Skybox] Worker Error:', error);
           this.applyFallbackSky();
           worker.terminate();
           URL.revokeObjectURL(blobUrl);
@@ -189,7 +190,7 @@ export class Skybox extends THREE.Object3D {
       };
 
       worker.onerror = (err) => {
-        console.error('[Skybox] Worker Crash:', err);
+        logger.error('[Skybox] Worker Crash:', err);
         this.applyFallbackSky();
         worker.terminate();
         URL.revokeObjectURL(blobUrl);
@@ -198,7 +199,7 @@ export class Skybox extends THREE.Object3D {
 
       // Add timeout for worker processing (60 seconds total)
       const workerTimeout = setTimeout(() => {
-        console.error('[Skybox] HDR Worker timeout - terminating');
+        logger.error('[Skybox] HDR Worker timeout - terminating');
         worker.terminate();
         URL.revokeObjectURL(blobUrl);
         this.applyFallbackSky();
@@ -208,7 +209,7 @@ export class Skybox extends THREE.Object3D {
       worker.postMessage({ url: blobUrl });
 
     } catch (workerInitError) {
-      console.error('[Skybox] Failed to initialize HDR Worker:', workerInitError);
+      logger.error('[Skybox] Failed to initialize HDR Worker:', workerInitError);
       this.applyFallbackSky();
       if (this.resolveLoading) this.resolveLoading();
     }
@@ -240,20 +241,20 @@ export class Skybox extends THREE.Object3D {
     this.skyMesh.name = 'SkySphereMesh';
     this.add(this.skyMesh);
 
-    console.log(`[Skybox] Mesh created and added: geometry segments=${segments}, material has texture=${!!material.map}`);
-    console.log(`[Skybox] Mesh details: position=${this.skyMesh.position.toArray()}, visible=${this.skyMesh.visible}, renderOrder=${this.skyMesh.renderOrder}`);
-    console.log(`[Skybox] Material details: transparent=${material.transparent}, depthWrite=${material.depthWrite}, fog=${material.fog}, side=${material.side}`);
+    logger.log(`[Skybox] Mesh created and added: geometry segments=${segments}, material has texture=${!!material.map}`);
+    logger.log(`[Skybox] Mesh details: position=${this.skyMesh.position.toArray()}, visible=${this.skyMesh.visible}, renderOrder=${this.skyMesh.renderOrder}`);
+    logger.log(`[Skybox] Material details: transparent=${material.transparent}, depthWrite=${material.depthWrite}, fog=${material.fog}, side=${material.side}`);
 
     // Force high render order to ensure sky renders last
     this.skyMesh.renderOrder = 1000;
-    console.log(`[Skybox] Set renderOrder to 1000 for sky mesh`);
+    logger.log(`[Skybox] Set renderOrder to 1000 for sky mesh`);
   }
 
   /**
    * Fallback to a beautiful procedural-like sky if the heavy HDR fails.
    */
   private applyFallbackSky() {
-    console.warn('[Skybox] Using fallback atmospheric sky');
+    logger.warn('[Skybox] Using fallback atmospheric sky');
     const geometry = new THREE.SphereGeometry(200, 64, 32);
     const material = new THREE.MeshBasicMaterial({
       color: 0x87CEEB, // Sky blue
@@ -292,19 +293,19 @@ export class Skybox extends THREE.Object3D {
             current.background = null;
             current.environment = envMap.texture;
 
-            console.log(`[Skybox] High-quality PMREM environment map applied successfully: texture size=${envMap.texture.image?.width}x${envMap.texture.image?.height}`);
+            logger.log(`[Skybox] High-quality PMREM environment map applied successfully: texture size=${envMap.texture.image?.width}x${envMap.texture.image?.height}`);
 
             // Log scene lighting status
-            console.log(`[Skybox] Scene lighting: background=${current.background}, environment=${!!current.environment}`);
-            console.log(`[Skybox] Scene children count: ${current.children.length}`);
+            logger.log(`[Skybox] Scene lighting: background=${current.background}, environment=${!!current.environment}`);
+            logger.log(`[Skybox] Scene children count: ${current.children.length}`);
           } catch (error) {
-            console.warn('[Skybox] PMREMGenerator failed, falling back to direct texture:', error);
+            logger.warn('[Skybox] PMREMGenerator failed, falling back to direct texture:', error);
             // Fallback to direct texture if PMREM fails
             current.background = null;
             current.environment = texture;
           }
         } else {
-          console.warn('[Skybox] No renderer available, using direct texture');
+          logger.warn('[Skybox] No renderer available, using direct texture');
           // Fallback when no renderer is available
           current.background = null;
           current.environment = texture;

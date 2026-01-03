@@ -4,6 +4,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useConnection } from '@solana/wallet-adapter-react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { logger } from '@/utils/logger';
 import { PublicKey } from '@solana/web3.js';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -23,8 +24,8 @@ interface BalanceDisplayProps {
 
 const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ isLoading, balance, error, currencyName, icon, onRetry }) => {
     const simpleFormatBalance = (bal: number | null): string => {
-      if (bal === null) return '---';
-      return bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+        if (bal === null) return '---';
+        return bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
     };
 
     return (
@@ -38,7 +39,7 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ isLoading, balance, err
                 {!isLoading && error && (
                     <div className="flex items-center text-destructive text-sm">
                         <AlertTriangle className="h-4 w-4 mr-1 rtl:ml-1" /> Error
-                     {onRetry && <Button onClick={onRetry} size="sm" variant="ghost" className="ml-1 h-auto p-1 text-xs">Retry</Button>}
+                        {onRetry && <Button onClick={onRetry} size="sm" variant="ghost" className="ml-1 h-auto p-1 text-xs">Retry</Button>}
                     </div>
                 )}
                 {!isLoading && !error && (
@@ -53,36 +54,36 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ isLoading, balance, err
 const TokenBalance: React.FC = () => {
     const { connection } = useConnection();
     const { sessionPublicKey, isAdapterConnected } = useSessionWallet();
-    
+
     const [solBalance, setSolBalance] = useState<number | null>(null);
     const [bobyBalance, setBobyBalance] = useState<number | null>(null);
-    const [usdtBalance, setUsdtBalance] = useState<number | null>(null); 
+    const [usdtBalance, setUsdtBalance] = useState<number | null>(null);
 
     const [isLoadingSol, setIsLoadingSol] = useState(true);
     const [isLoadingBoby, setIsLoadingBoby] = useState(true);
-    const [isLoadingUsdt, setIsLoadingUsdt] = useState(true); 
+    const [isLoadingUsdt, setIsLoadingUsdt] = useState(true);
 
     const [solError, setSolError] = useState<ErrorType>(null);
     const [bobyError, setBobyError] = useState<ErrorType>(null);
-    const [usdtError, setUsdtError] = useState<ErrorType>(null); 
+    const [usdtError, setUsdtError] = useState<ErrorType>(null);
 
     const fetchBalances = useCallback(async () => {
         if (!connection || !sessionPublicKey || !isAdapterConnected) {
-            setSolBalance(null); setBobyBalance(null); setUsdtBalance(null); 
-            setIsLoadingSol(false); setIsLoadingBoby(false); setIsLoadingUsdt(false); 
-            setSolError(null); setBobyError(null); setUsdtError(null); 
+            setSolBalance(null); setBobyBalance(null); setUsdtBalance(null);
+            setIsLoadingSol(false); setIsLoadingBoby(false); setIsLoadingUsdt(false);
+            setSolError(null); setBobyError(null); setUsdtError(null);
             return;
         }
 
         setIsLoadingSol(true); setSolError(null);
         setIsLoadingBoby(true); setBobyError(null);
-        setIsLoadingUsdt(true); setUsdtError(null); 
-        
+        setIsLoadingUsdt(true); setUsdtError(null);
+
         try {
             const balanceInLamports = await connection.getBalance(sessionPublicKey);
             setSolBalance(balanceInLamports / LAMPORTS_PER_SOL);
         } catch (error: unknown) {
-            console.error("Error fetching SOL balance:", error);
+            logger.error("Error fetching SOL balance:", error);
             if (error instanceof Error) {
                 setSolError(error.message.includes('RPC') ? 'rpc' : 'other');
             }
@@ -100,7 +101,7 @@ const TokenBalance: React.FC = () => {
                 setBobyBalance(0);
             }
         } catch (error: unknown) {
-            console.error("Error fetching Boby balance:", error);
+            logger.error("Error fetching Boby balance:", error);
             if (error instanceof Error) {
                 setBobyError(error.message.includes('RPC') ? 'rpc' : 'other');
             }
@@ -110,27 +111,27 @@ const TokenBalance: React.FC = () => {
         }
 
         try {
-            const usdtMintPublicKey = new PublicKey(USDT_TOKEN_MINT_ADDRESS); 
+            const usdtMintPublicKey = new PublicKey(USDT_TOKEN_MINT_ADDRESS);
             const accounts = await connection.getParsedTokenAccountsByOwner(sessionPublicKey, { mint: usdtMintPublicKey });
             if (accounts.value.length > 0 && accounts.value[0]?.account?.data?.parsed?.info?.tokenAmount?.uiAmount) {
-                setUsdtBalance(accounts.value[0].account.data.parsed.info.tokenAmount.uiAmount); 
+                setUsdtBalance(accounts.value[0].account.data.parsed.info.tokenAmount.uiAmount);
             } else {
-                setUsdtBalance(0); 
+                setUsdtBalance(0);
             }
         } catch (error: unknown) {
-            console.error("Error fetching USDT balance:", error);
+            logger.error("Error fetching USDT balance:", error);
             if (error instanceof Error) {
                 setUsdtError(error.message.includes('RPC') ? 'rpc' : 'other');
             }
             setUsdtBalance(null);
         } finally {
-            setIsLoadingUsdt(false); 
+            setIsLoadingUsdt(false);
         }
     }, [connection, sessionPublicKey, isAdapterConnected]);
 
     useEffect(() => {
         fetchBalances();
-        const intervalId = setInterval(fetchBalances, 30000); 
+        const intervalId = setInterval(fetchBalances, 30000);
         return () => clearInterval(intervalId);
     }, [connection, sessionPublicKey, isAdapterConnected, fetchBalances]);
 
@@ -151,7 +152,7 @@ const TokenBalance: React.FC = () => {
     return (
         <Card className="w-full shadow-md bg-opacity-80 backdrop-blur-sm">
             <CardHeader className="p-4 pb-2">
-                 <CardTitle className="text-md font-headline flex items-center gap-2"><WalletCards /> Your Balances</CardTitle>
+                <CardTitle className="text-md font-headline flex items-center gap-2"><WalletCards /> Your Balances</CardTitle>
             </CardHeader>
             <CardContent className="p-4 pt-2 space-y-2.5">
                 <BalanceDisplay
@@ -171,28 +172,28 @@ const TokenBalance: React.FC = () => {
                     onRetry={fetchBalances}
                 />
                 <BalanceDisplay
-                    isLoading={isLoadingUsdt} 
-                    balance={usdtBalance} 
-                    error={usdtError} 
-                    currencyName="USDT" 
+                    isLoading={isLoadingUsdt}
+                    balance={usdtBalance}
+                    error={usdtError}
+                    currencyName="USDT"
                     icon={<Image src="/USDT-logo.png" alt="USDT-sol Token" width={24} height={24} className="rounded-full" priority />}
                     onRetry={fetchBalances}
                 />
-                
-                {(solError || bobyError || usdtError) && ( 
+
+                {(solError || bobyError || usdtError) && (
                     <CardDescription className="text-xs text-destructive/80 pt-2 text-center px-2">
-                        { (solError === 'rpc' || bobyError === 'rpc' || usdtError === 'rpc') 
-                            ? "A network error (RPC) occurred. You may need to try again later or check your connection." 
+                        {(solError === 'rpc' || bobyError === 'rpc' || usdtError === 'rpc')
+                            ? "A network error (RPC) occurred. You may need to try again later or check your connection."
                             : "An error occurred while fetching some balances."}
                     </CardDescription>
                 )}
                 {bobyBalance === 0 && !isLoadingBoby && !bobyError && (
-                     <CardDescription className="text-xs text-muted-foreground pt-1 text-center px-2">
+                    <CardDescription className="text-xs text-muted-foreground pt-1 text-center px-2">
                         No Boby token balance found.
                     </CardDescription>
                 )}
-                 {usdtBalance === 0 && !isLoadingUsdt && !usdtError && ( 
-                     <CardDescription className="text-xs text-muted-foreground pt-1 text-center px-2">
+                {usdtBalance === 0 && !isLoadingUsdt && !usdtError && (
+                    <CardDescription className="text-xs text-muted-foreground pt-1 text-center px-2">
                         No USDT token balance found.
                     </CardDescription>
                 )}

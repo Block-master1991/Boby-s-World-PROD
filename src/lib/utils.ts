@@ -1,4 +1,5 @@
 import { clsx, type ClassValue } from "clsx";
+import { logger } from 'utils/logger';
 import { twMerge } from "tailwind-merge";
 
 export function cn(...inputs: ClassValue[]) {
@@ -35,7 +36,7 @@ export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit
     const csrfToken = getCookie('csrfToken');
 
     if (!csrfToken) {
-      console.warn('[fetchWithCsrf] CSRF token not found in cookies. This is normal for unauthenticated requests, but will fail for protected routes.');
+      logger.warn('[fetchWithCsrf] CSRF token not found in cookies. This is normal for unauthenticated requests, but will fail for protected routes.');
       // Don't throw here, let the request proceed. The server will reject it if CSRF is required.
     } else {
       const headers = new Headers(init?.headers);

@@ -1,14 +1,14 @@
 import { getFirestore, FieldValue, Timestamp } from 'firebase-admin/firestore';
+import { logger } from 'utils/logger';
 import { initializeAdminApp } from '@/lib/firebase-admin';
-import { fallbackStoreItems } from './items'; // استيراد البيانات الاحتياطية
+import { fallbackStoreItems } from './items'; // Import fallback data
 
-// تحديث واجهة StoreItemDefinition للتوافق مع GraphQL وقاعدة البيانات
+// Update StoreItemDefinition interface for GraphQL and database compatibility
 export interface StoreItemDefinition {
     id: string;
     name: string;
     description: string;
-    price: number; // السعر بالعملات الافتراضية
-    usdPrice: number; // السعر بالدولار
+    price: number; // Price in USD
     image: string;
     dataAiHint: string;
     type: 'consumable' | 'permanent';
@@ -16,15 +16,15 @@ export interface StoreItemDefinition {
     isActive: boolean;
     createdAt: string;
     updatedAt: string;
-    icon?: any; // أيقونة React للاستخدام في المكونات
+    icon?: any; // React icon for use in components
 }
 
-// واجهات GraphQL
+// GraphQL interfaces
 export interface CreateItemInput {
+    id?: string; // Optional, will be generated automatically if not provided
     name: string;
     description: string;
     price: number;
-    usdPrice: number;
     image: string;
     dataAiHint: string;
     type: 'consumable' | 'permanent';
@@ -35,7 +35,6 @@ export interface UpdateItemInput {
     name?: string;
     description?: string;
     price?: number;
-    usdPrice?: number;
     image?: string;
     dataAiHint?: string;
     type?: 'consumable' | 'permanent';
@@ -49,7 +48,7 @@ export interface ItemResult {
     message: string;
 }
 
-// وظيفة لجلب عنصر واحد من Firestore
+// Function to fetch single item from Firestore
 export async function getStoreItemFromFirestore(itemId: string): Promise<StoreItemDefinition | null> {
     try {
         await initializeAdminApp();
@@ -62,12 +61,12 @@ export async function getStoreItemFromFirestore(itemId: string): Promise<StoreIt
         }
         return null;
     } catch (error) {
-        console.error("Error fetching item from Firestore:", error);
+        logger.error("Error fetching item from Firestore:", error);
         return null;
     }
 }
 
-// وظيفة لترحيل العناصر الأولية إلى Firestore
+// Function to migrate initial items to Firestore
 export async function initializeStoreItemsInFirestore(): Promise<void> {
     try {
         await initializeAdminApp();
@@ -80,13 +79,12 @@ export async function initializeStoreItemsInFirestore(): Promise<void> {
             const itemDoc = await itemDocRef.get();
 
             if (!itemDoc.exists) {
-                // إضافة العنصر فقط إذا لم يكن موجودًا بالفعل
+                // Add item only if it doesn't already exist
                 const firestoreItem: StoreItemDefinition = {
                     id: item.id,
                     name: item.name,
                     description: item.description,
-                    price: Math.round(item.price * 100000), // تحويل من USD إلى العملات الافتراضية
-                    usdPrice: item.price,
+                    price: item.price,
                     image: item.image,
                     dataAiHint: item.dataAiHint,
                     type: 'consumable' as const,
@@ -102,18 +100,18 @@ export async function initializeStoreItemsInFirestore(): Promise<void> {
 
         if (itemsAddedCount > 0) {
             await batch.commit();
-            console.log(`Successfully added ${itemsAddedCount} store items to Firestore.`);
+            logger.log(`Successfully added ${itemsAddedCount} store items to Firestore.`);
         } else {
-            console.log("All store items already exist in Firestore. No new items added.");
+            logger.log("All store items already exist in Firestore. No new items added.");
         }
     } catch (error) {
-        console.error("Error initializing store items in Firestore:", error);
+        logger.error("Error initializing store items in Firestore:", error);
     }
 }
 
-// ===== وظائف CRUD الجديدة =====
+// ===== New CRUD functions =====
 
-// قراءة جميع الأغراض
+// Read all items
 export async function getAllStoreItems(): Promise<StoreItemDefinition[]> {
     try {
         await initializeAdminApp();
@@ -129,12 +127,12 @@ export async function getAllStoreItems(): Promise<StoreItemDefinition[]> {
 
         return items;
     } catch (error) {
-        console.error("Error fetching all store items:", error);
+        logger.error("Error fetching all store items:", error);
         return [];
     }
 }
 
-// قراءة الأغراض النشطة فقط
+// Read active items only
 export async function getActiveStoreItems(): Promise<StoreItemDefinition[]> {
     try {
         await initializeAdminApp();
@@ -151,28 +149,30 @@ export async function getActiveStoreItems(): Promise<StoreItemDefinition[]> {
         // Sort in memory instead of using orderBy
         return items.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     } catch (error) {
-        console.error("Error fetching active store items:", error);
+        logger.error("Error fetching active store items:", error);
         return [];
     }
 }
 
-// قراءة عنصر واحد بالمعرف
+// Read single item by ID
 export async function getStoreItemById(id: string): Promise<StoreItemDefinition | null> {
     return await getStoreItemFromFirestore(id);
 }
 
-// إنشاء عنصر جديد
+// Create new item
 export async function createStoreItem(input: CreateItemInput): Promise<ItemResult> {
     try {
         await initializeAdminApp();
         const db = getFirestore();
 
-        // إنشاء معرف فريد
-        const itemId = `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        // Generate unique ID if not provided
+        const itemId = input.id || `item_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+        const { id, ...inputWithoutId } = input;
 
         const newItem: StoreItemDefinition = {
             id: itemId,
-            ...input,
+            ...inputWithoutId,
             isActive: true,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -180,14 +180,14 @@ export async function createStoreItem(input: CreateItemInput): Promise<ItemResul
 
         await db.collection('storeItems').doc(itemId).set(newItem);
 
-        console.log(`Created new store item: ${itemId}`);
+        logger.log(`Created new store item: ${itemId}`);
         return {
             success: true,
             item: newItem,
             message: 'Item created successfully'
         };
     } catch (error) {
-        console.error("Error creating store item:", error);
+        logger.error("Error creating store item:", error);
         return {
             success: false,
             message: error instanceof Error ? error.message : 'Failed to create item'
@@ -195,7 +195,7 @@ export async function createStoreItem(input: CreateItemInput): Promise<ItemResul
     }
 }
 
-// تحديث عنصر موجود
+// Update existing item
 export async function updateStoreItem(id: string, updates: UpdateItemInput): Promise<ItemResult> {
     try {
         await initializeAdminApp();
@@ -218,18 +218,18 @@ export async function updateStoreItem(id: string, updates: UpdateItemInput): Pro
 
         await itemRef.update(updateData);
 
-        // جلب العنصر المحدث
+        // Fetch updated item
         const updatedDoc = await itemRef.get();
         const updatedItem = updatedDoc.data() as StoreItemDefinition;
 
-        console.log(`Updated store item: ${id}`);
+        logger.log(`Updated store item: ${id}`);
         return {
             success: true,
             item: updatedItem,
             message: 'Item updated successfully'
         };
     } catch (error) {
-        console.error("Error updating store item:", error);
+        logger.error("Error updating store item:", error);
         return {
             success: false,
             message: error instanceof Error ? error.message : 'Failed to update item'
@@ -237,17 +237,17 @@ export async function updateStoreItem(id: string, updates: UpdateItemInput): Pro
     }
 }
 
-// تحديث سعر عنصر
+// Update item price
 export async function updateItemPrice(id: string, newPrice: number): Promise<ItemResult> {
     return await updateStoreItem(id, { price: newPrice });
 }
 
-// تفعيل/إلغاء تفعيل عنصر
+// Activate/deactivate item
 export async function toggleItemStatus(id: string, isActive: boolean): Promise<ItemResult> {
     return await updateStoreItem(id, { isActive });
 }
 
-// حذف عنصر
+// Delete item
 export async function deleteStoreItem(id: string): Promise<ItemResult> {
     try {
         await initializeAdminApp();
@@ -265,13 +265,13 @@ export async function deleteStoreItem(id: string): Promise<ItemResult> {
 
         await itemRef.delete();
 
-        console.log(`Deleted store item: ${id}`);
+        logger.log(`Deleted store item: ${id}`);
         return {
             success: true,
             message: 'Item deleted successfully'
         };
     } catch (error) {
-        console.error("Error deleting store item:", error);
+        logger.error("Error deleting store item:", error);
         return {
             success: false,
             message: error instanceof Error ? error.message : 'Failed to delete item'
@@ -279,15 +279,15 @@ export async function deleteStoreItem(id: string): Promise<ItemResult> {
     }
 }
 
-// ===== وظائف مساعدة =====
+// ===== Helper functions =====
 
-// التحقق من وجود عنصر
+// Check if item exists
 export async function storeItemExists(id: string): Promise<boolean> {
     const item = await getStoreItemById(id);
     return item !== null;
 }
 
-// عد الأغراض حسب النوع
+// Count items by type
 export async function countItemsByType(type: 'consumable' | 'permanent'): Promise<number> {
     try {
         await initializeAdminApp();
@@ -299,12 +299,12 @@ export async function countItemsByType(type: 'consumable' | 'permanent'): Promis
 
         return snapshot.size;
     } catch (error) {
-        console.error("Error counting items by type:", error);
+        logger.error("Error counting items by type:", error);
         return 0;
     }
 }
 
-// عد الأغراض حسب الندرة
+// Count items by rarity
 export async function countItemsByRarity(rarity: 'common' | 'rare' | 'epic' | 'legendary'): Promise<number> {
     try {
         await initializeAdminApp();
@@ -316,20 +316,20 @@ export async function countItemsByRarity(rarity: 'common' | 'rare' | 'epic' | 'l
 
         return snapshot.size;
     } catch (error) {
-        console.error("Error counting items by rarity:", error);
+        logger.error("Error counting items by rarity:", error);
         return 0;
     }
 }
 
-// ===== وظائف إضافية لإدارة العناصر =====
+// ===== Additional functions for item management =====
 
-// إعادة تهيئة العناصر من البيانات الأولية (للأدمن)
+// Reinitialize items from initial data (for admin)
 export async function reinitializeStoreItems(): Promise<ItemResult> {
     try {
         await initializeAdminApp();
         const db = getFirestore();
 
-        // حذف جميع العناصر الموجودة
+        // Delete all existing items
         const itemsSnapshot = await db.collection('storeItems').get();
         const batch = db.batch();
 
@@ -337,15 +337,14 @@ export async function reinitializeStoreItems(): Promise<ItemResult> {
             batch.delete(doc.ref);
         });
 
-        // إضافة العناصر من البيانات الأولية
+        // Add items from initial data
         for (const item of fallbackStoreItems) {
             const itemRef = db.collection('storeItems').doc(item.id);
             const firestoreItem: StoreItemDefinition = {
                 id: item.id,
                 name: item.name,
                 description: item.description,
-                price: Math.round(item.price * 100000), // تحويل من USD إلى العملات الافتراضية
-                usdPrice: item.price,
+                price: item.price,
                 image: item.image,
                 dataAiHint: item.dataAiHint,
                 type: 'consumable' as const,
@@ -359,13 +358,13 @@ export async function reinitializeStoreItems(): Promise<ItemResult> {
 
         await batch.commit();
 
-        console.log(`Reinitialized store items with ${fallbackStoreItems.length} default items`);
+        logger.log(`Reinitialized store items with ${fallbackStoreItems.length} default items`);
         return {
             success: true,
             message: `Reinitialized with ${fallbackStoreItems.length} default items`
         };
     } catch (error) {
-        console.error("Error reinitializing store items:", error);
+        logger.error("Error reinitializing store items:", error);
         return {
             success: false,
             message: error instanceof Error ? error.message : 'Failed to reinitialize items'
@@ -373,7 +372,7 @@ export async function reinitializeStoreItems(): Promise<ItemResult> {
     }
 }
 
-// التحقق من صحة بيانات العنصر
+// Validate item data
 export function validateItemData(input: CreateItemInput): { valid: boolean; errors: string[] } {
     const errors: string[] = [];
 
@@ -387,10 +386,6 @@ export function validateItemData(input: CreateItemInput): { valid: boolean; erro
 
     if (!input.price || input.price <= 0) {
         errors.push('Price must be greater than 0');
-    }
-
-    if (!input.usdPrice || input.usdPrice <= 0) {
-        errors.push('USD price must be greater than 0');
     }
 
     if (!input.image || !input.image.trim()) {
@@ -411,7 +406,7 @@ export function validateItemData(input: CreateItemInput): { valid: boolean; erro
     };
 }
 
-// جلب إحصائيات الأغراض
+// Get item statistics
 export async function getStoreItemsStats(): Promise<{
     total: number;
     active: number;
@@ -444,7 +439,7 @@ export async function getStoreItemsStats(): Promise<{
 
         return stats;
     } catch (error) {
-        console.error("Error fetching store items stats:", error);
+        logger.error("Error fetching store items stats:", error);
         return {
             total: 0,
             active: 0,

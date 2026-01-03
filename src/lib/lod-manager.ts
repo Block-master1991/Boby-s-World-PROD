@@ -1,4 +1,5 @@
 // Advanced LOD (Level of Detail) Manager
+import { logger } from 'utils/logger';
 // Provides smooth transitions between quality levels based on distance and performance
 
 import { Vector3, Object3D, Mesh, Material, Geometry } from '@/lib/three-chunk';
@@ -200,7 +201,7 @@ class LODManager {
     private ensureGeometryLoaded(level: LODLevel): void {
         // Implement lazy loading for LOD geometries
         if (level.geometry && typeof level.geometry.load === 'function') {
-            level.geometry.load().catch(console.warn);
+            level.geometry.load().catch(logger.warn);
         }
     }
 

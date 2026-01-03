@@ -4,6 +4,7 @@
 import React from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { logger } from '@/utils/logger';
 import { Button, type ButtonProps } from '@/components/ui/button';
 import { LogOut, PawPrint } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
@@ -34,11 +35,11 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
     setIsDisconnecting(true);
     toast({ title: "Disconnecting...", description: "Ending your session." });
     try {
-      console.log("[DisconnectButton] Logging out from auth hook...");
+      logger.log("[DisconnectButton] Logging out from auth hook...");
       await logoutAuthHook();
-      console.log("[DisconnectButton] Auth hook logout complete. Disconnecting wallet session...");
+      logger.log("[DisconnectButton] Auth hook logout complete. Disconnecting wallet session...");
       await disconnectFromSession();
-      console.log("[DisconnectButton] Wallet session disconnect complete.");
+      logger.log("[DisconnectButton] Wallet session disconnect complete.");
 
       toast({ title: "Disconnected", description: "Session ended successfully.", duration: 3000 });
 
@@ -52,7 +53,7 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
       }
 
     } catch (error: unknown) {
-      console.error("[DisconnectButton] Error during full disconnect process:", error);
+      logger.error("[DisconnectButton] Error during full disconnect process:", error);
       toast({
         title: "Disconnection Error",
         description: `An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}.`,

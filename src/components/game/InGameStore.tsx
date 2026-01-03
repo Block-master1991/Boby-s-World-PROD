@@ -21,13 +21,20 @@ import {
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useActiveStoreItems } from '@/hooks/useStoreItems';
-import { useApiFetch } from '@/utils/api'; // استيراد useApiFetch
+import { useApiFetch } from '@/utils/api'; // Import useApiFetch
+import { logger } from '@/utils/logger';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Badge } from '@/components/ui/badge';
 import StoreItemSkeleton from '@/components/shared/StoreItemSkeleton';
 import { useMarketData, useGraphQLMutation } from '@/hooks/useGraphQL';
 import { GAME_MUTATIONS } from '@/lib/graphql-client';
 import { StoreItemDefinition } from '@/lib/server-items';
+import { WebAuthnTransactionSigner } from '@/lib/WebAuthnTransactionSigner';
+
+import { uint8ArrayToBase64url } from '@/utils/base64';
+import { solanaPaymentService, PurchaseProgress } from '@/lib/solanaPaymentService';
+import { PurchaseStatusOverlay } from '@/components/game/PurchaseStatusOverlay';
+import { History } from 'lucide-react';
 
 interface InGameStoreProps {
     isAuthenticated: boolean;
@@ -59,10 +66,14 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     const { items: storeItems, loading: itemsLoading, error: itemsError } = useActiveStoreItems();
 
     // Debug logs (remove in production)
-    // console.log('[InGameStore] storeItems:', storeItems?.length || 0, 'itemsLoading:', itemsLoading, 'itemsError:', itemsError);
-    // console.log('[InGameStore] isAuthenticated:', isAuthenticated, 'isWalletConnectedAndMatching:', isWalletConnectedAndMatching);
+    // logger.log('[InGameStore] storeItems:', storeItems?.length || 0, 'itemsLoading:', itemsLoading, 'itemsError:', itemsError);
+    // logger.log('[InGameStore] isAuthenticated:', isAuthenticated, 'isWalletConnectedAndMatching:', isWalletConnectedAndMatching);
 
     const [isLoading, setIsLoading] = useState<string | null>(null); // For individual item purchase loading
+    const [purchaseProgress, setPurchaseProgress] = useState<PurchaseProgress>({ phase: 'idle', message: '' });
+    const [showPurchaseHistory, setShowPurchaseHistory] = useState(false);
+    const [purchaseHistory, setPurchaseHistory] = useState<any[]>([]);
+    const [historyLoading, setHistoryLoading] = useState(false);
     const [showSkeletons, setShowSkeletons] = useState(true);
     const [storeItemsLoaded, setStoreItemsLoaded] = useState(false);
     const [quantities, setQuantities] = useState<Record<string, number>>(() => {
@@ -107,7 +118,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         // Set up refresh interval
         const intervalId = setInterval(() => {
             fetchBobyUsdPrice();
-        }, 5000); // Refresh every 5 seconds
+        }, 30000); // Refresh every 30 seconds
         return () => clearInterval(intervalId);
     }, [fetchBobyUsdPrice]);
 
@@ -156,6 +167,45 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         const calculatedBobyAmount = totalUsdValue / bobyUsdPrice;
 
         setIsLoading(item.id);
+
+        let transactionAuthSignature: any = undefined;
+
+        // STEP-UP AUTH: Higher value transactions (> 50,000 BOBY) require fresh passkey signature
+        if (calculatedBobyAmount > 50000 && 'PublicKeyCredential' in window) {
+            try {
+                toast({ title: 'Step-up Auth Required', description: 'This is a high-value transaction. Please verify your identity with a passkey.' });
+
+                const payload = {
+                    action: 'PURCHASE_ITEM',
+                    itemId: item.id,
+                    quantity,
+                    amount: calculatedBobyAmount,
+                    timestamp: Date.now(),
+                    nonce: Math.random().toString(36).substring(2) // Basic nonce for transaction uniqueness
+                };
+
+                const authResult = await WebAuthnTransactionSigner.signTransaction(payload);
+                if (!authResult) throw new Error('Security verification cancelled or failed.');
+
+                transactionAuthSignature = {
+                    id: authResult.id,
+                    response: {
+                        authenticatorData: uint8ArrayToBase64url(new Uint8Array((authResult.response as any).authenticatorData)),
+                        clientDataJSON: uint8ArrayToBase64url(new Uint8Array(authResult.response.clientDataJSON)),
+                        signature: uint8ArrayToBase64url(new Uint8Array((authResult.response as any).signature)),
+                        userHandle: (authResult.response as any).userHandle ? uint8ArrayToBase64url(new Uint8Array((authResult.response as any).userHandle)) : null
+                    },
+                    payload // Send payload so server can reconstruct the challenge
+                };
+                logger.log("[Store] Transaction step-up auth successful.");
+            } catch (err: any) {
+                logger.error("[Store] Step-up Auth failed:", err);
+                setIsLoading(null);
+                toast({ variant: 'destructive', title: 'Security Verification Failed', description: 'High-value transactions require passkey confirmation.' });
+                return;
+            }
+        }
+
         const mobileMessage = isMobile ? 'Check your wallet app for approval.' : 'Approve the transaction in your wallet.';
         toast({ title: 'Purchase Initiated', description: `Buying ${quantity} ${item.name} for ~${calculatedBobyAmount.toLocaleString(undefined, { maximumFractionDigits: 2 })} Boby ($${totalUsdValue.toFixed(2)}). ${mobileMessage}` });
 
@@ -165,6 +215,8 @@ const InGameStore: React.FC<InGameStoreProps> = ({
 
         const attemptPurchase = async (): Promise<void> => {
             try {
+                setPurchaseProgress({ phase: 'preparing', message: 'Preparing transaction...' });
+
                 const bobyMintPublicKey = new PublicKey(BOBY_TOKEN_MINT_ADDRESS);
                 if (!STORE_TREASURY_WALLET_ADDRESS) {
                     throw new Error("STORE_TREASURY_WALLET_ADDRESS is not set.");
@@ -214,7 +266,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     solBalance = await connection.getBalance(adapterPublicKey);
                 } catch (error) {
                     // Account doesn't exist, balance is 0
-                    console.warn('SOL account not found, assuming balance 0:', error);
+                    logger.warn('SOL account not found, assuming balance 0:', error);
                 }
                 const minSolForFees = 10000; // 0.00001 SOL in lamports (adjust as needed)
                 if (solBalance < minSolForFees) {
@@ -250,16 +302,16 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     )
                 );
 
-                // Ensure transaction has required fields (especially for mobile wallets)
-                if (!transaction.recentBlockhash || !transaction.feePayer) {
-                    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash();
-                    transaction.recentBlockhash = blockhash;
-                    transaction.lastValidBlockHeight = lastValidBlockHeight;
-                    transaction.feePayer = adapterPublicKey;
-                }
+                // ✅ FIX: Get FRESH blockhash immediately before sending to maximize validity window
+                const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('finalized');
+                transaction.recentBlockhash = blockhash;
+                transaction.lastValidBlockHeight = lastValidBlockHeight;
+                transaction.feePayer = adapterPublicKey;
+
+                setPurchaseProgress({ phase: 'awaiting_signature', message: 'Please approve the transaction in your wallet...' });
 
                 // Set transaction timeout for mobile
-                const timeoutMs = isMobile ? 60000 : 30000; // 60 seconds for mobile, 30 for desktop
+                const timeoutMs = isMobile ? 90000 : 60000; // 90 seconds for mobile, 60 for desktop
                 const timeoutPromise = new Promise((_, reject) => {
                     setTimeout(() => reject(new Error('Transaction timeout')), timeoutMs);
                 });
@@ -267,11 +319,47 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 const sendPromise = sendTransaction(transaction, connection);
                 signature = await Promise.race([sendPromise, timeoutPromise]) as string;
 
-                toast({ title: 'Purchase Successful!', description: `Bought ${quantity} ${item.name}. Sig: ${signature.substring(0, 10)}... Processing inventory update.` });
+                const explorerUrl = solanaPaymentService.getExplorerUrl(signature);
+                setPurchaseProgress({
+                    phase: 'confirming',
+                    message: 'Sent! Confirming transaction...',
+                    signature,
+                    explorerUrl
+                });
 
-                // Wait a bit longer for transaction confirmation before calling backend API
-                console.log('[Purchase] Waiting 10 seconds for transaction confirmation...');
-                await new Promise(resolve => setTimeout(resolve, 10000)); // Wait 10 seconds
+                toast({ title: 'Purchase Sent!', description: `Sig: ${signature.substring(0, 10)}... Confirming...` });
+
+                // ✅ FIX: Use polling-based confirmation with fallback
+                logger.log('[Purchase] Polling for transaction confirmation...');
+                let confirmed = false;
+                const maxPolls = 30;
+                for (let i = 0; i < maxPolls && !confirmed; i++) {
+                    await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds between polls
+                    const statuses = await connection.getSignatureStatuses([signature]);
+                    const status = statuses?.value?.[0];
+                    if (status) {
+                        if (status.err) {
+                            throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+                        }
+                        if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized') {
+                            confirmed = true;
+                            logger.log(`[Purchase] Transaction confirmed (${status.confirmationStatus}) after ${i + 1} polls.`);
+                        }
+                    }
+                }
+
+                if (!confirmed) {
+                    throw new Error('Transaction confirmation timed out. Please check your wallet or try again.');
+                }
+
+                logger.log('[Purchase] Transaction confirmed successfully.');
+
+                setPurchaseProgress({
+                    phase: 'verifying',
+                    message: 'Verifying with server...',
+                    signature,
+                    explorerUrl: solanaPaymentService.getExplorerUrl(signature)
+                });
 
                 // Call backend API to update inventory with timeout
                 const apiTimeoutMs = isMobile ? 45000 : 30000; // 45 seconds for mobile, 30 for desktop
@@ -283,7 +371,12 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     headers: {
                         'Content-Type': 'application/json',
                     },
-                    body: JSON.stringify({ itemId: item.id, quantity, transactionSignature: signature }),
+                    body: JSON.stringify({
+                        itemId: item.id,
+                        quantity,
+                        transactionSignature: signature,
+                        transactionAuthSignature: transactionAuthSignature // Pass the step-up signature if generated
+                    }),
                     signal: controller.signal
                 });
 
@@ -291,6 +384,12 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 const inventoryUpdateData = await inventoryUpdateResponse.json();
 
                 if (inventoryUpdateResponse.ok) {
+                    setPurchaseProgress({
+                        phase: 'complete',
+                        message: `${quantity} ${item.name} added to inventory!`,
+                        signature,
+                        explorerUrl: solanaPaymentService.getExplorerUrl(signature!)
+                    });
                     toast({ title: 'Inventory Updated', description: inventoryUpdateData.message || `${quantity} ${item.name} added to inventory.` });
                     if (onPurchaseSuccess) {
                         await onPurchaseSuccess();
@@ -300,7 +399,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     // Handle specific API errors
                     const errorCode = inventoryUpdateData.code;
                     if (errorCode === 'TRANSACTION_NOT_FOUND' && retryCount < maxRetries) {
-                        console.log(`Transaction not found, retrying... (${retryCount + 1}/${maxRetries})`);
+                        logger.log(`Transaction not found, retrying... (${retryCount + 1}/${maxRetries})`);
                         retryCount++;
                         toast({ title: 'Retrying...', description: 'Transaction verification in progress. Please wait.' });
                         await new Promise(resolve => setTimeout(resolve, 8000)); // Wait 8 seconds
@@ -310,7 +409,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 }
 
             } catch (error) {
-                console.error('Purchase attempt failed:', error);
+                logger.error('Purchase attempt failed:', error);
                 let errorMessage = error instanceof Error ? error.message : 'Could not complete purchase.';
 
                 // Improve error messages for better user experience
@@ -321,7 +420,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 // Check if it's a timeout or user rejection error
                 if (errorMessage.includes('timeout') || errorMessage.includes('User rejected')) {
                     if (retryCount < maxRetries) {
-                        console.log(`Retrying purchase due to: ${errorMessage} (${retryCount + 1}/${maxRetries})`);
+                        logger.log(`Retrying purchase due to: ${errorMessage} (${retryCount + 1}/${maxRetries})`);
                         retryCount++;
                         toast({ title: 'Retrying...', description: 'Transaction failed, retrying automatically.' });
                         await new Promise(resolve => setTimeout(resolve, 2000));
@@ -330,6 +429,13 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                 }
 
                 // If all retries failed or it's a different error
+                setPurchaseProgress({
+                    phase: 'error',
+                    message: 'Operation failed',
+                    error: errorMessage,
+                    signature,
+                    explorerUrl: signature ? solanaPaymentService.getExplorerUrl(signature) : undefined
+                });
                 toast({ title: 'Purchase Failed', description: errorMessage, variant: 'destructive' });
 
                 // On mobile, offer manual retry for certain errors
@@ -355,7 +461,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             await attemptPurchase();
         } catch (error) {
             // Final error handling - all retries exhausted
-            console.error('All purchase attempts failed:', error);
+            logger.error('All purchase attempts failed:', error);
             const finalErrorMessage = error instanceof Error ? error.message : 'Purchase failed after multiple attempts.';
             toast({
                 title: 'Purchase Failed',
@@ -544,6 +650,12 @@ const InGameStore: React.FC<InGameStoreProps> = ({
                     Prices displayed in Boby are dynamically converted. Final amount may vary slightly due to price fluctuations and rounding.
                 </p>
             </SheetFooter>
+
+            {/* Purchase Status Overlay */}
+            <PurchaseStatusOverlay
+                progress={purchaseProgress}
+                onClose={() => setPurchaseProgress({ phase: 'idle', message: '' })}
+            />
         </>
     );
 };

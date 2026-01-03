@@ -9,13 +9,14 @@ import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } 
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS, ENEMY_COLLISION_PENALTY_USDT } from '../lib/constants';
 import { GameObject, BaseGameObject } from '@/types/game';
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
+import { logger } from '@/utils/logger';
 // import FloatingEffect from '@/components/game/FloatingEffect'; // Import FloatingEffect for type hinting
 // import { useFloatingEffects } from './useFloatingEffects'; // Import useFloatingEffects hook
 
 
 
 const COIN_RADIUS = 0.4;
-const COIN_EMISSIVE_INTENSITY = 0.8; // زيادة شدة الإضاءة المنبعثة مع الحفاظ على المظهر الطبيعي
+const COIN_EMISSIVE_INTENSITY = 0.8; // Increased emissive intensity while maintaining natural appearance
 const COIN_ROTATION_SPEED = 0.03;
 const COIN_VALUE = ENEMY_COLLISION_PENALTY_USDT; // Use the same value as the penalty for consistency
 const COLLECTION_THRESHOLD_BASE = 0.5;
@@ -115,13 +116,13 @@ export const useCoinLogic = ({
         // Try to load from IndexedDB first
         const cachedData = await getModel(modelName);
         if (cachedData) {
-          console.log(`[CoinLogic] Loading coin model from IndexedDB: ${modelName}`);
+          logger.log(`[CoinLogic] Loading coin model from IndexedDB: ${modelName}`);
           const gltf = await gltfLoaderRef.current.parseAsync(cachedData, '');
           coinModelRef.current = gltf.scene;
           isCoinModelLoadedRef.current = true;
-          console.log('[CoinLogic] Coin model loaded successfully from IndexedDB (Singleton)');
+          logger.log('[CoinLogic] Coin model loaded successfully from IndexedDB (Singleton)');
         } else {
-          console.log(`[CoinLogic] Fetching coin model from network: ${COIN_MODEL_PATH}`);
+          logger.log(`[CoinLogic] Fetching coin model from network: ${COIN_MODEL_PATH}`);
           const response = await fetch(COIN_MODEL_PATH);
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const arrayBuffer = await response.arrayBuffer();
@@ -129,21 +130,21 @@ export const useCoinLogic = ({
           const gltf = await gltfLoaderRef.current.parseAsync(arrayBuffer, '');
           coinModelRef.current = gltf.scene;
           isCoinModelLoadedRef.current = true;
-          console.log('[CoinLogic] Coin model loaded successfully from network and cached (Singleton)');
+          logger.log('[CoinLogic] Coin model loaded successfully from network and cached (Singleton)');
         }
       } catch (error) {
-        console.error(`[CoinLogic] Error loading or caching coin model:`, error);
+        logger.error(`[CoinLogic] Error loading or caching coin model:`, error);
         // Fallback to direct network load if IndexedDB fails
-        console.log(`[CoinLogic] Falling back to direct network load for: ${COIN_MODEL_PATH}`);
+        logger.log(`[CoinLogic] Falling back to direct network load for: ${COIN_MODEL_PATH}`);
         try {
           if (gltfLoaderRef.current) {
             const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
             coinModelRef.current = gltf.scene;
             isCoinModelLoadedRef.current = true;
-            console.log('[CoinLogic] Coin model loaded successfully via fallback (Singleton)');
+            logger.log('[CoinLogic] Coin model loaded successfully via fallback (Singleton)');
           }
         } catch (fallbackError) {
-          console.error('[CoinLogic] Fallback load also failed:', fallbackError);
+          logger.error('[CoinLogic] Fallback load also failed:', fallbackError);
           coinModelPromiseRef.current = null; // Reset on failure so we can try again
         }
       }
@@ -203,18 +204,18 @@ export const useCoinLogic = ({
           coinY = octreeRef.current.getGroundHeightAt(coinX, coinZ) + COIN_RADIUS;
         }
         coinMesh.position.set(coinX, coinY, coinZ);
-        // تعديل اتجاه العملة لتكون واقفة بشكل صحيح
-        coinMesh.rotation.x = 0; // إلغاء أي تدوير حول المحور السيني
-        coinMesh.rotation.z = 0; // إلغاء أي تدوير حول المحور الزيتي
-        coinMesh.rotation.y = 0; // إلغاء أي تدوير حول المحور الصادي
+        // Adjust coin orientation to stand correctly
+        coinMesh.rotation.x = 0; // Cancel any rotation around x-axis
+        coinMesh.rotation.z = 0; // Cancel any rotation around z-axis
+        coinMesh.rotation.y = 0; // Cancel any rotation around y-axis
         coinMesh.castShadow = true;
-        // تعديل مقياس العملة ليبدو مناسبًا
+        // Adjust coin scale to look appropriate
         coinMesh.scale.set(2.5, 2.5, 2.5);
 
-        // تطبيق إعدادات الإضاءة على العملة مع الحفاظ على اللون الأصلي للنموذج
+        // Apply lighting settings to the coin while preserving original model color
         coinMesh.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            // استخدام اللون الأصلي للنموذج للإضاءة المنبعثة
+            // Use original model color for emissive lighting
             const originalColor = child.material.color.clone();
             child.material.emissive = originalColor;
             child.material.emissiveIntensity = COIN_EMISSIVE_INTENSITY;
@@ -233,7 +234,7 @@ export const useCoinLogic = ({
         }
       }
       loadedCoinChunks.current.add(chunkKey);
-      console.log(`[CoinLogic] Chunk ${chunkKey} marked as LOADED. Total Loaded: ${loadedCoinChunks.current.size}`);
+      logger.log(`[CoinLogic] Chunk ${chunkKey} marked as LOADED. Total Loaded: ${loadedCoinChunks.current.size}`);
       onRemainingCoinsUpdate(remainingCoinsRef.current);
     } finally {
       loadingCoinChunks.current.delete(chunkKey);
@@ -344,20 +345,20 @@ export const useCoinLogic = ({
       if (coin.visible) {
         const distanceToDog = dogPosition.distanceTo(coin.position);
 
-        // زيادة مسافة الجمع عند تفعيل المغناطيس لضمان جمع العملة وعدم بقائها عالقة
+        // Increase collection distance when magnet is active to ensure collection and prevent coin from getting stuck
         // Increase collection threshold when magnet is active to ensure collection
         const effectiveThreshold = isCoinMagnetActiveRef.current ? COLLECTION_THRESHOLD * 2.0 : COLLECTION_THRESHOLD;
 
         if (distanceToDog < effectiveThreshold) {
           // If magnet is active, play the cool animation
-          // إذا كان المغناطيس مفعل، شغل الأنيميشن الجذاب
+          // If magnet is active, play the attractive animation
           if (isCoinMagnetActiveRef.current && !coin.userData.isAnimatingCollection) {
             coin.userData.isAnimatingCollection = true;
             coin.userData.collectionStartTime = performance.now();
 
             // IMMEDIATE CREDIT LOGIC (Moved to where Attraction starts for guaranteed pickup)
             // We give the reward NOW so it feels instant.
-            // نمنح الجائزة فوراً ليشعر اللاعب بالاستجابة
+            // We give the reward immediately so player feels responsive
             // NOTE: Credit is now handled when attraction BEGINS (below).
             // But if for some reason it wasn't, we do it here as backup.
             if (!coin.userData.isCredited) {
@@ -432,11 +433,11 @@ export const useCoinLogic = ({
         // Always check visibility against distance
         coin.visible = dogPosition.distanceTo(coin.position) < VISIBLE_COIN_DISTANCE;
         if (coin.visible) {
-          // تدوير العملة حول محورها العمودي بشكل احترافي
+          // Rotate coin around its vertical axis professionally
           coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
         }
 
-        // تحديث حركة العملة إذا كانت في حالة جذب
+        // Update coin movement if it's in attraction state
         // Update magnet attraction / animation
         if (coin.userData.isAnimatingCollection) {
           // HANDLE ANIMATION STATE
@@ -517,7 +518,7 @@ export const useCoinLogic = ({
     });
 
     await Promise.all(loadPromises);
-    console.log(`[CoinLogic] Force loaded coins for ${chunksToLoad.size} chunks around ${centerX}, ${centerZ}`);
+    logger.log(`[CoinLogic] Force loaded coins for ${chunksToLoad.size} chunks around ${centerX}, ${centerZ}`);
   }, [sceneRef, loadCoinsForChunk]);
 
   return {

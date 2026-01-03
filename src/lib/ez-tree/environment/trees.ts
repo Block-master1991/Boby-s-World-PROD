@@ -4,6 +4,7 @@ import TreeOptions from '../options';
 import { TreePreset, loadPreset } from '../presets';
 import { CHUNK_SIZE } from '../../chunkUtils';
 import { DOG_SPAWN_PROTECTION_RADIUS } from '../../constants';
+import { logger } from 'utils/logger';
 
 export class TreesOptions {
   public treeCountPerChunk: number = 1; // Number of trees per chunk
@@ -36,12 +37,12 @@ export class Trees extends THREE.Object3D {
 
   public generateTreesForChunk(chunkX: number, chunkZ: number): THREE.Group | null {
     if (this.loadedPresets.size === 0) {
-      console.warn("Trees: No presets loaded. Call fetchAssets() first.");
-      console.log("Trees: Attempting to fetch assets now...");
+      logger.warn("Trees: No presets loaded. Call fetchAssets() first.");
+      logger.log("Trees: Attempting to fetch assets now...");
       this.fetchAssets().then(() => {
-        console.log(`Trees: Assets loaded, ${this.loadedPresets.size} presets available`);
+        logger.log(`Trees: Assets loaded, ${this.loadedPresets.size} presets available`);
       }).catch(error => {
-        console.error("Trees: Failed to fetch assets:", error);
+        logger.error("Trees: Failed to fetch assets:", error);
       });
       return null;
     }
@@ -53,7 +54,7 @@ export class Trees extends THREE.Object3D {
     const chunkWorldStartX = chunkX * CHUNK_SIZE;
     const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
 
-    console.log(`[Trees] Generating ${this.options.treeCountPerChunk} trees for chunk ${chunkX},${chunkZ}`);
+    logger.log(`[Trees] Generating ${this.options.treeCountPerChunk} trees for chunk ${chunkX},${chunkZ}`);
 
     for (let i = 0; i < this.options.treeCountPerChunk; i++) {
       const localX = Math.random() * CHUNK_SIZE;
@@ -86,7 +87,7 @@ export class Trees extends THREE.Object3D {
 
         tree.position.copy(p);
         tree.rotation.set(0, 2 * Math.PI * Math.random(), 0);
-        const scale = 0.05; // استخدام الحجم الفعلي من الإعداد المسبق
+        const scale = 0.05; // Use actual scale from preset
         tree.scale.set(scale, scale, scale);
 
         // Enable shadows for trees
@@ -101,13 +102,13 @@ export class Trees extends THREE.Object3D {
       }
     }
 
-    console.log(`[Trees] Generated ${treesGroup.children.length} trees for chunk ${chunkX},${chunkZ}`);
+    logger.log(`[Trees] Generated ${treesGroup.children.length} trees for chunk ${chunkX},${chunkZ}`);
     return treesGroup;
   }
 
   public generateTreesFromData(data: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] }): THREE.Group | null {
     if (this.loadedPresets.size === 0 || !data) {
-      console.warn("Trees: No presets loaded or no data. Call fetchAssets() first.");
+      logger.warn("Trees: No presets loaded or no data. Call fetchAssets() first.");
       return null;
     }
 

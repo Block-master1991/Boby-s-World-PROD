@@ -1,10 +1,10 @@
 const admin = require('firebase-admin');
 
-// تهيئة Firebase Admin باستخدام متغيرات البيئة (مثل باقي المشروع)
+// Initialize Firebase Admin using environment variables (like the rest of the project)
 const initializeAdminApp = async () => {
-    // التحقق من وجود Firebase app مُهيكل مسبقاً
+    // Check if Firebase app is already initialized
     if (admin.apps.length === 0) {
-        // استخدام نفس طريقة server-items.ts
+        // Use same method as server-items.ts
         const projectId = process.env.FIREBASE_PROJECT_ID;
         const clientEmail = process.env.FIREBASE_CLIENT_EMAIL;
         const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
@@ -29,52 +29,52 @@ const initializeAdminApp = async () => {
 let db = null;
 
 async function migrateInventoryData() {
-    console.log('🔄 بدء عملية نقل بيانات المخزون...');
+    console.log('🔄 Starting inventory data migration process...');
 
     try {
-        // تهيئة Firebase Admin
+        // Initialize Firebase Admin
         await initializeAdminApp();
 
-        // تهيئة Firestore
+        // Initialize Firestore
         db = admin.firestore();
 
-        // 1. قراءة جميع المستخدمين الذين لديهم inventory
-        console.log('📖 قراءة بيانات المستخدمين...');
+        // 1. Read all users who have inventory
+        console.log('📖 Reading user data...');
 
         const usersSnapshot = await db.collection('players')
             .where('inventory', '!=', null)
             .get();
 
-        console.log(`👥 تم العثور على ${usersSnapshot.size} مستخدم لديهم مخزون`);
+        console.log(`👥 Found ${usersSnapshot.size} users with inventory`);
 
         let totalUsersProcessed = 0;
         let totalUsersMigrated = 0;
         let totalItemsMigrated = 0;
         const backups = [];
 
-        // 2. معالجة كل مستخدم
+        // 2. Process each user
         for (const userDoc of usersSnapshot.docs) {
             const userId = userDoc.id;
             const userData = userDoc.data();
             const oldInventory = userData.inventory || [];
 
-            console.log(`\n🔄 معالجة المستخدم: ${userId}`);
-            console.log(`📦 العناصر القديمة: ${oldInventory.length}`);
+            console.log(`\n🔄 Processing user: ${userId}`);
+            console.log(`📦 Old items: ${oldInventory.length}`);
 
-            // تخطي إذا كان المخزون فارغ
+            // Skip if inventory is empty
             if (oldInventory.length === 0) {
-                console.log('⏭️ تخطي - المخزون فارغ');
+                console.log('⏭️ Skipping - empty inventory');
                 continue;
             }
 
-            // التحقق من أن البيانات بالنظام القديم (instanceId موجود)
+            // Verify that data is in old system (instanceId exists)
             const hasInstanceIds = oldInventory.some(item => item.instanceId);
             if (!hasInstanceIds) {
-                console.log('✅ تخطي - البيانات بالنظام الجديد بالفعل');
+                console.log('✅ Skipping - data is already in new system');
                 continue;
             }
 
-            // 3. إنشاء backup
+            // 3. Create backup
             const backup = {
                 userId,
                 timestamp: new Date().toISOString(),
@@ -83,19 +83,19 @@ async function migrateInventoryData() {
                 success: false
             };
 
-            // 4. تحويل البيانات من النظام القديم إلى الجديد
+            // 4. Convert data from old system to new
             const newInventory = convertInventoryFormat(oldInventory);
 
-            console.log(`🔄 تحويل ${oldInventory.length} عنصر إلى ${newInventory.length} عنصر مجمع`);
+            console.log(`🔄 Converting ${oldInventory.length} items to ${newInventory.length} aggregated items`);
 
-            // 5. التحقق من سلامة البيانات
+            // 5. Verify data integrity
             const validation = validateMigration(oldInventory, newInventory);
             if (!validation.isValid) {
-                console.error(`❌ فشل التحقق للمستخدم ${userId}:`, validation.errors);
+                console.error(`❌ Validation failed for user ${userId}:`, validation.errors);
                 continue;
             }
 
-            // 6. حفظ التحديث في قاعدة البيانات
+            // 6. Save update in database
             await db.collection('players').doc(userId).update({
                 inventory: newInventory,
                 migratedAt: new Date(),
@@ -103,7 +103,7 @@ async function migrateInventoryData() {
                 lastUpdated: new Date()
             });
 
-            // 7. تحديث الـ backup
+            // 7. Update backup
             backup.migratedAt = new Date().toISOString();
             backup.success = true;
             backup.newInventory = newInventory;
@@ -114,11 +114,11 @@ async function migrateInventoryData() {
             totalUsersMigrated++;
             totalItemsMigrated += oldInventory.length;
 
-            console.log(`✅ تم النقل بنجاح للمستخدم: ${userId}`);
-            console.log(`📊 العناصر القديمة: ${oldInventory.length}, المجمعة: ${newInventory.length}`);
+            console.log(`✅ Migration successful for user: ${userId}`);
+            console.log(`📊 Old items: ${oldInventory.length}, aggregated: ${newInventory.length}`);
         }
 
-        // 8. حفظ تقرير الـ migration
+        // 8. Save migration report
         await saveMigrationReport({
             totalUsersProcessed,
             totalUsersMigrated,
@@ -127,16 +127,16 @@ async function migrateInventoryData() {
             timestamp: new Date().toISOString()
         });
 
-        // 9. عرض التقرير النهائي
-        console.log('\n🎉 تمت عملية النقل بنجاح!');
-        console.log('📊 إحصائيات النقل:');
-        console.log(`   👥 إجمالي المستخدمين المعالجين: ${totalUsersProcessed}`);
-        console.log(`   ✅ المستخدمين المنقولين: ${totalUsersMigrated}`);
-        console.log(`   📦 العناصر المنقولة: ${totalItemsMigrated}`);
-        console.log(`   💾 النسخ الاحتياطية المحفوظة: ${backups.length}`);
+        // 9. Display final report
+        console.log('\n🎉 Migration completed successfully!');
+        console.log('📊 Migration statistics:');
+        console.log(`   👥 Total users processed: ${totalUsersProcessed}`);
+        console.log(`   ✅ Users migrated: ${totalUsersMigrated}`);
+        console.log(`   📦 Items migrated: ${totalItemsMigrated}`);
+        console.log(`   💾 Backups saved: ${backups.length}`);
 
     } catch (error) {
-        console.error('❌ خطأ في عملية النقل:', error);
+        console.error('❌ Error in migration process:', error);
         process.exit(1);
     } finally {
         await admin.app().delete();
@@ -144,12 +144,12 @@ async function migrateInventoryData() {
 }
 
 /**
- * تحويل مخزون من النظام القديم (instance-based) إلى الجديد (count-based)
+ * Convert inventory from old system (instance-based) to new (count-based)
  */
 function convertInventoryFormat(oldInventory) {
     const itemMap = new Map();
 
-    // تجميع العناصر حسب ID
+    // Group items by ID
     for (const item of oldInventory) {
         const itemId = String(item.id);
 
@@ -166,7 +166,7 @@ function convertInventoryFormat(oldInventory) {
             });
         }
 
-        // زيادة العدد
+        // Increase count
         const existingItem = itemMap.get(itemId);
         existingItem.quantity += item.quantity || 1;
     }
@@ -175,10 +175,10 @@ function convertInventoryFormat(oldInventory) {
 }
 
 /**
- * الحصول على نوع العنصر من ID
+ * Get item type from ID
  */
 function getItemTypeFromId(itemId) {
-    // العناصر المعروفة
+    // Known items
     const itemTypes = {
         '1': 'consumable', // Protection Bottle
         '2': 'consumable', // Guardian Shield
@@ -190,44 +190,44 @@ function getItemTypeFromId(itemId) {
 }
 
 /**
- * التحقق من سلامة النقل
+ * Verify migration integrity
  */
 function validateMigration(oldInventory, newInventory) {
     const errors = [];
     let isValid = true;
 
-    // حساب العدد الإجمالي في النظام القديم
+    // Calculate total count in old system
     const oldTotalCount = oldInventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
 
-    // حساب العدد الإجمالي في النظام الجديد
+    // Calculate total count in new system
     const newTotalCount = newInventory.reduce((sum, item) => sum + item.quantity, 0);
 
     if (oldTotalCount !== newTotalCount) {
-        errors.push(`عدم تطابق العدد الإجمالي: القديم=${oldTotalCount}, الجديد=${newTotalCount}`);
+        errors.push(`Total count mismatch: old=${oldTotalCount}, new=${newTotalCount}`);
         isValid = false;
     }
 
-    // التحقق من أن جميع IDs موجودة
+    // Verify that all IDs exist
     const oldIds = new Set(oldInventory.map(item => String(item.id)));
     const newIds = new Set(newInventory.map(item => String(item.id)));
 
     if (oldIds.size !== newIds.size) {
-        errors.push(`عدم تطابق عدد IDs: القديم=${oldIds.size}, الجديد=${newIds.size}`);
+        errors.push(`ID count mismatch: old=${oldIds.size}, new=${newIds.size}`);
         isValid = false;
     }
 
-    // التحقق من أن جميع IDs من القديم موجودة في الجديد
+    // Verify that all old IDs exist in new
     for (const oldId of oldIds) {
         if (!newIds.has(oldId)) {
-            errors.push(`ID مفقود في النظام الجديد: ${oldId}`);
+            errors.push(`ID missing in new system: ${oldId}`);
             isValid = false;
         }
     }
 
-    // التحقق من صحة البيانات
+    // Verify data validity
     for (const item of newInventory) {
         if (!item.id || !item.name || item.quantity <= 0) {
-            errors.push(`عنصر غير صالح: ${JSON.stringify(item)}`);
+            errors.push(`Invalid item: ${JSON.stringify(item)}`);
             isValid = false;
         }
     }
@@ -236,7 +236,7 @@ function validateMigration(oldInventory, newInventory) {
 }
 
 /**
- * حفظ تقرير النقل
+ * Save migration report
  */
 async function saveMigrationReport(report) {
     try {
@@ -244,21 +244,21 @@ async function saveMigrationReport(report) {
             ...report,
             completedAt: new Date()
         });
-        console.log('📄 تم حفظ تقرير النقل');
+        console.log('📄 Migration report saved');
     } catch (error) {
-        console.error('❌ خطأ في حفظ تقرير النقل:', error);
+        console.error('❌ Error saving migration report:', error);
     }
 }
 
-// تشغيل الدالة
-console.log('🚀 بدء migration script لمخزون العناصر...');
-console.log('⚠️  تأكد من وجود backup لقاعدة البيانات قبل المتابعة!');
+// Run function
+console.log('🚀 Starting migration script for item inventory...');
+console.log('⚠️  Make sure you have a database backup before continuing!');
 console.log('');
 
 migrateInventoryData().then(() => {
-    console.log('\n🎊 انتهت عملية النقل!');
+    console.log('\n🎊 Migration process completed!');
     process.exit(0);
 }).catch((error) => {
-    console.error('\n❌ فشلت عملية النقل:', error);
+    console.error('\n❌ Migration process failed:', error);
     process.exit(1);
 });

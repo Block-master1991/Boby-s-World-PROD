@@ -7,6 +7,7 @@ import { useEffect, useRef, useCallback, MutableRefObject } from 'react';
 import { getModel, putModel } from '../lib/indexedDB';
 import { Octree } from '../lib/Octree';
 import { GameObject } from '@/types/game';
+import { logger } from '@/utils/logger';
 
 // Define a generic interface for objects that need dynamic loading
 export interface DynamicLoadableObject { // Export the interface
@@ -81,7 +82,7 @@ export const useDynamicModelLoader = ({
         }
       }
     });
-    console.log(`[useDynamicModelLoader] Disposed of model resources.`);
+    logger.log(`[useDynamicModelLoader] Disposed of model resources.`);
   }, []);
 
   // Initialize loaders once
@@ -117,7 +118,7 @@ export const useDynamicModelLoader = ({
 
     const modelName = object.modelPath.split('/').pop();
     if (!modelName) {
-      console.error(`Invalid modelPath for object ${object.id}: ${object.modelPath}`);
+      logger.error(`Invalid modelPath for object ${object.id}: ${object.modelPath}`);
       return;
     }
 
@@ -128,7 +129,7 @@ export const useDynamicModelLoader = ({
     if (modelPoolRef.current[object.modelPath] && modelPoolRef.current[object.modelPath].instances.length > 0) {
       modelInstance = modelPoolRef.current[object.modelPath].instances.pop()!;
       animations = modelPoolRef.current[object.modelPath].animations;
-      console.log(`[useDynamicModelLoader] Reusing model from pool: ${modelName}`);
+      logger.log(`[useDynamicModelLoader] Reusing model from pool: ${modelName}`);
       // Reset state of reused model
       modelInstance.position.set(0, 0, 0);
       modelInstance.rotation.set(0, 0, 0);
@@ -141,10 +142,10 @@ export const useDynamicModelLoader = ({
         const cachedData = await getModel(modelName);
 
         if (cachedData) {
-          console.log(`[useDynamicModelLoader] Loading model from IndexedDB: ${modelName}`);
+          logger.log(`[useDynamicModelLoader] Loading model from IndexedDB: ${modelName}`);
           gltf = await gltfLoaderRef.current.parseAsync(cachedData, '');
         } else {
-          console.log(`[useDynamicModelLoader] Fetching model from network: ${object.modelPath}`);
+          logger.log(`[useDynamicModelLoader] Fetching model from network: ${object.modelPath}`);
           const response = await fetch(object.modelPath);
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const arrayBuffer = await response.arrayBuffer();
@@ -177,10 +178,10 @@ export const useDynamicModelLoader = ({
             }
           });
         }
-        console.log(`[useDynamicModelLoader] Created new model instance: ${modelName}`);
+        logger.log(`[useDynamicModelLoader] Created new model instance: ${modelName}`);
 
       } catch (error) {
-        console.error(`[useDynamicModelLoader] Error loading or instantiating model ${modelName}:`, error);
+        logger.error(`[useDynamicModelLoader] Error loading or instantiating model ${modelName}:`, error);
         object.isModelInstantiated = false; // Mark as failed to instantiate
         object.modelInstance = null;
         object.mixer = null;
@@ -223,13 +224,13 @@ export const useDynamicModelLoader = ({
           // Import ENEMY_ANIMATION_NAMES from useEnemyLogic.ts
           // For now, re-define locally to resolve the error.
           const ENEMY_ANIMATION_NAMES_LOCAL = {
-              CARNIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack', DEATH: 'Death' },
-              HERBIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack_Kick', DEATH: 'Death' },
+            CARNIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack', DEATH: 'Death' },
+            HERBIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack_Kick', DEATH: 'Death' },
           };
           const isIdleAnimation = ENEMY_ANIMATION_NAMES_LOCAL[object.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE.includes(clip.name);
           if (clip.name === ENEMY_ANIMATION_NAMES_LOCAL[object.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].WALK ||
-              clip.name === ENEMY_ANIMATION_NAMES_LOCAL[object.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
-              isIdleAnimation) {
+            clip.name === ENEMY_ANIMATION_NAMES_LOCAL[object.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].GALLOP ||
+            isIdleAnimation) {
             action.setLoop(THREE.LoopRepeat, Infinity);
           } else {
             action.setLoop(THREE.LoopOnce, 1);
@@ -241,16 +242,16 @@ export const useDynamicModelLoader = ({
 
       // Play initial idle animation if applicable
       if (object.enemyType) {
-          const ENEMY_ANIMATION_NAMES_LOCAL = { // Re-define locally for this block too
-              CARNIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack', DEATH: 'Death' },
-              HERBIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack_Kick', DEATH: 'Death' },
-          };
-          const idleAnimations = ENEMY_ANIMATION_NAMES_LOCAL[object.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
-          const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
-          if (object.actions[initialIdleActionName]) {
-              object.currentAction = object.actions[initialIdleActionName];
-              object.currentAction.play();
-          }
+        const ENEMY_ANIMATION_NAMES_LOCAL = { // Re-define locally for this block too
+          CARNIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack', DEATH: 'Death' },
+          HERBIVORE: { IDLE: ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'], WALK: 'Walk', GALLOP: 'Gallop', ATTACK: 'Attack_Kick', DEATH: 'Death' },
+        };
+        const idleAnimations = ENEMY_ANIMATION_NAMES_LOCAL[object.enemyType.toUpperCase() as 'CARNIVORE' | 'HERBIVORE'].IDLE;
+        const initialIdleActionName = idleAnimations[Math.floor(Math.random() * idleAnimations.length)];
+        if (object.actions[initialIdleActionName]) {
+          object.currentAction = object.actions[initialIdleActionName];
+          object.currentAction.play();
+        }
       }
     }
 
@@ -281,7 +282,7 @@ export const useDynamicModelLoader = ({
       }
       object.mixer?.stopAllAction();
       sceneRef.current.remove(modelToUnload);
-      
+
       // Return to pool instead of disposing
       if (!modelPoolRef.current[object.modelPath]) {
         modelPoolRef.current[object.modelPath] = {
@@ -292,7 +293,7 @@ export const useDynamicModelLoader = ({
       (modelToUnload as THREE.Group & { lastPooledTime?: number }).lastPooledTime = Date.now();
       modelPoolRef.current[object.modelPath].instances.push(modelToUnload as THREE.Group & { lastPooledTime?: number });
       object.isPooled = true; // Mark as pooled
-      console.log(`[useDynamicModelLoader] Returned model to pool: ${object.modelPath.split('/').pop()}`);
+      logger.log(`[useDynamicModelLoader] Returned model to pool: ${object.modelPath.split('/').pop()}`);
 
       object.modelInstance = null;
       object.isModelInstantiated = false;
@@ -331,7 +332,7 @@ export const useDynamicModelLoader = ({
       // Dispose of marked instances
       instancesToDispose.forEach(instance => {
         disposeModelResources(instance);
-        console.log(`[useDynamicModelLoader] Disposed of idle/excess model from pool: ${modelPath.split('/').pop()}`);
+        logger.log(`[useDynamicModelLoader] Disposed of idle/excess model from pool: ${modelPath.split('/').pop()}`);
       });
 
       // Update the pool with remaining instances

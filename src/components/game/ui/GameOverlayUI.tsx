@@ -33,7 +33,7 @@ interface GameOverlayUIProps {
   coinMagnetTreatCount: number;
 
   onUseConsumableItem: (itemId: string, amount: number) => void; // Updated to accept amount
-  
+
 
   isGameEffectivelyPaused: boolean;
   isWalletMismatch: boolean;
@@ -108,19 +108,19 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
       </div>
 
       <div className="absolute top-[calc(2.5rem+var(--sat))] right-[calc(1rem+var(--sar))] z-20 flex flex-col space-y-2">
-                {isSpeedBoostActive && speedBoostTimeLeft > 0 && (
+        {isSpeedBoostActive && speedBoostTimeLeft > 0 && (
           <div className="bg-yellow-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
-            <Image src="/speedyPawsTreat.png" alt="Speed Boost" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({speedBoostTimeLeft}s)
+            <Image src="/items/speedyPawsTreat.png" alt="Speed Boost" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({speedBoostTimeLeft}s)
           </div>
         )}
         {isShieldActive && shieldTimeLeft > 0 && (
           <div className="bg-blue-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
-            <Image src="/guardianShield.png" alt="Guardian Shield" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({shieldTimeLeft}s)
+            <Image src="/items/guardianShield.png" alt="Guardian Shield" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({shieldTimeLeft}s)
           </div>
         )}
         {isCoinMagnetActive && coinMagnetTimeLeft > 0 && (
           <div className="bg-purple-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
-            <Image src="/coinMagnetTreat.png" alt="Coin Magnet" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({coinMagnetTimeLeft}s)
+            <Image src="/items/coinMagnetTreat.png" alt="Coin Magnet" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({coinMagnetTimeLeft}s)
           </div>
         )}
 
@@ -132,7 +132,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
             onClick={() => onUseConsumableItem('4', 1)} // Pass amount as 1
             disabled={coinMagnetTreatCount === 0 || (isGameEffectivelyPaused && !isCoinMagnetActive)}
             className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none">
-            <Image src="/coinMagnetTreat.png" alt="Coin Magnet" width={56} height={56} className="h-full w-full object-contain" />
+            <Image src="/items/coinMagnetTreat.png" alt="Coin Magnet" width={56} height={56} className="h-full w-full object-contain" />
             {coinMagnetTreatCount > 0 && (<span className="absolute -bottom-1 -right-1 text-black font-bold text-xs flex items-center justify-center">{coinMagnetTreatCount}</span>)}
           </Button>
         )}
@@ -142,7 +142,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
             disabled={speedyPawsTreatCount === 0 || (isGameEffectivelyPaused && !isSpeedBoostActive)}
             className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
-            <Image src="/speedyPawsTreat.png" alt="Speedy Paws" width={56} height={56} className="h-full w-full object-contain" />
+            <Image src="/items/speedyPawsTreat.png" alt="Speedy Paws" width={56} height={56} className="h-full w-full object-contain" />
             {speedyPawsTreatCount > 0 && (<span className="absolute -bottom-1 -right-1 text-black font-bold text-xs flex items-center justify-center">{speedyPawsTreatCount}</span>)}
           </Button>
         )}
@@ -152,7 +152,7 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = ({
             disabled={guardianShieldCount === 0 || (isGameEffectivelyPaused && !isShieldActive)}
             className="relative h-14 w-14 p-0 bg-transparent hover:bg-transparent shadow-none"
           >
-            <Image src="/guardianShield.png" alt="Guardian Shield" width={56} height={56} className="h-full w-full object-contain" />
+            <Image src="/items/guardianShield.png" alt="Guardian Shield" width={56} height={56} className="h-full w-full object-contain" />
             {guardianShieldCount > 0 && (<span className="absolute -bottom-1 -right-1 text-black font-bold text-xs flex items-center justify-center">{guardianShieldCount}</span>)}
           </Button>
         )}

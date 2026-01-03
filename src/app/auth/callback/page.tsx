@@ -6,6 +6,7 @@ import { useWallet } from '@solana/wallet-adapter-react';
 import { useAuth } from '@/hooks/useAuth';
 import { PawPrint, AlertTriangle } from 'lucide-react';
 import Image from 'next/image';
+import { logger } from 'utils/logger';
 
 export default function AuthCallback() {
     const router = useRouter();
@@ -24,7 +25,7 @@ export default function AuthCallback() {
                 router.push('/');
             }
         } catch (error) {
-            console.error('Login failed:', error);
+            logger.error('Login failed:', error);
         }
     };
 

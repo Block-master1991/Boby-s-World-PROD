@@ -9,6 +9,7 @@ import { AudioProvider, useAudio } from '@/contexts/AudioContext';
 import SoundManager from '@/components/game/SoundManager';
 import { swrConfig } from '@/lib/swr-config';
 import { performanceMonitor } from '@/lib/advanced-service-worker';
+import { logger } from '@/utils/logger';
 
 function AudioInitializer() {
   const { soundManagerRef, isMuted, hasUserInteracted } = useAudio();
@@ -22,7 +23,7 @@ function AudioInitializer() {
       ref={soundManagerRef}
       isMuted={isMuted}
       hasUserInteracted={hasUserInteracted}
-      onPlaybackBlocked={() => console.warn("Audio playback was blocked.")}
+      onPlaybackBlocked={() => logger.warn("Audio playback was blocked.")}
       currentScreen={'loading'} // This prop is now internal to SoundManager, but still required by its interface
     />
   );
@@ -38,13 +39,13 @@ export default function RootLayoutClient({
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker.register('/sw.js')
         .then(registration => {
-          console.log('[SW] Registered successfully:', registration.scope);
+          logger.log('[SW] Registered successfully:', registration.scope);
         })
         .catch(error => {
-          console.error('[SW] Registration failed:', error);
+          logger.error('[SW] Registration failed:', error);
         });
     } else {
-      console.warn('[SW] Service Workers not supported');
+      logger.warn('[SW] Service Workers not supported');
     }
 
     // Record initial load time

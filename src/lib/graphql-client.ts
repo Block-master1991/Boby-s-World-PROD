@@ -7,6 +7,7 @@ import {
     cacheExchange,
     fetchExchange,
 } from 'urql';
+import { logger } from '@/utils/logger';
 
 interface GraphQLResponse<T = any> {
     data?: T;
@@ -103,14 +104,14 @@ const createGraphQLClient = (): Client => {
                             }
                         }
                     } catch (refreshError) {
-                        console.warn('[GraphQL] Token refresh failed:', refreshError);
+                        logger.warn('[GraphQL] Token refresh failed:', refreshError);
                     }
                 }
 
                 return response;
             } catch (error) {
                 if (error instanceof Error && error.name === 'AbortError') {
-                    console.error('[GraphQL] Request timed out:', input);
+                    logger.error('[GraphQL] Request timed out:', input);
                     throw new Error('Request timed out. Please check your connection.');
                 }
                 throw error;
@@ -165,7 +166,7 @@ export const graphqlQuery = async <T = any>(
         };
 
     } catch (error) {
-        console.error('[GraphQL] Query failed:', error);
+        logger.error('[GraphQL] Query failed:', error);
         return {
             errors: [new GraphQLError(error instanceof Error ? error.message : 'Unknown error')],
         };
@@ -208,7 +209,7 @@ export const graphqlMutation = async <T = any>(
         };
 
     } catch (error) {
-        console.error('[GraphQL] Mutation failed:', error);
+        logger.error('[GraphQL] Mutation failed:', error);
         return {
             errors: [new GraphQLError(error instanceof Error ? error.message : 'Unknown error')],
         };
@@ -249,7 +250,7 @@ export const graphqlUtils = {
     clearCache: () => {
         // Note: resetStore might not be available in all URQL versions
         // This is a placeholder for cache clearing functionality
-        console.log('[GraphQL] Cache clearing not implemented in this version');
+        logger.log('[GraphQL] Cache clearing not implemented in this version');
     },
 
     // Get cache statistics

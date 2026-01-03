@@ -1,5 +1,10 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
 import { getStoreItemById, updateStoreItem, deleteStoreItem } from '@/lib/server-items';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
 interface RouteParams {
     params: Promise<{
@@ -7,17 +12,14 @@ interface RouteParams {
     }>;
 }
 
-export async function GET(request: NextRequest, { params }: RouteParams) {
+export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
     try {
         const resolvedParams = await params;
         const itemId = resolvedParams.id;
 
         if (!itemId) {
             return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Item ID is required',
-                },
+                { success: false, error: 'Item ID is required' },
                 { status: 400 }
             );
         }
@@ -26,10 +28,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
         if (!item) {
             return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Item not found',
-                },
+                { success: false, error: 'Item not found' },
                 { status: 404 }
             );
         }
@@ -39,7 +38,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             item,
         });
     } catch (error) {
-        console.error('Error fetching store item:', error);
+        logger.error('Error fetching store item:', error as Error);
         return NextResponse.json(
             {
                 success: false,
@@ -49,9 +48,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             { status: 500 }
         );
     }
-}
+});
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export const PUT = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest, { params }: RouteParams) => {
     try {
         const resolvedParams = await params;
         const itemId = resolvedParams.id;
@@ -59,10 +58,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
 
         if (!itemId) {
             return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Item ID is required',
-                },
+                { success: false, error: 'Item ID is required' },
                 { status: 400 }
             );
         }
@@ -72,10 +68,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         for (const field of requiredFields) {
             if (!body[field]) {
                 return NextResponse.json(
-                    {
-                        success: false,
-                        error: `Missing required field: ${field}`,
-                    },
+                    { success: false, error: `Missing required field: ${field}` },
                     { status: 400 }
                 );
             }
@@ -86,7 +79,6 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             name: body.name,
             description: body.description,
             price: body.price || 0,
-            usdPrice: body.usdPrice || 0.001,
             image: body.image,
             dataAiHint: body.dataAiHint || '',
             type: body.type || 'consumable',
@@ -94,23 +86,19 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             isActive: body.isActive !== undefined ? body.isActive : true,
         });
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             message: 'Item updated successfully',
             item: updatedItem,
         });
-    } catch (error) {
-        console.error('Error updating store item:', error);
 
-        // Handle not found error
+        const requestHost = request.headers.get('host') || undefined;
+        return await setCsrfTokenResponse(response, request.user.sub, requestHost);
+    } catch (error) {
+        logger.error('Error updating store item:', error as Error);
+
         if (error instanceof Error && error.message.includes('not found')) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Item not found',
-                },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
         }
 
         return NextResponse.json(
@@ -122,19 +110,16 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             { status: 500 }
         );
     }
-}
+}));
 
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
+export const DELETE = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest, { params }: RouteParams) => {
     try {
         const resolvedParams = await params;
         const itemId = resolvedParams.id;
 
         if (!itemId) {
             return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Item ID is required',
-                },
+                { success: false, error: 'Item ID is required' },
                 { status: 400 }
             );
         }
@@ -142,22 +127,18 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         // Delete the item
         await deleteStoreItem(itemId);
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             message: 'Item deleted successfully',
         });
-    } catch (error) {
-        console.error('Error deleting store item:', error);
 
-        // Handle not found error
+        const requestHost = request.headers.get('host') || undefined;
+        return await setCsrfTokenResponse(response, request.user.sub, requestHost);
+    } catch (error) {
+        logger.error('Error deleting store item:', error as Error);
+
         if (error instanceof Error && error.message.includes('not found')) {
-            return NextResponse.json(
-                {
-                    success: false,
-                    error: 'Item not found',
-                },
-                { status: 404 }
-            );
+            return NextResponse.json({ success: false, error: 'Item not found' }, { status: 404 });
         }
 
         return NextResponse.json(
@@ -169,4 +150,4 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             { status: 500 }
         );
     }
-}
+}));

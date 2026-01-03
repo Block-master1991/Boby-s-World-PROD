@@ -8,6 +8,7 @@ import type { MutableRefObject } from 'react';
 import { Octree } from '../lib/Octree';
 import { GameObject } from '@/types/game';
 import { getDevicePerformanceConfig } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 interface UseSceneSetupProps {
   mountRef: MutableRefObject<HTMLDivElement | null>;
@@ -29,7 +30,7 @@ export const useSceneSetup = ({
 
   const initializeScene = React.useCallback(() => {
     if (!mountRef.current || !cameraRef.current) {
-      console.warn("[useSceneSetup] Mount point or camera not ready for scene initialization.");
+      logger.warn("[useSceneSetup] Mount point or camera not ready for scene initialization.");
       return false;
     }
     const currentMount = mountRef.current;
@@ -63,7 +64,7 @@ export const useSceneSetup = ({
       renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     }
 
-    console.log(`[useSceneSetup] Renderer configured for ${perfConfig.isMobile ? 'mobile' : 'desktop'} (${perfConfig.performanceLevel} performance):`, {
+    logger.log(`[useSceneSetup] Renderer configured for ${perfConfig.isMobile ? 'mobile' : 'desktop'} (${perfConfig.performanceLevel} performance):`, {
       antialias: perfConfig.renderer.antialias,
       pixelRatio: perfConfig.renderer.pixelRatio,
       shadows: renderer.shadowMap.enabled
@@ -100,7 +101,7 @@ export const useSceneSetup = ({
 
   const cleanupScene = React.useCallback(() => {
     if (rendererRef.current && mountRef.current && mountRef.current.contains(rendererRef.current.domElement)) {
-      try { mountRef.current.removeChild(rendererRef.current.domElement); } catch (e) { console.warn("Error removing renderer on cleanup:", e); }
+      try { mountRef.current.removeChild(rendererRef.current.domElement); } catch (e) { logger.warn("Error removing renderer on cleanup:", e); }
     }
     if (rendererRef.current) { rendererRef.current.dispose(); rendererRef.current = null; }
     if (sceneRef.current) {
@@ -120,7 +121,7 @@ export const useSceneSetup = ({
       octreeRef.current = null;
     }
 
-    console.log("[useSceneSetup] Cleanup complete.");
+    logger.log("[useSceneSetup] Cleanup complete.");
   }, [rendererRef, sceneRef, mountRef, octreeRef]); // octreeRef added to dependencies
 
 

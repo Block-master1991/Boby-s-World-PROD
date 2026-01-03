@@ -5,6 +5,7 @@ import { initialAssetPreloader, PreloadProgress } from '@/lib/initialAssetPreloa
 import { MANIFEST_STATS } from '@/lib/gameAssetManifest';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
+import { logger } from '@/utils/logger';
 
 interface InitialAssetLoaderProps {
     onComplete: () => void;
@@ -38,7 +39,7 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
 
         const checkAndPreload = async () => {
             try {
-                console.log('[InitialAssetLoader] Checking asset availability...');
+                logger.log('[InitialAssetLoader] Checking asset availability...');
 
                 // Import the checker
                 const { checkAssetAvailability } = await import('@/lib/assetChecker');
@@ -48,8 +49,8 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
 
                 // If all assets are present, stay with indeterminate loader (check-only mode)
                 if (checkResult.allPresent) {
-                    console.log('[InitialAssetLoader] ✓ All assets already present in IndexedDB!');
-                    console.log(`[InitialAssetLoader] Staying with indeterminate loader for check-only.`);
+                    logger.log('[InitialAssetLoader] ✓ All assets already present in IndexedDB!');
+                    logger.log(`[InitialAssetLoader] Staying with indeterminate loader for check-only.`);
 
                     setIsCheckOnly(true);
 
@@ -68,11 +69,11 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
                 }
 
                 // Some assets are missing - switch to full preload mode
-                console.log(`[InitialAssetLoader] ${checkResult.missingAssets.length} assets missing, switching to full preload mode...`);
+                logger.log(`[InitialAssetLoader] ${checkResult.missingAssets.length} assets missing, switching to full preload mode...`);
                 setIsInitialLoading(false); // Switch to full loader
-                console.log('[InitialAssetLoader] Starting initial asset preload...');
-                console.log(`[InitialAssetLoader] Total assets to load: ${MANIFEST_STATS.totalAssets}`);
-                console.log(`[InitialAssetLoader] Estimated total size: ${MANIFEST_STATS.totalEstimatedSizeMB.toFixed(1)}MB (will show actual size during loading)`);
+                logger.log('[InitialAssetLoader] Starting initial asset preload...');
+                logger.log(`[InitialAssetLoader] Total assets to load: ${MANIFEST_STATS.totalAssets}`);
+                logger.log(`[InitialAssetLoader] Estimated total size: ${MANIFEST_STATS.totalEstimatedSizeMB.toFixed(1)}MB (will show actual size during loading)`);
 
                 const success = await initialAssetPreloader.preloadAllAssets({
                     onProgress: (progress) => {
@@ -97,9 +98,9 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
                 if (!mounted) return;
 
                 if (success) {
-                    console.log('[InitialAssetLoader] ✓ Initial preload completed successfully');
-                    console.log(`[InitialAssetLoader] Total preload time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
-                    console.log(`[InitialAssetLoader] Average speed: ${(progress.loadedSizeMB / ((Date.now() - startTime) / 1000)).toFixed(1)}MB/s`);
+                    logger.log('[InitialAssetLoader] ✓ Initial preload completed successfully');
+                    logger.log(`[InitialAssetLoader] Total preload time: ${((Date.now() - startTime) / 1000).toFixed(1)}s`);
+                    logger.log(`[InitialAssetLoader] Average speed: ${(progress.loadedSizeMB / ((Date.now() - startTime) / 1000)).toFixed(1)}MB/s`);
 
                     setTimeout(() => {
                         if (mounted) {
@@ -110,7 +111,7 @@ const InitialAssetLoader: React.FC<InitialAssetLoaderProps> = ({ onComplete, onE
                     throw new Error('Preload failed - some assets could not be loaded');
                 }
             } catch (error) {
-                console.error('[InitialAssetLoader] Error during check/preload:', error);
+                logger.error('[InitialAssetLoader] Error during check/preload:', error);
                 if (mounted) {
                     onError(error instanceof Error ? error.message : 'Unknown preload error');
                 }

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useCallback, useState, useImperativeHandle, forwardRef } from 'react';
+import { logger } from '@/utils/logger';
 import { getModel, putModel } from '../../lib/indexedDB'; // Import IndexedDB utilities
 
 export interface SoundManagerRef {
@@ -33,7 +34,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       audioRef.current.volume = volume;
       audioRef.current.loop = true; // Default to loop
       audioRef.current.oncanplaythrough = () => setIsAudioReady(true);
-      audioRef.current.onerror = (e) => console.error("Audio error:", e);
+      audioRef.current.onerror = (e) => logger.error("Audio error:", e);
     }
   }, [volume]);
 
@@ -41,7 +42,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
     if (audioRef.current) {
       // Check if it's the same original track (not blob URL)
       if (originalTrackSrc.current === src) {
-        console.log(`[SoundManager] Same track (${src}), continuing playback.`);
+        logger.log(`[SoundManager] Same track (${src}), continuing playback.`);
         return;
       }
 
@@ -51,26 +52,29 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
           // Try to load from IndexedDB first
           const cachedData = await getModel(audioName);
           if (cachedData) {
-            console.log(`[SoundManager] Loading ${audioName} from IndexedDB`);
-            // Create blob URL from cached data
+            logger.log(`[SoundManager] Loading ${audioName} from IndexedDB cache.`);
             const blob = new Blob([cachedData], { type: 'audio/mpeg' });
             return URL.createObjectURL(blob);
           } else {
-            console.log(`[SoundManager] Fetching ${audioName} from network: ${audioPath}`);
-            // Fetch from network and cache
+            logger.log(`[SoundManager] Initial load: Fetching ${audioName} from network.`);
             const response = await fetch(audioPath);
             if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
             const arrayBuffer = await response.arrayBuffer();
-            await putModel(audioName, arrayBuffer);
 
-            // Create blob URL
+            // Validate the arrayBuffer
+            if (arrayBuffer.byteLength === 0) {
+              throw new Error("Received empty audio buffer");
+            }
+
+            // Cache for future use
+            await putModel(audioName, arrayBuffer);
+            logger.log(`[SoundManager] Successfully cached ${audioName} in IndexedDB.`);
+
             const blob = new Blob([arrayBuffer], { type: 'audio/mpeg' });
             return URL.createObjectURL(blob);
           }
         } catch (error) {
-          console.error(`[SoundManager] Error loading or caching ${audioName}:`, error);
-          // Fallback to direct URL
-          console.log(`[SoundManager] Falling back to direct URL for: ${audioPath}`);
+          logger.error(`[SoundManager] Professional fallback: Error loading ${audioName}, using direct network path.`, error);
           return audioPath;
         }
       };
@@ -78,6 +82,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       // Clean up previous blob URL if it exists
       if (currentTrackSrc.current && currentTrackSrc.current.startsWith('blob:')) {
         URL.revokeObjectURL(currentTrackSrc.current);
+        logger.log(`[SoundManager] Revoked previous blob URL.`);
       }
 
       audioRef.current.pause();
@@ -89,9 +94,9 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       audioRef.current.src = blobUrl;
       audioRef.current.loop = loop;
       currentTrackSrc.current = blobUrl;
-      originalTrackSrc.current = src; // Track the original path
-      setIsAudioReady(false); // Reset ready state when source changes
-      console.log(`[SoundManager] Setting audio source to: ${blobUrl}`);
+      originalTrackSrc.current = src;
+      setIsAudioReady(false); // Reset ready state
+      logger.log(`[SoundManager] Audio source prepared: ${blobUrl}`);
     }
   }, []);
 
@@ -100,15 +105,14 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
 
-      // Clean up blob URL if it exists
       if (currentTrackSrc.current && currentTrackSrc.current.startsWith('blob:')) {
         URL.revokeObjectURL(currentTrackSrc.current);
       }
 
       currentTrackSrc.current = null;
-      originalTrackSrc.current = null; // Clear original track reference
+      originalTrackSrc.current = null;
       setIsAudioReady(false);
-      console.log("[SoundManager] Audio stopped.");
+      logger.log("[SoundManager] Audio stopped and cleaned up.");
     }
   }, []);
 
@@ -116,17 +120,18 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
     if (audioRef.current && currentTrackSrc.current && !isMuted && isAudioReady) {
       try {
         if (audioRef.current.readyState >= 2 && audioRef.current.paused) {
-          await audioRef.current.play();
-          console.log(`[SoundManager] Playing: ${currentTrackSrc.current}`);
+          const playPromise = audioRef.current.play();
+          if (playPromise !== undefined) {
+            await playPromise;
+            logger.log(`[SoundManager] Playback started: ${originalTrackSrc.current}`);
+          }
         }
       } catch (e: unknown) {
         if (e instanceof Error && (e.name === 'NotAllowedError' || e.name === 'AbortError')) {
-          console.warn("[SoundManager] Audio playback blocked by browser autoplay policy or aborted:", e.message);
-          if (onPlaybackBlocked) {
-            onPlaybackBlocked();
-          }
+          logger.warn("[SoundManager] Autoplay blocked, awaiting user interaction.", e.message);
+          if (onPlaybackBlocked) onPlaybackBlocked();
         } else {
-          console.error("Error playing audio:", e);
+          logger.error("[SoundManager] Critical playback error:", e);
         }
       }
     }
@@ -138,7 +143,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       if (audioRef.current) {
         audioRef.current.muted = !audioRef.current.muted;
         audioRef.current.volume = audioRef.current.muted ? 0 : volume;
-        console.log(`[SoundManager] Muted: ${audioRef.current.muted}`);
+        logger.log(`[SoundManager] Muted: ${audioRef.current.muted}`);
       }
     },
     setVolume: (newVolume: number) => {
@@ -164,7 +169,7 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
       case 'captcha':
       case 'authentication':
       case 'mainMenu':
-      case 'loading': // الحفاظ على الصوت الموسيقي أثناء التحميل والانتقالات
+      case 'loading': // Keep music during loading and transitions
         audioToSet = preGameTrack;
         break;
       case 'boby-world':
@@ -174,11 +179,11 @@ const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(({ isMuted, 
         audioToSet = '/audio/Boby_On_the_Run_road_run_bg_sound.mp3';
         break;
       case 'admin':
-        // إيقاف الصوت في صفحة الإدارة
+        // Stop audio on admin page
         stopAudio();
         break;
       default:
-        // إيقاف الصوت في الحالات غير المعروفة
+        // Stop audio for unknown cases
         stopAudio();
         break;
     }

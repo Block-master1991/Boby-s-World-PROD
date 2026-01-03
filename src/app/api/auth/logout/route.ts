@@ -1,25 +1,28 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 import { cookies } from 'next/headers';
 import { JWTManager } from '@/lib/jwt-utils';
-import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
-import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
-import { getClientIp } from '@/lib/request-utils'; // لاستخراج IP إذا لزم الأمر للتحقق من الرمز المميز
+import { withCsrfProtection } from '@/lib/csrf-middleware'; // Import CSRF middleware
+import { securityIntegration } from '@/lib/securityIntegration'; // Import SecurityIntegration
+import { CSRFManager } from '@/lib/csrf-utils'; // Import CSRFManager
+import { getClientIp } from '@/lib/request-utils'; // To extract IP if needed for token verification
+import { auditLogger } from '@/lib/audit-logger';
 
 export const POST = withCsrfProtection(async (request: Request) => {
-  console.log('[LOGOUT] Received logout request');
+  logger.log('[LOGOUT] Received logout request');
   try {
     const cookieStore = await cookies();
     const accessToken = cookieStore.get('accessToken')?.value;
     const refreshToken = cookieStore.get('refreshToken')?.value;
 
-    console.log('[LOGOUT] Access token:', accessToken);
-    console.log('[LOGOUT] Refresh token:', refreshToken);
+    logger.log('[LOGOUT] Access token:', accessToken);
+    logger.log('[LOGOUT] Refresh token:', refreshToken);
 
     let userPublicKey: string | undefined;
 
     // Blacklist tokens if they exist
     if (accessToken) {
-      console.log('[LOGOUT] Blacklisting accessToken');
+      logger.log('[LOGOUT] Blacklisting accessToken');
       await JWTManager.revokeToken(accessToken, 'logout');
       // Try to get publicKey from accessToken to invalidate CSRF token
       try {
@@ -30,34 +33,47 @@ export const POST = withCsrfProtection(async (request: Request) => {
           userPublicKey = payload.sub;
         }
       } catch (tokenError) {
-        console.warn('[LOGOUT] Could not extract publicKey from accessToken for CSRF invalidation:', tokenError);
+        logger.warn('[LOGOUT] Could not extract publicKey from accessToken for CSRF invalidation:', tokenError);
       }
     }
     if (refreshToken) {
-      console.log('[LOGOUT] Blacklisting refreshToken');
+      logger.log('[LOGOUT] Blacklisting refreshToken');
       await JWTManager.revokeToken(refreshToken, 'logout');
     }
 
     // Invalidate CSRF token in Firestore if publicKey is available
     if (userPublicKey) {
-      console.log(`[LOGOUT] Invalidating CSRF token for session ${userPublicKey} in Firestore.`);
+      logger.log(`[LOGOUT] Invalidating CSRF token for session ${userPublicKey} in Firestore.`);
       await CSRFManager.deleteToken(userPublicKey);
+
+      // Revoke all active sessions via SecurityIntegration (Unified)
+      logger.log(`[LOGOUT] Revoking all advanced sessions for user ${userPublicKey}`);
+      await securityIntegration.terminateAllUserSessions(userPublicKey);
+
+      // Log security event (SIEM)
+      await auditLogger.logEvent(
+        'LOGOUT',
+        `User logged out successfully: ${userPublicKey}`,
+        {
+          userId: userPublicKey,
+          ip: getClientIp(request),
+          endpoint: '/api/auth/logout'
+        },
+        'info'
+      );
     }
 
     const requestHost = request.headers.get('host') || undefined;
 
-    // خيارات الكوكيز لحذفها (تعيين maxAge إلى -1 أو expires إلى تاريخ قديم)
-    // يجب أن تتطابق الخيارات (path, domain, secure, httpOnly, sameSite) مع تلك التي تم تعيين الكوكي بها في الأصل
+    // Cookie options for deletion
     const commonExpiredOptions = {
-      ...JWTManager.createSecureCookieOptions(-1, requestHost), // استخدم -1 لـ maxAge للحذف الفوري
-      expires: new Date(0), // تأكيد الحذف بتعيين تاريخ انتهاء صلاحية في الماضي
+      ...JWTManager.createSecureCookieOptions(-1, requestHost),
+      expires: new Date(0),
     };
 
-    // خيارات خاصة لـ csrfToken لأنه ليس httpOnly
-    // نعود إلى الطريقة الأكثر بساطة وموثوقية لحذف الكوكيز غير httpOnly
     const csrfExpiredOptions = {
-      expires: new Date(0), // تعيين تاريخ انتهاء الصلاحية إلى 1 يناير 1970 (الماضي البعيد)
-      path: '/', // تأكد من أن المسار يطابق المسار الذي تم تعيين الكوكي به
+      expires: new Date(0),
+      path: '/',
     };
 
     const response = NextResponse.json({
@@ -65,24 +81,25 @@ export const POST = withCsrfProtection(async (request: Request) => {
       message: 'Logged out successfully. All session cookies cleared.'
     });
 
-    console.log('[LOGOUT] Clearing cookies');
+    logger.log('[LOGOUT] Clearing cookies');
 
-    // حذف جميع الكوكيز المتعلقة بالمصادقة
+    // Delete all authentication-related cookies
     response.cookies.set('accessToken', '', commonExpiredOptions);
     response.cookies.set('refreshToken', '', commonExpiredOptions);
-    response.cookies.set('session', '', commonExpiredOptions); 
+    response.cookies.set('session', '', commonExpiredOptions);
     response.cookies.set('nonce', '', commonExpiredOptions);
-    response.cookies.set('csrfToken', '', csrfExpiredOptions); 
-    // أضف أي كوكيز أخرى قد تكون موجودة وتحتاج إلى مسح
+    response.cookies.set('csrfToken', '', csrfExpiredOptions);
+    response.cookies.set('secure_session', '', commonExpiredOptions);
+    response.cookies.set('session_seed', '', commonExpiredOptions); // Also clear session seed
     // response.cookies.set('anotherCookieName', '', commonExpiredOptions);
 
-    console.log('[LOGOUT] Logout process completed');
+    logger.log('[LOGOUT] Logout process completed');
     return response;
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     const errorStack = error instanceof Error ? error.stack : '';
-    console.error('[POST /api/auth/logout] Error during logout:', errorMessage, errorStack);
+    logger.error('[POST /api/auth/logout] Error during logout:', new Error(errorMessage));
     return NextResponse.json({
       error: 'Logout failed',
       details: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error'

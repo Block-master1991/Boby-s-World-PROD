@@ -44,30 +44,30 @@ export const DOG_SPAWN_PROTECTION_RADIUS = 40; // Radius around dog's initial sp
 export const ENEMY_COLLISION_PENALTY_USDT = 0.001; // Penalty amount for enemy collision
 // src/lib/constants.ts
 export const PERFORMANCE_SETTINGS = {
-  // إعدادات LOD
+  // LOD Settings
   LOD_DISTANCES: {
     HIGH: 50,
     MEDIUM: 100,
     LOW: 200
   },
 
-  // إعدادات التحميل
+  // Loading Settings
   BATCH_SIZE: 2,
   MAX_CONCURRENT_LOADS: 3,
 
-  // إعدادات الذاكرة
+  // Memory Settings
   MAX_MEMORY_USAGE: 500 * 1024 * 1024, // 500MB
   CLEANUP_THRESHOLD: 0.8, // 80%
 
-  // إعدادات الجودة
+  // Quality Settings
   TEXTURE_QUALITY: 1.0,
   SHADOW_QUALITY: 0.5,
 
-  // إعدادات الأداء
+  // Performance Settings
   TARGET_FPS: 60,
   MIN_FPS: 30,
 
-  // إعدادات Occlusion Culling
+  // Occlusion Culling Settings
   OCCLUSION_CHECK_INTERVAL: 100, // ms
   MAX_OCCLUSION_OBJECTS: 1000
 };

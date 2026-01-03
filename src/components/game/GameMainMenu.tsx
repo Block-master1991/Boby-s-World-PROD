@@ -19,7 +19,7 @@ const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected }) => {
 
     return (
         <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
-            {/* User Info & Disconnect Button - compact للشاشات الصغيرة */}
+            {/* User Info & Disconnect Button - compact for small screens */}
             {isAuthenticated && authUser && (
                 <div className="fixed top-4 left-4 z-30 w-auto max-w-[calc(100vw-2rem)]">
                     <Card className="bg-card/95 backdrop-blur-sm border-border/50 shadow-xl">

@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
-import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
-import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
 interface InventoryItem {
   id: string;
@@ -12,14 +12,10 @@ interface InventoryItem {
 }
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
-  console.log("[API] /api/game/consumeProtectionBottle called");
+  logger.log("[API] /api/game/consumeProtectionBottle called");
 
   // userPublicKey is now available directly from request.user
-  const userPublicKey = request.user?.sub;
-
-  if (!userPublicKey) {
-    return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-  }
+  const userPublicKey = request.user.sub;
 
   try {
     await initializeAdminApp();
@@ -51,21 +47,11 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     const response = NextResponse.json({ message: 'Protection Bottle consumed successfully.', newInventory: currentInventory });
 
-    // إصدار CSRF Token جديد بعد الطلب الناجح
+    // Issue new CSRF Token using the helper
     const requestHost = request.headers.get('host') || undefined;
-    const csrfToken = await CSRFManager.getOrCreateToken(userPublicKey);
-    response.cookies.set('csrfToken', csrfToken, {
-      httpOnly: false,
-      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-      maxAge: 30 * 60, // 30 دقيقة
-      path: '/',
-    });
-    console.log('[consumeProtectionBottle] New CSRF token issued and set in cookie.');
-
-    return response;
+    return await setCsrfTokenResponse(response, userPublicKey, requestHost);
   } catch (error) {
-    console.error("Error consuming protection Bottle:", error);
+    logger.error("Error consuming protection Bottle:", error as Error);
     let errorMessage = error instanceof Error ? error.message : 'Failed to consume protection Bottle.';
     let statusCode = 500;
 

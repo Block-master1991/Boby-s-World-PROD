@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GrassOptions } from './grass'; // Import GrassOptions for type reference
 import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { logger } from 'utils/logger';
 
 let loaded = false;
 let _grassTexture: THREE.Texture | null = null;
@@ -18,7 +19,7 @@ async function fetchAssets(): Promise<void> {
       // Try to load from IndexedDB first
       const cachedData = await getModel(textureName);
       if (cachedData) {
-        console.log(`[Ground] Loading ${textureName} from IndexedDB`);
+        logger.log(`[Ground] Loading ${textureName} from IndexedDB`);
         // Create blob URL from cached data
         const blob = new Blob([cachedData], { type: 'image/jpeg' });
         const blobUrl = URL.createObjectURL(blob);
@@ -26,7 +27,7 @@ async function fetchAssets(): Promise<void> {
         URL.revokeObjectURL(blobUrl); // Clean up blob URL
         return texture;
       } else {
-        console.log(`[Ground] Fetching ${textureName} from network: ${texturePath}`);
+        logger.log(`[Ground] Fetching ${textureName} from network: ${texturePath}`);
         // Fetch from network and cache
         const response = await fetch(texturePath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -41,9 +42,9 @@ async function fetchAssets(): Promise<void> {
         return texture;
       }
     } catch (error) {
-      console.error(`[Ground] Error loading or caching ${textureName}:`, error);
+      logger.error(`[Ground] Error loading or caching ${textureName}:`, error);
       // Fallback to direct network load
-      console.log(`[Ground] Falling back to direct network load for: ${texturePath}`);
+      logger.log(`[Ground] Falling back to direct network load for: ${texturePath}`);
       return await textureLoader.loadAsync(texturePath);
     }
   };

@@ -6,6 +6,7 @@ import { simplex2d } from './noise';
 import { appendWindShader } from '../shaders/windShaderUtils';
 import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
 import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { logger } from 'utils/logger';
 
 let loaded = false;
 let _flowerBlueMesh: THREE.Mesh | null = null;
@@ -14,13 +15,13 @@ let _flowerYellowMesh: THREE.Mesh | null = null;
 
 export class FlowerOptions {
   public flowersCountPerChunk: number = 5; // Number of flowers per chunk
-  public size: { x: number; y: number; z: number } = { x: 0.5, y: 0.5, z: 0.5 }; // حجم موحد للنموذج الأصلي
-  public sizeVariation: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }; // لا تباين في الحجم
-  public scale: number = 100.0; // مقياس موحد
+  public size: { x: number; y: number; z: number } = { x: 0.5, y: 0.5, z: 0.5 }; // Uniform size for the original model
+  public sizeVariation: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }; // No size variation
+  public scale: number = 100.0; // Uniform scale
   public patchiness: number = 0.6;
-  public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // قوة الرياح (مضاعفة)
-  public windFrequency: number = 1.2; // تردد الرياح (مضاعفة)
-  public windScale: number = 500.0; // مقياس الرياح
+  public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // Wind strength (multiplier)
+  public windFrequency: number = 1.2; // Wind frequency (multiplier)
+  public windScale: number = 500.0; // Wind scale
 }
 
 export class Flowers extends THREE.Group {
@@ -33,8 +34,8 @@ export class Flowers extends THREE.Group {
   }
 
   /**
-   * تحديث تأثير الرياح على الأزهار
-   * @param time الوقت الحالي
+   * Update wind effect on flowers
+   * @param time Current time
    */
   public updateWindEffect(time: number): void {
     this.traverse((child) => {
@@ -72,11 +73,11 @@ export class Flowers extends THREE.Group {
         // Try to load from IndexedDB first
         const cachedData = await getModel(modelName);
         if (cachedData) {
-          console.log(`[Flowers] Loading ${modelName} from IndexedDB`);
+          logger.log(`[Flowers] Loading ${modelName} from IndexedDB`);
           const gltf = await gltfLoader.parseAsync(cachedData, '');
           return gltf.scene;
         } else {
-          console.log(`[Flowers] Fetching ${modelName} from network: ${modelPath}`);
+          logger.log(`[Flowers] Fetching ${modelName} from network: ${modelPath}`);
           const response = await fetch(modelPath);
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const arrayBuffer = await response.arrayBuffer();
@@ -85,23 +86,23 @@ export class Flowers extends THREE.Group {
           return gltf.scene;
         }
       } catch (error) {
-        console.error(`[Flowers] Error loading or caching model ${modelName}:`, error);
+        logger.error(`[Flowers] Error loading or caching model ${modelName}:`, error);
         // Fallback to direct network load if IndexedDB fails
-        console.log(`[Flowers] Falling back to direct network load for: ${modelPath}`);
+        logger.log(`[Flowers] Falling back to direct network load for: ${modelPath}`);
         const gltf = await gltfLoader.loadAsync(modelPath);
         return gltf.scene;
       }
     };
 
     try {
-      console.log('[Flowers] Loading flower models...');
+      logger.log('[Flowers] Loading flower models...');
 
-      // تحميل نماذج الأزهار كما في grass.js مع IndexedDB caching
+      // Load flower models as in grass.js with IndexedDB caching
       _flowerBlueMesh = (await loadModel('/models/flower_blue.glb', 'flower_blue_model')).children[0] as THREE.Mesh;
       _flowerWhiteMesh = (await loadModel('/models/flower_white.glb', 'flower_white_model')).children[0] as THREE.Mesh;
       _flowerYellowMesh = (await loadModel('/models/flower_yellow.glb', 'flower_yellow_model')).children[0] as THREE.Mesh;
 
-      // تطبيق نفس معالجة المواد كما في grass.js
+      // Apply same material processing as in grass.js
       [_flowerWhiteMesh, _flowerBlueMesh, _flowerYellowMesh].forEach((mesh) => {
         if (mesh) {
           mesh.traverse((o) => {
@@ -109,20 +110,20 @@ export class Flowers extends THREE.Group {
               if (o.material.map) {
                 o.material = new THREE.MeshPhongMaterial({ map: o.material.map });
               }
-              // تطبيق تظليل الرياح على الأزهار
+              // Apply wind shading to flowers
               appendWindShader(o.material, new FlowerOptions(), false);
             }
           });
         }
       });
 
-      console.log('[Flowers] All flower models loaded successfully');
+      logger.log('[Flowers] All flower models loaded successfully');
     } catch (error) {
-      console.error('[Flowers] Error loading flower models:', error);
-      // إنشاء نماذج بديلة في حالة فشل التحميل
-      _flowerBlueMesh = this.createFallbackFlower(0x3498db); // أزرق
-      _flowerWhiteMesh = this.createFallbackFlower(0xffffff); // أبيض
-      _flowerYellowMesh = this.createFallbackFlower(0xf1c40f); // أصفر
+      logger.error('[Flowers] Error loading flower models:', error);
+      // Create fallback models in case of loading failure
+      _flowerBlueMesh = this.createFallbackFlower(0x3498db); // Blue
+      _flowerWhiteMesh = this.createFallbackFlower(0xffffff); // White
+      _flowerYellowMesh = this.createFallbackFlower(0xf1c40f); // Yellow
     }
 
     loaded = true;
@@ -130,7 +131,7 @@ export class Flowers extends THREE.Group {
 
   public generateFlowersForChunk(chunkX: number, chunkZ: number, getHeightAt?: (x: number, z: number) => number): THREE.Group | null {
     if (!_flowerBlueMesh || !_flowerWhiteMesh || !_flowerYellowMesh) {
-      console.warn("Flowers: No meshes loaded. Call fetchAssets() first.");
+      logger.warn("Flowers: No meshes loaded. Call fetchAssets() first.");
       return null;
     }
 
@@ -142,7 +143,7 @@ export class Flowers extends THREE.Group {
     const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
 
     for (let i = 0; i < this.options.flowersCountPerChunk; i++) {
-      // استخدام نفس طريقة تحديد المواقع كما في grass.js
+      // Use same positioning method as in grass.js
       const r = 10 + Math.random() * 200;
       const theta = Math.random() * 2.0 * Math.PI;
 
@@ -150,7 +151,7 @@ export class Flowers extends THREE.Group {
       const worldX = chunkWorldStartX + r * Math.cos(theta);
       const worldZ = chunkWorldStartZ + r * Math.sin(theta);
 
-      // استخدام نفس طريقة حساب الضوضاء كما في grass.js
+      // Use same noise calculation method as in grass.js
       const n = 0.5 + 0.5 * simplex2d(new THREE.Vector2(
         worldX / this.options.scale,
         worldZ / this.options.scale
@@ -158,17 +159,17 @@ export class Flowers extends THREE.Group {
 
       if (n > this.options.patchiness && Math.random() + 0.8 > this.options.patchiness) { continue; }
 
-      // الحصول على ارتفاع التضاريس عند هذه النقطة
+      // Get terrain height at this point
       const height = getHeightAt ? getHeightAt(worldX, worldZ) : 0;
       const p = new THREE.Vector3(worldX, height, worldZ);
 
       const flowerMesh = flowerMeshes[Math.floor(Math.random() * flowerMeshes.length)];
-      // استنساخ النموذج كما في grass.js
+      // Clone the model as in grass.js
       const flower = flowerMesh.clone();
       flower.position.copy(p);
       flower.rotation.set(0, 2 * Math.PI * Math.random(), 0);
 
-      // تعيين حجم مصغر إلى ثلاثة أضعاف
+      // Set scaled size to three times smaller
       const scale = (0.02 + 0.03 * Math.random()) / 7;
       flower.scale.set(scale, scale, scale);
 
@@ -176,7 +177,7 @@ export class Flowers extends THREE.Group {
       flower.receiveShadow = true;
       flower.frustumCulled = true;
 
-      // تطبيق تأثير الرياح على الزهرة
+      // Apply wind effect to the flower
       if (flower.material) {
         appendWindShader(flower.material, this.options, false);
       }
@@ -194,35 +195,35 @@ export class Flowers extends THREE.Group {
     const { positions, scales, quaternions } = data;
     const count = positions.length / 3;
 
-    console.log(`[Flowers] Generating ${count} flowers`);
+    logger.log(`[Flowers] Generating ${count} flowers`);
 
     for (let i = 0; i < count; i++) {
       const flowerMesh = flowerMeshes[Math.floor(Math.random() * flowerMeshes.length)];
 
-      // استنساخ النموذج كما في grass.js
+      // Clone the model as in grass.js
       const flower = flowerMesh.clone();
 
-      // استخراج الموضع الحالي
+      // Extract current position
       const x = positions[i * 3];
       const z = positions[i * 3 + 2];
 
-      // تحديد الارتفاع الصحيح للتضاريس
+      // Determine correct terrain height
       const height = getHeightAt ? getHeightAt(x, z) : positions[i * 3 + 1];
 
-      // تعيين الموضع الصحيح مع الارتفاع المحدد
+      // Set correct position with determined height
       flower.position.set(x, height, z);
       flower.rotation.set(0, 2 * Math.PI * Math.random(), 0);
 
-      // تعيين حجم مصغر إلى ثلاثة أضعاف
+      // Set scaled size to three times smaller
       const scale = (0.02 + 0.03 * Math.random()) / 7;
       flower.scale.set(scale, scale, scale);
 
-      // التأكد من أن الزهرة تلقي وتستقبل الظلال
+      // Ensure flower casts and receives shadows
       flower.castShadow = true;
       flower.receiveShadow = true;
       flower.frustumCulled = true;
 
-      // تطبيق تأثير الرياح على الزهرة
+      // Apply wind effect to the flower
       if (flower.material) {
         appendWindShader(flower.material, this.options, false);
       }
@@ -232,16 +233,16 @@ export class Flowers extends THREE.Group {
     return flowersGroup;
   }
 
-  // دالة متقدمة لاستنساخ النماذج بشكل صحيح
+  // Advanced function for proper model cloning
   private cloneMeshAdvanced(original: THREE.Mesh): THREE.Mesh {
-    // استنساخ الهندسة
+    // Clone geometry
     const geometry = original.geometry.clone();
 
-    // استنساخ المواد
+    // Clone materials
     let materials: THREE.Material | THREE.Material[];
 
     if (Array.isArray(original.material)) {
-      // استنساخ مجموعة من المواد
+      // Clone array of materials
       materials = original.material.map(mat => {
         if (mat instanceof THREE.Material) {
           return mat.clone();
@@ -249,22 +250,22 @@ export class Flowers extends THREE.Group {
         return mat;
       });
     } else if (original.material) {
-      // استنساخ مادة واحدة
+      // Clone single material
       materials = original.material.clone();
     } else {
-      // إنشاء مادة افتراضية إذا لم تكن هناك مادة
+      // Create default material if none exists
       materials = new THREE.MeshBasicMaterial({ color: 0xffffff });
     }
 
-    // إنشاء النسخة الجديدة
+    // Create new clone
     const clone = new THREE.Mesh(geometry, materials);
 
-    // نسخ الخصائص الأخرى
+    // Copy other properties
     clone.position.copy(original.position);
     clone.rotation.copy(original.rotation);
     clone.scale.copy(original.scale);
 
-    // نسخ خصائص الظل
+    // Copy shadow properties
     clone.castShadow = original.castShadow;
     clone.receiveShadow = original.receiveShadow;
     clone.frustumCulled = original.frustumCulled;
@@ -272,30 +273,30 @@ export class Flowers extends THREE.Group {
     return clone;
   }
 
-  // دالة لإنشاء نموذج بديل للزهرة في حالة فشل تحميل النموذج الأصلي
+  // Function to create fallback flower model in case of original model loading failure
   private static createFallbackFlower(color: number): THREE.Mesh {
-    // إنشاء زهرة بسيطة من أشكال هندسية أساسية
+    // Create simple flower from basic geometric shapes
     const flowerGroup = new THREE.Group();
 
-    // ساق الزهرة
+    // Flower stem
     const stemGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8);
-    const stemMaterial = new THREE.MeshBasicMaterial({ color: 0x2ecc71 }); // أخضر
+    const stemMaterial = new THREE.MeshBasicMaterial({ color: 0x2ecc71 }); // Green
     const stem = new THREE.Mesh(stemGeometry, stemMaterial);
     stem.position.y = 0.15;
     flowerGroup.add(stem);
 
-    // رأس الزهرة
+    // Flower head
     const headGeometry = new THREE.SphereGeometry(0.1, 8, 6);
     const headMaterial = new THREE.MeshBasicMaterial({ color });
     const head = new THREE.Mesh(headGeometry, headMaterial);
     head.position.y = 0.3;
     flowerGroup.add(head);
 
-    // تحويل المجموعة إلى mesh واحد
+    // Convert group to single mesh
     const mergedGeometry = new THREE.BufferGeometry();
     const geometries = [stem.geometry, head.geometry];
 
-    // دمج الأشكال الهندسية
+    // Merge geometries
     let vertexCount = 0;
     geometries.forEach(geometry => {
       const positionAttribute = geometry.getAttribute('position');
@@ -310,7 +311,7 @@ export class Flowers extends THREE.Group {
         for (let i = 0; i < indexArray.length; i++) {
           newIndexArray[i] = indexArray[i] + vertexCount;
         }
-        // تحويل Uint32Array إلى Array<number>
+        // Convert Uint32Array to Array<number>
         const indexArrayForSet = Array.from(newIndexArray);
         mergedGeometry.setIndex(indexArrayForSet);
       }
@@ -318,7 +319,7 @@ export class Flowers extends THREE.Group {
       vertexCount += positionAttribute.count;
     });
 
-    // إنشاء mesh مدمج
+    // Create merged mesh
     const mergedMesh = new THREE.Mesh(mergedGeometry, [stemMaterial, headMaterial]);
     mergedMesh.position.copy(flowerGroup.position);
     mergedMesh.rotation.copy(flowerGroup.rotation);

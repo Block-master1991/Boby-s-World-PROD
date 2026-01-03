@@ -6,6 +6,7 @@ import GameCanvas from './game/GameCanvas';
 import { Octree } from '@/lib/Octree';
 import { GameObject } from '@/types/game';
 import { checkCriticalAssets } from '@/lib/assetChecker';
+import { logger } from '@/utils/logger';
 
 interface GameWrapperProps {
     sessionPublicKey: PublicKey | null;
@@ -37,21 +38,23 @@ const GameWrapper: React.FC<GameWrapperProps> = (props) => {
     // Quick check that critical assets are available in IndexedDB
     useEffect(() => {
         const checkAssets = async () => {
-            console.log('[GameWrapper] Verifying assets in IndexedDB...');
+            logger.log('[GameWrapper] Verifying assets in IndexedDB...');
             setIsLoading(true);
 
             try {
                 const criticalAssetsPresent = await checkCriticalAssets();
 
                 if (criticalAssetsPresent) {
-                    console.log('[GameWrapper] ✓ All critical assets present in IndexedDB');
+                    logger.log('[GameWrapper] ✓ All critical assets present in IndexedDB');
                     setAssetsReady(true);
                 } else {
-                    console.error('[GameWrapper] ✗ Critical assets missing from IndexedDB');
+                    logger.error('[GameWrapper] ✗ Critical assets missing from IndexedDB');
+                    setAssetsReady(false);
                     setLoadingError('Critical game assets are missing. Please refresh the page.');
                 }
             } catch (error) {
-                console.error('[GameWrapper] Error checking assets:', error);
+                logger.error('[GameWrapper] Error checking assets:', error);
+                setAssetsReady(false);
                 setLoadingError('Failed to verify game assets');
             } finally {
                 setIsLoading(false);
@@ -62,7 +65,7 @@ const GameWrapper: React.FC<GameWrapperProps> = (props) => {
     }, []);
 
     const handleLoadStart = () => {
-        console.log('[GameWrapper] Starting game scene loading...');
+        logger.log('[GameWrapper] Starting game scene loading...');
     };
 
     const handleLoadProgress = (progress: number, phase?: string) => {
@@ -70,7 +73,7 @@ const GameWrapper: React.FC<GameWrapperProps> = (props) => {
     };
 
     const handleLoadComplete = (success: boolean) => {
-        console.log(`[GameWrapper] Game scene loading ${success ? 'completed' : 'failed'}`);
+        logger.log(`[GameWrapper] Game scene loading ${success ? 'completed' : 'failed'}`);
     };
 
     // Show loading state while checking assets

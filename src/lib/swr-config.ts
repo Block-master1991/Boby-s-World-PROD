@@ -1,4 +1,5 @@
 // Advanced SWR Configuration for Optimized Data Fetching
+import { logger } from 'utils/logger';
 // Provides intelligent caching, revalidation, and background sync
 
 import { SWRConfiguration } from 'swr';
@@ -53,7 +54,7 @@ export const swrConfig: SWRConfiguration = {
 
             // Log slow requests
             if (duration > 1000) {
-                console.warn(`[SWR] Slow request: ${url} took ${duration}ms`);
+                logger.warn(`[SWR] Slow request: ${url} took ${duration}ms`);
             }
 
             if (!response.ok) {
@@ -77,7 +78,7 @@ export const swrConfig: SWRConfiguration = {
 
         } catch (error) {
             if (error instanceof Error) {
-                console.error(`[SWR] Fetch failed for ${url}:`, error.message);
+                logger.error(`[SWR] Fetch failed for ${url}:`, error.message);
             }
             throw error;
         }
@@ -96,7 +97,7 @@ export const swrConfig: SWRConfiguration = {
                 const isStale = Date.now() - entry.timestamp > 5 * 60 * 1000;
                 if (isStale && !entry.isStale) {
                     entry.isStale = true;
-                    console.log(`[SWR] Cache entry stale: ${key}`);
+                    logger.log(`[SWR] Cache entry stale: ${key}`);
                 }
 
                 return entry;
@@ -108,7 +109,7 @@ export const swrConfig: SWRConfiguration = {
                     // Remove oldest entries (simple LRU approximation)
                     const keysToDelete = Array.from(cache.keys()).slice(0, 20);
                     keysToDelete.forEach(k => cache.delete(k));
-                    console.log(`[SWR] Cleaned up ${keysToDelete.length} old cache entries`);
+                    logger.log(`[SWR] Cleaned up ${keysToDelete.length} old cache entries`);
                 }
 
                 cache.set(key, {
@@ -132,7 +133,7 @@ export const swrConfig: SWRConfiguration = {
             clear: () => {
                 const size = cache.size;
                 cache.clear();
-                console.log(`[SWR] Cache cleared (${size} entries)`);
+                logger.log(`[SWR] Cache cleared (${size} entries)`);
             },
         };
     },
@@ -214,7 +215,7 @@ export class SWRBackgroundSync {
         const keysToSync = Array.from(this.syncQueue);
         this.syncQueue.clear();
 
-        console.log(`[SWRBackgroundSync] Processing ${keysToSync.length} keys`);
+        logger.log(`[SWRBackgroundSync] Processing ${keysToSync.length} keys`);
 
         // In a real implementation, this would trigger revalidation for these keys
         // using SWR's mutate function
@@ -244,17 +245,17 @@ export const swrUtils = {
     invalidatePattern: (pattern: RegExp) => {
         // In a real implementation, this would iterate through the cache
         // and invalidate entries matching the pattern
-        console.log(`[SWR] Invalidating cache pattern: ${pattern}`);
+        logger.log(`[SWR] Invalidating cache pattern: ${pattern}`);
     },
 
     // Prefetch data
     prefetch: async (key: string, fetcher: () => Promise<any>) => {
         try {
             const data = await fetcher();
-            console.log(`[SWR] Prefetched data for key: ${key}`);
+            logger.log(`[SWR] Prefetched data for key: ${key}`);
             return data;
         } catch (error) {
-            console.error(`[SWR] Prefetch failed for key: ${key}`, error);
+            logger.error(`[SWR] Prefetch failed for key: ${key}`, error);
             throw error;
         }
     },

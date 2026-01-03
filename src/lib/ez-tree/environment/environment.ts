@@ -8,6 +8,7 @@ import { Flowers, FlowerOptions } from './flowers'; // Import Flowers
 import { ChunkManager } from '../../chunk/ChunkManager';
 import { RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '../../chunkUtils';
 import { getDevicePerformanceConfig } from '../../utils';
+import { logger } from 'utils/logger';
 
 export class Environment extends THREE.Object3D {
   public ground: Ground;
@@ -23,7 +24,7 @@ export class Environment extends THREE.Object3D {
 
     // Calculate dynamic ground size based on render distance
     const groundSize = Math.ceil((RENDER_DISTANCE_CHUNKS * 2 + 1) * CHUNK_SIZE * 1.2); // 20% margin
-    console.log(`[Environment] Creating ground with dynamic size: ${groundSize}x${groundSize} (based on ${RENDER_DISTANCE_CHUNKS} chunk render distance)`);
+    logger.log(`[Environment] Creating ground with dynamic size: ${groundSize}x${groundSize} (based on ${RENDER_DISTANCE_CHUNKS} chunk render distance)`);
 
     this.ground = new Ground(new GrassOptions(), groundSize, groundSize);
     this.add(this.ground);
@@ -52,7 +53,7 @@ export class Environment extends THREE.Object3D {
     this.treesInstance = new Trees(treeOptions);
     this.flowersInstance = new Flowers(flowerOptions);
 
-    console.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? 'mobile' : 'desktop'}:`, {
+    logger.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? 'mobile' : 'desktop'}:`, {
       grass: grassOptions.instanceCountPerChunk,
       rocks: rockOptions.rockCountPerChunk,
       trees: treeOptions.treeCountPerChunk,
@@ -65,13 +66,13 @@ export class Environment extends THREE.Object3D {
 
     // Note: Assets are preloaded in useGameAssetLoader, so fetchAssets will use cached data
     // If not preloaded, they will be loaded on-demand (though not recommended)
-    console.log("Environment: Fetching/caching assets for world objects...");
+    logger.log("Environment: Fetching/caching assets for world objects...");
 
     // FORCE SUCCESS - Retry until all assets are loaded
     const loadAssetsWithRetry = async (maxAttempts: number = 20) => {
       for (let attempt = 1; attempt <= maxAttempts; attempt++) {
         try {
-          console.log(`[Environment] Asset loading attempt ${attempt}/${maxAttempts}`);
+          logger.log(`[Environment] Asset loading attempt ${attempt}/${maxAttempts}`);
 
           await Promise.all([
             Grass.fetchAssets(),
@@ -80,21 +81,21 @@ export class Environment extends THREE.Object3D {
             Flowers.fetchAssets()
           ]);
 
-          console.log("Environment: All assets loaded successfully on attempt", attempt);
+          logger.log("Environment: All assets loaded successfully on attempt", attempt);
           this.chunkManager.setGeneratorsReady();
           return; // Success - exit loop
 
         } catch (error) {
-          console.warn(`[Environment] Asset loading failed on attempt ${attempt}:`, error);
+          logger.warn(`[Environment] Asset loading failed on attempt ${attempt}:`, error);
 
           if (attempt < maxAttempts) {
             // Wait before retry with exponential backoff
             const delay = Math.min(2000 * Math.pow(1.2, attempt - 1), 15000);
-            console.log(`[Environment] Retrying in ${delay}ms...`);
+            logger.log(`[Environment] Retrying in ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
           } else {
             // Final attempt - force success with fallbacks
-            console.error("[Environment] All attempts failed, forcing success with fallbacks");
+            logger.error("[Environment] All attempts failed, forcing success with fallbacks");
 
             // Force set generators ready even if some assets failed
             // The generators will handle missing assets gracefully
@@ -124,7 +125,7 @@ export class Environment extends THREE.Object3D {
    * Forces completion even if some chunks fail to ensure game starts
    */
   public async preloadInitialScene(centerPosition: THREE.Vector3): Promise<void> {
-    console.log(`[Environment] Preloading initial scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}...`);
+    logger.log(`[Environment] Preloading initial scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}...`);
 
     const chunks = this.generateChunkCoordsAround(centerPosition);
     const generationPromises: Promise<void>[] = [];
@@ -135,7 +136,7 @@ export class Environment extends THREE.Object3D {
     }
 
     // Use allSettled to ensure we don't hang on failures, but still wait for success
-    console.log(`[Environment] Waiting for ${chunks.length} chunks to generate...`);
+    logger.log(`[Environment] Waiting for ${chunks.length} chunks to generate...`);
 
     try {
       // Wait for all chunks to settle (succeed or fail)
@@ -143,10 +144,10 @@ export class Environment extends THREE.Object3D {
       const succeeded = results.filter(r => r.status === 'fulfilled').length;
       const failed = results.filter(r => r.status === 'rejected').length;
 
-      console.log(`[Environment] Chunk preloading complete: ${succeeded} succeeded, ${failed} failed`);
-      console.log(`[Environment] World ready for gameplay!`);
+      logger.log(`[Environment] Chunk preloading complete: ${succeeded} succeeded, ${failed} failed`);
+      logger.log(`[Environment] World ready for gameplay!`);
     } catch (error) {
-      console.error('[Environment] Unexpected error in preload:', error);
+      logger.error('[Environment] Unexpected error in preload:', error);
     }
 
     // Explicit return to ensure promise resolves

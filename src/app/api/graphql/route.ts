@@ -1,13 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
-import { JWTManager } from '@/lib/jwt-utils';
 import { getClientIp } from '@/lib/request-utils';
-import { rateLimit } from '@/lib/rate-limit';
+import { AdvancedRateLimiter } from '@/lib/advancedRateLimiter';
 import { validateTokenFromRequest } from '@/lib/auth-middleware';
 import { CreateItemInput, UpdateItemInput } from '@/lib/server-items';
-import jwt from 'jsonwebtoken';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { extractMutationName, checkGraphQLMutationRateLimit } from '@/lib/graphql-rate-limiter';
+import { auditLogger } from '@/lib/audit-logger';
+import redis from '@/lib/redis';
 
 // GraphQL Type Definitions
 const typeDefs = `
@@ -357,7 +359,7 @@ const resolvers = {
                     lastLogin: userData?.lastLogin?.toDate?.()?.toISOString(),
                 };
             } catch (error) {
-                console.error('[GraphQL] Error fetching user:', error);
+                logger.error('[GraphQL] Error fetching user:', error as Error);
                 throw new Error('Failed to fetch user data');
             }
         },
@@ -388,7 +390,7 @@ const resolvers = {
 
                 return { chunks };
             } catch (error) {
-                console.error('[GraphQL] Error fetching game world:', error);
+                logger.error('[GraphQL] Error fetching game world:', error as Error);
                 throw new Error('Failed to fetch game world');
             }
         },
@@ -400,7 +402,7 @@ const resolvers = {
                 const baseUrl = request ? `${request.nextUrl.protocol}//${request.nextUrl.host}` : 'http://localhost:3000';
 
                 // Fetch real Boby price from Jupiter API
-                console.log('[GraphQL] Fetching market data from Jupiter API...');
+                logger.log('[GraphQL] Fetching market data from Jupiter API...');
                 const response = await fetch(`${baseUrl}/api/boby-price-jup`, {
                     method: 'GET',
                 });
@@ -423,7 +425,7 @@ const resolvers = {
                     lastUpdated: new Date().toISOString(),
                 };
             } catch (error) {
-                console.error('[GraphQL] Error fetching market data from Jupiter:', error);
+                logger.error('[GraphQL] Error fetching market data from Jupiter:', error as Error);
                 // Fallback to mock data if Jupiter API fails
                 return {
                     bobyPrice: 0.00001234,
@@ -486,7 +488,7 @@ const resolvers = {
                     items: inventory,
                 };
             } catch (error) {
-                console.error('[GraphQL] Error fetching user inventory:', error);
+                logger.error('[GraphQL] Error fetching user inventory:', error as Error);
                 throw new Error('Failed to fetch user inventory');
             }
         },
@@ -521,7 +523,7 @@ const resolvers = {
                     activeGames,
                 };
             } catch (error) {
-                console.error('[GraphQL] Error fetching user stats:', error);
+                logger.error('[GraphQL] Error fetching user stats:', error);
                 // Return zeros instead of throwing to prevent UI breakage
                 return {
                     totalUsers: 0,
@@ -611,7 +613,7 @@ const resolvers = {
                     };
                 }
             } catch (error) {
-                console.error('[GraphQL] Error generating auth nonce:', error);
+                logger.error('[GraphQL] Error generating auth nonce:', error);
                 return {
                     success: false,
                     error: 'Internal server error',
@@ -651,7 +653,7 @@ const resolvers = {
                     };
                 }
             } catch (error) {
-                console.error('[GraphQL] Error during login:', error);
+                logger.error('[GraphQL] Error during login:', error);
                 return {
                     success: false,
                     error: 'Internal server error',
@@ -684,7 +686,7 @@ const resolvers = {
                     unlockedAchievements: [],
                 };
             } catch (error) {
-                console.error('[GraphQL] Error updating progress:', error);
+                logger.error('[GraphQL] Error updating progress:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Unknown error',
@@ -761,7 +763,7 @@ const resolvers = {
                     lastInteraction: FieldValue.serverTimestamp()
                 });
 
-                console.log(`[Purchase] User ${userId} purchased ${quantity}x ${itemData.name} for ${totalPrice} coins`);
+                logger.log(`[Purchase] User ${userId} purchased ${quantity}x ${itemData.name} for ${totalPrice} coins`);
 
                 return {
                     success: true,
@@ -769,7 +771,7 @@ const resolvers = {
                     inventory: updatedInventory,
                 };
             } catch (error) {
-                console.error('[GraphQL] Error purchasing item:', error);
+                logger.error('[GraphQL] Error purchasing item:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Purchase failed',
@@ -801,7 +803,7 @@ const resolvers = {
                     savedAt: new Date().toISOString(),
                 };
             } catch (error) {
-                console.error('[GraphQL] Error saving session:', error);
+                logger.error('[GraphQL] Error saving session:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to save session',
@@ -862,7 +864,7 @@ const resolvers = {
                     remainingCount: item.quantity - quantity,
                 };
             } catch (error) {
-                console.error('[GraphQL] Error using consumable item:', error);
+                logger.error('[GraphQL] Error using consumable item:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to use item',
@@ -904,7 +906,7 @@ const resolvers = {
                     }
                 };
             } catch (error) {
-                console.error('[GraphQL] Error fetching player data:', error);
+                logger.error('[GraphQL] Error fetching player data:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to fetch player data'
@@ -950,7 +952,7 @@ const resolvers = {
                     newBalance
                 };
             } catch (error) {
-                console.error('[GraphQL] Error adding coins:', error);
+                logger.error('[GraphQL] Error adding coins:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to add coins'
@@ -1020,7 +1022,7 @@ const resolvers = {
                     remainingCount: Math.max(0, item.quantity - 1)
                 };
             } catch (error) {
-                console.error('[GraphQL] Error using item:', error);
+                logger.error('[GraphQL] Error using item:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to use item'
@@ -1090,7 +1092,7 @@ const resolvers = {
                     remainingCount: Math.max(0, bottle.quantity - 1)
                 };
             } catch (error) {
-                console.error('[GraphQL] Error consuming protection bottle:', error);
+                logger.error('[GraphQL] Error consuming protection bottle:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to consume protection bottle'
@@ -1137,7 +1139,7 @@ const resolvers = {
                     penaltyApplied: amount
                 };
             } catch (error) {
-                console.error('[GraphQL] Error applying penalty:', error);
+                logger.error('[GraphQL] Error applying penalty:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to apply penalty'
@@ -1160,7 +1162,7 @@ const resolvers = {
 
                 // For now, just simulate the withdrawal
                 // In a real implementation, this would integrate with USDT transfer logic
-                console.log(`[GraphQL] Simulated USDT withdrawal: ${amount} USDT for user ${userId}`);
+                logger.log(`[GraphQL] Simulated USDT withdrawal: ${amount} USDT for user ${userId}`);
 
                 const withdrawalId = `wd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -1170,7 +1172,7 @@ const resolvers = {
                     amount
                 };
             } catch (error) {
-                console.error('[GraphQL] Error withdrawing USDT:', error);
+                logger.error('[GraphQL] Error withdrawing USDT:', error);
                 return {
                     success: false,
                     error: error instanceof Error ? error.message : 'Failed to withdraw USDT'
@@ -1208,7 +1210,7 @@ const resolvers = {
                 let lastPrice = 0.00001234; // fallback default
 
                 try {
-                    console.log('[Subscription] Fetching initial price for bobyPriceUpdates...');
+                    logger.log('[Subscription] Fetching initial price for bobyPriceUpdates...');
                     const initResponse = await fetch(`${baseUrl}/api/boby-price-jup`, {
                         method: 'GET',
                     });
@@ -1217,16 +1219,16 @@ const resolvers = {
                         const initData = await initResponse.json();
                         if (initData.price && typeof initData.price === 'number') {
                             lastPrice = initData.price;
-                            console.log(`[Subscription] Initialized with real price: ${lastPrice}`);
+                            logger.log(`[Subscription] Initialized with real price: ${lastPrice}`);
                         } else {
-                            console.warn('[Subscription] Invalid price format from API, using fallback');
+                            logger.warn('[Subscription] Invalid price format from API, using fallback');
                         }
                     } else {
-                        console.warn('[Subscription] Failed to fetch initial price, using fallback');
+                        logger.warn('[Subscription] Failed to fetch initial price, using fallback');
                     }
                 } catch (error) {
-                    console.error('[Subscription] Error fetching initial price:', error);
-                    console.log('[Subscription] Using fallback price:', lastPrice);
+                    logger.error('[Subscription] Error fetching initial price:', error);
+                    logger.log('[Subscription] Using fallback price:', lastPrice);
                 }
 
                 while (true) {
@@ -1246,7 +1248,7 @@ const resolvers = {
 
                                 // Only emit if price actually changed significantly
                                 if (Math.abs(changePercent) > 0.01) { // 0.01% threshold to avoid noise
-                                    console.log(`[Subscription] Price change detected: ${lastPrice} -> ${currentPrice} (${changePercent.toFixed(4)}%)`);
+                                    logger.log(`[Subscription] Price change detected: ${lastPrice} -> ${currentPrice} (${changePercent.toFixed(4)}%)`);
 
                                     yield {
                                         bobyPriceUpdates: {
@@ -1258,13 +1260,13 @@ const resolvers = {
                                     lastPrice = currentPrice;
                                 }
                             } else {
-                                console.warn('[Subscription] Invalid price format in update');
+                                logger.warn('[Subscription] Invalid price format in update');
                             }
                         } else {
-                            console.warn(`[Subscription] API returned status ${response.status}`);
+                            logger.warn(`[Subscription] API returned status ${response.status}`);
                         }
                     } catch (error) {
-                        console.error('[GraphQL Subscription] Error fetching price update:', error);
+                        logger.error('[GraphQL Subscription] Error fetching price update:', error);
                     }
 
                     // Wait 30 seconds before next update
@@ -1301,7 +1303,7 @@ const resolvers = {
                             }
                         };
                     } catch (error) {
-                        console.error('[GraphQL Subscription] Error fetching user activity:', error);
+                        logger.error('[GraphQL Subscription] Error fetching user activity:', error);
                         // Emit default values on error
                         yield {
                             userActivityUpdates: {
@@ -1353,10 +1355,28 @@ const resolvers = {
 // Simple GraphQL endpoint using existing URQL client
 export const POST = withCsrfProtection(async (request: NextRequest) => {
     try {
+        // Enforce Advanced Rate Limiting
+        const clientIp = getClientIp(request);
+        const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(
+            request,
+            clientIp,
+            'graphql-api',
+            undefined, // Device info will be extracted if available in headers
+            { customLimit: 200 } // Specific limit for GraphQL: 200 req/min
+        );
+
+        if (!rateLimitResult.allowed) {
+            logger.warn(`[GraphQL] Rate limit exceeded for IP ${clientIp}`);
+            return NextResponse.json(
+                { error: 'Too many requests', retryAfter: rateLimitResult.retryAfter },
+                { status: 429 }
+            );
+        }
+
         const { query, variables } = await request.json();
-        console.log('[GraphQL] --- START REQUEST ---');
-        console.log('[GraphQL] Query:', query);
-        console.log('[GraphQL] Variables:', JSON.stringify(variables, null, 2));
+        logger.log('[GraphQL] --- START REQUEST ---');
+        logger.log('[GraphQL] Query:', query);
+        logger.log('[GraphQL] Variables:', JSON.stringify(variables, null, 2));
 
         // Proper authentication using middleware utility
         const userPayload = await validateTokenFromRequest(request);
@@ -1367,19 +1387,44 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 id: userPayload.sub,
                 publicKey: userPayload.sub,
             };
-            console.log('[GraphQL] Authenticated user:', user.id);
+            logger.log('[GraphQL] Authenticated user:', user.id);
         } else {
-            console.log('[GraphQL] No authenticated user found for request.');
+            logger.log('[GraphQL] No authenticated user found for request.');
+        }
+
+        // Enforce Per-Mutation Rate Limiting
+        const mutationName = extractMutationName(query);
+        if (mutationName) {
+            const rateLimitResult = await checkGraphQLMutationRateLimit(
+                clientIp,
+                mutationName,
+                userPayload?.sub
+            );
+
+            if (!rateLimitResult.allowed) {
+                // Log the rate limit hit
+                await auditLogger.logRateLimitHit(
+                    userPayload?.sub ? `User:${userPayload.sub}` : `IP:${clientIp}`,
+                    `GraphQL:${mutationName}`,
+                    { query, ip: clientIp, userAgent: request.headers.get('user-agent') || undefined }
+                );
+
+                logger.warn(`[GraphQL] Mutation rate limit exceeded for ${mutationName} from IP ${clientIp}`);
+                return NextResponse.json(
+                    { errors: [{ message: `Rate limit exceeded for this operation. Please wait ${rateLimitResult.retryAfterSeconds}s.` }] },
+                    { status: 429 }
+                );
+            }
         }
 
         // Simple query processing (mock implementation)
         let result: any = {};
 
         if (query.includes('health')) {
-            console.log('[GraphQL] Matching health query');
+            logger.log('[GraphQL] Matching health query');
             result = { data: { health: 'OK' } };
         } else if (query.includes('user(') && user) {
-            console.log('[GraphQL] Matching user query for:', user.id);
+            logger.log('[GraphQL] Matching user query for:', user.id);
             // Mock user data
             result = {
                 data: {
@@ -1398,7 +1443,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 }
             };
         } else if ((query.includes('userInventory(') || query.includes('userInventory')) && user) {
-            console.log('[GraphQL] Matching userInventory query for:', user.id);
+            logger.log('[GraphQL] Matching userInventory query for:', user.id);
             // Get user inventory from database
             try {
                 await initializeAdminApp();
@@ -1448,7 +1493,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
 
                 result = { data: { userInventory: inventoryData } };
             } catch (error) {
-                console.error('[GraphQL] Error fetching user inventory:', error);
+                logger.error('[GraphQL] Error fetching user inventory:', error as Error);
                 result = {
                     errors: [{ message: 'Failed to fetch user inventory' }]
                 };
@@ -1498,7 +1543,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 result = { data: { login: { success: false, error: 'Internal server error' } } };
             }
         } else if ((query.includes('useConsumableItem(') || query.includes('useConsumableItem')) && user) {
-            console.log('[GraphQL] Matching useConsumableItem mutation for:', user.id);
+            logger.log('[GraphQL] Matching useConsumableItem mutation for:', user.id);
             // Handle use consumable item mutation
             try {
                 await initializeAdminApp();
@@ -1570,44 +1615,56 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     }
                 }
             } catch (error) {
-                console.error('[GraphQL] Error in useConsumableItem:', error);
+                logger.error('[GraphQL] Error in useConsumableItem:', error);
                 result = { data: { useConsumableItem: { success: false, error: 'Failed to use item' } } };
             }
         } else if (query.includes('userStats')) {
-            // Get real user statistics from database
+            // Get real user statistics with caching (TTL: 60s)
             try {
-                await initializeAdminApp();
-                const db = getFirestore();
+                const cacheKey = 'graphql:userStats';
+                const cachedStats = await redis.get(cacheKey);
 
-                const usersSnapshot = await db.collection('players').get();
-                const totalUsers = usersSnapshot.size;
+                if (cachedStats) {
+                    result = { data: { userStats: JSON.parse(cachedStats) } };
+                } else {
+                    await initializeAdminApp();
+                    const db = getFirestore();
 
-                // Get online users (users with recent activity - last 10 minutes)
-                const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
-                const recentUsersQuery = db.collection('players').where('lastLogin', '>', tenMinutesAgo);
-                const recentUsersSnapshot = await recentUsersQuery.get();
-                const onlineUsers = recentUsersSnapshot.size;
+                    const usersSnapshot = await db.collection('players').get();
+                    const totalUsers = usersSnapshot.size;
 
-                const offlineUsers = totalUsers - onlineUsers;
+                    // Get online users (users with recent activity - last 10 minutes)
+                    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+                    const recentUsersQuery = db.collection('players').where('lastLogin', '>', tenMinutesAgo);
+                    const recentUsersSnapshot = await recentUsersQuery.get();
+                    const onlineUsers = recentUsersSnapshot.size;
 
-                // Get active games (users who have played in the last hour)
-                const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
-                const activeGamesQuery = db.collection('gameSessions').where('createdAt', '>', oneHourAgo);
-                const activeGamesSnapshot = await activeGamesQuery.get();
-                const activeGames = activeGamesSnapshot.size;
+                    const offlineUsers = totalUsers - onlineUsers;
 
-                result = {
-                    data: {
-                        userStats: {
-                            totalUsers,
-                            onlineUsers,
-                            offlineUsers,
-                            activeGames,
+                    // Get active games (users who have played in the last hour)
+                    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+                    const activeGamesQuery = db.collection('gameSessions').where('createdAt', '>', oneHourAgo);
+                    const activeGamesSnapshot = await activeGamesQuery.get();
+                    const activeGames = activeGamesSnapshot.size;
+
+                    const statsData = {
+                        totalUsers,
+                        onlineUsers,
+                        offlineUsers,
+                        activeGames,
+                    };
+
+                    // Cache the result
+                    await redis.setex(cacheKey, 60, JSON.stringify(statsData));
+
+                    result = {
+                        data: {
+                            userStats: statsData
                         }
-                    }
-                };
+                    };
+                }
             } catch (error) {
-                console.error('[GraphQL] Error fetching user stats:', error);
+                logger.error('[GraphQL] Error fetching user stats:', error);
                 result = {
                     data: {
                         userStats: {
@@ -1620,7 +1677,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 };
             }
         } else if ((query.includes('fetchPlayerData(') || query.includes('fetchPlayerData')) && user) {
-            console.log('[GraphQL] Matching fetchPlayerData mutation for:', user.id);
+            logger.log('[GraphQL] Matching fetchPlayerData mutation for:', user.id);
             // Handle fetch player data mutation
             try {
                 await initializeAdminApp();
@@ -1646,11 +1703,11 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     };
                 }
             } catch (error) {
-                console.error('[GraphQL] Error in fetchPlayerData:', error);
+                logger.error('[GraphQL] Error in fetchPlayerData:', error);
                 result = { data: { fetchPlayerData: { success: false, error: 'Failed to fetch player data' } } };
             }
         } else if ((query.includes('addCoins(') || query.includes('addCoins')) && user && variables) {
-            console.log('[GraphQL] Matching addCoins mutation for:', user.id);
+            logger.log('[GraphQL] Matching addCoins mutation for:', user.id);
             // Handle add coins mutation
             try {
                 await initializeAdminApp();
@@ -1664,6 +1721,13 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     const userData = userDoc.data();
                     const currentBalance = userData?.gameUSDTBalance || 0;
                     const newBalance = currentBalance + (variables.amount || 0);
+
+                    await auditLogger.logEvent(
+                        'TRANSACTION',
+                        `Added ${variables.amount} coins to user ${user.id}`,
+                        { userId: user.id, amount: variables.amount, action: 'addCoins' },
+                        'warn'
+                    );
 
                     await userRef.update({
                         gameUSDTBalance: newBalance,
@@ -1681,11 +1745,11 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     };
                 }
             } catch (error) {
-                console.error('[GraphQL] Error in addCoins:', error);
+                logger.error('[GraphQL] Error in addCoins:', error);
                 result = { data: { addCoins: { success: false, error: 'Failed to add coins' } } };
             }
         } else if ((query.includes('useItem(') || query.includes('useItem')) && user && variables) {
-            console.log('[GraphQL] Matching useItem mutation for:', user.id);
+            logger.log('[GraphQL] Matching useItem mutation for:', user.id);
             // Handle use item mutation
             try {
                 await initializeAdminApp();
@@ -1733,11 +1797,11 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     }
                 }
             } catch (error) {
-                console.error('[GraphQL] Error in useItem:', error);
+                logger.error('[GraphQL] Error in useItem:', error);
                 result = { data: { useItem: { success: false, error: 'Failed to use item' } } };
             }
         } else if ((query.includes('consumeProtectionBottle(') || query.includes('consumeProtectionBottle')) && user) {
-            console.log('[GraphQL] Matching consumeProtectionBottle mutation for:', user.id);
+            logger.log('[GraphQL] Matching consumeProtectionBottle mutation for:', user.id);
             // Handle consume protection bottle mutation
             try {
                 await initializeAdminApp();
@@ -1785,11 +1849,11 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     }
                 }
             } catch (error) {
-                console.error('[GraphQL] Error in consumeProtectionBottle:', error);
+                logger.error('[GraphQL] Error in consumeProtectionBottle:', error);
                 result = { data: { consumeProtectionBottle: { success: false, error: 'Failed to consume protection bottle' } } };
             }
         } else if ((query.includes('applyPenalty(') || query.includes('applyPenalty')) && user && variables) {
-            console.log('[GraphQL] Matching applyPenalty mutation for:', user.id);
+            logger.log('[GraphQL] Matching applyPenalty mutation for:', user.id);
             // Handle apply penalty mutation
             try {
                 await initializeAdminApp();
@@ -1803,6 +1867,13 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     const userData = userDoc.data();
                     const currentCoins = userData?.gameStats?.coins || 0;
                     const newBalance = Math.max(0, currentCoins - (variables.amount || 0));
+
+                    await auditLogger.logEvent(
+                        'TRANSACTION',
+                        `Applied penalty of ${variables.amount} to user ${user.id}`,
+                        { userId: user.id, amount: variables.amount, action: 'applyPenalty' },
+                        'warn'
+                    );
 
                     await userRef.update({
                         'gameStats.coins': newBalance,
@@ -1821,15 +1892,22 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     };
                 }
             } catch (error) {
-                console.error('[GraphQL] Error in applyPenalty:', error);
+                logger.error('[GraphQL] Error in applyPenalty:', error);
                 result = { data: { applyPenalty: { success: false, error: 'Failed to apply penalty' } } };
             }
         } else if ((query.includes('withdrawUSDT(') || query.includes('withdrawUSDT')) && user && variables) {
-            console.log('[GraphQL] Matching withdrawUSDT mutation for:', user.id);
+            logger.log('[GraphQL] Matching withdrawUSDT mutation for:', user.id);
             // Handle withdraw USDT mutation
             try {
                 // For now, just simulate the withdrawal
-                console.log(`[GraphQL] Simulated USDT withdrawal: ${variables.amount} USDT for user ${user.id}`);
+                logger.log(`[GraphQL] Simulated USDT withdrawal: ${variables.amount} USDT for user ${user.id}`);
+
+                await auditLogger.logEvent(
+                    'TRANSACTION',
+                    `User ${user.id} requested withdrawal of ${variables.amount} USDT`,
+                    { userId: user.id, amount: variables.amount, action: 'withdrawUSDT' },
+                    'info'
+                );
 
                 const withdrawalId = `wd_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -1843,22 +1921,28 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     }
                 };
             } catch (error) {
-                console.error('[GraphQL] Error in withdrawUSDT:', error);
+                logger.error('[GraphQL] Error in withdrawUSDT:', error);
                 result = { data: { withdrawUSDT: { success: false, error: 'Failed to withdraw USDT' } } };
             }
         } else if (query.includes('marketData')) {
-            console.log('[GraphQL] Processing marketData query');
-            // Use the proper resolver instead of hardcoded data
+            logger.log('[GraphQL] Processing marketData query');
+            // Cache market data for 60 seconds
+            const cacheKey = 'graphql:marketData';
             try {
-                const marketDataResult = await resolvers.Query.marketData(null, null, { request });
-                result = {
-                    data: {
-                        marketData: marketDataResult
-                    }
-                };
-                console.log('[GraphQL] marketData resolved successfully:', marketDataResult);
+                const cached = await redis.get(cacheKey);
+                if (cached) {
+                    result = { data: { marketData: JSON.parse(cached) } };
+                } else {
+                    const marketDataResult = await resolvers.Query.marketData(null, null, { request });
+                    await redis.setex(cacheKey, 60, JSON.stringify(marketDataResult));
+                    result = {
+                        data: {
+                            marketData: marketDataResult
+                        }
+                    };
+                }
             } catch (error) {
-                console.error('[GraphQL] Error in marketData resolver:', error);
+                logger.error('[GraphQL] Error in marketData resolver:', error);
                 result = {
                     data: {
                         marketData: {
@@ -1871,16 +1955,24 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 };
             }
         } else if (query.includes('storeItems')) {
-            console.log('[GraphQL] Processing storeItems query');
+            logger.log('[GraphQL] Processing storeItems query');
+            // Cache store items for 5 minutes
+            const cacheKey = 'graphql:storeItems';
             try {
-                const storeItems = await resolvers.Query.storeItems(null, null, { user });
-                result = {
-                    data: {
-                        storeItems
-                    }
-                };
+                const cached = await redis.get(cacheKey);
+                if (cached) {
+                    result = { data: { storeItems: JSON.parse(cached) } };
+                } else {
+                    const storeItems = await resolvers.Query.storeItems(null, null, { user });
+                    await redis.setex(cacheKey, 300, JSON.stringify(storeItems));
+                    result = {
+                        data: {
+                            storeItems
+                        }
+                    };
+                }
             } catch (error) {
-                console.error('[GraphQL] Error in storeItems query:', error);
+                logger.error('[GraphQL] Error in storeItems query:', error);
                 result = {
                     data: {
                         storeItems: []
@@ -1888,16 +1980,24 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 };
             }
         } else if (query.includes('activeStoreItems')) {
-            console.log('[GraphQL] Processing activeStoreItems query');
+            logger.log('[GraphQL] Processing activeStoreItems query');
+            // Cache active store items for 5 minutes
+            const cacheKey = 'graphql:activeStoreItems';
             try {
-                const activeStoreItems = await resolvers.Query.activeStoreItems(null, null, { user });
-                result = {
-                    data: {
-                        activeStoreItems
-                    }
-                };
+                const cached = await redis.get(cacheKey);
+                if (cached) {
+                    result = { data: { activeStoreItems: JSON.parse(cached) } };
+                } else {
+                    const activeStoreItems = await resolvers.Query.activeStoreItems(null, null, { user });
+                    await redis.setex(cacheKey, 300, JSON.stringify(activeStoreItems));
+                    result = {
+                        data: {
+                            activeStoreItems
+                        }
+                    };
+                }
             } catch (error) {
-                console.error('[GraphQL] Error in activeStoreItems query:', error);
+                logger.error('[GraphQL] Error in activeStoreItems query:', error);
                 result = {
                     data: {
                         activeStoreItems: []
@@ -1905,7 +2005,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 };
             }
         } else if (query.includes('storeItem(') && variables?.id) {
-            console.log('[GraphQL] Processing storeItem query for ID:', variables.id);
+            logger.log('[GraphQL] Processing storeItem query for ID:', variables.id);
             try {
                 const storeItem = await resolvers.Query.storeItem(null, { id: variables.id }, { user });
                 result = {
@@ -1914,7 +2014,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                     }
                 };
             } catch (error) {
-                console.error('[GraphQL] Error in storeItem query:', error);
+                logger.error('[GraphQL] Error in storeItem query:', error);
                 result = {
                     data: {
                         storeItem: null
@@ -1922,7 +2022,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
                 };
             }
         } else {
-            console.log('[GraphQL] No matching handler found for query. User authenticated:', !!user);
+            logger.log('[GraphQL] No matching handler found for query. User authenticated:', !!user);
             const isAuthIssue = (query.includes('user(') || query.includes('userInventory') || query.includes('useConsumableItem')) && !user;
             result = {
                 errors: [{
@@ -1935,7 +2035,7 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
 
         return NextResponse.json(result);
     } catch (error) {
-        console.error('[GraphQL] Error:', error);
+        logger.error('[GraphQL] Error:', error);
         return NextResponse.json({
             errors: [{ message: 'Internal server error' }]
         }, { status: 500 });

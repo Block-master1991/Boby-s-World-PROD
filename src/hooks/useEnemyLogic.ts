@@ -14,6 +14,7 @@ import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDy
 import { CoinData } from './useCoinLogic'; // Import CoinData
 import { GameObject, BaseGameObject } from '@/types/game';
 import { getDevicePerformanceConfig } from '@/lib/utils';
+import { logger } from '@/utils/logger';
 
 // New: Enemy Model Cache
 const EnemyModelCache: { [key: string]: { model: THREE.Group; animations: THREE.AnimationClip[] } } = {};
@@ -159,7 +160,7 @@ export const useEnemyLogic = ({
         }
       }
     });
-    console.log(`[useEnemyLogic] Disposed of enemy model resources.`);
+    logger.log(`[useEnemyLogic] Disposed of enemy model resources.`);
   }, []);
 
   React.useEffect(() => {
@@ -186,11 +187,11 @@ export const useEnemyLogic = ({
     try {
       const cachedData = await getModel(modelName);
       if (cachedData) {
-        console.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
+        logger.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
         const gltf = await gltfLoader.current!.parseAsync(cachedData, modelPath);
         return { model: gltf.scene, animations: gltf.animations };
       } else {
-        console.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
+        logger.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
         const response = await fetch(modelPath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
@@ -199,8 +200,8 @@ export const useEnemyLogic = ({
         return { model: gltf.scene, animations: gltf.animations };
       }
     } catch (error) {
-      console.error(`[useEnemyLogic] Error loading or caching model ${modelName}:`, error);
-      console.log(`[useEnemyLogic] Falling back to placeholder.`);
+      logger.error(`[useEnemyLogic] Error loading or caching model ${modelName}:`, error);
+      logger.log(`[useEnemyLogic] Falling back to placeholder.`);
 
       // Return a placeholder model (Red Box) to ensure guardian exists
       const placeholder = new THREE.Group();
@@ -231,26 +232,26 @@ export const useEnemyLogic = ({
       const modelName = `enemy_${name}`;
       if (!EnemyModelCache[modelName]) {
         try {
-          console.log(`[useEnemyLogic] Preloading enemy model from: ${modelPath}`);
+          logger.log(`[useEnemyLogic] Preloading enemy model from: ${modelPath}`);
           const { model, animations } = await loadEnemyModel(type as 'carnivore' | 'herbivore', name);
           if (model) {
             // Update matrix world to ensure proper initialization before caching
             model.updateMatrixWorld(true);
             EnemyModelCache[modelName] = { model, animations };
-            console.log(`[useEnemyLogic] Successfully preloaded model: ${modelName}`);
+            logger.log(`[useEnemyLogic] Successfully preloaded model: ${modelName}`);
           }
         } catch (error) {
-          console.error(`[useEnemyLogic] Failed to preload model ${name} from ${modelPath}:`, error);
+          logger.error(`[useEnemyLogic] Failed to preload model ${name} from ${modelPath}:`, error);
         }
       }
     }
     areModelsPreloaded = true;
-    console.log('[useEnemyLogic] Preload completed! Cache now has', Object.keys(EnemyModelCache).length, 'models');
+    logger.log('[useEnemyLogic] Preload completed! Cache now has', Object.keys(EnemyModelCache).length, 'models');
   }, [loadEnemyModel]);
 
   // Preload enemy models when component mounts
   React.useEffect(() => {
-    console.log('[useEnemyLogic] Component mounted, starting preload...');
+    logger.log('[useEnemyLogic] Component mounted, starting preload...');
     preloadEnemyModels();
   }, [preloadEnemyModels]);
 
@@ -319,7 +320,7 @@ export const useEnemyLogic = ({
       }
 
       if (!loadedModel || !loadedAnimations) {
-        console.error(`[EnemyLogic] ❌ FAILED to spawn enemy for coin ${coin.uuid}`);
+        logger.error(`[EnemyLogic] ❌ FAILED to spawn enemy for coin ${coin.uuid}`);
         return;
       }
 
@@ -390,7 +391,7 @@ export const useEnemyLogic = ({
             if (enemySpawn) {
               enemyX = enemySpawn.position[0];
               enemyZ = enemySpawn.position[2];
-              console.log(`[EnemyLogic] Using worker spawn for enemy at ${enemyX.toFixed(2)}, ${enemyZ.toFixed(2)}`);
+              logger.log(`[EnemyLogic] Using worker spawn for enemy at ${enemyX.toFixed(2)}, ${enemyZ.toFixed(2)}`);
             }
           }
         }
@@ -473,7 +474,7 @@ export const useEnemyLogic = ({
         enemyData.currentAction.play();
       }
     } catch (error) {
-      console.error('Error spawning enemy:', error);
+      logger.error('Error spawning enemy:', error);
     } finally {
       pendingCoinIds.current.delete(coin.uuid);
     }
@@ -499,13 +500,13 @@ export const useEnemyLogic = ({
         return coinX >= chunkMinX && coinX < chunkMaxX && coinZ >= chunkMinZ && coinZ < chunkMaxZ;
       });
 
-      console.log(`[EnemyLogic] Loading enemies for chunk ${chunkKey}. Coins found: ${coinsInChunk.length}`);
+      logger.log(`[EnemyLogic] Loading enemies for chunk ${chunkKey}. Coins found: ${coinsInChunk.length}`);
 
       // Use spawnEnemyForCoin for each coin
       await Promise.all(coinsInChunk.map(coin => spawnEnemyForCoin(coin, chunkKey)));
 
     } catch (error) {
-      console.error(`[EnemyLogic] Critical error loading enemies for chunk ${chunkKey}:`, error);
+      logger.error(`[EnemyLogic] Critical error loading enemies for chunk ${chunkKey}:`, error);
     } finally {
       loadedEnemyChunks.current.add(chunkKey);
       loadingEnemyChunks.current.delete(chunkKey);
@@ -553,9 +554,9 @@ export const useEnemyLogic = ({
 
     // CRITICAL: Always preload models before spawning enemies
     if (!areModelsPreloaded) {
-      console.log('[initializeEnemies] Waiting for enemy models to preload...');
+      logger.log('[initializeEnemies] Waiting for enemy models to preload...');
       await preloadEnemyModels();
-      console.log('[initializeEnemies] Preload complete! Cache now has', Object.keys(EnemyModelCache).length, 'models');
+      logger.log('[initializeEnemies] Preload complete! Cache now has', Object.keys(EnemyModelCache).length, 'models');
     }
 
     const scene = sceneRef.current;
@@ -598,7 +599,7 @@ export const useEnemyLogic = ({
 
     // Debug logging for sync issues
     if (Math.random() < 0.01) { // Occasional log
-      console.log(`[EnemyLogic] updateEnemies running. Loaded Coin Chunks: ${loadedCoinChunks.current.size}, Loaded Enemy Chunks: ${loadedEnemyChunks.current.size}`);
+      logger.gameLoop(`[EnemyLogic] updateEnemies running. Loaded Coin Chunks: ${loadedCoinChunks.current.size}, Loaded Enemy Chunks: ${loadedEnemyChunks.current.size}`);
     }
 
     if (!currentDogChunk.current || currentX !== currentDogChunk.current.chunkX || currentZ !== currentDogChunk.current.chunkZ) {
@@ -621,12 +622,12 @@ export const useEnemyLogic = ({
       chunksToLoad.forEach(chunkKey => {
         // Log if we *should* load but can't because coins aren't ready
         if (!loadedEnemyChunks.current.has(chunkKey) && !loadedCoinChunks.current.has(chunkKey)) {
-          // console.log(`[EnemyLogic] Waiting for coins in chunk ${chunkKey} before spawning enemies.`);
+          // logger.log(`[EnemyLogic] Waiting for coins in chunk ${chunkKey} before spawning enemies.`);
         }
 
         if (!loadedEnemyChunks.current.has(chunkKey) && loadedCoinChunks.current.has(chunkKey)) {
           const [cx, cz] = chunkKey.split(',').map(Number);
-          console.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey}`);
+          logger.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey}`);
           loadEnemiesForChunk(cx, cz);
         }
       });
@@ -645,7 +646,7 @@ export const useEnemyLogic = ({
           !loadingEnemyChunks.current.has(chunkKey) &&
           loadedCoinChunks.current.has(chunkKey)) {
           const [cx, cz] = chunkKey.split(',').map(Number);
-          console.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey} (Late Update)`);
+          logger.log(`[EnemyLogic] Triggering enemy load for chunk ${chunkKey} (Late Update)`);
           loadEnemiesForChunk(cx, cz);
         }
       });
@@ -672,7 +673,7 @@ export const useEnemyLogic = ({
       );
 
       if (coinsNeedingGuardians.length > 0) {
-        console.log(`[EnemyLogic] Reconciliation: Found ${coinsNeedingGuardians.length} unguarded coins. Spawning enemies...`);
+        logger.log(`[EnemyLogic] Reconciliation: Found ${coinsNeedingGuardians.length} unguarded coins. Spawning enemies...`);
         coinsNeedingGuardians.forEach(coin => {
           // Determine chunk key for this coin
           const { chunkX, chunkZ } = getChunkCoordinates(coin.position.x, coin.position.z);
@@ -708,7 +709,7 @@ export const useEnemyLogic = ({
     visibleEnemies.forEach(enemy => {
       // Defensive check for mixer
       if (!enemy.mixer) {
-        //console.warn(`[useEnemyLogic] Skipping update for enemy ${enemy.uuid} because mixer is undefined.`);
+        //logger.warn(`[useEnemyLogic] Skipping update for enemy ${enemy.uuid} because mixer is undefined.`);
         return;
       }
 
@@ -1064,7 +1065,7 @@ export const useEnemyLogic = ({
     });
 
     await Promise.all(loadPromises);
-    console.log(`[EnemyLogic] Force loaded enemies for ${chunksToLoad.size} chunks around ${centerX}, ${centerZ}`);
+    logger.log(`Force loaded enemies for ${chunksToLoad.size} chunks around ${centerX}, ${centerZ}`);
   }, [sceneRef, loadEnemiesForChunk]);
 
   return {

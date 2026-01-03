@@ -1,4 +1,5 @@
 // Advanced Service Worker with Intelligent Caching Strategies
+import { logger } from 'utils/logger';
 // Optimized for Boby's World performance and offline capabilities
 
 interface CacheConfig {
@@ -345,7 +346,7 @@ class AdvancedCacheManager {
             this.cacheEntries.set(type, new Map());
         }
 
-        console.log('[AdvancedCacheManager] All caches cleared');
+        logger.log('[AdvancedCacheManager] All caches cleared');
     }
 }
 
@@ -373,7 +374,7 @@ class BackgroundSyncManager {
                 const syncManager = (registration as any).sync;
                 if (syncManager) {
                     syncManager.register('game-data-sync').catch((err: unknown) => {
-                        console.log('[BackgroundSync] Sync registration failed:', err);
+                        logger.log('[BackgroundSync] Sync registration failed:', err);
                     });
                 }
             });
@@ -400,7 +401,7 @@ class BackgroundSyncManager {
         // Sort by priority (higher first)
         this.pendingOperations.sort((a, b) => b.priority - a.priority);
 
-        console.log(`[BackgroundSync] Added operation ${id} with priority ${priority}`);
+        logger.log(`[BackgroundSync] Added operation ${id} with priority ${priority}`);
         return id;
     }
 
@@ -408,7 +409,7 @@ class BackgroundSyncManager {
     async processOperations(): Promise<void> {
         if (this.pendingOperations.length === 0) return;
 
-        console.log(`[BackgroundSync] Processing ${this.pendingOperations.length} operations`);
+        logger.log(`[BackgroundSync] Processing ${this.pendingOperations.length} operations`);
 
         const operationsToProcess = [...this.pendingOperations];
         this.pendingOperations = [];
@@ -416,9 +417,9 @@ class BackgroundSyncManager {
         for (const op of operationsToProcess) {
             try {
                 await op.operation();
-                console.log(`[BackgroundSync] Operation ${op.id} completed successfully`);
+                logger.log(`[BackgroundSync] Operation ${op.id} completed successfully`);
             } catch (error) {
-                console.error(`[BackgroundSync] Operation ${op.id} failed:`, error);
+                logger.error(`[BackgroundSync] Operation ${op.id} failed:`, error);
 
                 // Re-queue failed operations with lower priority
                 this.pendingOperations.push({
@@ -437,7 +438,7 @@ class BackgroundSyncManager {
         const oldOps = this.pendingOperations.filter(op => (now - op.timestamp) > maxAge);
 
         if (oldOps.length > 0) {
-            console.log(`[BackgroundSync] Cleaning up ${oldOps.length} old operations`);
+            logger.log(`[BackgroundSync] Cleaning up ${oldOps.length} old operations`);
             this.pendingOperations = this.pendingOperations.filter(op => (now - op.timestamp) <= maxAge);
         }
     }

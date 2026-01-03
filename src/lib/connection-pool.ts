@@ -1,6 +1,8 @@
 // Connection Pooling Manager for Optimized Network Requests
 // Reuses connections and manages request queuing for better performance
 
+import { logger } from '@/utils/logger';
+
 interface ConnectionConfig {
     maxConnections: number;
     timeout: number;
@@ -150,7 +152,7 @@ class ConnectionPool {
 
         if (this.circuitBreakerFailures >= this.config.circuitBreakerThreshold) {
             this.isCircuitBreakerOpen = true;
-            console.warn('[ConnectionPool] Circuit breaker opened due to too many failures');
+            logger.warn('[ConnectionPool] Circuit breaker opened due to too many failures');
         }
 
         // Check if we should retry
@@ -164,7 +166,7 @@ class ConnectionPool {
                 this.processQueue();
             }, delay);
 
-            console.log(`[ConnectionPool] Retrying request ${request.id} (attempt ${request.retryCount + 1})`);
+            logger.log(`[ConnectionPool] Retrying request ${request.id} (attempt ${request.retryCount + 1})`);
         } else {
             // Max retries reached, reject the promise
             request.reject(new Error(`Request failed after ${this.config.retryAttempts} attempts: ${error.message}`));
@@ -261,7 +263,7 @@ class BackgroundSync {
             enabled,
         });
 
-        console.log(`[BackgroundSync] Registered task: ${id} (interval: ${interval}ms)`);
+        logger.log(`[BackgroundSync] Registered task: ${id} (interval: ${interval}ms)`);
     }
 
     // Start background sync processing
@@ -283,9 +285,9 @@ class BackgroundSync {
                 try {
                     await task.task();
                     task.lastRun = now;
-                    console.log(`[BackgroundSync] Task ${task.id} completed successfully`);
+                    logger.log(`[BackgroundSync] Task ${task.id} completed successfully`);
                 } catch (error) {
-                    console.error(`[BackgroundSync] Task ${task.id} failed:`, error);
+                    logger.error(`[BackgroundSync] Task ${task.id} failed:`, error);
                     // Don't update lastRun on failure to retry sooner
                 } finally {
                     this.runningTasks.delete(task.id);
@@ -299,7 +301,7 @@ class BackgroundSync {
         const task = this.syncTasks.find(t => t.id === id);
         if (task) {
             task.enabled = enabled;
-            console.log(`[BackgroundSync] Task ${id} ${enabled ? 'enabled' : 'disabled'}`);
+            logger.log(`[BackgroundSync] Task ${id} ${enabled ? 'enabled' : 'disabled'}`);
         }
     }
 
@@ -317,7 +319,7 @@ class BackgroundSync {
         try {
             await task.task();
             task.lastRun = Date.now();
-            console.log(`[BackgroundSync] Task ${id} force-run completed`);
+            logger.log(`[BackgroundSync] Task ${id} force-run completed`);
         } finally {
             this.runningTasks.delete(id);
         }
@@ -349,7 +351,7 @@ let backgroundSync: BackgroundSync | null = null;
 export const initializeConnectionPooling = (config?: Partial<ConnectionConfig>): ConnectionPool => {
     if (!connectionPool) {
         connectionPool = new ConnectionPool(config);
-        console.log('[ConnectionPooling] Initialized with config:', config);
+        logger.log('[ConnectionPooling] Initialized with config:', config);
     }
     return connectionPool;
 };
@@ -358,7 +360,7 @@ export const initializeBackgroundSync = (): BackgroundSync => {
     if (!backgroundSync) {
         backgroundSync = new BackgroundSync();
         backgroundSync.start();
-        console.log('[BackgroundSync] Initialized and started');
+        logger.log('[BackgroundSync] Initialized and started');
     }
     return backgroundSync;
 };

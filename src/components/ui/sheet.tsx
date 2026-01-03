@@ -52,7 +52,7 @@ const sheetVariants = cva(
 
 interface SheetContentProps
   extends React.ComponentPropsWithoutRef<typeof SheetPrimitive.Content>,
-    VariantProps<typeof sheetVariants> {}
+  VariantProps<typeof sheetVariants> { }
 
 const SheetContent = React.forwardRef<
   React.ElementRef<typeof SheetPrimitive.Content>,
@@ -140,7 +140,7 @@ const SheetLoading = React.forwardRef<
     {...props}
   >
     <PawPrint className="h-8 w-8 animate-pulse text-primary" />
-    <p className="mt-4 text-sm text-muted-foreground">جاري التحميل...</p>
+    <p className="mt-4 text-sm text-muted-foreground">Loading...</p>
   </div>
 ))
 SheetLoading.displayName = "SheetLoading"

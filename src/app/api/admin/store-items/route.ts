@@ -1,7 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 import { createStoreItem, getAllStoreItems } from '@/lib/server-items';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
-export async function GET() {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
     try {
         const items = await getAllStoreItems();
         return NextResponse.json({
@@ -10,7 +15,7 @@ export async function GET() {
             count: items.length,
         });
     } catch (error) {
-        console.error('Error fetching store items:', error);
+        logger.error('Error fetching store items:', error as Error);
         return NextResponse.json(
             {
                 success: false,
@@ -20,9 +25,9 @@ export async function GET() {
             { status: 500 }
         );
     }
-}
+});
 
-export async function POST(request: NextRequest) {
+export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
     try {
         const body = await request.json();
 
@@ -42,23 +47,27 @@ export async function POST(request: NextRequest) {
 
         // Create the item
         const newItem = await createStoreItem({
+            id: body.id,
             name: body.name,
             description: body.description,
             price: body.price || 0,
-            usdPrice: body.usdPrice || 0.001,
             image: body.image,
             dataAiHint: body.dataAiHint || '',
             type: body.type || 'consumable',
             rarity: body.rarity || 'common',
         });
 
-        return NextResponse.json({
+        const response = NextResponse.json({
             success: true,
             message: 'Item created successfully',
             item: newItem,
         });
+
+        // Use unified helper to update CSRF
+        const requestHost = request.headers.get('host') || undefined;
+        return await setCsrfTokenResponse(response, request.user.sub, requestHost);
     } catch (error) {
-        console.error('Error creating store item:', error);
+        logger.error('Error creating store item:', error as Error);
 
         // Handle duplicate ID error
         if (error instanceof Error && error.message.includes('already exists')) {
@@ -80,4 +89,4 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
-}
+}));

@@ -1,15 +1,18 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 import { db, initializeAdminApp } from '@/lib/firebase-admin';
 import * as admin from 'firebase-admin';
 
-export async function GET() {
+import { withAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+
+export const GET = withAdminAuth(async (request: AdminRequest) => {
   try {
     // In a real application, you would add authentication/authorization here
     // to ensure only admins can access this endpoint.
     try {
       await initializeAdminApp(); // Ensure the admin app is initialized
     } catch (initError) {
-      console.error('Firebase Admin SDK initialization failed:', initError);
+      logger.error('Firebase Admin SDK initialization failed:', initError as Error);
       const errorMessage = initError instanceof Error ? initError.message : 'An unknown error occurred';
       return NextResponse.json({
         error: 'Firebase Admin SDK initialization failed. Check server logs for details.',
@@ -18,12 +21,12 @@ export async function GET() {
     }
 
     const playersRef = db.collection('players'); // Changed from 'users' to 'players'
-    console.log('Attempting to fetch players from collection:', playersRef.path);
+    logger.log('Attempting to fetch players from collection:', playersRef.path);
     const snapshot = await playersRef.get();
     const totalUsers = snapshot.size; // Renamed to totalUsers for consistency with frontend
-    console.log('Total players fetched:', totalUsers);
+    logger.log('Total players fetched:', totalUsers);
     if (totalUsers === 0) {
-      console.warn('No documents found in the "players" collection. Is the collection name correct or is it empty?');
+      logger.warn('No documents found in the "players" collection. Is the collection name correct or is it empty?');
     }
 
     const now = Date.now();
@@ -41,8 +44,8 @@ export async function GET() {
     });
 
     const offlineUsers = totalUsers - onlineUsers;
-    console.log('Online users:', onlineUsers);
-    console.log('Offline users:', offlineUsers);
+    logger.log('Online users:', onlineUsers);
+    logger.log('Offline users:', offlineUsers);
 
     return NextResponse.json({
       totalUsers,
@@ -50,13 +53,13 @@ export async function GET() {
       offlineUsers,
     });
   } catch (error) {
-    console.error('Error fetching user statistics:', error);
+    logger.error('Error fetching user statistics:', error as Error);
     // Log the full error object for more details
-    console.error('Full error details:', JSON.stringify(error, Object.getOwnPropertyNames(error)));
+    logger.error('Full error details:', new Error(JSON.stringify(error, Object.getOwnPropertyNames(error))));
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
     return NextResponse.json({
       error: 'Failed to fetch user statistics.',
       details: process.env.NODE_ENV === 'development' ? errorMessage : undefined
     }, { status: 500 });
   }
-}
+});

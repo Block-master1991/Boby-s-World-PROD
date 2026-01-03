@@ -1,4 +1,5 @@
 // Offline Capabilities Manager
+import { logger } from 'utils/logger';
 // Handles offline functionality and data synchronization
 
 interface OfflineQueueItem {
@@ -43,14 +44,14 @@ class OfflineManager {
 
     private initializeOfflineDetection(): void {
         window.addEventListener('online', () => {
-            console.log('[OfflineManager] Connection restored');
+            logger.log('[OfflineManager] Connection restored');
             this.isOnline = true;
             this.updateSyncStatus({ isOnline: true });
             this.processOfflineQueue();
         });
 
         window.addEventListener('offline', () => {
-            console.log('[OfflineManager] Connection lost');
+            logger.log('[OfflineManager] Connection lost');
             this.isOnline = false;
             this.updateSyncStatus({ isOnline: false });
         });
@@ -82,7 +83,7 @@ class OfflineManager {
         // Enforce queue size limit
         if (this.offlineQueue.length > this.maxQueueSize) {
             const removed = this.offlineQueue.splice(this.maxQueueSize);
-            console.warn(`[OfflineManager] Queue full, removed ${removed.length} old items`);
+            logger.warn(`[OfflineManager] Queue full, removed ${removed.length} old items`);
         }
 
         this.updateSyncStatus({ pendingItems: this.offlineQueue.length });
@@ -114,7 +115,7 @@ class OfflineManager {
                 this.offlineQueue = this.offlineQueue.filter(i => i.id !== item.id);
                 processedCount++;
             } catch (error) {
-                console.error(`[OfflineManager] Failed to process queued item ${item.id}:`, error);
+                logger.error(`[OfflineManager] Failed to process queued item ${item.id}:`, error);
                 item.retryCount++;
 
                 if (item.retryCount >= item.maxRetries) {
@@ -133,7 +134,7 @@ class OfflineManager {
 
         this.persistQueue();
 
-        console.log(`[OfflineManager] Processed ${processedCount} items, ${failedCount} failed, ${this.offlineQueue.length} remaining`);
+        logger.log(`[OfflineManager] Processed ${processedCount} items, ${failedCount} failed, ${this.offlineQueue.length} remaining`);
     }
 
     private async executeQueuedOperation(item: OfflineQueueItem): Promise<void> {
@@ -162,12 +163,12 @@ class OfflineManager {
     private async executeGameAction(data: any): Promise<void> {
         // Implement game action replay logic
         // This would depend on your specific game mechanics
-        console.log('[OfflineManager] Executing game action:', data);
+        logger.log('[OfflineManager] Executing game action:', data);
     }
 
     private async syncUserData(data: any): Promise<void> {
         // Implement user data synchronization
-        console.log('[OfflineManager] Syncing user data:', data);
+        logger.log('[OfflineManager] Syncing user data:', data);
     }
 
     // Persist queue to IndexedDB for persistence across sessions
@@ -185,9 +186,9 @@ class OfflineManager {
                 store.put(item);
             }
 
-            console.log(`[OfflineManager] Persisted ${this.offlineQueue.length} queue items`);
+            logger.log(`[OfflineManager] Persisted ${this.offlineQueue.length} queue items`);
         } catch (error) {
-            console.error('[OfflineManager] Failed to persist queue:', error);
+            logger.error('[OfflineManager] Failed to persist queue:', error);
         }
     }
 
@@ -202,9 +203,9 @@ class OfflineManager {
             this.offlineQueue = items;
             this.updateSyncStatus({ pendingItems: this.offlineQueue.length });
 
-            console.log(`[OfflineManager] Loaded ${this.offlineQueue.length} persisted queue items`);
+            logger.log(`[OfflineManager] Loaded ${this.offlineQueue.length} persisted queue items`);
         } catch (error) {
-            console.error('[OfflineManager] Failed to load persisted queue:', error);
+            logger.error('[OfflineManager] Failed to load persisted queue:', error);
         }
     }
 
@@ -257,7 +258,7 @@ class OfflineManager {
             try {
                 callback(this.syncStatus);
             } catch (error) {
-                console.error('[OfflineManager] Error in sync callback:', error);
+                logger.error('[OfflineManager] Error in sync callback:', error);
             }
         });
     }
@@ -351,10 +352,10 @@ class BackgroundProcessor {
                 await Promise.race([task.task(), timeoutPromise]);
 
                 const duration = Date.now() - startTime;
-                console.log(`[BackgroundProcessor] Task ${task.id} completed in ${duration}ms`);
+                logger.log(`[BackgroundProcessor] Task ${task.id} completed in ${duration}ms`);
 
             } catch (error) {
-                console.error(`[BackgroundProcessor] Task ${task.id} failed:`, error);
+                logger.error(`[BackgroundProcessor] Task ${task.id} failed:`, error);
             }
 
             // Small delay between tasks to prevent blocking

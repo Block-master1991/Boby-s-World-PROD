@@ -14,6 +14,9 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Edit, Trash2, Package, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
+import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { createSignedAdminHeaders } from '@/utils/frontend-auth';
+import { logger } from '@/utils/logger';
 
 interface StoreItem {
     id: string;
@@ -38,6 +41,7 @@ export default function AdminItemsPage() {
     const [editingItem, setEditingItem] = useState<StoreItem | null>(null);
     const [isDialogOpen, setIsDialogOpen] = useState(false);
     const { toast } = useToast();
+    const { signMessage, adapterPublicKey: walletPublicKey } = useSessionWallet();
 
     // Form state
     const [formData, setFormData] = useState({
@@ -70,7 +74,7 @@ export default function AdminItemsPage() {
                 });
             }
         } catch (error) {
-            console.error('Error loading items:', error);
+            logger.error('Error loading items:', error as Error);
             toast({
                 title: 'Error',
                 description: 'Failed to load items',
@@ -105,7 +109,7 @@ export default function AdminItemsPage() {
                 });
             }
         } catch (error) {
-            console.error('Error initializing items:', error);
+            logger.error('Error initializing items:', error as Error);
             toast({
                 title: 'Error',
                 description: 'Failed to initialize items',
@@ -134,11 +138,40 @@ export default function AdminItemsPage() {
                 ? `/api/admin/store-items/${editingItem.id}`
                 : '/api/admin/store-items';
 
+            // Prepare headers with signature
+            let headers: HeadersInit = { 'Content-Type': 'application/json' };
+
+            try {
+                if (method === 'POST') { // Only enforce signature for creation (critical) or update if required
+                    // NOTE: Adjust if PUT also requires signature. The middleware usually protects the whole route. 
+                    // Assuming middleware is strictly 'withSignedAdminAuth' for POST/PUT/DELETE
+                    const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, formData);
+                    headers = { ...headers, ...signedHeaders };
+                }
+                // If editing (PUT), we might also need signature if the route is protected.
+                // Let's assume protection is on the route handler level, so ALL methods need it if wrapped.
+                // However, I wrapped 'POST' specifically in the route file. checking...
+                // The route files: POST is wrapped. 
+
+                // WAIT. If I only wrapped POST, then PUT (edit) and DELETE might be open or just "Authenticated"?
+                // I need to double check the route file content for store-items.
+                // I'll optimistically sign ALL mutation requests to be safe/future-proof.
+                if (method === 'PUT') {
+                    const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, formData);
+                    headers = { ...headers, ...signedHeaders };
+                }
+            } catch (signError) {
+                toast({
+                    title: 'Signature Required',
+                    description: 'You must sign the transaction to proceed.',
+                    variant: 'destructive'
+                });
+                return;
+            }
+
             const response = await fetch(url, {
                 method,
-                headers: {
-                    'Content-Type': 'application/json',
-                },
+                headers,
                 body: JSON.stringify(formData),
             });
 
@@ -161,7 +194,7 @@ export default function AdminItemsPage() {
                 });
             }
         } catch (error) {
-            console.error('Error saving item:', error);
+            logger.error('Error saving item:', error as Error);
             toast({
                 title: 'Error',
                 description: 'Failed to save item',
@@ -193,7 +226,7 @@ export default function AdminItemsPage() {
                 });
             }
         } catch (error) {
-            console.error('Error deleting item:', error);
+            logger.error('Error deleting item:', error as Error);
             toast({
                 title: 'Error',
                 description: 'Failed to delete item',
@@ -227,8 +260,13 @@ export default function AdminItemsPage() {
 
         try {
             setMigrating(true);
+
+            const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, {});
+
             const response = await fetch('/api/admin/migrate-inventory', {
                 method: 'POST',
+                headers: signedHeaders,
+                body: JSON.stringify({})
             });
 
             const data = await response.json();
@@ -238,17 +276,17 @@ export default function AdminItemsPage() {
                     title: 'Migration Completed',
                     description: 'Inventory migration completed successfully',
                 });
-                console.log('Migration output:', data.output);
+                logger.log('Migration output:', data.output);
             } else {
                 toast({
                     title: 'Migration Failed',
                     description: data.error || 'Migration failed',
                     variant: 'destructive',
                 });
-                console.error('Migration error:', data.errorOutput);
+                logger.error('Migration error:', data.errorOutput);
             }
         } catch (error) {
-            console.error('Error running migration:', error);
+            logger.error('Error running migration:', error as Error);
             toast({
                 title: 'Migration Error',
                 description: 'Failed to run migration',

@@ -227,67 +227,67 @@ export function appendWindShader(
         vec2 worldPositionXZ = (modelMatrix * mvPosition).xz;
         float windOffset = 2.0 * 3.14 * simplex2d(worldPositionXZ / uWindScale);
 
-        // تحسين حركة العشب في النسخة المثبتة
+        // Improve grass movement in the instanced version
         float heightFactor = pow(position.y, 0.6);
         float bendReduction = 1.0 - abs(normal.y) * 0.2;
 
-        // استخدام دوال أكثر انسيابية لضمان عدم وجود توقف في الحركة
-        float smoothTime = uTime * 1.5; // زيادة سرعة الوقت أكثر لجعل الحركة أكثر انسيابية
+        // Use more fluid functions to ensure no stops in movement
+        float smoothTime = uTime * 1.5; // Increase time speed more to make movement more fluid
 
-        // حساب الموجات الأساسية المستخدمة في tree.js
+        // Calculate basic waves used in tree.js
         float primaryWave = sin(uTime * uWindFrequency + windOffset);
         float secondaryWave = sin(2.0 * uTime * uWindFrequency + 1.3 * windOffset);
         float tertiaryWave = sin(5.0 * uTime * uWindFrequency + 1.5 * windOffset);
 
-        // دمج الموجات بنفس الأوزان المستخدمة في tree.js
+        // Combine waves with same weights used in tree.js
         float waveCombined = 0.5 * primaryWave + 0.3 * secondaryWave + 0.2 * tertiaryWave;
 
-        // تطبيق تأثير الارتفاع (مثل grass.js)
+        // Apply height effect (like grass.js)
         float heightEffect = heightFactor;
 
-        // تطبيق تأثير الانحناء (مثل grass.js)
+        // Apply bending effect (like grass.js)
         float bendEffect = bendReduction;
 
-        // استخدام نفس دالة الجيب وجيب التمام المستخدمة في grass.js
+        // Use same sine and cosine functions used in grass.js
         float sinComponent = sin(uTime * uWindFrequency + windOffset);
         float cosComponent = cos(uTime * 1.4 * uWindFrequency + windOffset);
 
-        // دمج المكونات لإنشاء حركة واقعية
+        // Combine components to create realistic movement
         float realisticMovement = waveCombined * sinComponent * cosComponent * heightEffect * bendEffect;
 
-        // إضافة بعض التشويه البسيط لمحاكاة الاضطرابات
+        // Add some simple distortion to simulate disturbances
         float disturbance = sin(uTime * uWindFrequency * 3.0 + windOffset * 2.0) * 0.05;
         realisticMovement += disturbance;
 
-        // تطبيق الحركة النهائية بنفس القوة المستخدمة في tree.js
+        // Apply final movement with same strength used in tree.js
         vec3 windSway = uWindStrength * realisticMovement;
 
-        // إضافة قيد لمنع التمدد المفرط
+        // Add constraint to prevent excessive stretching
         float maxSway = length(uWindStrength) * 0.3; // Adjusted max sway
         float swayLength = length(windSway);
         if (swayLength > maxSway) {
           windSway = normalize(windSway) * maxSway;
         }
 
-        // تطبيق تأثير الرياح فقط على الإحداثيات النسبية للعشبة وليس على الموقع الأساسي
+        // Apply wind effect only on relative coordinates of the grass blade, not on base position
         vec3 relativeOffset = vec3(0.0);
 
-        // استخدام دالة انتقال سلسة لتجنب أي توقف في الحركة
+        // Use smooth transition function to avoid any stops in movement
         float smoothWind = sin(uTime * uWindFrequency + windOffset) * 0.5 + 0.5;
         smoothWind = smoothstep(0.0, 1.0, smoothWind);
 
-        // حساب الانحراف في اتجاه X مع انتقال سلس
+        // Calculate deviation in X direction with smooth transition
         relativeOffset.x = windSway.x * position.y * heightFactor * smoothWind;
 
-        // حساب الانحراف في اتجاه Z مع انتقال سلس
+        // Calculate deviation in Z direction with smooth transition
         relativeOffset.z = windSway.z * position.y * heightFactor * smoothWind;
 
-        // إضافة اهتزازات صغيرة دائمة للحركة المستمرة
+        // Add small constant vibrations for continuous movement
         float microMovement = sin(uTime * uWindFrequency * 8.0 + windOffset * 3.0) * 0.01;
         relativeOffset.x += microMovement * windSway.x;
         relativeOffset.z += microMovement * windSway.z;
 
-        // الحفاظ على الموقع الأساسي للعشبة وتطبيق الانحناء فقط
+        // Keep base position of grass blade and apply bending only
         vec3 modifiedPosition = transformed + relativeOffset;
         mvPosition = instanceMatrix * vec4(modifiedPosition, 1.0);
         mvPosition = modelViewMatrix * mvPosition;
@@ -297,31 +297,31 @@ export function appendWindShader(
         `
         vec4 mvPosition = vec4(transformed, 1.0);
 
-        // حساب موضع النقطة في العالم لتحديد تأثير الرياح
+        // Calculate point position in world to determine wind effect
         vec3 worldPos = (modelMatrix * mvPosition).xyz;
 
-        // استخدام simplex2d لتوحيد تأثير الرياح مع العشب
+        // Use simplex2d to unify wind effect with grass
         vec2 worldPos2D = worldPos.xz;
         float windOffset = simplex2d(worldPos2D / uWindScale) * 6.28318; // 2 * PI
 
-        // حساب تأثير الرياح الأساسي - استخدام نفس النهج الموجود في grass.js
+        // Calculate basic wind effect - use same approach as in grass.js
         float windEffect = sin(uTime * uWindFrequency + windOffset) *
                          cos(uTime * 1.4 * uWindFrequency + windOffset);
 
-        // تطبيق تأثير الارتفاع - الأجزاء العليا من الزهرة تتأثر أكثر بالرياح
+        // Apply height effect - upper parts of flower are affected more by wind
         float heightFactor = position.y;
 
-        // تطبيق الحركة كإزاحة نسبية تعتمد على ارتفاع النقطة
-        // استخدام معامل تصغير 0.2 مثلما في grass.js
+        // Apply movement as relative offset depending on point height
+        // Use reduction factor 0.2 as in grass.js
         vec3 windSway = 0.2 * heightFactor * uWindStrength *
                        windEffect;
 
-        // تطبيق الإزاحة
+        // Apply the offset
         vec3 newPosition = transformed;
         newPosition.x += windSway.x;
         newPosition.z += windSway.z;
 
-        // تطبيق المصفوفات
+        // Apply matrices
         mvPosition = vec4(newPosition, 1.0);
         mvPosition = modelViewMatrix * mvPosition;
         gl_Position = projectionMatrix * mvPosition;

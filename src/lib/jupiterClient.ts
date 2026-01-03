@@ -1,19 +1,20 @@
 import axios, { type AxiosError } from 'axios';
 import { BOBY_TOKEN_MINT_ADDRESS, JUPITER_API_KEY, SOL_TOKEN_MINT_ADDRESS } from '@/lib/constants';
+import { logger } from '@/utils/logger';
 
-// 1. إنشاء نسخة مخصصة من axios (axios instance)
-// هذا يسمح لنا بضبط إعدادات أساسية لاستخدامها في كل الطلبات
+// 1. Create a custom axios instance
+// This allows us to set basic configurations for use in all requests
 const jupiterApiClient = axios.create({
   baseURL: 'https://api.jup.ag',
-  timeout: 10000, // 10 ثوانٍ كمهلة للطلب
+  timeout: 10000, // 10 seconds as timeout for the request
   headers: {
     'Accept': 'application/json',
-    'x-api-key': JUPITER_API_KEY, // <-- إضافة مفتاح API هنا
+    'x-api-key': JUPITER_API_KEY, // <-- Add API key here
   }
 });
 
-// 2. تعريف واجهات الأنواع (Interfaces) لاستجابة Jupiter API
-// هذا يجعل التعامل مع البيانات أكثر أمانًا ووضوحًا
+// 2. Define type interfaces for Jupiter API response
+// This makes data handling safer and clearer
 interface JupiterPriceData {
   id?: string;
   usdPrice: number;
@@ -26,64 +27,64 @@ interface JupiterPriceResponse {
   data?: {
     [key: string]: JupiterPriceData;
   };
-  // السماح بالوصول المباشر للبيانات
+  // Allow direct access to data
   [key: string]: any;
 }
 
 /**
- * دالة احترافية لجلب سعر توكن BOBY من Jupiter API
- * @returns {Promise<number>} - سعر التوكن
- * @throws {Error} - في حالة فشل جلب السعر أو عدم وجوده
+ * Professional function to fetch BOBY token price from Jupiter API
+ * @returns {Promise<number>} - Token price
+ * @throws {Error} - In case of failure to fetch price or non-existence
  */
 export async function getBobyPrice(): Promise<number> {
   const endpoint = `/price/v3?ids=${BOBY_TOKEN_MINT_ADDRESS},${SOL_TOKEN_MINT_ADDRESS}`;
-  console.log(`[jupiterClient] Fetching Boby price from: ${endpoint}`);
+  logger.log(`[jupiterClient] Fetching Boby price from: ${endpoint}`);
 
   try {
-    // 3. استخدام نسخة axios المخصصة لإجراء الطلب
+    // 3. Use custom axios instance to make the request
     const response = await jupiterApiClient.get<JupiterPriceResponse>(endpoint);
 
-    // 4. معالجة البيانات المستلمة
-    // استخراج البيانات من الاستجابة
+    // 4. Process received data
+    // Extract data from the response
     const responseData = response.data as any;
 
-    // التحقق من وجود البيانات
+    // Verify data existence
     if (!responseData || typeof responseData !== 'object') {
-      console.error('[jupiterClient] Invalid response structure:', response.data);
+      logger.error('[jupiterClient] Invalid response structure:', response.data);
       throw new Error('Invalid response structure from Jupiter API.');
     }
 
-    // البحث عن بيانات Boby token
+    // Search for Boby token data
     let bobyData = null;
 
-    // الطريقة الأولى: استخدام المفتاح المباشر
+    // First method: use direct key
     if (responseData[BOBY_TOKEN_MINT_ADDRESS] && typeof responseData[BOBY_TOKEN_MINT_ADDRESS].usdPrice === 'number') {
       bobyData = responseData[BOBY_TOKEN_MINT_ADDRESS];
     }
-    // الطريقة الثانية: البحث في كائن data
+    // Second method: search in data object
     else if (responseData.data && responseData.data[BOBY_TOKEN_MINT_ADDRESS] && typeof responseData.data[BOBY_TOKEN_MINT_ADDRESS].usdPrice === 'number') {
       bobyData = responseData.data[BOBY_TOKEN_MINT_ADDRESS];
     }
 
     if (bobyData) {
-      console.log(`[jupiterClient] Successfully fetched Boby price: ${bobyData.usdPrice}`);
+      logger.log(`[jupiterClient] Successfully fetched Boby price: ${bobyData.usdPrice}`);
       return bobyData.usdPrice;
     } else {
-      console.error('[jupiterClient] Boby token data or usdPrice not found in Jupiter response:', response.data);
+      logger.error('[jupiterClient] Boby token data or usdPrice not found in Jupiter response:', response.data);
       throw new Error('Invalid response structure from Jupiter API.');
     }
   } catch (error) {
-    // 5. معالجة الأخطاء بطريقة احترافية
+    // 5. Handle errors professionally
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
-      console.error(`[jupiterClient] Axios error fetching price: ${axiosError.message}`);
+      logger.error(`[jupiterClient] Axios error fetching price: ${axiosError.message}`);
       if (axiosError.response) {
-        console.error(`[jupiterClient] Status: ${axiosError.response.status}, Data:`, axiosError.response.data);
+        logger.error(`[jupiterClient] Status: ${axiosError.response.status}, Data:`, axiosError.response.data);
       }
     } else {
-      console.error('[jupiterClient] An unexpected error occurred:', error);
+      logger.error('[jupiterClient] An unexpected error occurred:', error);
     }
-    // رمي خطأ جديد لكي يتمكن المستدعي من معالجته
+    // Throw new error so caller can handle it
     throw new Error('Failed to fetch price from Jupiter API.');
   }
 }

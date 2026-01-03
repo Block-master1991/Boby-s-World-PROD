@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { useCallback, useRef } from 'react';
+import { logger } from '@/utils/logger';
 // A dummy object to manipulate matrices.
 const dummy = new THREE.Object3D();
 
@@ -17,9 +18,9 @@ interface LODMeshes {
 
 interface LODInstance {
   // Unique identifier for this instance
-  id: string; 
+  id: string;
   // The model type (e.g., 'tree1')
-  modelIdentifier: string; 
+  modelIdentifier: string;
   // Current LOD level
   currentLOD: 'high' | 'medium' | 'low';
   // The index of this instance within its current InstancedMesh
@@ -54,7 +55,7 @@ export const useLODSwitching = () => {
   ) => {
     const modelMeshes = lodMeshesRef.current.get(modelIdentifier);
     if (!modelMeshes || !modelMeshes.low) {
-      console.error(`LOD meshes for ${modelIdentifier} not initialized.`);
+      logger.error(`LOD meshes for ${modelIdentifier} not initialized.`);
       return;
     }
 
@@ -71,17 +72,17 @@ export const useLODSwitching = () => {
     // Here, we'll just assume the count of the mesh is the next available index.
     const newInstanceIndex = targetMesh.count;
     if (newInstanceIndex >= targetMesh.instanceMatrix.array.length / 16) {
-      console.warn(`InstancedMesh for ${modelIdentifier} (${initialLOD}) is full.`);
+      logger.warn(`InstancedMesh for ${modelIdentifier} (${initialLOD}) is full.`);
       return;
     }
 
     targetMesh.setMatrixAt(newInstanceIndex, transform);
     targetMesh.instanceMatrix.needsUpdate = true;
     targetMesh.count++;
-    
-    // تأكد من أن الشبكة مرئية
+
+    // Ensure the mesh is visible
     targetMesh.visible = true;
-    targetMesh.frustumCulled = false; // تعطيل الإخفاء التلقائي لضمان الرؤية
+    targetMesh.frustumCulled = false; // Disable automatic culling to ensure visibility
 
     // Store the instance's state
     const newInstance: LODInstance = {
@@ -93,23 +94,23 @@ export const useLODSwitching = () => {
     };
 
     instancesRef.current.set(instanceId, newInstance);
-    console.log(`[useLODSwitching] Added instance ${instanceId} to instancesRef. Current count: ${instancesRef.current.size}`);
+    logger.log(`[useLODSwitching] Added instance ${instanceId} to instancesRef. Current count: ${instancesRef.current.size}`);
   }, []);
 
   const switchLOD = useCallback((instanceKey: string, newLOD: 'high' | 'medium' | 'low') => {
     const instance = instancesRef.current.get(instanceKey);
     if (!instance || instance.currentLOD === newLOD) return;
 
-    console.log(`[useLODSwitching] Switching LOD for ${instanceKey} from ${instance.currentLOD} to ${newLOD}`);
+    logger.log(`[useLODSwitching] Switching LOD for ${instanceKey} from ${instance.currentLOD} to ${newLOD}`);
 
     const modelMeshes = lodMeshesRef.current.get(instance.modelIdentifier);
     if (!modelMeshes) return;
 
-    const oldMesh = modelMeshes[instance.currentLOD + 'Mesh' as keyof LODMeshes]; // Access by property name
-    const newMesh = modelMeshes[newLOD + 'Mesh' as keyof LODMeshes]; // Access by property name
+    const oldMesh = modelMeshes[instance.currentLOD]; // Access by property name
+    const newMesh = modelMeshes[newLOD]; // Access by property name
 
     if (!oldMesh || !newMesh) {
-      console.error(`[useLODSwitching] LOD mesh not available for ${instance.modelIdentifier}`);
+      logger.error(`[useLODSwitching] LOD mesh not available for ${instance.modelIdentifier}`);
       return;
     }
 
@@ -118,7 +119,7 @@ export const useLODSwitching = () => {
     dummy.updateMatrix();
     oldMesh.setMatrixAt(instance.instanceId, dummy.matrix);
     oldMesh.instanceMatrix.needsUpdate = true;
-    console.log(`[useLODSwitching] Hid instance ${instanceKey} in old mesh (${instance.currentLOD})`);
+    logger.gameLoop(`Hid instance ${instanceKey} in old mesh (${instance.currentLOD})`);
 
     // Find an available slot in the new mesh and "add" it
     // This requires a more complex management of free slots in the InstancedMesh.
@@ -127,7 +128,7 @@ export const useLODSwitching = () => {
     const newInstanceId = instance.instanceId; // Simplified for now
     newMesh.setMatrixAt(newInstanceId, instance.transform);
     newMesh.instanceMatrix.needsUpdate = true;
-    console.log(`[useLODSwitching] Showed instance ${instanceKey} in new mesh (${newLOD})`);
+    logger.gameLoop(`Showed instance ${instanceKey} in new mesh (${newLOD})`);
 
     // Update the instance's state
     instance.currentLOD = newLOD;
@@ -139,22 +140,22 @@ export const useLODSwitching = () => {
     const instance = instancesRef.current.get(instanceId);
     if (!instance) return;
 
-    console.log(`[useLODSwitching] Removing instance ${instanceId}`);
+    logger.log(`Removing instance ${instanceId}`);
 
     const modelMeshes = lodMeshesRef.current.get(instance.modelIdentifier);
     if (!modelMeshes) return;
 
-    const currentMesh = modelMeshes[instance.currentLOD + 'Mesh' as keyof LODMeshes];
+    const currentMesh = modelMeshes[instance.currentLOD];
     if (currentMesh) {
       // Set the instance's matrix to a zero scale to effectively hide it
       dummy.scale.set(0, 0, 0);
       dummy.updateMatrix();
       currentMesh.setMatrixAt(instance.instanceId, dummy.matrix);
       currentMesh.instanceMatrix.needsUpdate = true;
-      console.log(`[useLODSwitching] Hid instance ${instanceId} in its current mesh (${instance.currentLOD})`);
+      logger.log(`Hid instance ${instanceId} in its current mesh (${instance.currentLOD})`);
     }
     instancesRef.current.delete(instanceId);
-    console.log(`[useLODSwitching] Removed instance ${instanceId} from instancesRef. Remaining count: ${instancesRef.current.size}`);
+    logger.log(`Removed instance ${instanceId} from instancesRef. Remaining count: ${instancesRef.current.size}`);
   }, []);
 
   // Update frustum based on camera position and projection
@@ -210,25 +211,25 @@ export const useLODSwitching = () => {
     models: { high: THREE.Group, medium: THREE.Group, low: THREE.Group },
     maxCount: number
   ) => {
-    console.log(`[useLODSwitching] Creating LOD meshes for ${modelIdentifier} with maxCount: ${maxCount}`);
+    logger.log(`[useLODSwitching] Creating LOD meshes for ${modelIdentifier} with maxCount: ${maxCount}`);
     const createMesh = (model: THREE.Group, lodLevel: string): THREE.InstancedMesh | null => {
       if (!model.children.length || !(model.children[0] instanceof THREE.Mesh)) {
-        console.warn(`[useLODSwitching] Model for ${modelIdentifier} (${lodLevel}) has no mesh child.`);
+        logger.warn(`Model for ${modelIdentifier} (${lodLevel}) has no mesh child.`);
         return null;
       }
       const sourceMesh = model.children[0] as THREE.Mesh;
       const materialUUID = Array.isArray(sourceMesh.material) ? sourceMesh.material[0]?.uuid : sourceMesh.material?.uuid;
-      console.log(`[useLODSwitching] Creating InstancedMesh for ${modelIdentifier} (${lodLevel}) with geometry UUID: ${sourceMesh.geometry.uuid} and material UUID: ${materialUUID}`);
+      logger.log(`Creating InstancedMesh for ${modelIdentifier} (${lodLevel}) with geometry UUID: ${sourceMesh.geometry.uuid} and material UUID: ${materialUUID}`);
       const mesh = new THREE.InstancedMesh(sourceMesh.geometry.clone(), sourceMesh.material, maxCount);
       mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
       mesh.name = `${modelIdentifier}_${lodLevel}_InstancedMesh`;
-      
-      // تأكد من أن الشبكة مرئية وقابلة للعرض
+
+      // Ensure the mesh is visible and renderable
       mesh.visible = true;
-      mesh.frustumCulled = false; // تعطيل الإخفاء التلقائي لضمان الرؤية
-      mesh.castShadow = true; // تفعيل الظل
-      mesh.receiveShadow = true; // تفعيل استقبال الظل
-      
+      mesh.frustumCulled = false; // Disable automatic culling to ensure visibility
+      mesh.castShadow = true; // Enable shadow casting
+      mesh.receiveShadow = true; // Enable shadow receiving
+
       return mesh;
     };
 
@@ -237,7 +238,7 @@ export const useLODSwitching = () => {
     const lowMesh = createMesh(models.low, 'low');
 
     lodMeshesRef.current.set(modelIdentifier, { high: highMesh, medium: mediumMesh, low: lowMesh });
-    console.log(`[useLODSwitching] Stored LOD meshes for ${modelIdentifier}:`, lodMeshesRef.current.get(modelIdentifier));
+    logger.log(`[useLODSwitching] Stored LOD meshes for ${modelIdentifier}:`, lodMeshesRef.current.get(modelIdentifier));
 
     return { highMesh, mediumMesh, lowMesh };
   }, []);
@@ -268,7 +269,7 @@ export const useLODSwitching = () => {
       const modelMeshes = lodMeshesRef.current.get(instance.modelIdentifier);
       if (!modelMeshes) return;
 
-      const currentMesh = modelMeshes[instance.currentLOD + 'Mesh' as keyof LODMeshes];
+      const currentMesh = modelMeshes[instance.currentLOD];
       if (!currentMesh) return;
 
       // Store visibility change if needed

@@ -5,6 +5,7 @@ import { CHUNK_SIZE } from '../../chunkUtils';
 import { appendWindShader } from '../shaders/windShaderUtils'; // Import the new utility and WindOptions
 import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
 import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { logger } from 'utils/logger';
 
 let loaded = false;
 let _grassMesh: THREE.Mesh | null = null;
@@ -15,9 +16,9 @@ export class GrassOptions {
   public patchiness: number = 0.7;
   public size: { x: number; y: number; z: number } = { x: 0.2, y: 0.2, z: 0.2 };
   public sizeVariation: { x: number; y: number; z: number } = { x: 0.05, y: 0.05, z: 0.05 };
-  public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // تطبيق نفس قوة الرياح المستخدمة في الأزهار
-  public windFrequency: number = 1.2; // تطبيق نفس تردد الرياح المستخدم في الأزهار
-  public windScale: number = 500.0; // تطبيق نفس مقياس الرياح المستخدم في الأزهار
+  public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // Apply same wind strength used in flowers
+  public windFrequency: number = 1.2; // Apply same wind frequency used in flowers
+  public windScale: number = 500.0; // Apply same wind scale used in flowers
 }
 
 export class Grass extends THREE.Object3D {
@@ -34,15 +35,15 @@ export class Grass extends THREE.Object3D {
   }
 
   /**
-   * تحديث تأثير الرياح على العشب
-   * @param time الوقت الحالي
+   * Update wind effect on grass
+   * @param time Current time
    */
   public updateWindEffect(time: number): void {
     this.traverse((child) => {
       if (child instanceof THREE.InstancedMesh && child.material) {
         const materials = Array.isArray(child.material) ? child.material : [child.material];
         materials.forEach(material => {
-          // تحويل GrassOptions إلى FlowerOptions لاستخدامها مع updateFlowerWindShaderUniforms
+          // Convert GrassOptions to FlowerOptions for use with updateFlowerWindShaderUniforms
           const flowerOptions = {
             windStrength: this.options.windStrength,
             windFrequency: this.options.windFrequency,
@@ -83,11 +84,11 @@ export class Grass extends THREE.Object3D {
         // Try to load from IndexedDB first
         const cachedData = await getModel(modelName);
         if (cachedData) {
-          console.log(`[Grass] Loading grass model from IndexedDB: ${modelName}`);
+          logger.log(`[Grass] Loading grass model from IndexedDB: ${modelName}`);
           const gltf = await gltfLoader.parseAsync(cachedData, '');
           return gltf.scene;
         } else {
-          console.log(`[Grass] Fetching grass model from network: ${modelPath}`);
+          logger.log(`[Grass] Fetching grass model from network: ${modelPath}`);
           const response = await fetch(modelPath);
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const arrayBuffer = await response.arrayBuffer();
@@ -96,9 +97,9 @@ export class Grass extends THREE.Object3D {
           return gltf.scene;
         }
       } catch (error) {
-        console.error(`[Grass] Error loading or caching model ${modelName}:`, error);
+        logger.error(`[Grass] Error loading or caching model ${modelName}:`, error);
         // Fallback to direct network load if IndexedDB fails
-        console.log(`[Grass] Falling back to direct network load for: ${modelPath}`);
+        logger.log(`[Grass] Falling back to direct network load for: ${modelPath}`);
         const gltf = await gltfLoader.loadAsync(modelPath);
         return gltf.scene;
       }
@@ -125,12 +126,12 @@ export class Grass extends THREE.Object3D {
 
   public generateGrassForChunk(chunkX: number, chunkZ: number): THREE.InstancedMesh | null {
     if (!_grassMesh) {
-      console.warn("Grass: No mesh loaded. Call fetchAssets() first.");
-      console.log("Grass: Attempting to fetch assets now...");
+      logger.warn("Grass: No mesh loaded. Call fetchAssets() first.");
+      logger.log("Grass: Attempting to fetch assets now...");
       Grass.fetchAssets().then(() => {
-        console.log("Grass: Assets loaded successfully");
+        logger.log("Grass: Assets loaded successfully");
       }).catch(error => {
-        console.error("Grass: Failed to fetch assets:", error);
+        logger.error("Grass: Failed to fetch assets:", error);
       });
       return null;
     }
@@ -175,7 +176,7 @@ export class Grass extends THREE.Object3D {
     const chunkWorldStartX = chunkX * CHUNK_SIZE;
     const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
 
-    console.log(`[Grass] Generating up to ${this.options.instanceCountPerChunk} grass instances for chunk ${chunkX},${chunkZ}`);
+    logger.log(`[Grass] Generating up to ${this.options.instanceCountPerChunk} grass instances for chunk ${chunkX},${chunkZ}`);
 
     for (let i = 0; i < this.options.instanceCountPerChunk; i++) {
       const localX = Math.random() * CHUNK_SIZE;
@@ -228,7 +229,7 @@ export class Grass extends THREE.Object3D {
       instancedGrass.instanceColor.needsUpdate = true;
     }
 
-    console.log(`[Grass] Generated ${count} grass instances for chunk ${chunkX},${chunkZ}`);
+    logger.log(`[Grass] Generated ${count} grass instances for chunk ${chunkX},${chunkZ}`);
 
     return instancedGrass;
   }

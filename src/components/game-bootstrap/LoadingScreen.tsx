@@ -424,7 +424,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
                 className="rounded-lg"
                 data-ai-hint="dog logo"
                 priority
-                style={{ transform: 'translateZ(0)' }} // Hardware acceleration
+                style={{ transform: 'translateZ(0)', width: 'auto', height: 'auto' }} // Hardware acceleration & aspect ratio
               />
             </div>
 
@@ -538,7 +538,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
                   height={100}
                   className="rounded-lg"
                   priority
-                  style={{ transform: 'translateZ(0)' }}
+                  style={{ transform: 'translateZ(0)', width: 'auto', height: 'auto' }}
                 />
               </div>
             </div>

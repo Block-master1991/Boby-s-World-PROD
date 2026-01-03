@@ -1,4 +1,3 @@
-
 'use client';
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -6,6 +5,7 @@ import { AlertCircle, PawPrint, RefreshCw } from 'lucide-react';
 import Image from 'next/image';
 import { Button } from '@/components/ui/button';
 import { useMarketData, useBobyPriceUpdates } from '@/hooks/useGraphQL';
+import { logger } from "@/utils/logger";
 
 const BobyPriceDisplay: React.FC = () => {
     // Maintain same variable names and structure
@@ -69,7 +69,7 @@ const BobyPriceDisplay: React.FC = () => {
             // Use GraphQL refresh function (same functionality)
             await refreshPrice();
         } catch (e: unknown) {
-            console.error("[BobyPriceDisplay] Error refreshing price:", e);
+            logger.error("[BobyPriceDisplay] Error refreshing price:", e);
             setErrorInfo({
                 message: (e instanceof Error) ? e.message : 'Failed to refresh price',
                 details: 'GraphQL refresh failed'

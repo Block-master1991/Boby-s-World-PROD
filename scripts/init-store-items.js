@@ -1,6 +1,6 @@
 const admin = require('firebase-admin');
 
-// تهيئة Firebase Admin
+// Initialize Firebase Admin
 const serviceAccount = require('../firebase-service-account.json');
 
 admin.initializeApp({
@@ -10,15 +10,14 @@ admin.initializeApp({
 
 const db = admin.firestore();
 
-// بيانات العناصر الأولية
+// Initial items data
 const initialItems = [
     {
         id: '1',
         name: 'Protection Bottle',
         description: 'Consumed instead of your coins, protecting your wealth.',
-        price: 50,
-        usdPrice: 0.001,
-        image: '/Boby-logo.png',
+        price: 0.001,
+        image: '/items/ProtectionBottle.png',
         dataAiHint: 'sturdy Bottle',
         type: 'consumable',
         rarity: 'common',
@@ -30,9 +29,8 @@ const initialItems = [
         id: '2',
         name: 'Guardian Shield',
         description: 'Provides temporary protection in fights.',
-        price: 75,
-        usdPrice: 0.001,
-        image: '/guardianShield.png',
+        price: 0.001,
+        image: '/items/guardianShield.png',
         dataAiHint: 'dog shield',
         type: 'consumable',
         rarity: 'common',
@@ -44,9 +42,8 @@ const initialItems = [
         id: '3',
         name: 'Speedy Paws',
         description: 'Boosts your running speed for a short time.',
-        price: 100,
-        usdPrice: 0.001,
-        image: '/speedyPawsTreat.png',
+        price: 0.001,
+        image: '/items/speedyPawsTreat.png',
         dataAiHint: 'dog treat',
         type: 'consumable',
         rarity: 'common',
@@ -58,9 +55,8 @@ const initialItems = [
         id: '4',
         name: 'Coin Magnet',
         description: 'When active, automatically collects nearby coins for a short duration.',
-        price: 150,
-        usdPrice: 0.001,
-        image: '/coinMagnetTreat.png',
+        price: 0.001,
+        image: '/items/coinMagnetTreat.png',
         dataAiHint: 'dog magnet',
         type: 'consumable',
         rarity: 'common',
@@ -83,7 +79,7 @@ async function initializeStoreItems() {
 
         console.log(`📊 Found ${existingItems.length} existing items:`, existingItems);
 
-        // إضافة العناصر المفقودة
+        // Add missing items
         let addedCount = 0;
         const batch = db.batch();
 
@@ -105,7 +101,7 @@ async function initializeStoreItems() {
             console.log('📋 All items already exist in Firestore.');
         }
 
-        // عرض ملخص
+        // Display summary
         console.log('\n📋 Store Items Summary:');
         const finalSnapshot = await db.collection('storeItems').get();
         finalSnapshot.forEach(doc => {
@@ -117,12 +113,12 @@ async function initializeStoreItems() {
         console.error('❌ Error initializing store items:', error);
         process.exit(1);
     } finally {
-        // إغلاق الاتصال
+        // Close connection
         await admin.app().delete();
         process.exit(0);
     }
 }
 
-// تشغيل الدالة
+// Run function
 console.log('🚀 Initializing store items in Firestore...');
 initializeStoreItems();

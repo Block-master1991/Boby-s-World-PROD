@@ -4,6 +4,7 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { CHUNK_SIZE } from '../../chunkUtils';
 import { simplex2d } from './noise';
 import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { logger } from 'utils/logger';
 
 let loaded = false;
 let _rock1Mesh: THREE.Mesh | null = null;
@@ -52,11 +53,11 @@ export class Rocks extends THREE.Group {
         // Try to load from IndexedDB first
         const cachedData = await getModel(modelName);
         if (cachedData) {
-          console.log(`[Rocks] Loading ${modelName} from IndexedDB`);
+          logger.log(`[Rocks] Loading ${modelName} from IndexedDB`);
           const gltf = await gltfLoader.parseAsync(cachedData, '');
           return gltf.scene;
         } else {
-          console.log(`[Rocks] Fetching ${modelName} from network: ${modelPath}`);
+          logger.log(`[Rocks] Fetching ${modelName} from network: ${modelPath}`);
           const response = await fetch(modelPath);
           if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
           const arrayBuffer = await response.arrayBuffer();
@@ -65,9 +66,9 @@ export class Rocks extends THREE.Group {
           return gltf.scene;
         }
       } catch (error) {
-        console.error(`[Rocks] Error loading or caching model ${modelName}:`, error);
+        logger.error(`[Rocks] Error loading or caching model ${modelName}:`, error);
         // Fallback to direct network load if IndexedDB fails
-        console.log(`[Rocks] Falling back to direct network load for: ${modelPath}`);
+        logger.log(`[Rocks] Falling back to direct network load for: ${modelPath}`);
         const gltf = await gltfLoader.loadAsync(modelPath);
         return gltf.scene;
       }
@@ -86,12 +87,12 @@ export class Rocks extends THREE.Group {
 
   public generateRocksForChunk(chunkX: number, chunkZ: number): THREE.Group | null {
     if (!_rock1Mesh || !_rock2Mesh || !_rock3Mesh) {
-      console.warn("Rocks: No meshes loaded. Call fetchAssets() first.");
-      console.log("Rocks: Attempting to fetch assets now...");
+      logger.warn("Rocks: No meshes loaded. Call fetchAssets() first.");
+      logger.log("Rocks: Attempting to fetch assets now...");
       Rocks.fetchAssets().then(() => {
-        console.log("Rocks: Assets loaded successfully");
+        logger.log("Rocks: Assets loaded successfully");
       }).catch(error => {
-        console.error("Rocks: Failed to fetch assets:", error);
+        logger.error("Rocks: Failed to fetch assets:", error);
       });
       return null;
     }
@@ -103,7 +104,7 @@ export class Rocks extends THREE.Group {
     const chunkWorldStartX = chunkX * CHUNK_SIZE;
     const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
 
-    console.log(`[Rocks] Generating ${this.options.rockCountPerChunk} rocks for chunk ${chunkX},${chunkZ}`);
+    logger.log(`[Rocks] Generating ${this.options.rockCountPerChunk} rocks for chunk ${chunkX},${chunkZ}`);
 
     for (let i = 0; i < this.options.rockCountPerChunk; i++) {
       const localX = Math.random() * CHUNK_SIZE;
@@ -144,7 +145,7 @@ export class Rocks extends THREE.Group {
       rocksGroup.add(rock);
     }
 
-    console.log(`[Rocks] Generated ${rocksGroup.children.length} rocks for chunk ${chunkX},${chunkZ}`);
+    logger.log(`[Rocks] Generated ${rocksGroup.children.length} rocks for chunk ${chunkX},${chunkZ}`);
     return rocksGroup;
   }
 

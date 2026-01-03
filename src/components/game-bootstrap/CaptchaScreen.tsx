@@ -1,10 +1,10 @@
-
 'use client';
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import ReCAPTCHA from "react-google-recaptcha";
 import { PawPrint, AlertTriangle } from 'lucide-react'; // Lock icon removed as button is removed
 import { useToast } from '@/hooks/use-toast';
+import { logger } from '@/utils/logger';
 import Image from 'next/image';
 import { useAudio } from '@/contexts/AudioContext';
 
@@ -16,32 +16,114 @@ interface CaptchaScreenProps {
 const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSuccess }) => {
   const [isVerifyingCaptcha, setIsVerifyingCaptcha] = useState(false);
   const [captchaError, setCaptchaError] = useState<string | null>(null);
+  const [isCaptchaLoading, setIsCaptchaLoading] = useState(true); // Loading state for CAPTCHA script
+  const [loadAttempts, setLoadAttempts] = useState(0);
+  const [showRetryButton, setShowRetryButton] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
+  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const { toast } = useToast();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [captchaTokenForAutoVerify, setCaptchaTokenForAutoVerify] = useState<string | null>(null);
   const [showOverlay, setShowOverlay] = useState(true); // New state for the overlay
-  const { soundManagerRef, setHasUserInteracted } = useAudio(); // Destructure from useAudio
+  const { soundManagerRef, setHasUserInteracted, setCurrentScreen } = useAudio(); // Destructure from useAudio
 
   const detectTheme = () =>
-  document.documentElement.classList.contains('dark') ? 'dark' : 'light';
+    document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
-useEffect(() => {
-  const preferredTheme = detectTheme();
-  setTheme(preferredTheme);
+  // Initialize audio screen on mount
+  useEffect(() => {
+    setCurrentScreen('captcha');
+  }, [setCurrentScreen]);
 
-  const observer = new MutationObserver(() => {
-    const newTheme = detectTheme();
-    if (newTheme !== theme) {
-      setTheme(newTheme);
-      recaptchaRef.current?.reset();
-      setCaptchaTokenForAutoVerify(null); // Reset token on theme change
+  useEffect(() => {
+    const preferredTheme = detectTheme();
+    setTheme(preferredTheme);
+
+    const observer = new MutationObserver(() => {
+      const newTheme = detectTheme();
+      if (newTheme !== theme) {
+        setTheme(newTheme);
+        recaptchaRef.current?.reset();
+        setCaptchaTokenForAutoVerify(null); // Reset token on theme change
+      }
+    });
+
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
+    return () => observer.disconnect();
+  }, [theme]);
+
+  const handleCaptchaLoad = useCallback(() => {
+    logger.log('[CaptchaScreen] CAPTCHA script loaded successfully');
+    setIsCaptchaLoading(false);
+    setShowRetryButton(false);
+    if (loadTimeoutRef.current) {
+      clearTimeout(loadTimeoutRef.current);
+      loadTimeoutRef.current = null;
     }
-  });
+  }, []);
 
-  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
-  return () => observer.disconnect();
-}, [theme]);
+  const handleCaptchaError = useCallback(() => {
+    logger.warn('[CaptchaScreen] CAPTCHA script failed to load');
+    setLoadAttempts(prev => {
+      const newAttempts = prev + 1;
+      if (newAttempts >= 3) { // maxRetries = 3
+        setIsCaptchaLoading(false);
+        setShowRetryButton(true);
+        setCaptchaError('Failed to load verification system. Please refresh the page.');
+        toast({
+          title: 'Loading Error',
+          description: 'Verification system failed to load. Try refreshing the page.',
+          variant: 'destructive',
+          duration: 7000
+        });
+      } else {
+        logger.log(`[CaptchaScreen] Retrying CAPTCHA load (attempt ${newAttempts}/3)`);
+        // Force re-render by changing key
+        setTheme(prev => prev === 'light' ? 'dark' : 'light');
+      }
+      return newAttempts;
+    });
+  }, [toast]);
+
+  // Handle CAPTCHA script loading with timeout and retry
+  useEffect(() => {
+    // If already loaded or not in loading state, no need to check
+    if (!isCaptchaLoading) return;
+
+    const maxLoadTime = 15000; // 15 seconds timeout
+
+    // Check if CAPTCHA is already loaded (it might be in the window already)
+    if (typeof window !== 'undefined' && (window as any).grecaptcha) {
+      logger.log('[CaptchaScreen] grecaptcha found on window');
+      handleCaptchaLoad();
+      return;
+    }
+
+    // Set timeout for CAPTCHA loading if not already loaded
+    loadTimeoutRef.current = setTimeout(() => {
+      if (isCaptchaLoading) {
+        logger.warn('[CaptchaScreen] CAPTCHA loading timeout');
+        handleCaptchaError();
+      }
+    }, maxLoadTime);
+
+    return () => {
+      if (loadTimeoutRef.current) {
+        clearTimeout(loadTimeoutRef.current);
+        loadTimeoutRef.current = null;
+      }
+    };
+  }, [isCaptchaLoading, handleCaptchaLoad, handleCaptchaError]);
+
+  const handleRetryCaptcha = useCallback(() => {
+    logger.log('[CaptchaScreen] Manual retry requested');
+    setIsCaptchaLoading(true);
+    setLoadAttempts(0);
+    setShowRetryButton(false);
+    setCaptchaError(null);
+    // Force re-render by changing key
+    setTheme(prev => prev === 'light' ? 'dark' : 'light');
+  }, []);
 
 
   const verifyToken = useCallback(async (token: string) => {
@@ -51,7 +133,7 @@ useEffect(() => {
     setCaptchaError(null);
 
     try {
-      const response = await fetch('/api/verify-captcha', { // استخدام fetch الأصلي
+      const response = await fetch('/api/verify-captcha', { // Use original fetch
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
@@ -68,7 +150,7 @@ useEffect(() => {
         setCaptchaTokenForAutoVerify(null);
       }
     } catch (error) {
-      console.error("CAPTCHA verification request failed:", error);
+      logger.error("CAPTCHA verification request failed:", error);
       setCaptchaError('An error occurred during verification. Please try again.');
       toast({ title: 'Network Error', description: 'An error occurred while trying to verify the CAPTCHA.', variant: 'destructive', duration: 5000 });
       recaptchaRef.current?.reset();
@@ -79,12 +161,12 @@ useEffect(() => {
   }, [onVerificationSuccess, toast, isVerifyingCaptcha]);
 
   const handleCaptchaChange = useCallback((tokenValue: string | null) => {
-  if (tokenValue && tokenValue !== captchaTokenForAutoVerify) {
-    setCaptchaTokenForAutoVerify(tokenValue);
-    setCaptchaError(null);
-    verifyToken(tokenValue);
-  }
-}, [verifyToken, captchaTokenForAutoVerify]);
+    if (tokenValue && tokenValue !== captchaTokenForAutoVerify) {
+      setCaptchaTokenForAutoVerify(tokenValue);
+      setCaptchaError(null);
+      verifyToken(tokenValue);
+    }
+  }, [verifyToken, captchaTokenForAutoVerify]);
 
   const handleOverlayClick = useCallback(() => {
     setShowOverlay(false);
@@ -108,15 +190,30 @@ useEffect(() => {
       <p className="text-xl text-muted-foreground mb-6 max-w-md">
         Please complete the verification below.
       </p>
-      <div className="mb-4 p-4 bg-card rounded-lg shadow-md border border-border">
+      <div className="mb-4 p-4 bg-card rounded-lg shadow-md border border-border relative">
         <ReCAPTCHA
-          key={theme}
+          key={`${theme}-${loadAttempts}`} // Force re-render on retry
           ref={recaptchaRef}
           sitekey={siteKey}
           onChange={handleCaptchaChange}
+          asyncScriptOnLoad={handleCaptchaLoad}
+          onErrored={handleCaptchaError}
           theme={theme}
           hl="en" // Set language to English
         />
+        {isCaptchaLoading && (
+          <div className="absolute inset-0 bg-card/90 backdrop-blur-sm flex flex-col items-center justify-center rounded-md">
+            <PawPrint className="h-8 w-8 animate-pulse text-primary mb-4" />
+            <p className="text-sm text-muted-foreground">
+              Loading verification system...
+            </p>
+            {loadAttempts > 0 && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Attempt {loadAttempts}/3
+              </p>
+            )}
+          </div>
+        )}
       </div>
       {isVerifyingCaptcha && (
         <div className="flex items-center text-muted-foreground mt-4">
@@ -124,7 +221,20 @@ useEffect(() => {
           <span>Verifying...</span>
         </div>
       )}
-      {captchaError && !isVerifyingCaptcha && (
+      {showRetryButton && (
+        <div className="flex flex-col items-center mt-4">
+          <p className="text-sm text-destructive mb-2 text-center">
+            Having trouble loading verification?
+          </p>
+          <button
+            onClick={handleRetryCaptcha}
+            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors text-sm"
+          >
+            Try Again
+          </button>
+        </div>
+      )}
+      {captchaError && !isVerifyingCaptcha && !showRetryButton && (
         <p className="text-sm text-destructive mt-4 flex items-center justify-center">
           <AlertTriangle className="h-4 w-4 mr-1" /> {captchaError}
         </p>

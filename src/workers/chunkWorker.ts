@@ -7,6 +7,7 @@ import { RockOptions as RocksOptions } from '../lib/ez-tree/environment/rocks';
 import { TreesOptions } from '../lib/ez-tree/environment/trees';
 import { FlowerOptions } from '../lib/ez-tree/environment/flowers';
 import RNG from '../lib/ez-tree/rng';
+import { logger } from 'utils/logger';
 
 // Keep track of generated chunk data to avoid re-computation
 export interface ChunkData {
@@ -359,7 +360,7 @@ function generateFlowerData(chunkX: number, chunkZ: number, options: FlowerOptio
             rng.random(0, 2 * Math.PI),
             rng.random(0, 0.2)
         ));
-        // تصغير الحجم إلى ثلاثة أضعاف
+        // Reduce size to three times smaller
         const baseScale = (options.size.x + options.sizeVariation.x * rng.random(0, 1)) / 7;
         const scale = new THREE.Vector3(baseScale, baseScale, baseScale);
         const color = new THREE.Color(0.4 + rng.random(0, 0.1), 0.4 + rng.random(0, 0.1), 0.4 + rng.random(0, 0.1));
@@ -483,7 +484,7 @@ function cleanupCache() {
         // Also clean up noise cache
         noiseCache.clear();
 
-        console.log(`[ChunkWorker] Cleaned up cache. Removed ${keysToDelete.length} entries.`);
+        logger.log(`[ChunkWorker] Cleaned up cache. Removed ${keysToDelete.length} entries.`);
     }
 }
 
@@ -535,7 +536,7 @@ self.onmessage = (e) => {
 
     // Log performance metrics periodically
     if (performanceMetrics.totalChunksGenerated % 10 === 0) {
-        console.log(`[ChunkWorker] Performance: Generated ${performanceMetrics.totalChunksGenerated} chunks, avg time: ${performanceMetrics.averageTimePerChunk.toFixed(2)}ms`);
+        logger.log(`[ChunkWorker] Performance: Generated ${performanceMetrics.totalChunksGenerated} chunks, avg time: ${performanceMetrics.averageTimePerChunk.toFixed(2)}ms`);
     }
 
     // Send response

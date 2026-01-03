@@ -2,6 +2,7 @@ import { useRef, useState, useCallback, MutableRefObject } from 'react';
 import * as THREE from 'three';
 import { v4 as uuidv4 } from 'uuid';
 import FloatingEffect from '@/components/game/FloatingEffect'; // Import the FloatingEffect class
+import { logger } from '@/utils/logger';
 
 export interface FloatingEffectData {
   id: string;
@@ -73,31 +74,31 @@ export const useFloatingEffects = ({ sceneRef, cameraRef }: UseFloatingEffectsPr
     // This function might be more about signaling the game logic to call addFloatingEffect
     // for nearby coins with the 'attractToTarget' animationType.
     // For now, it's a placeholder to align with the plan.
-    console.log(`Magnet effect activated for coin at ${coinPosition.x}, dog at ${dogPosition.x}`);
+    logger.log(`Magnet effect activated for coin at ${coinPosition.x}, dog at ${dogPosition.x}`);
   }, []);
 
   const deactivateMagnetEffect = useCallback(() => {
-    console.log('Magnet effect deactivated');
+    logger.log('Magnet effect deactivated');
   }, []);
 
   const activateSpeedBeam = useCallback(() => {
     setIsSpeedBeamActive(true);
-    console.log('Speed beam activated');
+    logger.log('Speed beam activated');
   }, []);
 
   const deactivateSpeedBeam = useCallback(() => {
     setIsSpeedBeamActive(false);
-    console.log('Speed beam deactivated');
+    logger.log('Speed beam deactivated');
   }, []);
 
   const activateShieldEffect = useCallback(() => {
     setIsShieldEffectActive(true);
-    console.log('Shield effect activated');
+    logger.log('Shield effect activated');
   }, []);
 
   const deactivateShieldEffect = useCallback(() => {
     setIsShieldEffectActive(false);
-    console.log('Shield effect deactivated');
+    logger.log('Shield effect deactivated');
   }, []);
 
   // Cleanup on unmount

@@ -9,3 +9,5 @@ export const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET;
 export const REDIS_URL = process.env.REDIS_URL;
 export const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 export const MASTER_ENCRYPTION_KEY = process.env.MASTER_ENCRYPTION_KEY;
+export const RESEND_API_KEY = process.env.RESEND_API_KEY;
+export const FROM_EMAIL = process.env.FROM_EMAIL;

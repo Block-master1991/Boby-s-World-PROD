@@ -97,6 +97,11 @@ service cloud.firestore {
       // Delete access: Generally, players should not delete their own accounts directly.
       // This should be an admin-only operation or a managed process.
       allow delete: if false;
+
+      // Passkeys subcollection: Server (Admin SDK) access only via API.
+      match /passkeys/{credentialId} {
+        allow read, write: if false; // Deny all direct client access
+      }
     }
   }
 }

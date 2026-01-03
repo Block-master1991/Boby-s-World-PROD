@@ -1,8 +1,8 @@
-// src/utils/modelLoader.ts
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
+import { logger } from './logger';
 
 type TypedArray = Int8Array | Uint8Array | Uint8ClampedArray | Int16Array | Uint16Array | Int32Array | Uint32Array | Float32Array | Float64Array;
 
@@ -56,7 +56,7 @@ class MemoryManager {
       this.cleanup();
     }
     if (this.currentMemoryUsage + size > this.MAX_MEMORY_USAGE) {
-      console.warn(`Cannot cache model ${path}, not enough memory.`);
+      logger.warn(`Cannot cache model ${path}, not enough memory.`);
       return;
     }
 
@@ -290,7 +290,7 @@ class WorkerManager {
   }
 
   private handleWorkerError(event: ErrorEvent) {
-    console.error('Worker error:', event.error);
+    logger.error('Worker error:', event.error);
     // It's important to find which task failed to reject its promise.
     // This is a simplified error handling. A more robust solution would
     // track which worker was running which task.
@@ -391,7 +391,7 @@ class ModelGrouper {
     if (!group) {
       const modelFromCache = memoryManager.getModel(path);
       if (!modelFromCache) {
-        console.warn(`[ModelGrouper] Base model not found in cache for path: ${path}`);
+        logger.warn(`[ModelGrouper] Base model not found in cache for path: ${path}`);
         return null;
       }
       group = { model: modelFromCache, instances: new Map() };
@@ -582,7 +582,7 @@ class LODManager {
   }
 
   updateLODDistances(qualityLevel: number) {
-    console.log(`[LODManager] Updating LOD distances with quality level: ${qualityLevel}`);
+    logger.log(`[LODManager] Updating LOD distances with quality level: ${qualityLevel}`);
     // In a full implementation, this would adjust LOD distances on relevant objects
   }
 }
@@ -791,7 +791,7 @@ class RetryManager {
     // OFFLINE-FIRST: Always try IndexedDB first, never load from network during gameplay
     const cachedData = await getModel(path); // Use full path as key for consistency
     if (cachedData) {
-      console.log(`[RetryManager] ✓ Loading model from IndexedDB (offline-first): ${path}`);
+      logger.log(`[RetryManager] ✓ Loading model from IndexedDB (offline-first): ${path}`);
       const loader = new GLTFLoader();
       if (this._dracoLoader) {
         loader.setDRACOLoader(this._dracoLoader);
@@ -810,7 +810,7 @@ class RetryManager {
 
     // EMERGENCY FALLBACK: Only in development or when asset is missing from preload
     if (process.env.NODE_ENV === 'development') {
-      console.warn(`[RetryManager] ⚠️ Asset not found in IndexedDB, attempting emergency network load: ${path}`);
+      logger.warn(`[RetryManager] ⚠️ Asset not found in IndexedDB, attempting emergency network load: ${path}`);
       try {
         const response = await fetch(path);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
@@ -833,10 +833,10 @@ class RetryManager {
           model = await compressionManager.compressModel(model, level);
         }
 
-        console.log(`[RetryManager] ✓ Emergency load successful and cached: ${path}`);
+        logger.log(`[RetryManager] ✓ Emergency load successful and cached: ${path}`);
         return model;
       } catch (networkError) {
-        console.error(`[RetryManager] ✗ Emergency network load failed for: ${path}`, networkError);
+        logger.error(`[RetryManager] ✗ Emergency network load failed for: ${path}`, networkError);
         throw new Error(`Asset not available offline and network load failed: ${path}`);
       }
     }
@@ -930,7 +930,7 @@ export const loadGLTF = (path: string, compress: boolean = true, instanceId?: st
     const id = instanceId || path;
     occlusionCullingManager.addObject(id, model);
   }).catch(error => {
-    console.error(`Failed to load model for occlusion culling: ${path}`, error);
+    logger.error(`Failed to load model for occlusion culling: ${path}`, error);
   });
   return promise;
 };
@@ -960,14 +960,14 @@ class ModelLoader {
     // Initialize DRACOLoader
     this.dracoLoader = new DRACOLoader();
     this.dracoLoader.setDecoderPath('/libs/draco/'); // Set the path to the Draco decoder
-    console.log("[ModelLoader] DRACOLoader initialized. Decoder path set.");
+    logger.log("[ModelLoader] DRACOLoader initialized. Decoder path set.");
 
     // Preload the DRACO decoder files
     await this.dracoLoader.preload();
-    console.log("[ModelLoader] DRACOLoader decoder preloaded.");
+    logger.log("[ModelLoader] DRACOLoader decoder preloaded.");
 
     retryManager.setDracoLoader(this.dracoLoader); // Pass dracoLoader to RetryManager
-    console.log("[ModelLoader] DRACOLoader passed to RetryManager.");
+    logger.log("[ModelLoader] DRACOLoader passed to RetryManager.");
 
     await Promise.all([
       Promise.resolve(workerManager),
@@ -987,7 +987,7 @@ class ModelLoader {
     lodManager.setCamera(camera);
 
     this.initialized = true;
-    console.log("ModelLoader and all subsystems initialized.");
+    logger.log("ModelLoader and all subsystems initialized.");
   }
 
   async loadModel(

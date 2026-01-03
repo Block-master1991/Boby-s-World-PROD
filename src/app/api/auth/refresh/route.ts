@@ -1,19 +1,19 @@
 import { NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
 import { cookies } from 'next/headers';
 import { JWTManager } from '@/lib/jwt-utils';
 import { createAuthErrorResponse } from '@/lib/auth-middleware';
 import { getClientIp } from '@/lib/request-utils';
-import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
-import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+
 export const POST = withCsrfProtection(async (request: Request) => {
-  
-  console.log('[REFRESH] Received refresh token request');
+
+  logger.log('[REFRESH] Received refresh token request');
   try {
     const cookieStore = await cookies();
     const refreshTokenValue = cookieStore.get('refreshToken')?.value;
-    console.log('[REFRESH] Refresh token value from cookies:', refreshTokenValue ? 'Found' : 'Not found');
-    const nonce = cookieStore.get('nonce')?.value; // مثال: إذا nonce مخزن في كوكيز
-    
+    const nonce = cookieStore.get('nonce')?.value;
 
     if (!refreshTokenValue) {
       const response = createAuthErrorResponse('Refresh token not found', 'NO_REFRESH_TOKEN', 401);
@@ -24,29 +24,30 @@ export const POST = withCsrfProtection(async (request: Request) => {
     }
 
     if (!nonce) {
-      console.warn('[REFRESH] Missing nonce in request cookies');
+      logger.warn('[REFRESH] Missing nonce in request cookies');
       const response = createAuthErrorResponse('Missing nonce, invalid session', 'MISSING_NONCE', 401);
       response.cookies.delete('accessToken');
       response.cookies.delete('refreshToken');
       response.cookies.delete('nonce');
       return response;
     }
-console.log('[REFRESH] Refresh token and nonce found, verifying match');
+
     const userAgent = request.headers.get('user-agent') || 'unknown';
-    const ip = getClientIp(request); // استعمل دالة موجودة لديك لقراءة IP العميل
+    const ip = getClientIp(request);
 
     const payload = await JWTManager.verifyRefreshToken(refreshTokenValue, userAgent, ip);
-    
+
     if (!payload) {
-      console.warn('[REFRESH] Refresh token verification failed (null payload)');
+      logger.warn('[REFRESH] Refresh token verification failed (null payload)');
       const response = createAuthErrorResponse('Invalid refresh token.', 'INVALID_REFRESH_TOKEN', 403);
       response.cookies.delete('accessToken');
       response.cookies.delete('refreshToken');
       response.cookies.delete('nonce');
       return response;
     }
+
     if (payload.nonce !== nonce) {
-      console.warn(`[REFRESH] Nonce mismatch. Token nonce: ${payload.nonce}, Cookie nonce: ${nonce}`);
+      logger.warn(`[REFRESH] Nonce mismatch. Token nonce: ${payload.nonce}, Cookie nonce: ${nonce}`);
       const response = createAuthErrorResponse('Invalid nonce. Session mismatch.', 'NONCE_MISMATCH', 403);
       response.cookies.delete('accessToken');
       response.cookies.delete('refreshToken');
@@ -55,16 +56,7 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
     }
 
     const result = await JWTManager.refreshAccessToken(refreshTokenValue, userAgent, ip);
-    console.log('[REFRESH] Refresh result:', !!result);
-
-    if (result) {
-      console.log('[REFRESH] New tokens issued');
-    } else {
-      console.warn('[REFRESH] Refresh token invalid or expired');
-    }
-
     if (!result) {
-      // حذف الكوكيز
       const response = createAuthErrorResponse('Invalid or expired refresh token. Please login again.', 'INVALID_REFRESH_TOKEN', 401);
       response.cookies.delete('accessToken');
       response.cookies.delete('refreshToken');
@@ -79,38 +71,18 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
       message: 'Tokens refreshed successfully'
     });
 
-    const requestHost = request.headers.get('host') || undefined; // Get the Host header
-    console.log(`[REFRESH] Request Host: ${requestHost}`); // Add this log
-    const secureOptions = JWTManager.createSecureCookieOptions(15 * 60, requestHost); // 15 دقيقة
-    response.cookies.set('accessToken', accessToken, secureOptions);
+    const requestHost = request.headers.get('host') || undefined;
+    const refreshOptions = JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost);
 
-    const refreshOptions = JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost); // 7 أيام
+    response.cookies.set('accessToken', accessToken, JWTManager.createSecureCookieOptions(15 * 60, requestHost));
     response.cookies.set('refreshToken', newRefreshToken, refreshOptions);
+    response.cookies.set('nonce', nonce, refreshOptions);
 
-    // === إصدار CSRF Token جديد ===
-    // يجب استخراج publicKey من Access Token الجديد أو من payload الـ refreshToken
-      // بما أن withCsrfProtection قد تحقق من Access Token، يمكننا استخدام payload.sub
-      const accessTokenPayload = await JWTManager.verifyAccessToken(accessToken, request.headers.get('user-agent') || 'unknown', getClientIp(request));
-      if (accessTokenPayload && accessTokenPayload.sub) {
-        const csrfToken = await CSRFManager.getOrCreateToken(accessTokenPayload.sub);
-      response.cookies.set('csrfToken', csrfToken, {
-        httpOnly: false,
-        secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-        sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-        maxAge: 30 * 60, // 30 دقيقة
-        path: '/',
-      });
-      console.log('[REFRESH] New CSRF token issued and set in cookie.');
-    } else {
-      console.warn('[REFRESH] Could not get publicKey to issue new CSRF token after refresh.');
-    }
-    
-    return response;
+    return await setCsrfTokenResponse(response, payload.sub, requestHost);
 
   } catch (error) {
-    console.error('Token refresh error:', error);
+    logger.error('Token refresh error:', error instanceof Error ? (error as Error) : undefined);
     const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-    // حذف التوكنات عند الخطأ
     const response = NextResponse.json({
       error: 'Token refresh failed',
       details: process.env.NODE_ENV === 'development' ? errorMessage : 'Internal server error during token refresh.',
@@ -123,5 +95,4 @@ console.log('[REFRESH] Refresh token and nonce found, verifying match');
 
     return response;
   }
-
 });

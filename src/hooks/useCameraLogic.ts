@@ -1,9 +1,9 @@
-
 'use client';
 
 import * as React from 'react';
 import * as THREE from 'three';
 import type { MutableRefObject } from 'react';
+import { logger } from '@/utils/logger';
 
 const CAMERA_FOLLOW_OFFSET = new THREE.Vector3(0, 2, -5);
 const CAMERA_LERP_FACTOR = 0.15;
@@ -24,7 +24,7 @@ export const useCameraLogic = ({
 
   const initializeCamera = React.useCallback(() => {
     if (!mountRef.current) {
-      console.warn("[useCameraLogic] Mount point not ready for camera initialization.");
+      logger.warn("[useCameraLogic] Mount point not ready for camera initialization.");
       return;
     }
 

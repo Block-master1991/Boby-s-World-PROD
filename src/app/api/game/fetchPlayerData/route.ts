@@ -1,20 +1,17 @@
 import { NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
-  console.log("[API] /api/game/fetchPlayerData called"); // Updated log message
+  logger.log("[API] /api/game/fetchPlayerData called"); // Updated log message
 
   try {
     await initializeAdminApp(); // Initialize inside the handler
     const db = getFirestore();
-    
-    const userPublicKey = request.user?.sub; // Get public key from authenticated user
 
-    if (!userPublicKey) {
-      return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
-    }
+    const userPublicKey = request.user.sub;
 
     const playerDocRef = db.collection('players').doc(userPublicKey);
     const docSnap = await playerDocRef.get();
@@ -40,7 +37,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
       inventory: data?.inventory || [],
     });
   } catch (error) {
-    console.error('[fetchPlayerData] Error:', error); // Updated log message
+    logger.error('[fetchPlayerData] Error:', error as Error); // Updated log message
     let errorMessage = error instanceof Error ? error.message : 'Failed to fetch player data';
     let statusCode = 500;
 

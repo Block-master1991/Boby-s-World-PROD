@@ -1,17 +1,22 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
+import { logger } from '@/utils/logger';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
-export async function POST(request: NextRequest): Promise<Response> {
+export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
     try {
-        console.log('🔄 بدء عملية النقل من API...');
+        logger.log('🔄 Starting migration process from API...');
 
-        // تشغيل migration script
+        // Run migration script
         const { spawn } = require('child_process');
         const path = require('path');
 
         const scriptPath = path.join(process.cwd(), 'scripts', 'migrate-inventory.js');
 
         return new Promise((resolve) => {
-            // تمرير متغيرات البيئة للعملية الفرعية
+            // Pass environment variables to child process
             const envVars = {
                 ...process.env,
                 FIREBASE_PROJECT_ID: process.env.FIREBASE_PROJECT_ID,
@@ -30,26 +35,30 @@ export async function POST(request: NextRequest): Promise<Response> {
 
             migrationProcess.stdout.on('data', (data: Buffer) => {
                 const text = data.toString();
-                console.log('Migration output:', text);
+                logger.log('Migration output:', text);
                 output += text;
             });
 
             migrationProcess.stderr.on('data', (data: Buffer) => {
                 const text = data.toString();
-                console.error('Migration error:', text);
+                logger.error('Migration error:', new Error(text));
                 errorOutput += text;
             });
 
             migrationProcess.on('close', (code: number) => {
-                console.log(`Migration process exited with code ${code}`);
+                logger.log(`Migration process exited with code ${code}`);
 
                 if (code === 0) {
-                    resolve(NextResponse.json({
+                    const response = NextResponse.json({
                         success: true,
                         message: 'Migration completed successfully',
                         output: output,
                         code: code
-                    }));
+                    });
+
+                    // Use unified helper to update CSRF
+                    const requestHost = request.headers.get('host') || undefined;
+                    resolve(setCsrfTokenResponse(response, request.user.sub, requestHost));
                 } else {
                     resolve(NextResponse.json({
                         success: false,
@@ -61,8 +70,8 @@ export async function POST(request: NextRequest): Promise<Response> {
                 }
             });
 
-            migrationProcess.on('error', (error: Error) => {
-                console.error('Failed to start migration process:', error);
+            migrationProcess.on('error', (error: any) => {
+                logger.error('Failed to start migration process:', error as Error);
                 resolve(NextResponse.json({
                     success: false,
                     error: 'Failed to start migration process',
@@ -72,7 +81,7 @@ export async function POST(request: NextRequest): Promise<Response> {
         });
 
     } catch (error) {
-        console.error('Error in migration API:', error);
+        logger.error('Error in migration API:', error as Error);
         return NextResponse.json(
             {
                 success: false,
@@ -82,14 +91,14 @@ export async function POST(request: NextRequest): Promise<Response> {
             { status: 500 }
         );
     }
-}
+}));
 
-export async function GET() {
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
     try {
-        // التحقق من حالة النقل السابقة
+        // Check previous migration status
         const admin = (await import('firebase-admin')).default;
 
-        // الحصول على Firebase admin instance
+        // Get Firebase admin instance
         const { initializeAdminApp } = await import('@/lib/firebase-admin');
         await initializeAdminApp();
         const db = admin.firestore();
@@ -112,7 +121,7 @@ export async function GET() {
         }
 
     } catch (error) {
-        console.error('Error checking migration status:', error);
+        logger.error('Error checking migration status:', error as Error);
         return NextResponse.json(
             {
                 success: false,
@@ -122,4 +131,4 @@ export async function GET() {
             { status: 500 }
         );
     }
-}
+});

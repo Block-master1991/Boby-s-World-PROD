@@ -1,4 +1,5 @@
 // Asset Validator - Ensures all required game assets are properly loaded and cached
+import { logger } from 'utils/logger';
 // Provides validation and integrity checks for offline-first gameplay
 
 import { getModel } from './indexedDB';
@@ -31,7 +32,7 @@ export interface AssetHealthReport {
  * Validate all game assets to ensure they're cached and accessible
  */
 export async function validateAllAssets(): Promise<ValidationResult> {
-    console.log('[AssetValidator] Starting comprehensive asset validation...');
+    logger.log('[AssetValidator] Starting comprehensive asset validation...');
 
     const result: ValidationResult = {
         isValid: true,
@@ -73,18 +74,18 @@ export async function validateAllAssets(): Promise<ValidationResult> {
                 }
             }
         } catch (error) {
-            console.warn(`[AssetValidator] Error validating ${asset.path}:`, error);
+            logger.warn(`[AssetValidator] Error validating ${asset.path}:`, error);
             result.corruptedAssets.push(asset.path);
             result.isValid = false;
         }
     }
 
-    console.log(`[AssetValidator] Validation complete: ${result.validAssets.length}/${result.totalChecked} assets valid`);
+    logger.log(`[AssetValidator] Validation complete: ${result.validAssets.length}/${result.totalChecked} assets valid`);
     if (result.missingAssets.length > 0) {
-        console.warn(`[AssetValidator] Missing assets: ${result.missingAssets.length}`);
+        logger.warn(`[AssetValidator] Missing assets: ${result.missingAssets.length}`);
     }
     if (result.corruptedAssets.length > 0) {
-        console.warn(`[AssetValidator] Corrupted assets: ${result.corruptedAssets.length}`);
+        logger.warn(`[AssetValidator] Corrupted assets: ${result.corruptedAssets.length}`);
     }
 
     return result;
@@ -98,7 +99,7 @@ async function validateSingleAsset(asset: AssetInfo): Promise<boolean> {
         const cachedData = await getModel(asset.path);
 
         if (!cachedData) {
-            console.log(`[AssetValidator] ✗ Asset missing: ${asset.path}`);
+            logger.log(`[AssetValidator] ✗ Asset missing: ${asset.path}`);
             return false;
         }
 
@@ -107,13 +108,13 @@ async function validateSingleAsset(asset: AssetInfo): Promise<boolean> {
         const isValidType = validateAssetType(cachedData, asset);
 
         if (!isValidSize || !isValidType) {
-            console.warn(`[AssetValidator] ⚠️ Asset validation failed for ${asset.path}: size=${isValidSize}, type=${isValidType}`);
+            logger.warn(`[AssetValidator] ⚠️ Asset validation failed for ${asset.path}: size=${isValidSize}, type=${isValidType}`);
             return false;
         }
 
         return true;
     } catch (error) {
-        console.error(`[AssetValidator] Error validating asset ${asset.path}:`, error);
+        logger.error(`[AssetValidator] Error validating asset ${asset.path}:`, error);
         return false;
     }
 }
@@ -132,7 +133,7 @@ function validateAssetSize(data: ArrayBuffer, asset: AssetInfo): boolean {
     const isValid = actualSizeBytes >= minSize && actualSizeBytes <= maxSize;
 
     if (!isValid) {
-        console.warn(`[AssetValidator] Size validation failed for ${asset.path}: expected ~${expectedSizeBytes} bytes, got ${actualSizeBytes} bytes`);
+        logger.warn(`[AssetValidator] Size validation failed for ${asset.path}: expected ~${expectedSizeBytes} bytes, got ${actualSizeBytes} bytes`);
     }
 
     return isValid;
@@ -328,7 +329,7 @@ export async function clearCorruptedAssets(): Promise<number> {
 
     // Note: This would need access to deleteAsset function from indexedDB
     // For now, just return the count
-    console.log(`[AssetValidator] Found ${validation.corruptedAssets.length} corrupted assets to clear`);
+    logger.log(`[AssetValidator] Found ${validation.corruptedAssets.length} corrupted assets to clear`);
 
     return validation.corruptedAssets.length;
 }

@@ -2,17 +2,19 @@ import { NextResponse } from 'next/server';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
-import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
-import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
-import { getActiveStoreItems } from '@/lib/server-items'; // To validate item existence
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+import { getActiveStoreItems } from '@/lib/server-items';
 import { Connection, PublicKey } from '@solana/web3.js';
 import { clusterApiUrl } from '@solana/web3.js';
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from '@/lib/constants';
 import { DEDICATED_RPC_ENDPOINT } from '@/lib/server-constants'; // Moved to server-side constants
+import { WebAuthnUtils } from '@/lib/webauthn-utils';
+import { WebAuthnTransactionSigner } from '@/lib/WebAuthnTransactionSigner';
+import { logger } from '@/utils/logger';
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
-  console.log("[API] /api/game/purchaseItem called");
+  logger.log("[API] /api/game/purchaseItem called");
 
   const userPublicKey = request.user?.sub;
 
@@ -20,16 +22,16 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
   }
 
-  // التحقق من أن userPublicKey هو مفتاح عام صالح لـ Solana
+  // Verify that userPublicKey is a valid Solana public key
   try {
     new PublicKey(userPublicKey);
   } catch (e) {
-    console.error(`[API] Invalid user public key format: ${userPublicKey}`, e);
+    logger.error(`[API] Invalid user public key format: ${userPublicKey}`, e as Error);
     return NextResponse.json({ error: 'Invalid user public key format.' }, { status: 400 });
   }
 
   try {
-    const { itemId, quantity, transactionSignature } = await request.json();
+    const { itemId, quantity, transactionSignature, transactionAuthSignature } = await request.json();
 
     if (!itemId || typeof quantity !== 'number' || quantity <= 0 || !transactionSignature) {
       return NextResponse.json({ error: 'Invalid request parameters.' }, { status: 400 });
@@ -45,12 +47,12 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     await initializeAdminApp();
     const db = getFirestore();
 
-    // التحقق مما إذا كان توقيع المعاملة قد تم استخدامه بالفعل
+    // Check if transaction signature has already been used
     const usedSignatureDocRef = db.collection('usedTransactionSignatures').doc(transactionSignature);
     const usedSignatureDoc = await usedSignatureDocRef.get();
 
     if (usedSignatureDoc.exists) {
-      console.error(`[API] Duplicate transaction signature detected: ${transactionSignature}`);
+      logger.error(`[API] Duplicate transaction signature detected: ${transactionSignature}`);
       return NextResponse.json({ error: 'This transaction signature has already been used.' }, { status: 409 }); // 409 Conflict
     }
 
@@ -59,13 +61,13 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     // Verify the transactionSignature on the backend with retry logic for mobile
     const connection = new Connection(DEDICATED_RPC_ENDPOINT || clusterApiUrl('mainnet-beta'), 'confirmed');
 
-    console.log(`[API] Verifying transaction signature: ${transactionSignature}`);
-    console.log(`[API] Starting transaction verification with maxAttempts: 6, delay: 5000ms`);
+    logger.log(`[API] Verifying transaction signature: ${transactionSignature}`);
+    logger.log(`[API] Starting transaction verification with maxAttempts: 6, delay: 5000ms`);
 
     let transaction = null;
     let attempts = 0;
-    const maxAttempts = 6; // زيادة إلى 6 محاولات كما كان سابقاً
-    const delayBetweenAttempts = 5000; // زيادة إلى 5 ثوانٍ كما كان سابقاً
+    const maxAttempts = 6; // Increased to 6 attempts as before
+    const delayBetweenAttempts = 5000; // Increased to 5 seconds as before
 
     while (attempts < maxAttempts && !transaction) {
       try {
@@ -75,12 +77,12 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
         });
 
         if (!transaction && attempts < maxAttempts - 1) {
-          console.log(`[API] Transaction not found, attempt ${attempts + 1}/${maxAttempts}. Retrying in ${delayBetweenAttempts}ms...`);
+          logger.log(`[API] Transaction not found, attempt ${attempts + 1}/${maxAttempts}. Retrying in ${delayBetweenAttempts}ms...`);
           await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
           attempts++;
         }
       } catch (error) {
-        console.error(`[API] Error fetching transaction on attempt ${attempts + 1}:`, error);
+        logger.error(`[API] Error fetching transaction on attempt ${attempts + 1}:`, error as Error);
         if (attempts < maxAttempts - 1) {
           await new Promise(resolve => setTimeout(resolve, delayBetweenAttempts));
           attempts++;
@@ -91,90 +93,142 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     }
 
     if (!transaction) {
-      console.error(`[API] Transaction not found after ${maxAttempts} attempts: ${transactionSignature}`);
+      logger.error(`[API] Transaction not found after ${maxAttempts} attempts: ${transactionSignature}`);
       return NextResponse.json({
         error: 'Transaction not found or not confirmed. Please wait a moment and try again.',
         code: 'TRANSACTION_NOT_FOUND'
       }, { status: 404 });
     }
 
-    // تحقق من حالة المعاملة
+    // Verify transaction status
     if (transaction.meta?.err) {
-      console.error(`[API] Transaction failed: ${transactionSignature}, Error: ${transaction.meta.err}`);
+      logger.error(`[API] Transaction failed: ${transactionSignature}, Error: ${transaction.meta.err}`);
       return NextResponse.json({ error: 'Transaction failed on Solana blockchain.' }, { status: 400 });
     }
 
-    // استخراج تفاصيل المعاملة
-    const sender = transaction.transaction.message.accountKeys[0].pubkey.toBase58(); // عادةً ما يكون أول مفتاح حساب هو المرسل
-    // ستحتاج إلى تحديد عنوان المستلم الفعلي (مثل عنوان محفظة المتجر أو برنامج العقد الذكي)
-    // وسعر العنصر والرمز المميز المتوقعين.
-    // هذه القيم يجب أن تأتي من مكان آمن (مثل متغيرات البيئة أو قاعدة البيانات)
-    // وليس من طلب الواجهة الأمامية.
+    // Extract transaction details
+    const sender = transaction.transaction.message.accountKeys[0].pubkey.toBase58(); // Usually the first account key is the sender
+    // You will need to specify the actual recipient address (like store wallet address or smart contract program)
+    // and expected item price and token.
+    // These values should come from a secure place (like environment variables or database)
+    // and not from the frontend request.
 
-    // مثال على التحقق
+    // Example verification
     if (!STORE_TREASURY_WALLET_ADDRESS || !BOBY_TOKEN_MINT_ADDRESS) {
-      console.error("[API] Missing required environment variables for Solana verification.");
+      logger.error("[API] Missing required environment variables for Solana verification.");
       return NextResponse.json({ error: 'Server configuration error: Missing Solana wallet or token mint addresses.' }, { status: 500 });
     }
     const expectedReceiverPublicKey = new PublicKey(STORE_TREASURY_WALLET_ADDRESS);
     const expectedTokenMintPublicKey = new PublicKey(BOBY_TOKEN_MINT_ADDRESS);
-    const expectedAmount = itemDefinition.price * quantity; // افترض أن itemDefinition.price موجود
+    const expectedAmount = itemDefinition.price * quantity; // Assume itemDefinition.price exists
 
     let amountTransferred = 0;
     let tokenMint = '';
 
-    console.log(`[API] Analyzing transaction balances for receiver: ${expectedReceiverPublicKey.toBase58()}`);
+    logger.log(`[API] Analyzing transaction balances for receiver: ${expectedReceiverPublicKey.toBase58()}`);
 
-    // البحث عن تحويلات SPL Token أو SOL مع تحسين التحليل
+    // Search for SPL Token transfers or SOL with improved analysis
     if (transaction.meta?.postTokenBalances && transaction.meta.preTokenBalances) {
-      console.log(`[API] Found ${transaction.meta.postTokenBalances.length} post balances and ${transaction.meta.preTokenBalances.length} pre balances`);
+      logger.log(`[API] Found ${transaction.meta.postTokenBalances.length} post balances and ${transaction.meta.preTokenBalances.length} pre balances`);
 
-      // تحقق من تحويلات SPL Token
+      // Check SPL Token transfers
       for (const postBalance of transaction.meta.postTokenBalances) {
         const preBalance = transaction.meta.preTokenBalances.find(pb => pb.accountIndex === postBalance.accountIndex);
         if (preBalance && postBalance.uiTokenAmount && preBalance.uiTokenAmount) {
           if (postBalance.uiTokenAmount.uiAmount !== null && preBalance.uiTokenAmount.uiAmount !== null) {
             const diff = postBalance.uiTokenAmount.uiAmount - preBalance.uiTokenAmount.uiAmount;
-            console.log(`[API] Account ${postBalance.accountIndex}: owner=${postBalance.owner}, mint=${postBalance.mint}, diff=${diff}`);
+            logger.log(`[API] Account ${postBalance.accountIndex}: owner=${postBalance.owner}, mint=${postBalance.mint}, diff=${diff}`);
 
             if (diff > 0 && postBalance.owner === expectedReceiverPublicKey.toBase58()) {
               amountTransferred = diff;
               tokenMint = postBalance.mint;
-              console.log(`[API] Found transfer to treasury: ${amountTransferred} tokens, mint: ${tokenMint}`);
+              logger.log(`[API] Found transfer to treasury: ${amountTransferred} tokens, mint: ${tokenMint}`);
               break;
             }
           }
         }
       }
     } else {
-      console.warn(`[API] Transaction missing token balance data. postTokenBalances: ${!!transaction.meta?.postTokenBalances}, preTokenBalances: ${!!transaction.meta?.preTokenBalances}`);
+      logger.warn(`[API] Transaction missing token balance data. postTokenBalances: ${!!transaction.meta?.postTokenBalances}, preTokenBalances: ${!!transaction.meta?.preTokenBalances}`);
     }
 
     if (sender !== userPublicKey) {
-      console.error(`[API] Transaction sender mismatch. Expected: ${userPublicKey}, Got: ${sender}`);
+      logger.error(`[API] Transaction sender mismatch. Expected: ${userPublicKey}, Got: ${sender}`);
       return NextResponse.json({ error: 'Transaction sender does not match authenticated user.' }, { status: 400 });
     }
 
-    if (tokenMint !== expectedTokenMintPublicKey.toBase58()) { // لا نحتاج للتحقق من SOL إذا كنا نستخدم BOBY فقط
-      console.error(`[API] Token mint mismatch. Expected: ${expectedTokenMintPublicKey.toBase58()}, Got: ${tokenMint}`);
+    if (tokenMint !== expectedTokenMintPublicKey.toBase58()) { // We don't need to check SOL if we're using BOBY only
+      logger.error(`[API] Token mint mismatch. Expected: ${expectedTokenMintPublicKey.toBase58()}, Got: ${tokenMint}`);
       return NextResponse.json({ error: 'Invalid token used for purchase. Expected BOBY token.' }, { status: 400 });
     }
 
     if (amountTransferred < expectedAmount) {
-      console.error(`[API] Insufficient amount transferred. Expected: ${expectedAmount}, Got: ${amountTransferred}`);
+      logger.error(`[API] Insufficient amount transferred. Expected: ${expectedAmount}, Got: ${amountTransferred}`);
       return NextResponse.json({ error: 'Insufficient amount paid for the item.' }, { status: 400 });
     }
 
-    console.log(`[API] Transaction ${transactionSignature} successfully verified.`);
+    // --- STEP-UP AUTH VERIFICATION ---
+    // Mandatory for purchases > 50,000 (approx. $500 depending on price)
+    if (expectedAmount > 50000 || transactionAuthSignature) {
+      logger.log(`[API] Verifying Step-up Auth for high-value purchase: ${expectedAmount} Boby`);
 
-    // تسجيل توقيع المعاملة لمنع التكرار
+      if (!transactionAuthSignature) {
+        return NextResponse.json({ error: 'Security verification required for high-value transactions.' }, { status: 403 });
+      }
+
+      // 1. Get user's active passkey for verification
+      // For simplicity, we assume the user has at least one passkey.
+      // In a real scenario, the client could provide the credentialId used.
+      const passkeys = await db.collection('players').doc(userPublicKey).collection('passkeys').get();
+      if (passkeys.empty) {
+        return NextResponse.json({ error: 'Passkey required for high-value security verification.' }, { status: 403 });
+      }
+
+      // We verify against any of the user's passkeys (usually they only have 1 active)
+      let verified = false;
+
+      // Reconstruct the expected challenge from the signed payload
+      const expectedChallenge = WebAuthnTransactionSigner.generateTransactionChallenge(transactionAuthSignature.payload);
+
+      // --- STRICT PAYLOAD VALIDATION ---
+      // Verify that the user actually signed FOR the item they are trying to buy
+      const signedPayload = transactionAuthSignature.payload;
+      if (signedPayload.itemId !== itemId || Number(signedPayload.quantity) !== quantity) {
+        logger.error(`[API] Payload mismatch! Signed: ${signedPayload.itemId}x${signedPayload.quantity}, Requested: ${itemId}x${quantity}`);
+        return NextResponse.json({ error: 'Security verification data does not match the purchase request.' }, { status: 400 });
+      }
+
+      for (const pkDoc of passkeys.docs) {
+        const pkData = pkDoc.data();
+        const isMatch = await WebAuthnUtils.verifyAuthenticationResponse(
+          pkData as any,
+          transactionAuthSignature.response,
+          expectedChallenge,
+          request.headers.get('origin') || ''
+        );
+        if (isMatch) {
+          verified = true;
+          break;
+        }
+      }
+
+      if (!verified) {
+        logger.error(`[API] Step-up Auth verification FAILED for user: ${userPublicKey}`);
+        return NextResponse.json({ error: 'Security verification failed. High-value transactions require a valid passkey signature.' }, { status: 401 });
+      }
+      logger.log(`[API] Step-up Auth verification SUCCESS for user: ${userPublicKey}`);
+    }
+
+    logger.log(`[API] Transaction ${transactionSignature} successfully verified.`);
+
+    // Record transaction signature to prevent reuse
     await usedSignatureDocRef.set({
       userId: userPublicKey,
       timestamp: FieldValue.serverTimestamp(),
       itemId: itemId,
       quantity: quantity,
     });
-    console.log(`[API] Transaction signature ${transactionSignature} recorded as used.`);
+    logger.log(`[API] Transaction signature ${transactionSignature} recorded as used.`);
 
     const itemsToAdd = Array(quantity).fill(null).map(() => ({
       id: itemDefinition.id,
@@ -192,25 +246,15 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     const response = NextResponse.json({ message: `${quantity} ${itemDefinition.name}(s) added to inventory.`, newItems: itemsToAdd });
 
-    // إصدار CSRF Token جديد بعد الطلب الناجح
+    // Use unified helper to update CSRF
     const requestHost = request.headers.get('host') || undefined;
-    const csrfToken = await CSRFManager.getOrCreateToken(userPublicKey);
-    response.cookies.set('csrfToken', csrfToken, {
-      httpOnly: false,
-      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-      maxAge: 30 * 60, // 30 دقيقة
-      path: '/',
-    });
-    console.log('[purchaseItem] New CSRF token issued and set in cookie.');
-
-    return response;
+    return await setCsrfTokenResponse(response, userPublicKey, requestHost);
   } catch (error) {
-    console.error("Error processing item purchase:", error);
-    let errorMessage = 'Failed to process item purchase. Please try again.'; // رسالة عامة للمستخدم
+    logger.error("Error processing item purchase:", error as Error);
+    let errorMessage = 'Failed to process item purchase. Please try again.'; // General message for user
     let statusCode = 500;
 
-    // يمكن الاحتفاظ برسائل خطأ محددة إذا كانت لا تكشف معلومات حساسة
+    // Can keep specific error messages if they don't reveal sensitive information
     if (error instanceof Error && error.message.includes("Authentication required")) {
       errorMessage = "Authentication required.";
       statusCode = 401;
@@ -244,10 +288,10 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
     } else if (error instanceof Error && error.message.includes("Missing required environment variables for Solana verification.")) {
       errorMessage = "Server configuration error. Please contact support.";
       statusCode = 500;
-    } else if (error instanceof Error && error.message.includes("Server busy, try again later.")) { // من rateLimit
+    } else if (error instanceof Error && error.message.includes("Server busy, try again later.")) { // From rateLimit
       errorMessage = "Server busy, please try again later.";
       statusCode = 503;
-    } else if (error instanceof Error && error.message.includes("Too many requests. Please try again later.")) { // من rateLimit
+    } else if (error instanceof Error && error.message.includes("Too many requests. Please try again later.")) { // From rateLimit
       errorMessage = "Too many requests. Please try again later.";
       statusCode = 429;
     }

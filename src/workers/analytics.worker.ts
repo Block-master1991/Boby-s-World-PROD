@@ -1,6 +1,8 @@
 // Analytics and Performance Monitoring WebWorker
 // Handles performance data processing and analytics in background
 
+import { logger } from 'utils/logger';
+
 interface PerformanceEvent {
     type: 'metric' | 'error' | 'user_action' | 'game_event';
     timestamp: number;
@@ -339,7 +341,7 @@ self.onmessage = async (event) => {
             break;
 
         default:
-            console.warn(`[AnalyticsWorker] Unknown message type: ${type}`);
+            logger.warn(`[AnalyticsWorker] Unknown message type: ${type}`);
     }
 };
 

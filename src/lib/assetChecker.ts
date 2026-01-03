@@ -3,6 +3,7 @@
 
 import { getAsset } from './indexedDB';
 import { GAME_ASSET_MANIFEST, AssetInfo } from './gameAssetManifest';
+import { logger } from '@/utils/logger';
 
 export interface AssetCheckResult {
     totalAssets: number;
@@ -16,7 +17,7 @@ export interface AssetCheckResult {
  * Check which assets are present in IndexedDB
  */
 export async function checkAssetAvailability(): Promise<AssetCheckResult> {
-    console.log('[AssetChecker] Starting parallel asset availability check...');
+    logger.log('[AssetChecker] Starting parallel asset availability check...');
     const startTime = performance.now();
 
     // Parallel check using Promise.all for much faster execution
@@ -54,12 +55,12 @@ export async function checkAssetAvailability(): Promise<AssetCheckResult> {
         checkDuration: duration
     };
 
-    console.log(`[AssetChecker] Parallel check complete in ${duration.toFixed(0)}ms:`);
-    console.log(`  ✓ Present: ${presentCount}/${GAME_ASSET_MANIFEST.length}`);
-    console.log(`  ✗ Missing: ${missingAssets.length}`);
+    logger.log(`[AssetChecker] Parallel check complete in ${duration.toFixed(0)}ms:`);
+    logger.log(`  ✓ Present: ${presentCount}/${GAME_ASSET_MANIFEST.length}`);
+    logger.log(`  ✗ Missing: ${missingAssets.length}`);
 
     if (!allPresent) {
-        console.log('[AssetChecker] Missing assets:', missingAssets.map(a => a.path));
+        logger.log('[AssetChecker] Missing assets:', missingAssets.map(a => a.path));
     }
 
     return result;
@@ -75,10 +76,11 @@ export async function checkCriticalAssets(): Promise<boolean> {
         try {
             const cached = await getAsset(asset.path);
             if (!cached || !cached.data) {
-                console.warn(`[AssetChecker] Critical asset missing: ${asset.path}`);
+                logger.warn(`[AssetChecker] Critical asset missing: ${asset.path}`);
                 return false;
             }
         } catch {
+            logger.error(`[AssetChecker] Error checking critical asset ${asset.path}`);
             return false;
         }
     }

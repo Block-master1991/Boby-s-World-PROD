@@ -18,6 +18,7 @@ import type { MutableRefObject } from 'react';
 import { Octree } from '../lib/Octree'; // Import Octree
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 import { GameObject } from '@/types/game';
+import { logger } from '@/utils/logger';
 
 const NORMAL_DOG_SPEED = 6.0; // Normal walking speed (units per second)
 const SPRINT_DOG_SPEED = 18.0; // Sprinting speed (units per second)
@@ -100,11 +101,11 @@ export const useDogLogic = ({
                 // Try to load from IndexedDB first
                 const cachedData = await getModel(modelName);
                 if (cachedData) {
-                    console.log(`[useDogLogic] Loading dog model from IndexedDB: ${modelName}`);
+                    logger.log(`[useDogLogic] Loading dog model from IndexedDB: ${modelName}`);
                     const gltf = await gltfLoader.parseAsync(cachedData, ''); // Pass empty string for path
                     return gltf;
                 } else {
-                    console.log(`[useDogLogic] Fetching dog model from network: ${modelPath}`);
+                    logger.log(`[useDogLogic] Fetching dog model from network: ${modelPath}`);
                     const response = await fetch(modelPath);
                     if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
                     const arrayBuffer = await response.arrayBuffer();
@@ -113,9 +114,9 @@ export const useDogLogic = ({
                     return gltf;
                 }
             } catch (error) {
-                console.error(`[useDogLogic] Error loading or caching model ${modelName}:`, error);
+                logger.error(`[useDogLogic] Error loading or caching model ${modelName}:`, error);
                 // Fallback to direct network load if IndexedDB fails or model is not found
-                console.log(`[useDogLogic] Falling back to direct network load for: ${modelPath}`);
+                logger.log(`[useDogLogic] Falling back to direct network load for: ${modelPath}`);
                 return new Promise((resolve, reject) => {
                     gltfLoader.load(modelPath, resolve, undefined, reject);
                 });
@@ -165,7 +166,7 @@ export const useDogLogic = ({
                 };
             }
         }).catch((error: Error) => { // Catch errors from loadModel promise
-            console.error('Error loading dog GLB model (final catch):', error);
+            logger.error('Error loading dog GLB model (final catch):', error);
             const dogGeometry = new THREE.BoxGeometry(DOG_MODEL_SCALE, DOG_MODEL_SCALE, DOG_MODEL_SCALE);
             const dogMaterial = new THREE.MeshStandardMaterial({ color: 0xA0522D });
             const fallbackDogMesh = new THREE.Mesh(dogGeometry, dogMaterial);

@@ -1,4 +1,5 @@
 import { initializeAdminApp } from './firebase-admin';
+import { logger } from 'utils/logger';
 import { getFirestore, FieldValue, Transaction, Firestore } from 'firebase-admin/firestore';
 import { randomBytes } from 'crypto';
 
@@ -28,7 +29,7 @@ export class CSRFManager {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    console.log(`[CSRFManager] Generated CSRF token for session ${sessionId}. Token: ${token.substring(0, 5)}... Expiry: ${new Date(expiry).toISOString()}`);
+    logger.log(`[CSRFManager] Generated CSRF token for session ${sessionId}. Token: ${token.substring(0, 5)}... Expiry: ${new Date(expiry).toISOString()}`);
     return token;
   }
 
@@ -48,20 +49,20 @@ export class CSRFManager {
       const docSnap = await transaction.get(docRef);
 
       if (!docSnap.exists) {
-        console.warn(`[CSRFManager] No CSRF token found for session ${sessionId}.`);
+        logger.warn(`[CSRFManager] No CSRF token found for session ${sessionId}.`);
         return { success: false, reason: 'not_found' };
       }
 
       const storedData = docSnap.data() as { token: string; expiry: number };
 
       if (storedData.expiry < Date.now()) {
-        console.warn(`[CSRFManager] CSRF token expired for session ${sessionId}. Deleting.`);
+        logger.warn(`[CSRFManager] CSRF token expired for session ${sessionId}. Deleting.`);
         transaction.delete(docRef);
         return { success: false, reason: 'expired' };
       }
 
       if (storedData.token !== clientToken) {
-        console.warn(`[CSRFManager] CSRF token mismatch for session ${sessionId}. Expected: ${storedData.token.substring(0, 5)}..., Got: ${clientToken.substring(0, 5)}...`);
+        logger.warn(`[CSRFManager] CSRF token mismatch for session ${sessionId}. Expected: ${storedData.token.substring(0, 5)}..., Got: ${clientToken.substring(0, 5)}...`);
         // For security, delete the token on mismatch to prevent brute-force attempts
         transaction.delete(docRef);
         return { success: false, reason: 'mismatch' };
@@ -72,7 +73,7 @@ export class CSRFManager {
       // which is necessary for optimistic updates where multiple requests might use the same token.
       const newExpiry = Date.now() + CSRF_TOKEN_EXPIRY_MINUTES * 60 * 1000;
       transaction.update(docRef, { expiry: newExpiry });
-      console.log(`[CSRFManager] CSRF token for session ${sessionId} verified and expiry updated. New Expiry: ${new Date(newExpiry).toISOString()}`);
+      logger.log(`[CSRFManager] CSRF token for session ${sessionId} verified and expiry updated. New Expiry: ${new Date(newExpiry).toISOString()}`);
       return { success: true, reason: 'valid' };
     });
 
@@ -94,10 +95,10 @@ export class CSRFManager {
     if (docSnap.exists) {
       const storedData = docSnap.data() as { token: string; expiry: number };
       if (storedData.expiry > Date.now()) {
-        console.log(`[CSRFManager] Reusing existing valid CSRF token for session ${sessionId}. Token: ${storedData.token.substring(0, 5)}...`);
+        logger.log(`[CSRFManager] Reusing existing valid CSRF token for session ${sessionId}. Token: ${storedData.token.substring(0, 5)}...`);
         return storedData.token;
       } else {
-        console.log(`[CSRFManager] Existing CSRF token for session ${sessionId} expired. Generating new one.`);
+        logger.log(`[CSRFManager] Existing CSRF token for session ${sessionId} expired. Generating new one.`);
         // Delete expired token before generating a new one to clean up
         await docRef.delete();
       }
@@ -117,6 +118,6 @@ export class CSRFManager {
     const db = getFirestore();
     const docRef = this.getCsrfCollection(db).doc(sessionId);
     await docRef.delete();
-    console.log(`[CSRFManager] Deleted CSRF token for session ${sessionId}.`);
+    logger.log(`[CSRFManager] Deleted CSRF token for session ${sessionId}.`);
   }
 }

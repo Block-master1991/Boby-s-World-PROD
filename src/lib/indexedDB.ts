@@ -1,4 +1,5 @@
 // src/lib/indexedDB.ts - Advanced IndexedDB Management System
+import { logger } from 'utils/logger';
 
 import { isMobileDevice } from './utils';
 
@@ -68,7 +69,7 @@ export class IndexedDBError extends Error {
 let dbInstance: IDBDatabase | null = null;
 let initPromise: Promise<IDBDatabase> | null = null;
 
-// Statistics tracking
+// Statistics tracking with mutex for thread safety
 let cacheStats: CacheStats = {
   totalItems: 0,
   totalSize: 0,
@@ -81,6 +82,29 @@ let cacheStats: CacheStats = {
 
 let accessCount = 0;
 let hitCount = 0;
+
+/**
+ * Atomically update cache statistics using mutex to prevent race conditions
+ */
+async function updateCacheStats(updates: Partial<CacheStats>): Promise<void> {
+  if (statsMutex) {
+    await statsMutex;
+  }
+
+  statsMutex = (async () => {
+    try {
+      cacheStats = { ...cacheStats, ...updates };
+      await saveStats();
+    } finally {
+      statsMutex = null;
+    }
+  })();
+
+  return statsMutex;
+}
+
+// Mutex for cache stats updates to prevent race conditions
+let statsMutex: Promise<void> | null = null;
 
 /**
  * Initialize IndexedDB with proper schema
@@ -96,7 +120,7 @@ async function initializeDatabase(): Promise<IDBDatabase> {
       const db = (event.target as IDBOpenDBRequest).result;
       const oldVersion = event.oldVersion;
 
-      console.log(`[IndexedDB] Upgrading database from v${oldVersion} to v${DB_CONFIG.version}`);
+      logger.log(`[IndexedDB] Upgrading database from v${oldVersion} to v${DB_CONFIG.version}`);
 
       // Create/update object stores
       if (!db.objectStoreNames.contains(DB_CONFIG.stores.assets)) {
@@ -124,18 +148,18 @@ async function initializeDatabase(): Promise<IDBDatabase> {
 
     request.onsuccess = (event) => {
       dbInstance = (event.target as IDBOpenDBRequest).result;
-      console.log(`[IndexedDB] Database initialized: ${DB_CONFIG.name} v${DB_CONFIG.version}`);
+      logger.log(`[IndexedDB] Database initialized: ${DB_CONFIG.name} v${DB_CONFIG.version}`);
       resolve(dbInstance);
     };
 
     request.onerror = (event) => {
       const error = (event.target as IDBOpenDBRequest).error;
-      console.error('[IndexedDB] Failed to initialize database:', error);
+      logger.error('[IndexedDB] Failed to initialize database:', error);
       reject(new IndexedDBError('Failed to initialize database', 'INIT_FAILED', error));
     };
 
     request.onblocked = () => {
-      console.warn('[IndexedDB] Database initialization blocked');
+      logger.warn('[IndexedDB] Database initialization blocked');
       reject(new IndexedDBError('Database initialization blocked', 'INIT_BLOCKED'));
     };
   });
@@ -150,7 +174,7 @@ function migrateFromV1(db: IDBDatabase): void {
   try {
     // Check if old store exists
     if (db.objectStoreNames.contains('models')) {
-      console.log('[IndexedDB] Migrating data from v1 models store');
+      logger.log('[IndexedDB] Migrating data from v1 models store');
 
       const transaction = db.transaction(['models'], 'readonly');
       const oldStore = transaction.objectStore('models');
@@ -174,7 +198,7 @@ function migrateFromV1(db: IDBDatabase): void {
           // Add to new store in a separate transaction
           setTimeout(() => {
             putAsset(newAsset).catch(err =>
-              console.warn('[IndexedDB] Failed to migrate asset:', oldData.name, err)
+              logger.warn('[IndexedDB] Failed to migrate asset:', oldData.name, err)
             );
           }, 0);
 
@@ -183,7 +207,7 @@ function migrateFromV1(db: IDBDatabase): void {
       };
     }
   } catch (error) {
-    console.error('[IndexedDB] Migration failed:', error);
+    logger.error('[IndexedDB] Migration failed:', error);
   }
 }
 
@@ -206,7 +230,7 @@ export function isAvailable(): boolean {
 async function getDatabase(): Promise<IDBDatabase> {
   if (!isAvailable()) {
     // Force fallback - create in-memory storage
-    console.warn('[IndexedDB] IndexedDB not available, using forced fallback');
+    logger.warn('[IndexedDB] IndexedDB not available, using forced fallback');
     return await forceFallbackDatabase();
   }
 
@@ -214,7 +238,7 @@ async function getDatabase(): Promise<IDBDatabase> {
     try {
       return await initializeDatabase();
     } catch (error) {
-      console.warn(`[IndexedDB] Attempt ${attempt} failed, retrying with longer delay...`);
+      logger.warn(`[IndexedDB] Attempt ${attempt} failed, retrying with longer delay...`);
       // Exponential backoff with longer delays
       const delay = Math.min(2000 * Math.pow(1.5, attempt - 1), 30000); // Max 30 seconds
       await new Promise(resolve => setTimeout(resolve, delay));
@@ -222,7 +246,7 @@ async function getDatabase(): Promise<IDBDatabase> {
   }
 
   // Ultimate fallback - never fail
-  console.error('[IndexedDB] All attempts failed, using emergency fallback');
+  logger.error('[IndexedDB] All attempts failed, using emergency fallback');
   return await forceFallbackDatabase();
 }
 
@@ -232,7 +256,7 @@ async function getDatabase(): Promise<IDBDatabase> {
 async function forceFallbackDatabase(): Promise<IDBDatabase> {
   // Create a minimal in-memory database simulation
   // This will use localStorage as ultimate fallback
-  console.warn('[IndexedDB] Using localStorage fallback - performance will be degraded');
+  logger.warn('[IndexedDB] Using localStorage fallback - performance will be degraded');
 
   // Create a mock database object that uses localStorage
   const mockDB = {
@@ -262,20 +286,44 @@ async function forceFallbackDatabase(): Promise<IDBDatabase> {
 }
 
 /**
- * Generate checksum for data integrity
+ * Efficient checksum for large binary data without string conversion
  */
-function generateChecksum(data: any): string {
-  let hash = 0;
-  const str = typeof data === 'string' ? data :
-    data instanceof ArrayBuffer ? new Uint8Array(data).toString() :
-      JSON.stringify(data);
+function generateQuickChecksum(data: any): string {
+  if (data instanceof ArrayBuffer) {
+    // For large buffers, sample the data instead of converting to string
+    const view = new Uint8Array(data);
+    const len = view.length;
 
+    // Sample head, middle, and tail (total 32 bytes or less)
+    let sample = `size:${len}`;
+
+    if (len > 0) {
+      // First 10 bytes
+      for (let i = 0; i < Math.min(10, len); i++) sample += view[i].toString(16);
+      // Middle 10 bytes
+      const mid = Math.floor(len / 2);
+      for (let i = 0; i < Math.min(10, len - mid); i++) sample += view[mid + i].toString(16);
+      // Last 10 bytes
+      const end = Math.max(0, len - 10);
+      for (let i = 0; i < Math.min(10, len - end); i++) sample += view[end + i].toString(16);
+    }
+
+    return generateStringHash(sample);
+  }
+
+  return generateStringHash(typeof data === 'string' ? data : JSON.stringify(data));
+}
+
+/**
+ * Lightweight string hashing
+ */
+function generateStringHash(str: string): string {
+  let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+    hash = hash & hash;
   }
-
   return Math.abs(hash).toString(16);
 }
 
@@ -299,19 +347,20 @@ export async function putAsset(asset: AssetMetadata & { data: any }): Promise<vo
     const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
 
-    // Prepare asset data
+    // Prepare asset data - USE PROVIDED CHECKSUM IF AVAILABLE
     const assetData = {
       ...asset,
-      checksum: generateChecksum(asset.data),
+      checksum: asset.checksum || generateQuickChecksum(asset.data),
       accessedAt: Date.now()
     };
 
     const request = store.put(assetData);
 
     request.onsuccess = async () => {
-      cacheStats.totalItems++;
-      cacheStats.totalSize += asset.size;
-      await saveStats();
+      await updateCacheStats({
+        totalItems: cacheStats.totalItems + 1,
+        totalSize: cacheStats.totalSize + asset.size
+      });
       resolve();
     };
 
@@ -320,7 +369,7 @@ export async function putAsset(asset: AssetMetadata & { data: any }): Promise<vo
     };
 
     transaction.oncomplete = () => {
-      console.log(`[IndexedDB] Stored asset: ${asset.name} (${formatBytes(asset.size)})`);
+      logger.log(`[IndexedDB] Stored asset: ${asset.name} (${formatBytes(asset.size)})`);
     };
   });
 }
@@ -334,28 +383,35 @@ export async function getAsset(id: string): Promise<(AssetMetadata & { data: any
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
-    const store = transaction.objectStore(DB_CONFIG.stores.assets);
-    const request = store.get(id);
+    // Use readonly transaction for reading to avoid blocking other readers
+    const readTransaction = db.transaction([DB_CONFIG.stores.assets], 'readonly');
+    const readStore = readTransaction.objectStore(DB_CONFIG.stores.assets);
+    const readRequest = readStore.get(id);
 
-    request.onsuccess = (event) => {
+    readRequest.onsuccess = (event) => {
       const result = (event.target as IDBRequest).result;
 
       if (result) {
         hitCount++;
 
-        // Update access time
-        result.accessedAt = Date.now();
-        store.put(result);
-
-        // Check TTL
+        // Check TTL first
         if (result.ttl && Date.now() - result.createdAt > result.ttl) {
-          // Asset expired, remove it
-          store.delete(id);
+          // Asset expired, schedule deletion in separate transaction
+          setTimeout(() => {
+            deleteAsset(id).catch(err =>
+              logger.warn('[IndexedDB] Failed to delete expired asset:', id, err)
+            );
+          }, 0);
           cacheStats.totalItems--;
           cacheStats.totalSize -= result.size;
           resolve(null);
         } else {
+          // Update access time in separate transaction to avoid blocking
+          setTimeout(() => {
+            updateAssetAccessTime(id).catch(err =>
+              logger.warn('[IndexedDB] Failed to update access time:', id, err)
+            );
+          }, 0);
           resolve(result);
         }
       } else {
@@ -363,8 +419,34 @@ export async function getAsset(id: string): Promise<(AssetMetadata & { data: any
       }
     };
 
-    request.onerror = (event) => {
+    readRequest.onerror = (event) => {
       reject(new IndexedDBError('Failed to retrieve asset', 'GET_FAILED', event.target));
+    };
+  });
+}
+
+/**
+ * Update asset access time (called asynchronously to avoid blocking reads)
+ */
+async function updateAssetAccessTime(id: string): Promise<void> {
+  const db = await getDatabase();
+
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const store = transaction.objectStore(DB_CONFIG.stores.assets);
+    const request = store.get(id);
+
+    request.onsuccess = (event) => {
+      const asset = (event.target as IDBRequest).result;
+      if (asset) {
+        asset.accessedAt = Date.now();
+        store.put(asset);
+      }
+      resolve();
+    };
+
+    request.onerror = (event) => {
+      reject(new IndexedDBError('Failed to update access time', 'UPDATE_ACCESS_FAILED', event.target));
     };
   });
 }
@@ -412,10 +494,12 @@ export async function deleteAsset(id: string): Promise<boolean> {
       const asset = getRequest.result;
       const deleteRequest = store.delete(id);
 
-      deleteRequest.onsuccess = () => {
+      deleteRequest.onsuccess = async () => {
         if (asset) {
-          cacheStats.totalItems--;
-          cacheStats.totalSize -= asset.size;
+          await updateCacheStats({
+            totalItems: cacheStats.totalItems - 1,
+            totalSize: cacheStats.totalSize - asset.size
+          });
         }
         resolve(true);
       };
@@ -442,10 +526,12 @@ export async function clearAssets(): Promise<void> {
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
     const request = store.clear();
 
-    request.onsuccess = () => {
-      cacheStats.totalItems = 0;
-      cacheStats.totalSize = 0;
-      cacheStats.evictions = 0;
+    request.onsuccess = async () => {
+      await updateCacheStats({
+        totalItems: 0,
+        totalSize: 0,
+        evictions: 0
+      });
       resolve();
     };
 
@@ -509,22 +595,27 @@ export async function batchPut(assets: (AssetMetadata & { data: any })[]): Promi
 
     let completed = 0;
     const total = assets.length;
+    let totalAddedItems = 0;
+    let totalAddedSize = 0;
 
     assets.forEach(asset => {
       const assetData = {
         ...asset,
-        checksum: generateChecksum(asset.data),
+        checksum: asset.checksum || generateQuickChecksum(asset.data),
         accessedAt: Date.now()
       };
 
       const request = transaction.objectStore(DB_CONFIG.stores.assets).put(assetData);
 
       request.onsuccess = () => {
-        cacheStats.totalItems++;
-        cacheStats.totalSize += asset.size;
+        totalAddedItems++;
+        totalAddedSize += asset.size;
         completed++;
         if (completed === total) {
-          saveStats().then(resolve);
+          updateCacheStats({
+            totalItems: cacheStats.totalItems + totalAddedItems,
+            totalSize: cacheStats.totalSize + totalAddedSize
+          }).then(resolve);
         }
       };
 
@@ -560,7 +651,7 @@ async function performLRUCleanup(requiredSpace: number = 0): Promise<void> {
         cacheStats.totalSize -= asset.size;
         cacheStats.evictions++;
 
-        console.log(`[IndexedDB] Evicting asset: ${asset.name}`);
+        logger.log(`[IndexedDB] Evicting asset: ${asset.name}`);
         cursor.delete();
         cursor.continue();
       } else {
@@ -696,7 +787,7 @@ export async function importData(jsonData: string): Promise<void> {
     data: null // Data needs to be restored separately
   }));
 
-  console.log(`[IndexedDB] Importing ${assets.length} assets`);
+  logger.log(`[IndexedDB] Importing ${assets.length} assets`);
   // Note: Actual data import would require additional logic
 }
 
@@ -720,14 +811,14 @@ export function formatBytes(bytes: number): string {
  * Initialize stats on module load
  */
 if (isAvailable()) {
-  loadStats().catch(err => console.warn('[IndexedDB] Failed to load initial stats:', err));
+  loadStats().catch(err => logger.warn('[IndexedDB] Failed to load initial stats:', err));
 }
 
 // Periodic cleanup
 if (isAvailable() && typeof window !== 'undefined') {
   setInterval(() => {
     cleanExpiredAssets().catch(err =>
-      console.warn('[IndexedDB] Failed to clean expired assets:', err)
+      logger.warn('[IndexedDB] Failed to clean expired assets:', err)
     );
   }, 5 * 60 * 1000); // Every 5 minutes
 }

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react';
 import { useAuthContext } from '@/contexts/AuthContext';
+import { logger } from '@/utils/logger';
 
 interface AnalyticsEvent {
     type: 'metric' | 'error' | 'user_action' | 'game_event';
@@ -21,7 +22,7 @@ export const useAnalytics = () => {
                 workerRef.current = new Worker(new URL('../workers/analytics.worker.ts', import.meta.url));
                 workerRef.current.postMessage({ type: 'INIT_ANALYTICS', data: { sessionId: sessionIdRef.current } });
             } catch (error) {
-                console.warn('[useAnalytics] Failed to initialize analytics worker:', error);
+                logger.warn('[useAnalytics] Failed to initialize analytics worker:', error);
             }
         }
 

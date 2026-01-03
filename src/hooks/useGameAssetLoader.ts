@@ -9,6 +9,7 @@ import { Grass } from '@/lib/ez-tree/environment/grass';
 import { Rocks } from '@/lib/ez-tree/environment/rocks';
 import { Trees } from '@/lib/ez-tree/environment/trees';
 import { Flowers } from '@/lib/ez-tree/environment/flowers';
+import { logger } from '@/utils/logger';
 
 interface UseGameAssetLoaderProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -43,14 +44,14 @@ export const useGameAssetLoader = ({
   const updateProgress = useCallback(() => {
     const totalProgressPercentage = (progressRef.current.environment + progressRef.current.dog + progressRef.current.coins + progressRef.current.enemies + progressRef.current.trees) / totalAssetsToLoad; // Update calculation
     setLoadProgress(totalProgressPercentage);
-    console.log(`[GameAssetLoader] Overall Progress: ${totalProgressPercentage.toFixed(2)}%`);
+    logger.log(`[GameAssetLoader] Overall Progress: ${totalProgressPercentage.toFixed(2)}%`);
   }, [totalAssetsToLoad]);
 
   const createProgressCallback = useCallback((assetName: 'environment' | 'dog' | 'coins' | 'enemies' | 'trees') => { // Update type
     return (url: string, loaded: number, total: number) => {
       const progressPercentage = total > 0 ? (loaded / total) * 100 : 100;
       progressRef.current[assetName] = progressPercentage;
-      console.log(`[GameAssetLoader] ${assetName} progress: ${loaded}/${total} (${progressPercentage.toFixed(2)}%)`);
+      logger.log(`[GameAssetLoader] ${assetName} progress: ${loaded}/${total} (${progressPercentage.toFixed(2)}%)`);
       if (onProgress) {
         onProgress(url, loaded, total);
       }
@@ -59,14 +60,14 @@ export const useGameAssetLoader = ({
   }, [updateProgress, onProgress]);
 
   const preloadEnvironmentAssets = useCallback(async () => {
-    console.log("[GameAssetLoader] Preloading Environment Assets...");
+    logger.log("[GameAssetLoader] Preloading Environment Assets...");
     await Grass.fetchAssets();
     await Rocks.fetchAssets();
     await Trees.prototype.fetchAssets();
     await Flowers.fetchAssets();
     progressRef.current.environment = 100;
     updateProgress();
-    console.log("[GameAssetLoader] Environment Assets Preloaded.");
+    logger.log("[GameAssetLoader] Environment Assets Preloaded.");
   }, [updateProgress]);
 
   const loadGameAssets = useCallback(async () => {
@@ -74,35 +75,35 @@ export const useGameAssetLoader = ({
     setLoadProgress(0);
     setError(null);
     progressRef.current = { environment: 0, dog: 0, coins: 0, enemies: 0, trees: 0, world: 0 }; // Reset all progress
-    console.log("[GameAssetLoader] Starting hybrid asset loading...");
+    logger.log("[GameAssetLoader] Starting hybrid asset loading...");
 
     try {
       // Step 0: Preload environment assets first
       await preloadEnvironmentAssets();
 
       // Step 1: Load the primary asset (Dog) first, as others depend on it.
-      console.log("[GameAssetLoader] Loading Dog model...");
+      logger.log("[GameAssetLoader] Loading Dog model...");
       await initializeDog(createProgressCallback('dog'));
-      console.log("[GameAssetLoader] Dog Model Loaded.");
+      logger.log("[GameAssetLoader] Dog Model Loaded.");
       progressRef.current.dog = 100;
       updateProgress();
 
       // Step 2: Now that the dog model is loaded, load dependent assets in parallel.
-      console.log("[GameAssetLoader] Loading dependent assets (Coins, Enemies, Trees) in parallel...");
+      logger.log("[GameAssetLoader] Loading dependent assets (Coins, Enemies, Trees) in parallel...");
       const coinsPromise = initializeCoins(createProgressCallback('coins')).then(() => {
-        console.log("[GameAssetLoader] Coins Loaded.");
+        logger.log("[GameAssetLoader] Coins Loaded.");
         progressRef.current.coins = 100;
         updateProgress();
       });
 
       const enemiesPromise = initializeEnemies(createProgressCallback('enemies')).then(() => {
-        console.log("[GameAssetLoader] Enemies Loaded.");
+        logger.log("[GameAssetLoader] Enemies Loaded.");
         progressRef.current.enemies = 100;
         updateProgress();
       });
 
       const treesPromise = initializeTrees(createProgressCallback('trees')).then(() => { // Add trees promise
-        console.log("[GameAssetLoader] Trees Loaded.");
+        logger.log("[GameAssetLoader] Trees Loaded.");
         progressRef.current.trees = 100;
         updateProgress();
       });
@@ -117,15 +118,15 @@ export const useGameAssetLoader = ({
           new THREE.Vector3(100, 100, 100)   // max corner
         );
         octreeRef.current = new Octree<GameObject>(worldBounds);
-        console.log("[GameAssetLoader] Octree initialized for collision detection");
+        logger.log("[GameAssetLoader] Octree initialized for collision detection");
       }
 
       setIsLoadingAssets(false);
       setLoadProgress(100);
-      console.log("[GameAssetLoader] All game assets loaded successfully. Final Progress: 100%");
+      logger.log("[GameAssetLoader] All game assets loaded successfully. Final Progress: 100%");
 
     } catch (err) {
-      console.error("[GameAssetLoader] Critical error during game asset loading:", err);
+      logger.error("[GameAssetLoader] Critical error during game asset loading:", err);
       if (err instanceof Error) {
         setError(err.message);
       } else {

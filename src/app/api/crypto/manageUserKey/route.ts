@@ -1,29 +1,25 @@
-// src/app/api/crypto/manageUserKey/route.ts
 import { NextResponse } from 'next/server';
-import {
-  getMasterKeyForApi,
-  generateAesKey,
-  exportKey,
-  importKey,
-  encryptData,
-  decryptData,
-} from '@/lib/cryptoUtils';
-import { db } from '@/lib/firebase-admin'; // Assuming firebase-admin is set up for Firestore
+import { logger } from '@/utils/logger';
+import { keyVault } from '@/lib/keyVaultService';
+import { db } from '@/lib/firebase-admin';
+import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
 // This API route will handle both generating/storing and retrieving user keys.
 // It should be protected by authentication middleware.
 // For simplicity, we'll assume the userId is passed in the request body for now,
 // but in a real app, it would come from the authenticated session.
 
-export async function POST(request: Request) {
+export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   try {
-    const { userId } = await request.json();
+    const userId = request.user?.sub;
 
     if (!userId) {
-      return NextResponse.json({ error: 'User ID is required.' }, { status: 400 });
+      return NextResponse.json({ error: 'User ID not found in session.' }, { status: 401 });
     }
 
-    const masterKey = await getMasterKeyForApi();
+    const masterKey = await keyVault.getMasterKey();
     if (!masterKey) {
       return NextResponse.json({ error: 'Master encryption key not available on server.' }, { status: 500 });
     }
@@ -49,36 +45,37 @@ export async function POST(request: Request) {
       // Create a new ArrayBuffer and copy the contents to ensure it's a plain ArrayBuffer
       const plainArrayBuffer = new ArrayBuffer(encryptedUserKeyArray.length);
       new Uint8Array(plainArrayBuffer).set(encryptedUserKeyArray);
-      const decryptedUserKeyBuffer = await decryptData(plainArrayBuffer, masterKey) as ArrayBuffer;
+      const decryptedUserKeyBuffer = await keyVault.decryptData(masterKey, plainArrayBuffer);
       userKeyJwk = JSON.parse(new TextDecoder().decode(decryptedUserKeyBuffer));
-      userCryptoKey = await importKey(userKeyJwk);
+      userCryptoKey = await keyVault.importKey(userKeyJwk);
 
-      console.log(`[API] Retrieved and decrypted user key for ${userId} from Firestore.`);
+      logger.log(`[API] Retrieved and decrypted user key for ${userId} from Firestore.`);
 
     } else {
       // Key does not exist, generate a new one
-      userCryptoKey = await generateAesKey();
-      userKeyJwk = await exportKey(userCryptoKey);
+      userCryptoKey = await keyVault.generateRawKey();
+      userKeyJwk = await keyVault.exportKey(userCryptoKey);
 
       // Encrypt the user's key with the master key before storing in Firestore
       const userKeyData = new TextEncoder().encode(JSON.stringify(userKeyJwk));
-      // Create a new ArrayBuffer and copy the data to ensure it's a standard ArrayBuffer
-      const userKeyBuffer = new ArrayBuffer(userKeyData.byteLength);
-      new Uint8Array(userKeyBuffer).set(userKeyData);
-      const encryptedUserKeyBuffer = await encryptData(userKeyBuffer, masterKey);
+      const encryptedUserKeyBuffer = await keyVault.encryptData(masterKey, userKeyData);
 
       // Convert ArrayBuffer to base64 string for Firestore storage
       const encryptedUserKeyBase64 = btoa(String.fromCharCode(...new Uint8Array(encryptedUserKeyBuffer)));
 
       await userKeyDocRef.set({ encryptedKey: encryptedUserKeyBase64 });
-      console.log(`[API] Generated, encrypted, and stored new user key for ${userId} in Firestore.`);
+      logger.log(`[API] Generated, encrypted, and stored new user key for ${userId} in Firestore.`);
     }
 
     // Return the unencrypted user key (JWK format) to the frontend
-    return NextResponse.json({ userKey: userKeyJwk }, { status: 200 });
+    const response = NextResponse.json({ userKey: userKeyJwk }, { status: 200 });
+
+    // Use unified helper to update CSRF
+    const requestHost = request.headers.get('host') || undefined;
+    return await setCsrfTokenResponse(response, userId, requestHost);
 
   } catch (error) {
-    console.error('[API] Error managing user key:', error);
+    logger.error('[API] Error managing user key:', error as Error);
     return NextResponse.json({ error: 'Failed to manage user encryption key.' }, { status: 500 });
   }
-}
+}));

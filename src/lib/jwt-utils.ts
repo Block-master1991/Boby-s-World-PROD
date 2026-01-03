@@ -4,6 +4,7 @@ import { randomBytes } from 'crypto';
 import { TokenBlacklistManager } from './token-blacklist';
 import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './server-constants'; // Moved to server-side constants
 import { createHash } from 'crypto';
+import { logger } from '@/utils/logger';
 
 export interface JWTPayload {
   sub: string; // Subject (user's public key)
@@ -51,12 +52,12 @@ export class JWTManager {
       : '';
 
     if (expectedUserAgentHash && actualUserAgentHash !== expectedUserAgentHash) {
-      console.warn(`[JWTManager] User-Agent hash mismatch for token ${decoded.jti}`);
+      logger.warn(`[JWTManager] User-Agent hash mismatch for token ${decoded.jti}`);
       return false;
     }
 
     if (expectedIpHash && actualIpHash !== expectedIpHash) {
-      console.warn(`[JWTManager] IP hash mismatch for token ${decoded.jti}`);
+      logger.warn(`[JWTManager] IP hash mismatch for token ${decoded.jti}`);
       return false;
     }
 
@@ -83,7 +84,7 @@ export class JWTManager {
       userAgentHash,
       ipHash,
     };
-    console.log(`[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
+    logger.log(`[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
     return jwt.sign(payload, this.ACCESS_TOKEN_SECRET, { algorithm: 'HS256' });
   }
 
@@ -100,7 +101,7 @@ export class JWTManager {
       userAgentHash,
       ipHash,
     };
-    console.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
+    logger.log(`[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`);
     return jwt.sign(payload, this.REFRESH_TOKEN_SECRET, { algorithm: 'HS256' });
   }
 
@@ -110,23 +111,23 @@ export class JWTManager {
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null; // Decode for logging before verification
       const jti = decodedForLog?.jti || 'unknown_jti';
-      console.log(`[JWTManager] Attempting to verify access token. JTI (from decode): ${jti}, Type (from decode): ${decodedForLog?.type}`);
+      logger.log(`[JWTManager] Attempting to verify access token. JTI (from decode): ${jti}, Type (from decode): ${decodedForLog?.type}`);
 
       const decoded = jwt.verify(token, this.ACCESS_TOKEN_SECRET) as JWTPayload;
-      console.log(`[JWTManager] Access token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
+      logger.log(`[JWTManager] Access token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
 
       if (await TokenBlacklistManager.isBlacklisted(decoded.jti)) {
-        console.warn(`[JWTManager] Access token ${decoded.jti} is blacklisted.`);
+        logger.warn(`[JWTManager] Access token ${decoded.jti} is blacklisted.`);
         return null;
       }
 
       if (decoded.type !== 'access') {
-        console.warn(`[JWTManager] Invalid token type for access token ${decoded.jti}. Expected 'access', got '${decoded.type}'.`);
+        logger.warn(`[JWTManager] Invalid token type for access token ${decoded.jti}. Expected 'access', got '${decoded.type}'.`);
         return null;
       }
       // jwt.verify already checks 'exp'
       if (decoded.exp * 1000 < Date.now()) {
-        console.warn(`[JWTManager] Access token ${decoded.jti} has expired (checked explicitly post-verification, which is redundant but informative).`);
+        logger.warn(`[JWTManager] Access token ${decoded.jti} has expired (checked explicitly post-verification, which is redundant but informative).`);
         await TokenBlacklistManager.addToBlacklist(decoded.jti, decoded.exp, 'expired');
         return null;
       }
@@ -138,7 +139,7 @@ export class JWTManager {
       const jti = decodedForLog?.jti || 'unknown_jti_on_error';
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[JWTManager] Access token verification failed. JTI: ${jti}`, errorMessage, errorStack);
+      logger.error(`[JWTManager] Access token verification failed. JTI: ${jti}`, errorMessage, errorStack);
       if (error instanceof Error && error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) {
         await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, 'expired');
       }
@@ -151,35 +152,35 @@ export class JWTManager {
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null;
       const jti = decodedForLog?.jti || 'unknown_jti';
-      console.log(`[JWTManager] Attempting to verify refresh token. JTI (from decode): ${jti}, Type (from decode): ${decodedForLog?.type}`);
+      logger.log(`[JWTManager] Attempting to verify refresh token. JTI (from decode): ${jti}, Type (from decode): ${decodedForLog?.type}`);
 
       const decoded = jwt.verify(token, this.REFRESH_TOKEN_SECRET) as JWTPayload;
-      console.log(`[JWTManager] Refresh token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
+      logger.log(`[JWTManager] Refresh token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
 
       if (await TokenBlacklistManager.isBlacklisted(decoded.jti)) {
-        console.warn(`[JWTManager] Refresh token ${decoded.jti} is blacklisted.`);
+        logger.warn(`[JWTManager] Refresh token ${decoded.jti} is blacklisted.`);
         return null;
       }
 
       if (decoded.type !== 'refresh') {
-        console.warn(`[JWTManager] Invalid token type for refresh token ${decoded.jti}. Expected 'refresh', got '${decoded.type}'.`);
+        logger.warn(`[JWTManager] Invalid token type for refresh token ${decoded.jti}. Expected 'refresh', got '${decoded.type}'.`);
         return null;
       }
       if (decoded.exp * 1000 < Date.now()) {
-        console.warn(`[JWTManager] Refresh token ${decoded.jti} has expired (checked explicitly post-verification). Blacklisting.`);
+        logger.warn(`[JWTManager] Refresh token ${decoded.jti} has expired (checked explicitly post-verification). Blacklisting.`);
         await TokenBlacklistManager.addToBlacklist(decoded.jti, decoded.exp, 'expired');
         return null;
       }
 
       if (!this.verifyFingerprint(decoded, userAgent, ip)) return null;
 
-      console.log(`[JWTManager] Refresh token ${decoded.jti} verified successfully (not blacklisted, correct type, not expired).`);
+      logger.log(`[JWTManager] Refresh token ${decoded.jti} verified successfully (not blacklisted, correct type, not expired).`);
       return decoded;
     } catch (error: unknown) {
       const jti = decodedForLog?.jti || 'unknown_jti_on_error';
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[JWTManager] Refresh token verification failed. JTI: ${jti}`, errorMessage, errorStack);
+      logger.error(`[JWTManager] Refresh token verification failed. JTI: ${jti}`, errorMessage, errorStack);
       if (error instanceof Error && error.name === 'TokenExpiredError' && decodedForLog?.jti && decodedForLog?.exp) {
         await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, 'expired');
       }
@@ -192,7 +193,7 @@ export class JWTManager {
     try {
       decodedForLog = jwt.decode(token) as JWTPayload | null;
       if (!decodedForLog || !decodedForLog.jti || !decodedForLog.exp) {
-        console.warn('[JWTManager] Failed to decode token for revocation or missing jti/exp. Token (first 20 chars):', token.substring(0, 20), 'Attempting verification to get details...');
+        logger.warn('[JWTManager] Failed to decode token for revocation or missing jti/exp. Token (first 20 chars):', token.substring(0, 20), 'Attempting verification to get details...');
         let verifiedDecoded: JWTPayload | null = null;
         try {
           const secretToUse = decodedForLog?.type === 'access' ? this.ACCESS_TOKEN_SECRET : this.REFRESH_TOKEN_SECRET;
@@ -201,43 +202,43 @@ export class JWTManager {
           }
         } catch (e: unknown) {
           const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
-          console.warn('[JWTManager] Verification attempt during revocation also failed:', errorMessage);
+          logger.warn('[JWTManager] Verification attempt during revocation also failed:', errorMessage);
         }
 
 
         if (verifiedDecoded && verifiedDecoded.jti && verifiedDecoded.exp) {
-          console.log(`[JWTManager] Token for revocation was verifiable (JTI: ${verifiedDecoded.jti}, Type: ${verifiedDecoded.type}). Adding to blacklist.`);
+          logger.log(`[JWTManager] Token for revocation was verifiable (JTI: ${verifiedDecoded.jti}, Type: ${verifiedDecoded.type}). Adding to blacklist.`);
           await TokenBlacklistManager.addToBlacklist(verifiedDecoded.jti, verifiedDecoded.exp, reason);
           return true;
         } else {
-          console.warn('[JWTManager] Token for revocation still missing JTI/exp even after verification attempt. Cannot blacklist.');
+          logger.warn('[JWTManager] Token for revocation still missing JTI/exp even after verification attempt. Cannot blacklist.');
           return false;
         }
       }
-      console.log(`[JWTManager] Revoking token JTI: ${decodedForLog.jti}, Type: ${decodedForLog.type}, Reason: ${reason}, Original Exp: ${new Date(decodedForLog.exp * 1000).toISOString()}`);
+      logger.log(`[JWTManager] Revoking token JTI: ${decodedForLog.jti}, Type: ${decodedForLog.type}, Reason: ${reason}, Original Exp: ${new Date(decodedForLog.exp * 1000).toISOString()}`);
       await TokenBlacklistManager.addToBlacklist(decodedForLog.jti, decodedForLog.exp, reason);
       return true;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error('[JWTManager] Unexpected error during token revocation logic:', errorMessage, errorStack);
+      logger.error('[JWTManager] Unexpected error during token revocation logic:', errorMessage, errorStack);
       return false;
     }
 
   }
 
   static async refreshAccessToken(refreshTokenValue: string, userAgent: string, ip: string): Promise<{ accessToken: string; newRefreshToken: string } | null> {
-    console.log(`[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0, 20)}...`);
+    logger.log(`[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0, 20)}...`);
     const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
     if (!decodedRefreshToken) {
-      console.warn('[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed.');
+      logger.warn('[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed.');
       // verifyRefreshToken should have already blacklisted it if it was expired or invalid and verifiable
       return null;
     }
 
     // Important: Revoke the old refresh token *after* successfully verifying it and *before* issuing new ones.
     // This prevents replay of the same refresh token if something goes wrong after this point.
-    console.log(`[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`);
+    logger.log(`[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`);
     await this.revokeToken(refreshTokenValue, 'expired'); // Mark as 'expired' because it's consumed
 
     const userAgentHash = userAgent ? createHash('sha256').update(userAgent).digest('base64') : '';
@@ -262,9 +263,9 @@ export class JWTManager {
     const newRefreshDecoded = jwt.decode(newRefreshToken) as JWTPayload | null;
 
 
-    console.log(`[JWTManager] New tokens generated for ${decodedRefreshToken.sub}`);
-    console.log(`→ New accessToken JTI: ${newAccessDecoded?.jti}`);
-    console.log(`→ New refreshToken JTI: ${newRefreshDecoded?.jti}`);
+    logger.log(`[JWTManager] New tokens generated for ${decodedRefreshToken.sub}`);
+    logger.log(`→ New accessToken JTI: ${newAccessDecoded?.jti}`);
+    logger.log(`→ New refreshToken JTI: ${newRefreshDecoded?.jti}`);
 
     return {
       accessToken: newAccessToken,
@@ -275,7 +276,7 @@ export class JWTManager {
   static extractTokenFromCookies(cookies: string, tokenName: string): string | null {
     const match = cookies.match(new RegExp(`${tokenName}=([^;]+)`));
     const token = match ? match[1] : null;
-    // console.log(`[JWTManager] Extracted token '${tokenName}' from cookies. Found: ${token ? 'Yes (masked)' : 'No'}`); // Mask token value
+    // logger.log(`[JWTManager] Extracted token '${tokenName}' from cookies. Found: ${token ? 'Yes (masked)' : 'No'}`); // Mask token value
     return token;
   }
 
@@ -313,7 +314,7 @@ export class JWTManager {
       options.domain = cookieDomain;
     }
 
-    console.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProduction: ${isProduction}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path}, Domain=${options.domain || 'N/A'} (NODE_ENV: ${process.env.NODE_ENV}, RequestHost: ${requestHost || 'N/A'})`);
+    logger.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProduction: ${isProduction}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path}, Domain=${options.domain || 'N/A'} (NODE_ENV: ${process.env.NODE_ENV}, RequestHost: ${requestHost || 'N/A'})`);
     return options;
   }
 }

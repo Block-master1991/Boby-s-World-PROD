@@ -10,8 +10,19 @@ import { PawPrint, LogOut, Trash2, Search } from 'lucide-react';
 import { useApiFetch } from '@/utils/api';
 import { useUserStats, useUserActivityUpdates } from '@/hooks/useAdminStats';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, LineChart, Line, PieChart, Pie, Cell } from 'recharts';
+import dynamic from 'next/dynamic';
+import { PasskeyManagement } from '@/components/auth/PasskeyManagement';
+import { StoreItemsManagement } from '@/components/admin/StoreItemsManagement';
+import { AdminUserStatsSkeleton } from '@/components/admin/AdminStatSkeleton';
+import { logger } from '@/utils/logger';
+import { LoggerDashboard } from '@/components/admin/LoggerDashboard';
+
+
+// Recharts components are better off being loaded as part of a dynamic chart wrapper
+const ChartUIWrapper = dynamic(() => import('@/components/admin/ChartUIWrapper'), {
+  ssr: false,
+  loading: () => <Skeleton className="h-[300px] w-full" />
+});
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
@@ -35,10 +46,11 @@ import {
   Shield,
   Settings,
   Home,
-  TrendingUp,
   Activity,
   Database,
-  Package
+  Package,
+  FileText,
+  Fingerprint
 } from 'lucide-react';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { db } from '@/lib/firebase';
@@ -143,10 +155,14 @@ export default function AdminPage() {
       const data = await response.json();
       setUserStats(data);
     } catch (err) {
-      console.error('Error fetching user stats:', err);
+      logger.error('Error fetching user stats:', err as Error);
       setMessage({ type: 'error', text: 'Failed to fetch user statistics.' });
     }
   }, [apiFetch]);
+
+
+
+
 
   // Add IP
   async function handleAddIp() {
@@ -249,6 +265,7 @@ export default function AdminPage() {
     { id: 'users', label: 'Users', icon: Users },
     { id: 'items', label: 'Items', icon: Package },
     { id: 'security', label: 'Security', icon: Shield },
+    { id: 'logs', label: 'Audit Logs', icon: FileText },
     { id: 'analytics', label: 'Analytics', icon: BarChart3 },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
@@ -272,11 +289,7 @@ export default function AdminPage() {
                     <SidebarMenuItem key={item.id}>
                       <SidebarMenuButton
                         onClick={() => {
-                          if (item.id === 'items') {
-                            router.push('/admin/items');
-                          } else {
-                            setActiveSection(item.id);
-                          }
+                          setActiveSection(item.id);
                         }}
                         isActive={activeSection === item.id}
                       >
@@ -341,11 +354,7 @@ export default function AdminPage() {
                         </CardHeader>
                         <CardContent>
                           {graphqlLoading ? (
-                            <div className="space-y-2">
-                              <Skeleton className="h-4 w-3/4" />
-                              <Skeleton className="h-4 w-1/2" />
-                              <Skeleton className="h-4 w-2/3" />
-                            </div>
+                            <AdminUserStatsSkeleton />
                           ) : graphqlError ? (
                             <p className="text-sm text-destructive">Error loading GraphQL stats: {graphqlError}</p>
                           ) : (
@@ -528,8 +537,26 @@ export default function AdminPage() {
                       )}
                     </div>
                   </div>
+
+                  {/* Passkey Management */}
+                  <div className="mt-12 pt-8 border-t">
+                    <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+                      <Fingerprint className="w-6 h-6 text-primary" />
+                      Administrative Biometrics
+                    </h2>
+                    <p className="text-sm text-muted-foreground mb-6">
+                      Manage your passkeys for secure administrative access. High-security actions require biometric verification.
+                    </p>
+                    <div className="bg-card/50 rounded-lg p-6 border">
+                      <PasskeyManagement />
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
+            )}
+
+            {activeSection === 'logs' && (
+              <LoggerDashboard />
             )}
 
             {activeSection === 'analytics' && (
@@ -547,24 +574,7 @@ export default function AdminPage() {
                           <CardTitle className="text-lg">User Status</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <ChartContainer config={{}} className="h-[200px]">
-                            <PieChart>
-                              <Pie
-                                data={userChartData}
-                                cx="50%"
-                                cy="50%"
-                                innerRadius={40}
-                                outerRadius={80}
-                                paddingAngle={5}
-                                dataKey="value"
-                              >
-                                {userChartData.map((entry, index) => (
-                                  <Cell key={`cell-${index}`} fill={entry.color} />
-                                ))}
-                              </Pie>
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                            </PieChart>
-                          </ChartContainer>
+                          <ChartUIWrapper type="pie" data={userChartData} config={{}} />
                         </CardContent>
                       </Card>
 
@@ -574,15 +584,11 @@ export default function AdminPage() {
                           <CardTitle className="text-lg">User Activity Trend</CardTitle>
                         </CardHeader>
                         <CardContent>
-                          <ChartContainer config={{}} className="h-[200px]">
-                            <LineChart data={activityData}>
-                              <CartesianGrid strokeDasharray="3 3" />
-                              <XAxis dataKey="month" />
-                              <YAxis />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Line type="monotone" dataKey="users" stroke="#8884d8" strokeWidth={2} />
-                            </LineChart>
-                          </ChartContainer>
+                          <ChartUIWrapper
+                            type="line"
+                            data={activityData.map(d => ({ name: d.month, value: d.users }))}
+                            config={{}}
+                          />
                         </CardContent>
                       </Card>
                     </div>
@@ -601,6 +607,10 @@ export default function AdminPage() {
                   <p className="text-muted-foreground">User management features coming soon...</p>
                 </CardContent>
               </Card>
+            )}
+
+            {activeSection === 'items' && (
+              <StoreItemsManagement />
             )}
 
             {activeSection === 'settings' && (
@@ -630,6 +640,6 @@ export default function AdminPage() {
           )}
         </SidebarInset>
       </div>
-    </SidebarProvider>
+    </SidebarProvider >
   );
 }

@@ -1,39 +1,39 @@
 # Advanced IndexedDB Management System
 
-نظام إدارة متقدم لـ IndexedDB مصمم لإدارة موارد اللعبة بكفاءة واحترافية.
+An advanced IndexedDB management system designed to efficiently and professionally manage game resources.
 
-## المميزات الرئيسية
+## Key Features
 
-### 🗄️ إدارة قواعد البيانات
-- **إصدارات تلقائية**: ترقية تلقائية لقاعدة البيانات مع الحفاظ على البيانات
-- **Migration**: نقل البيانات من الإصدارات القديمة
-- **Multiple Stores**: فواصل منفصلة للبيانات والإحصائيات والمعلومات الوصفية
+### 🗄️ Database Management
+- **Automatic Versioning**: Automatic database upgrade while preserving data
+- **Migration**: Data transfer from old versions
+- **Multiple Stores**: Separate partitions for data, statistics, and metadata
 
-### 📊 إحصائيات متقدمة
-- **Hit/Miss Rate**: تتبع معدل الإصابات والإخفاقات
-- **Cache Size Management**: إدارة حجم الـ cache تلقائياً
-- **LRU Eviction**: إزالة البيانات الأقل استخداماً عند الحاجة
-- **TTL Support**: انتهاء صلاحية البيانات تلقائياً
+### 📊 Advanced Statistics
+- **Hit/Miss Rate**: Tracking hit and miss rates
+- **Cache Size Management**: Automatic cache size management
+- **LRU Eviction**: Removing least-used data when needed
+- **TTL Support**: Automatic data expiration
 
-### 🔧 عمليات متقدمة
-- **Batch Operations**: عمليات مجمعة لتحسين الأداء
-- **Data Integrity**: فحص سلامة البيانات باستخدام checksum
-- **Retry Logic**: إعادة المحاولة التلقائية عند فشل العمليات
-- **Error Handling**: معالجة أخطاء شاملة مع أكواد محددة
+### 🔧 Advanced Operations
+- **Batch Operations**: Batched operations for improved performance
+- **Data Integrity**: Data integrity checking using checksum
+- **Retry Logic**: Automatic retry on operation failure
+- **Error Handling**: Comprehensive error handling with specific codes
 
-### 📱 دعم الأجهزة
-- **Mobile/Desktop**: حدود مختلفة للأجهزة المحمولة والمكتبية
-- **Performance**: تحسينات خاصة للأجهزة ذات الموارد المحدودة
-- **Availability Check**: فحص توفر IndexedDB
+### 📱 Device Support
+- **Mobile/Desktop**: Different limits for mobile and desktop devices
+- **Performance**: Special optimizations for devices with limited resources
+- **Availability Check**: IndexedDB availability check
 
-## واجهة برمجة التطبيقات (API)
+## Application Programming Interface (API)
 
-### أنواع البيانات المدعومة
+### Supported Data Types
 ```typescript
 type DataType = 'arraybuffer' | 'blob' | 'json' | 'text' | 'uint8array';
 ```
 
-### تخزين مورد
+### Store Resource
 ```typescript
 await putAsset({
   id: 'my-texture',
@@ -46,69 +46,69 @@ await putAsset({
 });
 ```
 
-### استرجاع مورد
+### Retrieve Resource
 ```typescript
 const asset = await getAsset('my-texture');
 if (asset) {
-  // استخدام asset.data
+  // Use asset.data
 }
 ```
 
-### إحصائيات الـ Cache
+### Cache Statistics
 ```typescript
 const stats = await getCacheStats();
 console.log(`Cache size: ${formatBytes(stats.totalSize)}`);
 console.log(`Hit rate: ${(stats.hitRate * 100).toFixed(1)}%`);
 ```
 
-## التوافق الخلفي
+## Backward Compatibility
 
-النظام يحافظ على التوافق مع الكود الحالي:
+The system maintains compatibility with existing code:
 
 ```typescript
-// الطرق القديمة ما زالت تعمل
+// Old methods still work
 await putModel('model-name', arrayBuffer);
 const data = await getModel('model-name');
 ```
 
-## الحدود والقيود
+## Limits and Constraints
 
-- **Mobile**: 50MB، 100 مورد كحد أقصى
-- **Desktop**: 200MB، 500 مورد كحد أقصى
-- **TTL**: تنظيف تلقائي كل 5 دقائق
-- **Migration**: دعم نقل البيانات من الإصدار 1
+- **Mobile**: 50MB, maximum 100 resources
+- **Desktop**: 200MB, maximum 500 resources
+- **TTL**: Automatic cleanup every 5 minutes
+- **Migration**: Support for data transfer from version 1
 
-## أدوات المطور
+## Developer Tools
 
-### تصدير/استيراد البيانات
+### Data Export/Import
 ```typescript
-// تصدير جميع البيانات للنسخ الاحتياطي
+// Export all data for backup
 const backup = await exportData();
 
-// استيراد البيانات من النسخ الاحتياطي
+// Import data from backup
 await importData(backup);
 ```
 
-### تنظيف يدوي
+### Manual Cleanup
 ```typescript
-// تنظيف البيانات المنتهية الصلاحية
+// Clean expired data
 const cleaned = await cleanExpiredAssets();
 
-// حذف مورد محدد
+// Delete specific resource
 await deleteAsset('asset-id');
 
-// تنظيف جميع الموارد
+// Clear all resources
 await clearAssets();
 ```
 
-## الأداء
+## Performance
 
-- **Indexing**: فهارس متعددة للبحث السريع
-- **Transactions**: معاملات محسنة للأداء
-- **Memory Management**: إدارة الذاكرة التلقائية
-- **Background Cleanup**: تنظيف دوري في الخلفية
+- **Indexing**: Multiple indexes for fast search
+- **Transactions**: Optimized transactions for performance
+- **Memory Management**: Automatic memory management
+- **Background Cleanup**: Periodic cleanup in background
 
-## معالجة الأخطاء
+## Error Handling
 
 ```typescript
 try {
@@ -120,12 +120,12 @@ try {
 }
 ```
 
-## الإعدادات
+## Settings
 
-يمكن تخصيص الإعدادات من خلال متغيرات البيئة:
+Settings can be customized through environment variables:
 
 ```typescript
-// في المستقبل يمكن إضافة متغيرات بيئة
+// Future environment variables can be added
 // INDEXEDDB_MAX_SIZE
 // INDEXEDDB_MAX_ITEMS
 // INDEXEDDB_CLEANUP_INTERVAL

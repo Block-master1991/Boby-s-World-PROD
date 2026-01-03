@@ -26,6 +26,7 @@ import { useCoinLogic } from '@/hooks/useCoinLogic';
 import { useEnemyLogic } from '@/hooks/useEnemyLogic';
 import { useCameraLogic } from '@/hooks/useCameraLogic';
 import { useSceneSetup } from '@/hooks/useSceneSetup';
+import { logger } from '@/utils/logger';
 import { useDynamicModelLoader } from '@/hooks/useDynamicModelLoader';
 
 // Priority System Implementation
@@ -63,7 +64,7 @@ class IntelligentCacheManager {
             this.updateAccessOrder(key);
 
             this.stats.hits++;
-            console.log(`[CacheManager] Cache hit for ${key} (size: ${(cached.size / 1024).toFixed(1)}KB)`);
+            logger.log(`[CacheManager] Cache hit for ${key} (size: ${(cached.size / 1024).toFixed(1)}KB)`);
             return cached.data;
         }
 
@@ -80,11 +81,11 @@ class IntelligentCacheManager {
             // Store in cache if we have space
             await this.store(key, data, estimatedSize);
 
-            console.log(`[CacheManager] Cache miss for ${key}, loaded and cached (${(estimatedSize / 1024).toFixed(1)}KB)`);
+            logger.log(`[CacheManager] Cache miss for ${key}, loaded and cached (${(estimatedSize / 1024).toFixed(1)}KB)`);
             return data;
 
         } catch (error) {
-            console.warn(`[CacheManager] Failed to load ${key}:`, error);
+            logger.warn(`[CacheManager] Failed to load ${key}:`, error);
             throw error;
         }
     }
@@ -105,7 +106,7 @@ class IntelligentCacheManager {
         this.currentSize += size;
         this.updateAccessOrder(key);
 
-        console.log(`[CacheManager] Stored ${key} in cache. Total cached: ${this.cache.size} items, ${(this.currentSize / 1024 / 1024).toFixed(1)}MB`);
+        logger.log(`[CacheManager] Stored ${key} in cache. Total cached: ${this.cache.size} items, ${(this.currentSize / 1024 / 1024).toFixed(1)}MB`);
     }
 
     private updateAccessOrder(key: string): void {
@@ -133,7 +134,7 @@ class IntelligentCacheManager {
                     this.cache.delete(keyToEvict);
                     this.stats.evictions++;
 
-                    console.log(`[CacheManager] Evicted ${keyToEvict} to free ${(evicted.size / 1024).toFixed(1)}KB`);
+                    logger.log(`[CacheManager] Evicted ${keyToEvict} to free ${(evicted.size / 1024).toFixed(1)}KB`);
                 }
             }
         }
@@ -145,7 +146,7 @@ class IntelligentCacheManager {
                 data.dispose();
             }
         } catch (error) {
-            console.warn('[CacheManager] Error disposing cached data:', error);
+            logger.warn('[CacheManager] Error disposing cached data:', error);
         }
     }
 
@@ -193,7 +194,7 @@ class IntelligentCacheManager {
             }
         }
 
-        console.log(`[CacheManager] Maintenance cleanup: removed ${itemsToRemove.length} old items`);
+        logger.log(`[CacheManager] Maintenance cleanup: removed ${itemsToRemove.length} old items`);
     }
 
     getStats() {
@@ -221,7 +222,7 @@ class IntelligentCacheManager {
                 this.accessOrder = [];
                 this.currentSize = 0;
                 this.stats = { hits: 0, misses: 0, evictions: 0, sizeReductions: 0 };
-                console.log('[CacheManager] Cache cleared');
+                logger.log('[CacheManager] Cache cleared');
                 resolve();
             });
         });
@@ -354,15 +355,15 @@ class PriorityAssetLoader {
             const cached = await getAsset(assetPath);
 
             if (cached && cached.data) {
-                console.log(`[PriorityAssetLoader] ✓ Loaded ${assetPath} from IndexedDB`);
+                logger.log(`[PriorityAssetLoader] ✓ Loaded ${assetPath} from IndexedDB`);
                 return cached.data;
             }
         } catch (error) {
-            console.log(`[PriorityAssetLoader] IndexedDB miss for ${assetPath}, fetching from network`);
+            logger.log(`[PriorityAssetLoader] IndexedDB miss for ${assetPath}, fetching from network`);
         }
 
         // Fallback to network
-        console.log(`[PriorityAssetLoader] Fetching ${assetPath} from network`);
+        logger.log(`[PriorityAssetLoader] Fetching ${assetPath} from network`);
         const response = await fetch(assetPath);
 
         if (!response.ok) {
@@ -441,7 +442,7 @@ class PriorityAssetLoader {
                     throw new Error(`Dependency ${depId} not found in manifest`);
                 }
 
-                console.log(`[DependencyManager] Loading dependency ${depId} for ${entry.id}`);
+                logger.log(`[DependencyManager] Loading dependency ${depId} for ${entry.id}`);
 
                 // Recursively resolve dependencies of the dependency
                 await this.resolveDependencies(depEntry, loadingStack);
@@ -476,7 +477,7 @@ class PriorityAssetLoader {
 
             } catch (error) {
                 lastError = error as Error;
-                console.warn(`[RetryLogic] Attempt ${attempt} failed for ${asset.id}:`, error);
+                logger.warn(`[RetryLogic] Attempt ${attempt} failed for ${asset.id}:`, error);
 
                 // Wait with exponential backoff
                 if (attempt < maxRetries) {
@@ -543,7 +544,7 @@ class PriorityAssetLoader {
             ).then(() => {
                 loadedCount += assetsByPriority[AssetPriority.LOW].length;
                 // Don't send progress update to avoid conflicts with main loading
-            }).catch(console.error);
+            }).catch(logger.error);
         }
     }
 
@@ -572,7 +573,7 @@ class PriorityAssetLoader {
             if (asset.dependencies) {
                 for (const dep of asset.dependencies) {
                     if (!this.loadedAssets.has(dep)) {
-                        console.warn(`[PriorityAssetLoader] Dependency ${dep} not loaded for ${asset.id}, loading it first`);
+                        logger.warn(`[PriorityAssetLoader] Dependency ${dep} not loaded for ${asset.id}, loading it first`);
                         const depAsset = this.manifest.find(a => a.id === dep);
                         if (depAsset) {
                             await this.loadAsset(depAsset, onProgress);
@@ -581,12 +582,12 @@ class PriorityAssetLoader {
                 }
             }
 
-            console.log(`[PriorityAssetLoader] Loading ${asset.name} (${asset.type})`);
+            logger.log(`[PriorityAssetLoader] Loading ${asset.name} (${asset.type})`);
             await asset.loadFunction();
             this.loadedAssets.add(asset.id);
 
         } catch (error) {
-            console.error(`[PriorityAssetLoader] Failed to load asset ${asset.id}:`, error);
+            logger.error(`[PriorityAssetLoader] Failed to load asset ${asset.id}:`, error);
             // Continue with other assets instead of failing completely
         }
     }
@@ -636,7 +637,7 @@ class CDNManager {
             }
         } catch (error) {
             // Fallback to US
-            console.log('[CDNManager] Could not detect user region, using fallback');
+            logger.log('[CDNManager] Could not detect user region, using fallback');
         }
     }
 
@@ -670,7 +671,7 @@ class CDNManager {
         const cacheBuster = process.env.NODE_ENV === 'development' ? `?v=${Date.now()}` : '';
         const fullUrl = `${regionUrl}${assetPath}${cacheBuster}`;
 
-        console.log(`[CDNManager] Serving asset from ${continent} region: ${fullUrl}`);
+        logger.log(`[CDNManager] Serving asset from ${continent} region: ${fullUrl}`);
         return fullUrl;
     }
 
@@ -826,7 +827,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         // This function will be called when an enemy's attack animation finishes
         // You can add any specific logic here if needed, e.g., triggering enemy death
         // For now, it just logs the event.
-        console.log("Enemy attack animation finished:", event);
+        logger.log("Enemy attack animation finished:", event);
     });
 
     useEffect(() => { onCoinCollectedCallbackRef.current = onCoinCollectedProp; }, [onCoinCollectedProp]);
@@ -1018,7 +1019,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                     lastDogPositionRef.current = { x: currentDogPos.x, z: currentDogPos.z };
                 }
             } catch (error) {
-                console.error("[GameCanvas] Error updating ez-tree environment:", error);
+                logger.error("[GameCanvas] Error updating ez-tree environment:", error);
             }
 
             // Chunk management for trees and grass
@@ -1026,7 +1027,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
             const { chunkX: newChunkX, chunkZ: newChunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
 
             if (!currentDogChunkRef.current || newChunkX !== currentDogChunkRef.current.chunkX || newChunkZ !== currentDogChunkRef.current.chunkZ) {
-                console.log(`[GameCanvas] Dog moved to new chunk: [${newChunkX}, ${newChunkZ}]`);
+                logger.log(`[GameCanvas] Dog moved to new chunk: [${newChunkX}, ${newChunkZ}]`);
                 currentDogChunkRef.current = { chunkX: newChunkX, chunkZ: newChunkZ };
                 // Update ChunkManager via Environment
                 if (environmentRef.current && environmentRef.current.chunkManager) {
@@ -1053,7 +1054,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                     dogModelRef.current.position.x,
                     dogModelRef.current.position.z,
                     velocity
-                ).catch(console.warn); // Don't let preloading errors break the game
+                ).catch(logger.warn); // Don't let preloading errors break the game
             }
         }
 
@@ -1062,11 +1063,11 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 rendererRef.current.render(sceneRef.current, cameraRef.current);
             }
         } catch (error) {
-            console.error("[GameCanvas] Error rendering scene:", error);
+            logger.error("[GameCanvas] Error rendering scene:", error);
             if (error instanceof Error) {
-                console.error("Error Name:", error.name);
-                console.error("Error Message:", error.message);
-                console.error("Error Stack:", error.stack);
+                logger.error("Error Name:", error.name);
+                logger.error("Error Message:", error.message);
+                logger.error("Error Stack:", error.stack);
             }
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
@@ -1081,15 +1082,15 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
         if (cameraRef.current) {
             // Initialize GPU instancing
             initializeGPUInstancing(cameraRef.current);
-            console.log('[GameCanvas] GPU Instancing initialized');
+            logger.log('[GameCanvas] GPU Instancing initialized');
 
             // Initialize LOD manager
             initializeLODManager();
-            console.log('[GameCanvas] LOD Manager initialized');
+            logger.log('[GameCanvas] LOD Manager initialized');
 
             // Initialize object pooling
             initializeObjectPooling();
-            console.log('[GameCanvas] Object Pooling initialized');
+            logger.log('[GameCanvas] Object Pooling initialized');
         }
     }, []);
 
@@ -1137,43 +1138,43 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
                 // After priority loading, continue with world preparation
                 onLoadProgress(85, 'world');
-                console.log("[GameCanvas] Starting World Environment preparation...");
+                logger.log("[GameCanvas] Starting World Environment preparation...");
 
                 // After all assets are loaded, set up camera and chunks and preload world
                 const setupGameWorldAndComplete = async () => {
                     // 🌌 Wait for 8K HDR Skybox to complete loading if environment exists
                     if (environmentRef.current?.skybox.loadingPromise) {
-                        console.log("[GameCanvas] 🌌 Waiting for 8K HDR Skybox to complete loading...");
+                        logger.log("[GameCanvas] 🌌 Waiting for 8K HDR Skybox to complete loading...");
                         await environmentRef.current.skybox.loadingPromise;
-                        console.log("[GameCanvas] 🌌 8K HDR Skybox READY.");
+                        logger.log("[GameCanvas] 🌌 8K HDR Skybox READY.");
                     }
 
                     if (dogModelRef.current) {
-                        console.log("[GameCanvas] 🐶 Dog model available, setting up game world...");
+                        logger.log("[GameCanvas] 🐶 Dog model available, setting up game world...");
 
                         const dogPos = dogModelRef.current.position;
                         const { chunkX, chunkZ } = getChunkCoordinates(dogPos.x, dogPos.z);
                         currentDogChunkRef.current = { chunkX, chunkZ };
 
-                        console.log(`[GameCanvas] 📍 Dog positioned at: ${dogPos.x.toFixed(1)}, ${dogPos.y.toFixed(1)}, ${dogPos.z.toFixed(1)}`);
-                        console.log(`[GameCanvas] 🎯 Current chunk: ${chunkX}, ${chunkZ}`);
+                        logger.log(`[GameCanvas] 📍 Dog positioned at: ${dogPos.x.toFixed(1)}, ${dogPos.y.toFixed(1)}, ${dogPos.z.toFixed(1)}`);
+                        logger.log(`[GameCanvas] 🎯 Current chunk: ${chunkX}, ${chunkZ}`);
 
                         // Final step: ensure world is preloaded before showing game - wait for complete world preload
-                        console.log("[GameCanvas] 🏗️ Starting complete world preload...");
+                        logger.log("[GameCanvas] 🏗️ Starting complete world preload...");
                         if (environmentRef.current) {
                             try {
                                 // Professional solution: Simplified approach using timeout with proper interval cleanup
                                 const preloadTimeoutPromise = new Promise<boolean>((resolve) => {
                                     // Start the preload with a catch to prevent unhandled rejection errors
                                     const preloadPromise = environmentRef.current!.preloadInitialScene(dogPos).catch(err => {
-                                        console.warn("[GameCanvas] ⚠️ Initial scene preload had errors, but continuing game start:", err);
+                                        logger.warn("[GameCanvas] ⚠️ Initial scene preload had errors, but continuing game start:", err);
                                         return; // Ensure it resolves even on error
                                     });
 
                                     // Use a professional timeout-based approach (increased for 8K HDR stability)
                                     setTimeout(() => {
                                         resolve(true);
-                                    }, 20000);
+                                    }, 30000);
                                 });
 
                                 // Smooth progress during preload
@@ -1203,7 +1204,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
 
                                 // Force load coins and enemies for the initial area to ensure everything is ready
                                 const { chunkX: centerX, chunkZ: centerZ } = getChunkCoordinates(dogPos.x, dogPos.z);
-                                console.log(`[GameCanvas] 🔄 Force loading game objects for initial area around chunk ${centerX}, ${centerZ}`);
+                                logger.log(`[GameCanvas] 🔄 Force loading game objects for initial area around chunk ${centerX}, ${centerZ}`);
 
                                 await Promise.all([
                                     forceLoadAreaCoins(centerX, centerZ),
@@ -1215,23 +1216,23 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                                 // Setup camera position after the timeout (camera zoom animation)
                                 setupInitialCameraPosition();
 
-                                console.log("[GameCanvas] 🎮 Starting game after 100% progress completion...");
+                                logger.log("[GameCanvas] 🎮 Starting game after 100% progress completion...");
                                 onLoadComplete(true);
                             } catch (error) {
-                                console.error("[GameCanvas] ❌ World preload failed critically:", error);
+                                logger.error("[GameCanvas] ❌ World preload failed critically:", error);
                                 const err = error as Error;
-                                console.error("❌ Preload error details:", err.message, err.stack);
+                                logger.error("❌ Preload error details:", err.message, err.stack);
 
                                 // Even on failure, force success after progress is 100%
-                                console.log("[GameCanvas] 🔄 Force success on error (progress reached 100%)");
+                                logger.log("[GameCanvas] 🔄 Force success on error (progress reached 100%)");
                                 onLoadComplete(true);
                             }
                         } else {
-                            console.error("[GameCanvas] ❌ Environment not available for preload");
+                            logger.error("[GameCanvas] ❌ Environment not available for preload");
                             onLoadComplete(false);
                         }
                     } else {
-                        console.log("[GameCanvas] ⏳ Waiting for dog model and skybox to be ready...");
+                        logger.log("[GameCanvas] ⏳ Waiting for dog model and skybox to be ready...");
                         setTimeout(setupGameWorldAndComplete, 100);
                     }
                 };
@@ -1239,13 +1240,13 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 await setupGameWorldAndComplete();
 
             } catch (error) {
-                console.error("[GameCanvas] Critical error during asset loading:", error);
+                logger.error("[GameCanvas] Critical error during asset loading:", error);
                 onLoadComplete(false); // Signal failure
             }
         };
 
         if (isNewSession) {
-            console.log("[GameCanvas] New session or first load. Initializing scene elements.");
+            logger.log("[GameCanvas] New session or first load. Initializing scene elements.");
 
             if (rendererRef.current) cleanupScene();
 
@@ -1261,9 +1262,9 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 try {
                     environmentRef.current = new Environment(rendererRef.current);
                     sceneRef.current.add(environmentRef.current);
-                    console.log("[GameCanvas] ez-tree Environment Initialized.");
+                    logger.log("[GameCanvas] ez-tree Environment Initialized.");
                 } catch (error) {
-                    console.error("[GameCanvas] Error initializing ez-tree environment:", error);
+                    logger.error("[GameCanvas] Error initializing ez-tree environment:", error);
                     environmentRef.current = null;
                 }
 
@@ -1276,7 +1277,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
                 try {
                     loadAllGameAssets();
                 } catch (err) {
-                    console.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.", err);
+                    logger.error("[GameCanvas] Failed to initialize scene, camera, or renderer. Aborting further setup.", err);
                     onLoadComplete(false);
                     return;
                 }
@@ -1326,7 +1327,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     // Effect for handling global unhandled rejections for better debugging
     useEffect(() => {
         const handleUnhandledRejection = (event: PromiseRejectionEvent) => {
-            console.error('[GameCanvas] Unhandled Promise Rejection:', event.reason);
+            logger.error('[GameCanvas] Unhandled Promise Rejection:', event.reason);
             const error = event.reason instanceof Error ? event.reason : new Error(String(event.reason));
             trackError(error, { type: 'unhandled_rejection' });
         };
@@ -1340,7 +1341,7 @@ const GameCanvas: React.FC<GameCanvasProps> = ({
     // Effect for full cleanup on component unmount
     useEffect(() => {
         return () => {
-            console.log("[GameCanvas] Component unmounting. Full cleanup.");
+            logger.log("[GameCanvas] Component unmounting. Full cleanup.");
             if (animationFrameId.current) {
                 cancelAnimationFrame(animationFrameId.current);
                 animationFrameId.current = null;

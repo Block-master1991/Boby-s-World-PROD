@@ -1,4 +1,5 @@
 'use client';
+import { logger } from 'utils/logger';
 
 /**
  * Client-safe functions for store items
@@ -37,7 +38,6 @@ export async function getStoreItems(): Promise<StoreItemDefinition[]> {
                             name
                             description
                             price
-                            usdPrice
                             image
                             type
                             rarity
@@ -53,7 +53,7 @@ export async function getStoreItems(): Promise<StoreItemDefinition[]> {
         const result = await response.json();
         return result.data?.storeItems || [];
     } catch (error) {
-        console.error('Error fetching store items:', error);
+        logger.error('Error fetching store items:', error);
         return [];
     }
 }
@@ -85,7 +85,6 @@ export async function getStoreItemsActive(): Promise<StoreItemDefinition[]> {
                             name
                             description
                             price
-                            usdPrice
                             image
                             type
                             rarity
@@ -101,7 +100,7 @@ export async function getStoreItemsActive(): Promise<StoreItemDefinition[]> {
         const result = await response.json();
         return result.data?.activeStoreItems || [];
     } catch (error) {
-        console.error('Error fetching active store items:', error);
+        logger.error('Error fetching active store items:', error);
         return [];
     }
 }
@@ -133,7 +132,6 @@ export async function getStoreItem(id: string): Promise<StoreItemDefinition | nu
                             name
                             description
                             price
-                            usdPrice
                             image
                             type
                             rarity
@@ -150,7 +148,7 @@ export async function getStoreItem(id: string): Promise<StoreItemDefinition | nu
         const result = await response.json();
         return result.data?.storeItem || null;
     } catch (error) {
-        console.error('Error fetching store item:', error);
+        logger.error('Error fetching store item:', error);
         return null;
     }
 }

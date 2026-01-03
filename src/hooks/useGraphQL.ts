@@ -1,6 +1,9 @@
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { useApiFetch } from '@/utils/api';
 import { getGraphQLClient, GAME_QUERIES, GAME_MUTATIONS } from '@/lib/graphql-client';
+import { useAuth } from '@/hooks/useAuth';
+import { ADMIN_WALLET_ADDRESS } from '@/lib/constants';
+import { logger } from '@/utils/logger';
 
 interface GraphQLHookResult<T> {
     data: T | null;
@@ -38,7 +41,8 @@ export const useGraphQL = <T = any>(
         const now = Date.now();
         const cached = graphqlCache.get(cacheKey);
         if (cached && (now - cached.timestamp) < cacheTTL) {
-            console.log(`[useGraphQL] Using cached result for: ${cacheKey.substring(0, 50)}...`);
+            logger.log(`[useGraphQL] Using cached result for: ${cacheKey.substring(0, 50)}...`);
+            logger.log(`[useGraphQL] Using cached result for: ${cacheKey.substring(0, 50)}...`);
             setData(cached.data);
             setError(null);
             return cached.data;
@@ -46,7 +50,7 @@ export const useGraphQL = <T = any>(
 
         // Check if there's a pending request for the same query
         if (pendingRequests.has(cacheKey)) {
-            console.log(`[useGraphQL] Waiting for pending request: ${cacheKey.substring(0, 50)}...`);
+            logger.log(`[useGraphQL] Waiting for pending request: ${cacheKey.substring(0, 50)}...`);
             try {
                 const result = await pendingRequests.get(cacheKey);
                 setData(result);
@@ -54,7 +58,7 @@ export const useGraphQL = <T = any>(
                 return result;
             } catch (err) {
                 // If pending request failed, we'll try again
-                console.log(`[useGraphQL] Pending request failed, retrying: ${cacheKey.substring(0, 50)}...`);
+                logger.log(`[useGraphQL] Pending request failed, retrying: ${cacheKey.substring(0, 50)}...`);
             }
         }
 
@@ -89,7 +93,7 @@ export const useGraphQL = <T = any>(
             } catch (err) {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error';
                 setError(errorMessage);
-                console.error('[useGraphQL] Query failed:', errorMessage);
+                logger.error('[useGraphQL] Query failed:', errorMessage);
                 throw err; // Re-throw to be caught by caller
             } finally {
                 setLoading(false);
@@ -138,14 +142,25 @@ export const useUserData = (userId: string) => {
     });
 };
 
+// Simple global cache for market data to prevent redundant requests across components
+let globalMarketDataCache: any = null;
+let lastMarketDataFetchTime = 0;
+const MARKET_DATA_CACHE_TTL = 60000; // 60 seconds
+
 export const useMarketData = () => {
     // Using useApiFetch for security and consistency
     const { apiFetch } = useApiFetch();
-    const [data, setData] = useState<any>(null);
+    const [data, setData] = useState<any>(globalMarketDataCache);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    const execute = useCallback(async () => {
+    const execute = useCallback(async (force = false) => {
+        const now = Date.now();
+        // Use cache if available and not expired, unless force refresh is requested
+        if (!force && globalMarketDataCache && (now - lastMarketDataFetchTime < MARKET_DATA_CACHE_TTL)) {
+            setData(globalMarketDataCache);
+            return;
+        }
         setLoading(true);
         setError(null);
 
@@ -183,7 +198,7 @@ export const useMarketData = () => {
             setData(result.data);
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-            console.error('[useMarketData] Error:', errorMessage);
+            logger.error('[useMarketData] Error:', errorMessage);
             setError(errorMessage);
         } finally {
             setLoading(false);
@@ -227,14 +242,23 @@ export const useUserInventory = (userId: string) => {
     });
 };
 
-export const useUserStats = () => {
+export const useUserStats = (requiredRole: 'admin' | 'user' = 'user') => {
     // Using useApiFetch for security and consistency
     const { apiFetch } = useApiFetch();
+    const { isAuthenticated, user } = useAuth();
     const [data, setData] = useState<any>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
+    const isAdmin = user?.publicKey === ADMIN_WALLET_ADDRESS;
+    const isAuthorized = requiredRole === 'admin' ? isAdmin : (!isAdmin || user?.publicKey !== ADMIN_WALLET_ADDRESS);
+
     const execute = useCallback(async () => {
+        // Guard: Check authentication and professional role separation
+        if (!isAuthenticated || !isAuthorized) {
+            logger.log(`Guard blocked request: Auth=${isAuthenticated}, Role=${requiredRole}, IsAdmin=${isAdmin}`);
+            return;
+        }
         setLoading(true);
         setError(null);
 
@@ -271,28 +295,30 @@ export const useUserStats = () => {
 
             setData(result.data);
         } catch (err) {
-            // تحسين error handling للـ network errors
+            // Improved error handling for network errors
             if (err instanceof Error &&
                 (err.message?.includes('NetworkError') ||
                     err.message?.includes('Failed to fetch') ||
                     err.message?.includes('fetch resource'))) {
-                // Network error - لا نعرض خطأ للمستخدم، فقط نسجل
-                console.warn('[useUserStats] Network error (will retry):', err.message);
+                // Network error - don't show error to user, just log
+                logger.warn('Network error (will retry):', err.message);
                 setError(null); // Clear error to avoid showing to user
             } else {
                 const errorMessage = err instanceof Error ? err.message : 'Unknown error';
-                console.error('[useUserStats] Error:', errorMessage);
+                logger.error('Error:', errorMessage);
                 setError(errorMessage);
             }
         } finally {
             setLoading(false);
         }
-    }, [apiFetch]);
+    }, [apiFetch, isAuthenticated, isAdmin]);
 
     // Auto-execute on mount
     useEffect(() => {
-        execute();
-    }, [execute]);
+        if (isAuthenticated && isAuthorized) {
+            execute();
+        }
+    }, [execute, isAuthenticated, isAuthorized]);
 
     return {
         data,
@@ -323,7 +349,7 @@ export const useGraphQLMutation = <T = any>(mutation: string) => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
             setError(errorMessage);
-            console.error('[useGraphQLMutation] Mutation failed:', errorMessage);
+            logger.error('[useGraphQLMutation] Mutation failed:', errorMessage);
             return null;
         } finally {
             setLoading(false);
@@ -414,7 +440,7 @@ export const useConsumableItem = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
             setError(errorMessage);
-            console.error('[useConsumableItem] Failed to use item:', errorMessage);
+            logger.error('[useConsumableItem] Failed to use item:', errorMessage);
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -487,7 +513,7 @@ export const useFetchPlayerData = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
             setError(errorMessage);
-            console.error('[useFetchPlayerData] Error:', errorMessage);
+            logger.error('[useFetchPlayerData] Error:', errorMessage);
         } finally {
             setLoading(false);
         }
@@ -545,7 +571,7 @@ export const useAddCoins = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
             setError(errorMessage);
-            console.error('[useAddCoins] Error:', errorMessage);
+            logger.error('[useAddCoins] Error:', errorMessage);
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -604,7 +630,7 @@ export const useWithdrawUSDT = () => {
         } catch (err) {
             const errorMessage = err instanceof Error ? err.message : 'Unknown error';
             setError(errorMessage);
-            console.error('[useWithdrawUSDT] Error:', errorMessage);
+            logger.error('[useWithdrawUSDT] Error:', errorMessage);
             return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
@@ -626,6 +652,7 @@ export const useBobyPriceUpdates = () => {
 
     useEffect(() => {
         let isSubscribed = true;
+        let intervalId: NodeJS.Timeout | null = null;
 
         const subscribeToPriceUpdates = async () => {
             try {
@@ -662,25 +689,21 @@ export const useBobyPriceUpdates = () => {
                         if (isSubscribed) {
                             const errorMessage = err instanceof Error ? err.message : 'Subscription error';
                             setError(errorMessage);
-                            console.error('[useBobyPriceUpdates] Error:', errorMessage);
+                            logger.error('[useBobyPriceUpdates] Error:', errorMessage);
                         }
                     }
                 };
 
                 // Poll every 30 seconds (matching server interval)
-                const intervalId = setInterval(pollPrice, 30000);
+                intervalId = setInterval(pollPrice, 30000);
 
                 // Initial poll
                 pollPrice();
-
-                return () => {
-                    clearInterval(intervalId);
-                };
             } catch (err) {
                 if (isSubscribed) {
                     const errorMessage = err instanceof Error ? err.message : 'Failed to setup subscription';
                     setError(errorMessage);
-                    console.error('[useBobyPriceUpdates] Setup error:', errorMessage);
+                    logger.error('[useBobyPriceUpdates] Setup error:', errorMessage);
                 }
             }
         };
@@ -689,6 +712,9 @@ export const useBobyPriceUpdates = () => {
 
         return () => {
             isSubscribed = false;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
         };
     }, [apiFetch]);
 
@@ -698,20 +724,33 @@ export const useBobyPriceUpdates = () => {
     };
 };
 
-export const useUserActivityUpdates = () => {
+export const useUserActivityUpdates = (requiredRole: 'admin' | 'user' = 'user') => {
     const { apiFetch } = useApiFetch();
+    const { isAuthenticated, user } = useAuth();
     const [data, setData] = useState<any>(null);
     const [error, setError] = useState<string | null>(null);
 
+    const isAdmin = user?.publicKey === ADMIN_WALLET_ADDRESS;
+    const isAuthorized = requiredRole === 'admin' ? isAdmin : (!isAdmin || user?.publicKey !== ADMIN_WALLET_ADDRESS);
+
     useEffect(() => {
         let isSubscribed = true;
+        let intervalId: NodeJS.Timeout | null = null;
 
         const subscribeToActivityUpdates = async () => {
             try {
+                // Guard: Check authentication and professional role separation
+                if (!isAuthenticated || !isAuthorized) {
+                    if (isSubscribed) {
+                        logger.log(`Guard active: Skipping updates for Role=${requiredRole}`);
+                    }
+                    return;
+                }
+
                 // Check if user is authenticated (has CSRF token)
                 const hasCsrfToken = document.cookie.includes('csrfToken');
                 if (!hasCsrfToken) {
-                    console.log('[useUserActivityUpdates] No CSRF token found, user likely logged out. Stopping activity updates.');
+                    logger.log('No CSRF token found, user likely logged out. Stopping activity updates.');
                     return;
                 }
 
@@ -721,7 +760,7 @@ export const useUserActivityUpdates = () => {
                         // Check CSRF token before each request
                         const currentHasCsrfToken = document.cookie.includes('csrfToken');
                         if (!currentHasCsrfToken) {
-                            console.log('[useUserActivityUpdates] CSRF token lost during polling, stopping activity updates.');
+                            logger.log('CSRF token lost during polling, stopping activity updates.');
                             return;
                         }
 
@@ -752,37 +791,33 @@ export const useUserActivityUpdates = () => {
                         }
                     } catch (err) {
                         if (isSubscribed) {
-                            // تحسين error handling للـ network errors
+                            // Improved error handling for network errors
                             if (err instanceof Error &&
                                 (err.message?.includes('NetworkError') ||
                                     err.message?.includes('Failed to fetch') ||
                                     err.message?.includes('fetch resource'))) {
-                                // Network error - لا نعرض خطأ للمستخدم، فقط نسجل
-                                console.warn('[useUserActivityUpdates] Network error (will retry):', err.message);
+                                // Network error - don't show error to user, just log
+                                logger.warn('Network error (will retry):', err.message);
                                 setError(null); // Clear error to avoid showing to user
                             } else {
                                 const errorMessage = err instanceof Error ? err.message : 'Activity subscription error';
                                 setError(errorMessage);
-                                console.error('[useUserActivityUpdates] Error:', errorMessage);
+                                logger.error('Error:', errorMessage);
                             }
                         }
                     }
                 };
 
                 // Poll every 10 seconds (matching server interval)
-                const intervalId = setInterval(pollActivity, 10000);
+                intervalId = setInterval(pollActivity, 10000);
 
                 // Initial poll
                 pollActivity();
-
-                return () => {
-                    clearInterval(intervalId);
-                };
             } catch (err) {
                 if (isSubscribed) {
                     const errorMessage = err instanceof Error ? err.message : 'Failed to setup activity subscription';
                     setError(errorMessage);
-                    console.error('[useUserActivityUpdates] Setup error:', errorMessage);
+                    logger.error('Setup error:', errorMessage);
                 }
             }
         };
@@ -791,8 +826,11 @@ export const useUserActivityUpdates = () => {
 
         return () => {
             isSubscribed = false;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
         };
-    }, [apiFetch]);
+    }, [apiFetch, isAuthenticated, isAuthorized]);
 
     return {
         data,
@@ -809,6 +847,7 @@ export const useGameEvents = (userId: string) => {
         if (!userId) return;
 
         let isSubscribed = true;
+        let intervalId: NodeJS.Timeout | null = null;
 
         const subscribeToGameEvents = async () => {
             try {
@@ -845,25 +884,21 @@ export const useGameEvents = (userId: string) => {
                         if (isSubscribed) {
                             const errorMessage = err instanceof Error ? err.message : 'Game events subscription error';
                             setError(errorMessage);
-                            console.error('[useGameEvents] Error:', errorMessage);
+                            logger.error('[useGameEvents] Error:', errorMessage);
                         }
                     }
                 };
 
                 // Poll every 30 seconds (matching server interval)
-                const intervalId = setInterval(pollEvents, 30000);
+                intervalId = setInterval(pollEvents, 30000);
 
                 // Initial poll
                 pollEvents();
-
-                return () => {
-                    clearInterval(intervalId);
-                };
             } catch (err) {
                 if (isSubscribed) {
                     const errorMessage = err instanceof Error ? err.message : 'Failed to setup game events subscription';
                     setError(errorMessage);
-                    console.error('[useGameEvents] Setup error:', errorMessage);
+                    logger.error('[useGameEvents] Setup error:', errorMessage);
                 }
             }
         };
@@ -872,6 +907,9 @@ export const useGameEvents = (userId: string) => {
 
         return () => {
             isSubscribed = false;
+            if (intervalId) {
+                clearInterval(intervalId);
+            }
         };
     }, [userId, apiFetch]);
 

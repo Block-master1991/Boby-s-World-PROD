@@ -1,4 +1,5 @@
 // Intelligent Asset Preloading System for Boby's World
+import { logger } from 'utils/logger';
 // Optimizes resource loading based on player position and movement patterns
 
 interface AssetMetadata {
@@ -245,9 +246,9 @@ class IntelligentAssetPreloader {
             this.loadedAssets.add(asset.id);
             this.preloadedAssets.add(asset.id);
             asset.lastAccessed = Date.now();
-            console.log(`[AssetPreloader] Preloaded ${asset.id} (${asset.estimatedSize}KB)`);
+            logger.log(`[AssetPreloader] Preloaded ${asset.id} (${asset.estimatedSize}KB)`);
         } catch (error) {
-            console.warn(`[AssetPreloader] Failed to preload ${asset.id}:`, error);
+            logger.warn(`[AssetPreloader] Failed to preload ${asset.id}:`, error);
         } finally {
             this.activePreloads.delete(asset.id);
         }
@@ -257,13 +258,13 @@ class IntelligentAssetPreloader {
         // OFFLINE-FIRST: Always check IndexedDB first
         const cached = await this.getCachedAsset(asset.id);
         if (cached) {
-            console.log(`[AssetPreloader] ✓ Loading from IndexedDB (offline-first): ${asset.id}`);
+            logger.log(`[AssetPreloader] ✓ Loading from IndexedDB (offline-first): ${asset.id}`);
             return cached;
         }
 
         // EMERGENCY FALLBACK: Only in development mode
         if (process.env.NODE_ENV === 'development') {
-            console.warn(`[AssetPreloader] ⚠️ Asset not found in IndexedDB, emergency network load: ${asset.id}`);
+            logger.warn(`[AssetPreloader] ⚠️ Asset not found in IndexedDB, emergency network load: ${asset.id}`);
 
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
@@ -277,11 +278,11 @@ class IntelligentAssetPreloader {
 
                 // Cache the asset for future use
                 await this.cacheAsset(asset.id, data, asset.estimatedSize);
-                console.log(`[AssetPreloader] ✓ Emergency load successful and cached: ${asset.id}`);
+                logger.log(`[AssetPreloader] ✓ Emergency load successful and cached: ${asset.id}`);
 
                 return data;
             } catch (networkError) {
-                console.error(`[AssetPreloader] ✗ Emergency network load failed for: ${asset.id}`, networkError);
+                logger.error(`[AssetPreloader] ✗ Emergency network load failed for: ${asset.id}`, networkError);
                 throw new Error(`Asset not available offline and network load failed: ${asset.id}`);
             } finally {
                 clearTimeout(timeoutId);
@@ -296,11 +297,11 @@ class IntelligentAssetPreloader {
         try {
             const cachedData = await getModel(assetId);
             if (cachedData) {
-                console.log(`[AssetPreloader] Loading ${assetId} from IndexedDB`);
+                logger.log(`[AssetPreloader] Loading ${assetId} from IndexedDB`);
                 return cachedData;
             }
         } catch (error) {
-            console.warn(`[AssetPreloader] Error loading ${assetId} from IndexedDB:`, error);
+            logger.warn(`[AssetPreloader] Error loading ${assetId} from IndexedDB:`, error);
         }
         return null;
     }
@@ -309,9 +310,9 @@ class IntelligentAssetPreloader {
         try {
             await putModel(assetId, data);
             this.currentCacheSize += sizeKB * 1024;
-            console.log(`[AssetPreloader] Cached ${assetId} (${sizeKB}KB) in IndexedDB`);
+            logger.log(`[AssetPreloader] Cached ${assetId} (${sizeKB}KB) in IndexedDB`);
         } catch (error) {
-            console.warn(`[AssetPreloader] Error caching ${assetId} in IndexedDB:`, error);
+            logger.warn(`[AssetPreloader] Error caching ${assetId} in IndexedDB:`, error);
             // Still count it in memory usage even if caching failed
             this.currentCacheSize += sizeKB * 1024;
         }
@@ -352,7 +353,7 @@ class IntelligentAssetPreloader {
 
         // Note: We don't remove from IndexedDB here as it serves as long-term cache
         // Only remove from memory tracking
-        console.log(`[AssetPreloader] Unloaded distant asset: ${assetId}`);
+        logger.log(`[AssetPreloader] Unloaded distant asset: ${assetId}`);
     }
 
     private startBackgroundMaintenance(): void {
@@ -395,7 +396,7 @@ class IntelligentAssetPreloader {
             freedSpace += asset.estimatedSize * 1024;
         }
 
-        console.log(`[AssetPreloader] Evicted ${(freedSpace / 1024 / 1024).toFixed(1)}MB of old assets`);
+        logger.log(`[AssetPreloader] Evicted ${(freedSpace / 1024 / 1024).toFixed(1)}MB of old assets`);
     }
 
     // Public API

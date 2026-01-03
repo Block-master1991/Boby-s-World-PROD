@@ -4,6 +4,6 @@
     "next/typescript"
   ],
   "rules": {
-    // أضف قواعد ESLint الخاصة بك هنا
+    // Add your ESLint rules here
   }
 }

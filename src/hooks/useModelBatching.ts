@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { useCallback, useMemo, useRef } from 'react';
+import { logger } from '@/utils/logger';
 
 interface ModelBatch {
   modelPath: string;
@@ -22,7 +23,7 @@ export const useModelBatching = () => {
     scale: THREE.Vector3
   ) => {
     let batch = batchesRef.current.get(modelPath);
-    
+
     if (!batch) {
       batch = {
         modelPath,
@@ -45,8 +46,8 @@ export const useModelBatching = () => {
     if (batch.mesh) return batch.mesh;
 
     // Ensure the model has children and the first child is a Mesh
-    if (!model.children.length || !(model.children[0] instanceof THREE.Mesh)) {
-      console.error("Model format is not as expected for batching.", model);
+    if (!model.children || model.children.length === 0 || !(model.children[0] instanceof THREE.Mesh)) {
+      logger.error("Model format is not as expected for batching.", model);
       return null;
     }
 
@@ -63,7 +64,7 @@ export const useModelBatching = () => {
     mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     mesh.frustumCulled = true;
 
-    // تطبيق جميع الإعدادات للنماذج في الدفعة
+    // Apply all settings to models in the batch
     batch.instances.forEach((instance, index) => {
       dummy.position.copy(instance.position);
       dummy.rotation.copy(instance.rotation);
@@ -105,7 +106,7 @@ export const useModelBatching = () => {
     const batch = batchesRef.current.get(modelPath);
     if (!batch || !batch.mesh) return;
 
-    // نقل النموذج بعيداً بدلاً من إزالته
+    // Move the model far away instead of removing it
     dummy.position.set(10000, 10000, 10000);
     dummy.updateMatrix();
 

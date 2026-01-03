@@ -2,9 +2,10 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { RECAPTCHA_SECRET_KEY } from '@/lib/server-constants';
+import { logger } from 'utils/logger';
 
 export async function POST(request: NextRequest) {
-  console.log('[CAPTCHA VERIFY] Received CAPTCHA verification request');
+  logger.log('[CAPTCHA VERIFY] Received CAPTCHA verification request');
 
   try {
     const { token } = await request.json();
@@ -16,7 +17,7 @@ export async function POST(request: NextRequest) {
     const secretKey = RECAPTCHA_SECRET_KEY;
 
     if (!secretKey) {
-      console.error('RECAPTCHA_SECRET_KEY is not set in environment variables. This is a critical configuration error.');
+      logger.error('RECAPTCHA_SECRET_KEY is not set in environment variables. This is a critical configuration error.');
       return NextResponse.json({ success: false, error: 'Server configuration error for CAPTCHA. Secret key is missing.' }, { status: 500 });
     }
 
@@ -35,7 +36,7 @@ export async function POST(request: NextRequest) {
     try {
       data = await response.json();
     } catch (jsonError) {
-      console.error('Failed to parse reCAPTCHA verification response as JSON:', jsonError);
+      logger.error('Failed to parse reCAPTCHA verification response as JSON:', jsonError);
       return NextResponse.json({ success: false, error: 'Invalid response from reCAPTCHA server' }, { status: 502 });
     }
 
@@ -44,12 +45,12 @@ export async function POST(request: NextRequest) {
       // e.g., if (data.score < 0.5) { return NextResponse.json({ success: false, error: 'Low CAPTCHA score' }); }
       return NextResponse.json({ success: true });
     } else {
-      console.error('reCAPTCHA verification failed:', data['error-codes']);
+      logger.error('reCAPTCHA verification failed:', data['error-codes']);
       return NextResponse.json({ success: false, error: 'CAPTCHA verification failed', details: data['error-codes'] }, { status: 400 });
     }
 
   } catch (error) {
-    console.error('Error in CAPTCHA verification API:', error);
+    logger.error('Error in CAPTCHA verification API:', error);
     return NextResponse.json({ success: false, error: 'Internal server error during CAPTCHA verification' }, { status: 500 });
   }
 }

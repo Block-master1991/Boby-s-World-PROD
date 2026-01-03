@@ -1,4 +1,5 @@
 
+import { logger } from 'utils/logger';
 import { initializeAdminApp } from './firebase-admin';
 import * as admin from 'firebase-admin'; // Import admin namespace for QueryDocumentSnapshot
 import { getFirestore, FieldValue, Timestamp as AdminTimestamp } from 'firebase-admin/firestore'; // Explicitly import AdminTimestamp
@@ -29,7 +30,7 @@ export class TokenBlacklistManager {
       const docSnap = await docRef.get();
 
       if (docSnap.exists) {
-        console.warn(`[TokenBlacklist] Token JTI: ${jti} is already in the blacklist. Current reason: ${docSnap.data()?.reason}. New reason: ${reason}. Not overwriting.`);
+        logger.warn(`[TokenBlacklist] Token JTI: ${jti} is already in the blacklist. Current reason: ${docSnap.data()?.reason}. New reason: ${reason}. Not overwriting.`);
         return;
       }
       
@@ -39,11 +40,11 @@ export class TokenBlacklistManager {
         reason,
         revokedAt: FieldValue.serverTimestamp() as AdminTimestamp 
       });
-      console.log(`[TokenBlacklist] Token JTI: ${jti} successfully added to blacklist. Reason: ${reason}, Original Exp: ${new Date(exp * 1000).toISOString()}`);
+      logger.log(`[TokenBlacklist] Token JTI: ${jti} successfully added to blacklist. Reason: ${reason}, Original Exp: ${new Date(exp * 1000).toISOString()}`);
         } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[TokenBlacklist] Error adding token JTI: ${jti} to blacklist:`, errorMessage, errorStack);
+      logger.error(`[TokenBlacklist] Error adding token JTI: ${jti} to blacklist:`, errorMessage, errorStack);
     }
 
   }
@@ -53,23 +54,23 @@ export class TokenBlacklistManager {
       await initializeAdminApp(); 
       const blacklistCol = this.getBlacklistCollection();
       
-      console.log(`[TokenBlacklist] Checking blacklist for JTI: ${jti}`);
+      logger.log(`[TokenBlacklist] Checking blacklist for JTI: ${jti}`);
       const tokenDoc = await blacklistCol.doc(jti).get();
 
       if (!tokenDoc.exists) {
-        console.log(`[TokenBlacklist] Token JTI: ${jti} not found in blacklist.`);
+        logger.log(`[TokenBlacklist] Token JTI: ${jti} not found in blacklist.`);
         return false; 
       }
 
       const tokenData = tokenDoc.data() as BlacklistedTokenDoc;
-      console.log(`[TokenBlacklist] Token JTI: ${jti} found in blacklist. Reason: ${tokenData.reason}, RevokedAt: ${tokenData.revokedAt.toDate().toISOString()}`);
+      logger.log(`[TokenBlacklist] Token JTI: ${jti} found in blacklist. Reason: ${tokenData.reason}, RevokedAt: ${tokenData.revokedAt.toDate().toISOString()}`);
 
       // Optional: Clean up very old tokens if their original expiry + buffer has passed.
       // This prevents the blacklist from growing indefinitely with tokens that would be long expired anyway.
       // Consider a longer buffer, e.g., refresh token expiry (7 days) + a few more days.
       const originalExpiryWithBufferMs = (tokenData.exp * 1000) + (10 * 24 * 60 * 60 * 1000); // 10 days buffer
       if (originalExpiryWithBufferMs < Date.now()) {
-        console.log(`[TokenBlacklist] Cleaning up very old blacklisted token JTI: ${jti} (original expiry + buffer passed). Deleting from blacklist.`);
+        logger.log(`[TokenBlacklist] Cleaning up very old blacklisted token JTI: ${jti} (original expiry + buffer passed). Deleting from blacklist.`);
         await tokenDoc.ref.delete();
         return false; // Treat as not blacklisted if it's extremely old and cleaned up.
       }
@@ -79,10 +80,10 @@ export class TokenBlacklistManager {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[TokenBlacklist] Error checking blacklist for token JTI: ${jti}:`, errorMessage, errorStack);
+      logger.error(`[TokenBlacklist] Error checking blacklist for token JTI: ${jti}:`, errorMessage, errorStack);
       // Fail-safe decision: If DB error, prefer to consider token as potentially valid to avoid undue user impact.
       // Log heavily and monitor. For extreme security, you might return true.
-      console.warn(`[TokenBlacklist] Database error during blacklist check for JTI ${jti}. Treating as NOT blacklisted due to error.`);
+      logger.warn(`[TokenBlacklist] Database error during blacklist check for JTI ${jti}. Treating as NOT blacklisted due to error.`);
       return false; 
     }
 
@@ -96,7 +97,7 @@ export class TokenBlacklistManager {
       // These tokens would be invalid anyway, regardless of blacklisting.
       const cleanupThresholdSeconds = Math.floor(Date.now() / 1000) - (olderThanDays * 24 * 60 * 60);
       
-      console.log(`[TokenBlacklist] Starting cleanup of blacklisted tokens originally expired before ${new Date(cleanupThresholdSeconds * 1000).toISOString()} (i.e., older than ${olderThanDays} days).`);
+      logger.log(`[TokenBlacklist] Starting cleanup of blacklisted tokens originally expired before ${new Date(cleanupThresholdSeconds * 1000).toISOString()} (i.e., older than ${olderThanDays} days).`);
       
       const querySnapshot = await db.collection('revokedAuthTokens')
                                   .where('exp', '<', cleanupThresholdSeconds)
@@ -104,21 +105,21 @@ export class TokenBlacklistManager {
                                   .get();
     
       if (querySnapshot.empty) {
-        console.log("[TokenBlacklist] No sufficiently old blacklisted tokens (based on original 'exp' field) found for this cleanup batch.");
+        logger.log("[TokenBlacklist] No sufficiently old blacklisted tokens (based on original 'exp' field) found for this cleanup batch.");
         return;
       }
 
       const batch = db.batch();
       querySnapshot.docs.forEach(doc => {
-        console.log(`[TokenBlacklist] Scheduling deletion for old blacklisted token: ${doc.id} (originally expired at ${new Date((doc.data().exp as number) * 1000).toISOString()})`);
+        logger.log(`[TokenBlacklist] Scheduling deletion for old blacklisted token: ${doc.id} (originally expired at ${new Date((doc.data().exp as number) * 1000).toISOString()})`);
         batch.delete(doc.ref);
       });
       await batch.commit();
-      console.log(`[TokenBlacklist] Cleaned up ${querySnapshot.size} old blacklisted tokens.`);
+      logger.log(`[TokenBlacklist] Cleaned up ${querySnapshot.size} old blacklisted tokens.`);
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[TokenBlacklist] Error during scheduled cleanup of expired tokens:`, errorMessage, errorStack);
+      logger.error(`[TokenBlacklist] Error during scheduled cleanup of expired tokens:`, errorMessage, errorStack);
     }
 
   }
@@ -127,7 +128,7 @@ export class TokenBlacklistManager {
   static async blacklistAllUserTokens(publicKey: string, reason: 'security_breach' | 'logout' = 'security_breach'): Promise<void> {
     try {
         await initializeAdminApp();
-        console.warn(`[TokenBlacklist] Conceptual: Blacklisting all tokens for user: ${publicKey}, reason: ${reason}. This function is a placeholder. A robust implementation would require tracking active JTIs per user or user session IDs linked to JWTs, then blacklisting those specific JTIs.`);
+        logger.warn(`[TokenBlacklist] Conceptual: Blacklisting all tokens for user: ${publicKey}, reason: ${reason}. This function is a placeholder. A robust implementation would require tracking active JTIs per user or user session IDs linked to JWTs, then blacklisting those specific JTIs.`);
         // Example (if you stored active JTIs per user):
         // const userSessionsRef = getFirestore().collection('userActiveSessions').doc(publicKey);
         // const doc = await userSessionsRef.get();
@@ -139,7 +140,7 @@ export class TokenBlacklistManager {
         //       // Use a far future 'exp' if original unknown, or fetch original 'exp' if stored with JTI
         //       await this.addToBlacklist(jti, nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS, reason);
         //     }
-        //     console.log(`[TokenBlacklist] Attempted to blacklist ${activeJtis.length} JTIs for user ${publicKey}.`);
+        //     logger.log(`[TokenBlacklist] Attempted to blacklist ${activeJtis.length} JTIs for user ${publicKey}.`);
         //     // Clear active JTIs for the user
         //     await userSessionsRef.update({ activeJtis: [] });
         //   }
@@ -147,7 +148,7 @@ export class TokenBlacklistManager {
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[TokenBlacklist] Error in conceptual blacklistAllUserTokens for ${publicKey}:`, errorMessage, errorStack);
+      logger.error(`[TokenBlacklist] Error in conceptual blacklistAllUserTokens for ${publicKey}:`, errorMessage, errorStack);
     }
 
   }
@@ -155,7 +156,7 @@ export class TokenBlacklistManager {
   static async getStats(useCache = true): Promise<{ totalBlacklisted: number; byReason: Record<string, number> } | null> {
     // Check cache first
     if (useCache && this.statsCache && (Date.now() - this.statsCache.timestamp < this.STATS_CACHE_TTL_MS)) {
-      console.log(`[TokenBlacklist] Returning cached stats from ${new Date(this.statsCache.timestamp).toISOString()}`);
+      logger.log(`[TokenBlacklist] Returning cached stats from ${new Date(this.statsCache.timestamp).toISOString()}`);
       return this.statsCache.data;
     }
     
@@ -173,7 +174,7 @@ export class TokenBlacklistManager {
       let hasMore = true;
       let processedDocs = 0;
       
-      console.log(`[TokenBlacklist] Starting stats computation for ${totalBlacklisted} total blacklisted tokens`);
+      logger.log(`[TokenBlacklist] Starting stats computation for ${totalBlacklisted} total blacklisted tokens`);
       
       while (hasMore) {
         let query = this.getBlacklistCollection()
@@ -205,7 +206,7 @@ export class TokenBlacklistManager {
         
         // Log progress for large collections
         if (totalBlacklisted > 10000 && processedDocs % 5000 === 0) {
-          console.log(`[TokenBlacklist] Stats computation progress: ${processedDocs}/${totalBlacklisted} documents processed`);
+          logger.log(`[TokenBlacklist] Stats computation progress: ${processedDocs}/${totalBlacklisted} documents processed`);
         }
       }
       
@@ -217,12 +218,12 @@ export class TokenBlacklistManager {
         timestamp: Date.now()
       };
       
-      console.log(`[TokenBlacklist] Stats computed:`, stats);
+      logger.log(`[TokenBlacklist] Stats computed:`, stats);
       return stats;
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
       const errorStack = error instanceof Error ? error.stack : undefined;
-      console.error(`[TokenBlacklist] Error getting blacklist stats:`, errorMessage, errorStack);
+      logger.error(`[TokenBlacklist] Error getting blacklist stats:`, errorMessage, errorStack);
       this.statsCache = null; // Invalidate cache on error
       return null;
     }

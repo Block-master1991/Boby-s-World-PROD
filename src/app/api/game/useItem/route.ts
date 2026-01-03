@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withCsrfProtection } from '@/lib/csrf-middleware'; // استيراد CSRF middleware
-import { CSRFManager } from '@/lib/csrf-utils'; // استيراد CSRFManager
-import { JWTManager } from '@/lib/jwt-utils'; // لاستخدام createSecureCookieOptions
-import { initializeAdminApp } from '@/lib/firebase-admin'; // استيراد db و initializeAdminApp
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+import { initializeAdminApp } from '@/lib/firebase-admin';
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
-  console.log("[API] /api/game/useItem called");
+  logger.log("[API] /api/game/useItem called");
 
   try {
     await initializeAdminApp(); // Initialize inside the handler
@@ -88,25 +88,15 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     const response = NextResponse.json({ success: true, itemsUsed: amount });
 
-    // إصدار CSRF Token جديد بعد الطلب الناجح
+    // Use unified helper to update CSRF
     const requestHost = request.headers.get('host') || undefined;
-    const csrfToken = await CSRFManager.getOrCreateToken(userPublicKey);
-    response.cookies.set('csrfToken', csrfToken, {
-      httpOnly: false,
-      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-      maxAge: 30 * 60, // 30 دقيقة
-      path: '/',
-    });
-    console.log('[useItem] New CSRF token issued and set in cookie.');
-
-    return response;
+    return await setCsrfTokenResponse(response, userPublicKey, requestHost);
   } catch (error: unknown) {
-    console.error('[useItem] Error:', error);
+    logger.error('[useItem] Error:', error as Error);
     let errorMessage = (error instanceof Error) ? error.message : 'Failed to use item.';
     let statusCode = 500;
 
-    // إذا كان الخطأ يشير إلى عدم تهيئة Firebase، فقم بمعالجته بشكل خاص
+    // If the error indicates Firebase not initialized, handle it specially
     if (errorMessage.includes("Firebase Admin SDK not initialized")) {
       errorMessage = "Server configuration error: Firebase Admin SDK not properly set up.";
       statusCode = 500;

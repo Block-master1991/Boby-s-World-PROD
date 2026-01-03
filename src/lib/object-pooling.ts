@@ -3,6 +3,7 @@
 
 import { THREE, Mesh, Points, Vector3, BufferGeometry, MeshStandardMaterial, PointsMaterial, BufferAttribute } from '@/lib/three-chunk';
 import { isMobileDevice } from './utils';
+import { logger } from '@/utils/logger';
 
 interface PoolConfig {
     initialSize: number;
@@ -84,7 +85,7 @@ abstract class ObjectPool<T> {
                 // For now, create a new one (could implement waiting queue later)
                 obj = this.create();
                 this.stats.created++;
-                console.warn(`[ObjectPool] Pool full, created additional object. Active: ${this.active.size}`);
+                logger.warn(`[ObjectPool] Pool full, created additional object. Active: ${this.active.size}`);
             }
         }
 
@@ -102,7 +103,7 @@ abstract class ObjectPool<T> {
 
     release(obj: T): void {
         if (!this.active.has(obj)) {
-            console.warn('[ObjectPool] Attempted to release object not in active pool');
+            logger.warn('[ObjectPool] Attempted to release object not in active pool');
             return;
         }
 
@@ -151,7 +152,7 @@ abstract class ObjectPool<T> {
         const hitRate = (this.stats.reused + this.stats.created) > 0 ?
             (this.stats.reused / (this.stats.reused + this.stats.created)) * 100 : 0;
 
-        console.log(`[ObjectPool] Cleanup - Active: ${this.active.size}, Available: ${this.available.length}, Hit Rate: ${hitRate.toFixed(1)}%`);
+        logger.log(`[ObjectPool] Cleanup - Active: ${this.active.size}, Available: ${this.available.length}, Hit Rate: ${hitRate.toFixed(1)}%`);
     }
 
     getStats(): PoolStats {
@@ -189,7 +190,7 @@ abstract class ObjectPool<T> {
             this.cleanupInterval = null;
         }
 
-        console.log(`[ObjectPool] Disposed all objects. Total disposed: ${this.stats.disposed + this.active.size + this.available.length}`);
+        logger.log(`[ObjectPool] Disposed all objects. Total disposed: ${this.stats.disposed + this.active.size + this.available.length}`);
     }
 }
 
@@ -348,9 +349,9 @@ class MemoryMonitor {
             this.warningThreshold = Math.min(this.warningThreshold, memory.limit * 0.6);
             this.criticalThreshold = Math.min(this.criticalThreshold, memory.limit * 0.8);
 
-            console.log(`[MemoryMonitor] Initialized dynamic thresholds: Warning=${this.formatBytes(this.warningThreshold)}, Critical=${this.formatBytes(this.criticalThreshold)} (Limit=${this.formatBytes(memory.limit)})`);
+            logger.log(`[MemoryMonitor] Initialized dynamic thresholds: Warning=${this.formatBytes(this.warningThreshold)}, Critical=${this.formatBytes(this.criticalThreshold)} (Limit=${this.formatBytes(memory.limit)})`);
         } else {
-            console.log(`[MemoryMonitor] Initialized static thresholds: Warning=${this.formatBytes(this.warningThreshold)}, Critical=${this.formatBytes(this.criticalThreshold)}`);
+            logger.log(`[MemoryMonitor] Initialized static thresholds: Warning=${this.formatBytes(this.warningThreshold)}, Critical=${this.formatBytes(this.criticalThreshold)}`);
         }
     }
 
@@ -376,10 +377,10 @@ class MemoryMonitor {
 
             // Check thresholds
             if (memory.used > this.criticalThreshold) {
-                console.error(`[MemoryMonitor] CRITICAL: Memory usage ${this.formatBytes(memory.used)} exceeds critical threshold`);
+                logger.error(`[MemoryMonitor] CRITICAL: Memory usage ${this.formatBytes(memory.used)} exceeds critical threshold`);
                 this.triggerEmergencyCleanup();
             } else if (memory.used > this.warningThreshold) {
-                console.warn(`[MemoryMonitor] WARNING: Memory usage ${this.formatBytes(memory.used)} exceeds warning threshold`);
+                logger.warn(`[MemoryMonitor] WARNING: Memory usage ${this.formatBytes(memory.used)} exceeds warning threshold`);
                 this.triggerGarbageCollection();
             }
         }
@@ -389,12 +390,12 @@ class MemoryMonitor {
         // Force garbage collection if available (Chrome DevTools only)
         if (typeof window !== 'undefined' && 'gc' in window) {
             (window as any).gc();
-            console.log('[MemoryMonitor] Forced garbage collection');
+            logger.log('[MemoryMonitor] Forced garbage collection');
         }
     }
 
     private triggerEmergencyCleanup(): void {
-        console.warn('[MemoryMonitor] EMERGENCY: Triggering full object pool disposal');
+        logger.warn('[MemoryMonitor] EMERGENCY: Triggering full object pool disposal');
         disposeAllPools();
         this.triggerGarbageCollection();
     }
@@ -445,7 +446,7 @@ export const initializeObjectPooling = (warningThreshold?: number, criticalThres
         growthFactor: 2,
     });
 
-    console.log('[ObjectPooling] Initialized memory monitor and vector pool');
+    logger.log('[ObjectPooling] Initialized memory monitor and vector pool');
 };
 
 export const getMeshPool = (geometry: THREE.BufferGeometry, material: THREE.Material): MeshPool => {
@@ -526,5 +527,5 @@ export const disposeAllPools = () => {
         vector3Pool = null;
     }
 
-    console.log('[ObjectPooling] All pools disposed');
+    logger.log('[ObjectPooling] All pools disposed');
 };

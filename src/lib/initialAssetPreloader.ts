@@ -1,4 +1,5 @@
 // Initial Asset Preloader - Forces complete preload of all game assets into IndexedDB
+import { logger } from 'utils/logger';
 // Prevents gameplay until all assets are cached locally for offline operation
 
 import { putAsset, isAvailable, AssetMetadata, DataType } from './indexedDB';
@@ -16,10 +17,10 @@ export interface PreloadProgress {
     isComplete: boolean;
     errors: string[];
     // ✨ Enhanced fields
-    verifiedAssets: number;      // عدد الملفات المتحقق منها
-    corruptedAssets: number;     // عدد الملفات التالفة
-    downloadSpeed: number;       // سرعة التحميل MB/s
-    integrityChecks: IntegrityCheck[];  // نتائج فحوصات السلامة
+    verifiedAssets: number;      // Number of verified files
+    corruptedAssets: number;     // Number of corrupted files
+    downloadSpeed: number;       // Download speed MB/s
+    integrityChecks: IntegrityCheck[];  // Integrity check results
 }
 
 export interface PreloadOptions {
@@ -58,12 +59,12 @@ class InitialAssetPreloader {
      */
     async preloadAllAssets(options: PreloadOptions = {}): Promise<boolean> {
         if (!isAvailable()) {
-            console.error('[InitialAssetPreloader] IndexedDB not available');
+            logger.error('[InitialAssetPreloader] IndexedDB not available');
             return false;
         }
 
         if (this.isPreloading) {
-            console.log('[InitialAssetPreloader] Preload already in progress');
+            logger.log('[InitialAssetPreloader] Preload already in progress');
             return this.preloadPromise!;
         }
 
@@ -84,11 +85,12 @@ class InitialAssetPreloader {
             integrityChecks: []
         };
 
+        const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
         const {
             onProgress,
-            maxConcurrentLoads = 3,
-            timeoutMs = 300000, // 5 minutes
-            retryAttempts = 3
+            maxConcurrentLoads = isMobile ? 2 : 3, // Reduce concurrency on mobile
+            timeoutMs = 600000, // Increase to 10 minutes for slow networks
+            retryAttempts = 5 // Increase retries for unstable connections
         } = options;
 
         this.preloadPromise = this.performPreload(maxConcurrentLoads, timeoutMs, retryAttempts, onProgress);
@@ -114,7 +116,7 @@ class InitialAssetPreloader {
     ): Promise<boolean> {
         // 🚀 CRITICAL: Signal IndexedDB to skip LRU cleanup during initial preload
         (globalThis as any).__INITIAL_PRELOAD_ACTIVE__ = true;
-        console.log('[InitialAssetPreloader] 🛡️ LRU cleanup disabled for initial preload');
+        logger.log('[InitialAssetPreloader] 🛡️ LRU cleanup disabled for initial preload');
 
         const timeoutPromise = new Promise<never>((_, reject) => {
             setTimeout(() => {
@@ -133,13 +135,13 @@ class InitialAssetPreloader {
             ]);
             return true;
         } catch (error) {
-            console.error('[InitialAssetPreloader] Preload failed:', error);
+            logger.error('[InitialAssetPreloader] Preload failed:', error);
             this.progress.errors.push(error instanceof Error ? error.message : 'Unknown error');
             return false;
         } finally {
             // Re-enable LRU cleanup after preload
             delete (globalThis as any).__INITIAL_PRELOAD_ACTIVE__;
-            console.log('[InitialAssetPreloader] ✓ LRU cleanup re-enabled');
+            logger.log('[InitialAssetPreloader] ✓ LRU cleanup re-enabled');
         }
     }
 
@@ -159,7 +161,7 @@ class InitialAssetPreloader {
             const assets = getAssetsByPriority(priority);
             if (assets.length === 0) continue;
 
-            console.log(`[InitialAssetPreloader] Loading ${assets.length} ${priority} priority assets`);
+            logger.log(`[InitialAssetPreloader] Loading ${assets.length} ${priority} priority assets`);
 
             // Load assets in batches to control concurrency
             for (let i = 0; i < assets.length; i += maxConcurrentLoads) {
@@ -188,7 +190,7 @@ class InitialAssetPreloader {
 
         // Count successful loads for statistics
         const successful = results.filter(r => r.status === 'fulfilled').length;
-        console.log(`[InitialAssetPreloader] Batch complete: ${successful}/${assets.length} assets loaded`);
+        logger.log(`[InitialAssetPreloader] Batch complete: ${successful}/${assets.length} assets loaded`);
     }
 
     private async loadSingleAsset(
@@ -207,12 +209,14 @@ class InitialAssetPreloader {
                 this.progress.currentAsset = asset.path;
                 onProgress?.(this.progress);
 
-                console.log(`[InitialAssetPreloader] Loading ${asset.path} (attempt ${attempt}/${retryAttempts})`);
+                logger.log(`[InitialAssetPreloader] Loading ${asset.path} (attempt ${attempt}/${retryAttempts})`);
 
                 const data = await this.fetchAssetData(asset);
 
                 // ✨ Verify asset integrity if hash is available
                 const assetInfo = asset as AssetInfo & { sha256?: string; actualSizeMB?: number };
+                let calculatedHash: string | undefined = undefined;
+
                 if (assetInfo.sha256 || assetInfo.actualSizeMB) {
                     const integrityCheck = await verifyAssetIntegrity(
                         asset.path,
@@ -225,18 +229,18 @@ class InitialAssetPreloader {
 
                     if (integrityCheck.isValid) {
                         this.progress.verifiedAssets++;
+                        calculatedHash = integrityCheck.actualSHA256; // Reuse the calculated hash
                     } else {
                         this.progress.corruptedAssets++;
-                        console.warn(`[InitialAssetPreloader] ⚠️ Integrity check failed: ${integrityCheck.error}`);
+                        logger.warn(`[InitialAssetPreloader] ⚠️ Integrity check failed: ${integrityCheck.error}`);
 
-                        // Optionally fail on corruption for critical assets
                         if (asset.priority === 'critical') {
                             throw new Error(`Critical asset corrupted: ${integrityCheck.error}`);
                         }
                     }
                 }
 
-                await this.storeAssetInIndexedDB(asset, data);
+                await this.storeAssetInIndexedDB(asset, data, calculatedHash);
 
                 // Update progress
                 this.progress.loadedAssets++;
@@ -252,7 +256,7 @@ class InitialAssetPreloader {
                 const estimateDiff = actualSizeMB - asset.estimatedSizeMB;
                 const percentDiff = ((estimateDiff / asset.estimatedSizeMB) * 100).toFixed(1);
 
-                console.log(
+                logger.log(
                     `[InitialAssetPreloader] ✓ Loaded ${asset.path} ` +
                     `(${actualSizeMB.toFixed(2)}MB actual vs ${asset.estimatedSizeMB}MB estimated, ` +
                     `${percentDiff}% diff, ${this.progress.downloadSpeed.toFixed(2)}MB/s)`
@@ -264,7 +268,7 @@ class InitialAssetPreloader {
 
             } catch (error) {
                 lastError = error as Error;
-                console.warn(`[InitialAssetPreloader] Attempt ${attempt} failed for ${asset.path}:`, error);
+                logger.warn(`[InitialAssetPreloader] Attempt ${attempt} failed for ${asset.path}:`, error);
 
                 if (attempt < retryAttempts) {
                     // Exponential backoff
@@ -276,7 +280,7 @@ class InitialAssetPreloader {
 
         // All attempts failed
         const errorMsg = `Failed to load ${asset.path} after ${retryAttempts} attempts: ${lastError?.message}`;
-        console.error(`[InitialAssetPreloader] ✗ ${errorMsg}`);
+        logger.error(`[InitialAssetPreloader] ✗ ${errorMsg}`);
         this.progress.errors.push(errorMsg);
         throw lastError;
     }
@@ -308,7 +312,7 @@ class InitialAssetPreloader {
         return await response.arrayBuffer();
     }
 
-    private async storeAssetInIndexedDB(asset: AssetInfo, data: ArrayBuffer): Promise<void> {
+    private async storeAssetInIndexedDB(asset: AssetInfo, data: ArrayBuffer, verifiedHash?: string): Promise<void> {
         const actualSizeMB = data.byteLength / (1024 * 1024);
 
         // Update actual total size
@@ -324,6 +328,7 @@ class InitialAssetPreloader {
             createdAt: Date.now(),
             accessedAt: Date.now(),
             priority: this.mapPriorityToNumber(asset.priority),
+            checksum: verifiedHash, // Pass verified hash to avoid re-calculation
             data: data
         };
 
@@ -382,9 +387,9 @@ class InitialAssetPreloader {
         const loadedAssets = this.progress.loadedAssets;
 
         if (loadedAssets < expectedAssets) {
-            console.warn(`[InitialAssetPreloader] Only ${loadedAssets}/${expectedAssets} assets loaded successfully`);
+            logger.warn(`[InitialAssetPreloader] Only ${loadedAssets}/${expectedAssets} assets loaded successfully`);
         } else {
-            console.log(`[InitialAssetPreloader] ✓ All ${loadedAssets} assets preloaded successfully`);
+            logger.log(`[InitialAssetPreloader] ✓ All ${loadedAssets} assets preloaded successfully`);
         }
     }
 

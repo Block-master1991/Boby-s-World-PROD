@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input'; // Import Input component
 import { Plus, Minus } from 'lucide-react'; // Removed Maximize icon, will use text
 import { useUserInventory, useConsumableItem } from '@/hooks/useGraphQL';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { logger } from '@/utils/logger';
 import { useToast } from '@/hooks/use-toast';
 
 interface AggregatedInventoryItem {
@@ -52,7 +53,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                 setStoreItemsData(items);
                 setStoreItemsLoaded(true);
             } catch (error) {
-                console.error('Error loading store items:', error);
+                logger.error('Error loading store items:', error);
                 setStoreItemsLoaded(true); // Even on error, consider it loaded
             }
         }
@@ -270,7 +271,7 @@ const PlayerInventory: React.FC<PlayerInventoryProps> = ({
                                                                     await refetchInventory();
                                                                 }
                                                             } catch (error) {
-                                                                console.error('[PlayerInventory] Failed to use item:', error);
+                                                                logger.error('[PlayerInventory] Failed to use item:', error);
                                                                 toast({
                                                                     title: 'Error',
                                                                     description: error instanceof Error ? error.message : 'Unknown error',

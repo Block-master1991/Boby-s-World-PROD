@@ -58,8 +58,20 @@ import { ADMIN_WALLET_ADDRESS, RECAPTCHA_SITE_KEY } from '@/lib/constants';
 import { Button } from '@/components/ui/button';
 import { Volume2, VolumeX } from 'lucide-react';
 import { useAudio } from '@/contexts/AudioContext'; // Import useAudio
+import { logger } from '@/utils/logger';
 
-const GameContainer: React.FC = () => {
+export interface GameContainerProps {
+    captchaVerified: boolean;
+}
+
+const GameContainer: React.FC<GameContainerProps> = ({ captchaVerified: initialCaptchaVerified }) => {
+    // We use the prop but also keep a local ref if connectivity issues occur,
+    // though the parent should handle the source of truth perfectly now.
+    const [captchaVerified, setCaptchaVerified] = useState(initialCaptchaVerified);
+
+    useEffect(() => {
+        setCaptchaVerified(initialCaptchaVerified);
+    }, [initialCaptchaVerified]);
     const {
         isAuthenticated,
         user: authUser,
@@ -82,7 +94,6 @@ const GameContainer: React.FC = () => {
 
     const octreeRef = useRef<Octree<GameObject> | null>(null);
 
-    const [captchaVerified, setCaptchaVerified] = useState(false);
     const [isRequestingNonce, setIsRequestingNonce] = useState(false);
     const [isLoadingGameResources, setIsLoadingGameResources] = useState(false); // Re-introducing for manual control
     const [loadProgress, setLoadProgress] = useState(0); // State for progress
@@ -92,7 +103,6 @@ const GameContainer: React.FC = () => {
     const [totalAssetsCount, setTotalAssetsCount] = useState<number | undefined>(); // State for total assets count
     const [assetLoadError, setAssetLoadError] = useState<string | null>(null); // State for error
     const [isRedirectingToAdmin, setIsRedirectingToAdmin] = useState(false);
-    const [isCheckingSession, setIsCheckingSession] = useState(true);
     const [selectedGameMode, setSelectedGameMode] = useState<'none' | 'boby-world' | 'running-game'>('none');
     const [showEnableSoundButton, setShowEnableSoundButton] = useState(false); // New state for fallback UI
     const [isSoundPlaying, setIsSoundPlaying] = useState(false); // Track if sound is actively playing
@@ -105,64 +115,40 @@ const GameContainer: React.FC = () => {
 
     const { soundManagerRef, isMuted, toggleMute, setHasUserInteracted, setCurrentScreen } = useAudio(); // Use AudioContext
 
-    const siteKey = RECAPTCHA_SITE_KEY;
+    // Use AuthContext's isLoading state to manage the loading overlay used to invoke setISCheckingSession here
 
-    // All useEffects and Callbacks are declared at the top level
-    useEffect(() => {
-        const runSessionCheck = async () => {
-            setIsCheckingSession(true);
-            try {
-                const sessionValid = await checkSession();
-                if (sessionValid) {
-                    setCaptchaVerified(true);
-                }
-                // إزالة إعادة تعيين captchaVerified عند فشل الجلسة إذا كان المستخدم قد قام بالتحقق بالفعل
-            } catch (error) {
-                console.error("[GameContainer] Error checking session:", error);
-            } finally {
-                setIsCheckingSession(false);
-            }
-        };
-        runSessionCheck();
-    }, [checkSession]); // إزالة isAuthenticated من الاعتماديات
 
-    // إضافة شرط للحفاظ على حالة الكابتشا:
+    // We no longer perform an explicit checkSession() here because AuthContext handles the initial check on mount.
+    // We just listen to the isAuthenticated state from useAuth().
     useEffect(() => {
         if (isAuthenticated && !captchaVerified) {
             setCaptchaVerified(true);
         }
     }, [isAuthenticated, captchaVerified]);
 
-    const handleCaptchaSuccess = useCallback(() => {
-        console.log("[GameContainer] Captcha verified successfully.");
-        setCaptchaVerified(true);
-        setHasUserInteracted(true); // User interaction point
-        soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
-        setIsSoundPlaying(true); // الزر يتحول للأزرق
-        toast({ title: 'Verification Successful', description: 'You can now connect your wallet.', duration: 3000 });
-    }, [toast, setHasUserInteracted, soundManagerRef]);
+    // Captcha management moved to ClientGameContainer
 
     const handleLoginAttempt = useCallback(async () => {
         if (!captchaVerified || isRequestingNonce) return;
         setIsRequestingNonce(true);
-        console.log("[GameContainer] Attempting login via useAuth.login()...");
+        logger.log("[GameContainer] Attempting login via useAuth.login()...");
         try {
             const loginSuccess = await loginAuthHook();
             if (loginSuccess) {
-                console.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
+                logger.log("[GameContainer] Login successful. Admin/resource loading check will follow.");
                 setHasUserInteracted(true); // User interaction point
                 soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
-                setIsSoundPlaying(true); // الزر يتحول للأزرق
+                setIsSoundPlaying(true); // Button turns blue
                 toast({ title: "Login Successful", description: "Welcome to Boby World!", duration: 3000 });
             } else {
-                console.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
+                logger.warn("[GameContainer] loginAuthHook returned false without throwing an error. This is unexpected.");
                 toast({ title: "Login Failed", description: "An unexpected issue occurred during login.", variant: "destructive" });
             }
         } catch (error: unknown) {
-            console.error(`[GameContainer] Login attempt failed: ${(error instanceof Error) ? error.message : 'Unknown error'}`);
+            logger.error(`[GameContainer] Login attempt failed: ${(error instanceof Error) ? error.message : 'Unknown error'}`);
             toast({
                 title: "Login Failed",
-                description: (error instanceof Error) ? error.message : "Could not authenticate with the server. Check console for details.",
+                description: (error instanceof Error) ? error.message : "Could not authenticate with the server. Check logs for details.",
                 variant: "destructive"
             });
         } finally {
@@ -173,13 +159,13 @@ const GameContainer: React.FC = () => {
     const handleDisconnect = useCallback(async () => {
         toast({ title: "Disconnecting...", description: "Attempting to end your session." });
         try {
-            console.log("[GameContainer] Attempting logoutAuthSession (clears global auth state & local)...");
+            logger.log("[GameContainer] Attempting logoutAuthSession (clears global auth state & local)...");
             await logoutAuthSessionHook();
-            console.log("[GameContainer] logoutAuthSession completed.");
+            logger.log("[GameContainer] logoutAuthSession completed.");
 
-            console.log("[GameContainer] Attempting disconnectWalletAdapter (disconnects wallet from site)...");
+            logger.log("[GameContainer] Attempting disconnectWalletAdapter (disconnects wallet from site)...");
             await disconnectWalletAdapterSession();
-            console.log("[GameContainer] disconnectWalletAdapter completed.");
+            logger.log("[GameContainer] disconnectWalletAdapter completed.");
 
             setCaptchaVerified(false);
             // setIsLoadingGameResources(false); // This is now managed by the asset loader hook
@@ -192,7 +178,7 @@ const GameContainer: React.FC = () => {
 
             toast({ title: "Disconnected", description: "Session ended. Please re-verify CAPTCHA to connect again.", duration: 3000 });
         } catch (error: unknown) {
-            console.error("[GameContainer] Error during full disconnect process:", error);
+            logger.error("[GameContainer] Error during full disconnect process:", error);
             toast({
                 title: "Disconnection Error",
                 description: `An error occurred: ${(error instanceof Error) ? error.message : 'Unknown error'}.`,
@@ -204,21 +190,21 @@ const GameContainer: React.FC = () => {
 
     useEffect(() => {
         if (isLoadingAuth) {
-            console.log("[GameContainer] AuthContext is loading, deferring admin/game resource decisions.");
+            logger.log("[GameContainer] AuthContext is loading, deferring admin/game resource decisions.");
             return;
         }
 
-        console.log(`[GameContainer] Auth state updated. IsAuth: ${isAuthenticated}, UserPK: ${authUser?.publicKey}, WalletConnectedAndMatching: ${isWalletConnectedAndMatching}, AdminPK: ${ADMIN_WALLET_ADDRESS}, Current Path: ${pathname}`);
+        logger.log(`[GameContainer] Auth state updated. IsAuth: ${isAuthenticated}, UserPK: ${authUser?.publicKey}, WalletConnectedAndMatching: ${isWalletConnectedAndMatching}, AdminPK: ${ADMIN_WALLET_ADDRESS}, Current Path: ${pathname}`);
 
         if (isAuthenticated && authUser?.publicKey) {
             if (authUser.publicKey === ADMIN_WALLET_ADDRESS) {
                 if (!isRedirectingToAdmin && pathname !== '/admin') {
-                    console.log("[GameContainer] Admin user detected. Redirecting to /admin.");
+                    logger.log("[GameContainer] Admin user detected. Redirecting to /admin.");
                     setIsRedirectingToAdmin(true);
                     router.push('/admin');
                 }
             } else {
-                console.log("[GameContainer] Authenticated as regular user. State will be managed by selectedGameMode effect.");
+                logger.log("[GameContainer] Authenticated as regular user. State will be managed by selectedGameMode effect.");
             }
         } else {
             // if (isLoadingGameResources) setIsLoadingGameResources(false); // Managed by asset loader
@@ -233,22 +219,30 @@ const GameContainer: React.FC = () => {
     const isGameUIVisible = useCallback(() => isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin && selectedGameMode !== 'none', [isAuthenticated, authUser, isRedirectingToAdmin, selectedGameMode]);
 
     const handleGameModeSelected = useCallback((mode: 'boby-world' | 'running-game') => {
-        console.log(`[GameContainer] Game mode selected: ${mode}`);
+        logger.log(`[GameContainer] Game mode selected: ${mode}`);
+
+        // Pre-emptively set loading state for ANY game mode to prevent "black flash"
+        // between menu and game world loader.
+        if (mode === 'boby-world' || mode === 'running-game') {
+            setIsGameUILoading(true);
+            setGameUILoadProgress(0);
+        }
+
         setSelectedGameMode(mode);
         setHasUserInteracted(true); // User interaction point
         soundManagerRef.current?.playCurrentTrack(); // Attempt to play audio
-        setIsSoundPlaying(true); // عند اختيار وضع اللعب، الصوت سيبدأ تلقائياً
+        setIsSoundPlaying(true); // When game mode is selected, sound starts automatically
     }, [setHasUserInteracted, soundManagerRef]);
 
     // Callbacks to be passed down to the game component
     const handleLoadStart = useCallback(() => {
-        console.log("[GameContainer] Received load start signal from child.");
+        logger.log("[GameContainer] Received load start signal from child.");
         setIsLoadingGameResources(true);
         setLoadProgress(0);
     }, []);
 
     const handleLoadProgress = useCallback((progress: number, phase?: string, currentAsset?: string, loadedAssets?: number, totalAssets?: number) => {
-        // console.log(`[GameContainer] Received progress update: ${progress}%`);
+        // logger.log(`[GameContainer] Received progress update: ${progress}%`);
         setLoadProgress(progress);
         if (phase) {
             setLoadPhase(phase);
@@ -259,13 +253,13 @@ const GameContainer: React.FC = () => {
     }, []);
 
     const handleLoadComplete = useCallback((success: boolean) => {
-        console.log(`[GameContainer] Received load complete signal. Success: ${success}`);
+        logger.log(`[GameContainer] Received load complete signal. Success: ${success}`);
         if (success) {
             setLoadProgress(100);
             // A small delay to show 100% before hiding the screen
             setTimeout(() => {
                 setIsLoadingGameResources(false);
-                // بعد انتهاء التحميل - غير الشاشة لصوت اللعبة
+                // After loading completes - change screen for game sound
                 setCurrentScreen(selectedGameMode as 'boby-world' | 'running-game');
             }, 500);
         } else {
@@ -276,7 +270,7 @@ const GameContainer: React.FC = () => {
 
     useEffect(() => {
         if (isAuthenticated && authUser && !isWalletConnectedAndMatching) {
-            console.warn("[GameContainer] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout and redirect.");
+            logger.warn("[GameContainer] Authenticated session detected with a mismatched or disconnected wallet. Forcing logout and redirect.");
             logoutAndRedirect('/');
         }
     }, [isAuthenticated, authUser, isWalletConnectedAndMatching, logoutAndRedirect]);
@@ -285,7 +279,7 @@ const GameContainer: React.FC = () => {
     useEffect(() => {
         const handleInitialInteraction = () => {
             setHasUserInteracted(true);
-            setIsSoundPlaying(true); // عند التفاعل الأول، غير شكل الزر تلقائياً
+            setIsSoundPlaying(true); // On first interaction, change button shape automatically
             window.removeEventListener('click', handleInitialInteraction);
             window.removeEventListener('keydown', handleInitialInteraction);
         };
@@ -312,71 +306,74 @@ const GameContainer: React.FC = () => {
         setAreSheetsOpen(isAnySheetOpen);
     }, []);
 
+    // Use AuthContext's isLoading (isLoadingAuth) directly for session checking status
+    // Eliminating local state to prevent flicker
+
     // Determine the current screen for SoundManager and update context
     useEffect(() => {
         let screen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin';
-        if (isCheckingSession || !siteKey) {
+        if (isLoadingAuth) {
+            logger.log("[GameContainer] Displaying: Checking session...");
             screen = 'loading';
         } else if (!captchaVerified) {
+            logger.log("[GameContainer] Displaying: Awaiting captcha verification (Deferred to Parent).");
             screen = 'captcha';
         } else if (!isAuthenticated) {
+            logger.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");
             screen = 'authentication';
         } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
             screen = 'admin';
         } else if (selectedGameMode === 'none') {
             screen = 'mainMenu';
         } else if (selectedGameMode === 'boby-world') {
-            // أثناء التحميل - ابقِ على صوت القائمة
+            // During loading - keep menu sound
             screen = 'mainMenu';
         } else if (selectedGameMode === 'running-game') {
-            // أثناء التحميل - ابقِ على صوت القائمة
+            // During loading - keep menu sound
             screen = 'mainMenu';
         } else {
             screen = 'mainMenu';
         }
         setCurrentScreen(screen);
-    }, [isCheckingSession, siteKey, captchaVerified, isAuthenticated, authUser, selectedGameMode, isLoadingGameResources, setCurrentScreen]);
+    }, [isLoadingAuth, captchaVerified, isAuthenticated, authUser, selectedGameMode, isLoadingGameResources, setCurrentScreen]);
 
 
     // Main content rendering logic
     let mainContent;
-    if (isCheckingSession) {
-        console.log("[GameContainer] Displaying: Checking session...");
+    if (isLoadingAuth) {
+        logger.log("[GameContainer] Displaying: Checking session...");
         mainContent = <LoadingScreen message="" showLogo variant='indeterminate' />;
-    } else if (!siteKey) {
-        console.log("[GameContainer] Displaying: Preparing verification (no CAPTCHA site key).");
-        mainContent = <LoadingScreen message="Preparing verification..." showLogo variant='indeterminate' />;
-    } else if (!captchaVerified) {
-        console.log("[GameContainer] Displaying: Awaiting captcha verification.");
-        mainContent = <CaptchaScreen siteKey={siteKey!} onVerificationSuccess={handleCaptchaSuccess} />;
+    } else if (!captchaVerified && !isAuthenticated) {
+        logger.log("[GameContainer] Displaying: Awaiting captcha verification (Deferred to Parent).");
+        mainContent = <LoadingScreen message="Verification required..." showLogo variant='indeterminate' />;
     } else if (!isAuthenticated) {
-        console.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");
+        logger.log("[GameContainer] Displaying: Not authenticated. Showing AuthenticationScreen.");
         mainContent = <AuthenticationScreen onRequestDisconnect={handleDisconnect} onLoginAttempt={handleLoginAttempt} captchaVerified={captchaVerified} />;
     } else if (authUser?.publicKey === ADMIN_WALLET_ADDRESS) {
         if (!isRedirectingToAdmin) {
-            console.log("[GameContainer] Admin user authenticated, initiating redirect.");
+            logger.log("[GameContainer] Admin user authenticated, initiating redirect.");
             mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo variant='indeterminate' />;
         } else {
-            console.log("[GameContainer] Displaying: Redirecting to admin panel...");
+            logger.log("[GameContainer] Displaying: Redirecting to admin panel...");
             mainContent = <LoadingScreen message="Redirecting to admin panel..." showLogo variant='indeterminate' />;
         }
     } else if (selectedGameMode === 'none') {
         // Show Initial Asset Loader only once before showing GameMainMenu
         if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin && !assetPreloadComplete) {
-            console.log("[GameContainer] Displaying: Authenticated. Showing InitialAssetLoader before GameMainMenu.");
+            logger.log("[GameContainer] Displaying: Authenticated. Showing InitialAssetLoader before GameMainMenu.");
             mainContent = (
                 <InitialAssetLoader
                     onComplete={() => {
-                        console.log("[GameContainer] Initial asset preload completed, showing GameMainMenu.");
+                        logger.log("[GameContainer] Initial asset preload completed, showing GameMainMenu.");
                         // Update state to show GameMainMenu instead of reloading
                         setAssetPreloadComplete(true);
                     }}
                     onError={(error) => {
-                        console.error("[GameContainer] Initial asset preload failed:", error);
+                        logger.error("[GameContainer] Initial asset preload failed:", error);
                         // Still show GameMainMenu but with error indication
                         toast({
-                            title: "تحميل الموارد فشل",
-                            description: "سيتم عرض القائمة لكن بعض الموارد قد لا تعمل بشكل صحيح",
+                            title: "Resource Loading Failed",
+                            description: "The menu will be displayed but some resources may not work properly",
                             variant: "destructive"
                         });
                         // Mark as complete even on error to show menu
@@ -386,13 +383,13 @@ const GameContainer: React.FC = () => {
             );
         } else if (isAuthenticated && authUser?.publicKey !== ADMIN_WALLET_ADDRESS && !isRedirectingToAdmin && selectedGameMode === 'none') {
             // Show GameMainMenu after preload is complete
-            console.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
+            logger.log("[GameContainer] Displaying: Authenticated. Showing GameMainMenu for mode selection.");
             mainContent = <GameMainMenu onGameModeSelected={handleGameModeSelected} />;
         }
     } else if (isGameUIVisible()) {
         // Render the game UI with loading overlay
         if (selectedGameMode === 'boby-world') {
-            console.log("[GameContainer] Displaying: Boby World GameUI for regular user.");
+            logger.log("[GameContainer] Displaying: Boby World GameUI for regular user.");
             mainContent = (
                 <>
                     {isGameUILoading && (
@@ -408,16 +405,16 @@ const GameContainer: React.FC = () => {
                         octreeRef={octreeRef}
                         onSheetsStateChange={handleSheetsStateChange}
                         onLoadStart={() => {
-                            console.log('[GameContainer] GameUI loading started');
+                            logger.log('[GameContainer] GameUI loading started');
                             setIsGameUILoading(true);
                             setGameUILoadProgress(0);
                         }}
                         onLoadProgress={(progress) => {
-                            console.log(`[GameContainer] GameUI loading progress: ${progress}%`);
+                            logger.log(`[GameContainer] GameUI loading progress: ${progress}%`);
                             setGameUILoadProgress(progress);
                         }}
                         onLoadComplete={(success) => {
-                            console.log(`[GameContainer] GameUI loading complete: ${success}`);
+                            logger.log(`[GameContainer] GameUI loading complete: ${success}`);
                             setIsGameUILoading(false);
                             if (!success) {
                                 toast({
@@ -431,18 +428,36 @@ const GameContainer: React.FC = () => {
                 </>
             );
         } else if (selectedGameMode === 'running-game') {
-            console.log("[GameContainer] Displaying: Running Game UI for regular user.");
-            mainContent = <RunningGameUI />;
+            logger.log("[GameContainer] Displaying: Running Game UI for regular user.");
+            mainContent = (
+                <>
+                    {isGameUILoading && (
+                        <GameLoadingOverlay
+                            isLoading={true}
+                            progress={0} // Placeholder doesn't really have progress
+                            error={null}
+                            phase="Preparing running game..."
+                            showTips={false}
+                        />
+                    )}
+                    <RunningGameUI
+                        onLoadComplete={(success) => {
+                            logger.log(`[GameContainer] RunningGameUI loading complete: ${success}`);
+                            setIsGameUILoading(false);
+                        }}
+                    />
+                </>
+            );
         }
     } else {
         // Fallback if no other condition is met. This might happen briefly during state transitions.
-        console.log("[GameContainer] Fallback: No specific content to render, showing loading screen.");
+        logger.log("[GameContainer] Fallback: No specific content to render, showing loading screen.");
         mainContent = <LoadingScreen message="Finalizing setup..." showLogo />;
     }
 
     return (
         <>
-            {/* Sound Control Button - متجاوب - مخفي عند فتح النوافذ */}
+            {/* Sound Control Button - Responsive - Hidden when windows are open */}
             {!areSheetsOpen && (
                 <div style={{ position: 'fixed', top: '20px', right: '20px', zIndex: 1000 }} className="sm:top-6 sm:right-6 md:top-8 md:right-8">
                     <Button
@@ -450,12 +465,12 @@ const GameContainer: React.FC = () => {
                         size="icon"
                         onClick={() => {
                             if (!isSoundPlaying) {
-                                // بدء التشغيل لأول مرة
+                                // Start playing for first time
                                 soundManagerRef.current?.playCurrentTrack();
-                                setIsSoundPlaying(true); // ✅ غير حالة الزر
+                                setIsSoundPlaying(true); // ✅ Change button state
                                 setHasUserInteracted(true);
                             } else {
-                                // تبديل كتم الصوت
+                                // Toggle mute
                                 toggleMute();
                             }
                         }}

@@ -1,8 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { getStoreItems, getStoreItemsActive, getStoreItem, StoreItemDefinition } from '@/lib/items';
+import { logger } from '@/utils/logger';
 
 /**
- * Hook لجلب جميع الأغراض من قاعدة البيانات
+ * Hook to fetch all items from the database
  */
 export function useStoreItems() {
     const [items, setItems] = useState<StoreItemDefinition[]>([]);
@@ -17,7 +18,7 @@ export function useStoreItems() {
                 setItems(data);
                 setError(null);
             } catch (err) {
-                console.error('Error fetching store items:', err);
+                logger.error('Error fetching store items:', err);
                 setError(err instanceof Error ? err.message : 'Failed to fetch items');
             } finally {
                 setLoading(false);
@@ -31,7 +32,7 @@ export function useStoreItems() {
 }
 
 /**
- * Hook لجلب الأغراض النشطة فقط من قاعدة البيانات
+ * Hook to fetch only active items from the database
  */
 export function useActiveStoreItems() {
     const [items, setItems] = useState<StoreItemDefinition[]>([]);
@@ -46,7 +47,7 @@ export function useActiveStoreItems() {
                 setItems(data);
                 setError(null);
             } catch (err) {
-                console.error('[useActiveStoreItems] Error fetching active store items:', err);
+                logger.error('[useActiveStoreItems] Error fetching active store items:', err);
                 setError(err instanceof Error ? err.message : 'Failed to fetch active items');
             } finally {
                 setLoading(false);
@@ -60,7 +61,7 @@ export function useActiveStoreItems() {
 }
 
 /**
- * Hook لجلب عنصر واحد بالمعرف من قاعدة البيانات
+ * Hook to fetch a single item by ID from the database
  */
 export function useStoreItem(id: string) {
     const [item, setItem] = useState<StoreItemDefinition | null>(null);
@@ -75,7 +76,7 @@ export function useStoreItem(id: string) {
                 setItem(data);
                 setError(null);
             } catch (err) {
-                console.error('Error fetching store item:', err);
+                logger.error('Error fetching store item:', err);
                 setError(err instanceof Error ? err.message : 'Failed to fetch item');
             } finally {
                 setLoading(false);
@@ -91,14 +92,23 @@ export function useStoreItem(id: string) {
 }
 
 /**
- * Hook لإعادة جلب الأغراض (للتحديث اليدوي)
+ * Hook to refetch items (for manual refresh)
  */
 export function useStoreItemsRefetch() {
     const [items, setItems] = useState<StoreItemDefinition[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const refetchInProgressRef = useRef(false);
 
     const refetch = async () => {
+        // Prevent multiple concurrent refetch calls (race condition protection)
+        if (refetchInProgressRef.current) {
+            logger.warn('[useStoreItemsRefetch] Refetch already in progress, skipping duplicate call');
+            return items; // Return current items
+        }
+
+        refetchInProgressRef.current = true;
+
         try {
             setLoading(true);
             const data = await getStoreItems();
@@ -106,11 +116,12 @@ export function useStoreItemsRefetch() {
             setError(null);
             return data;
         } catch (err) {
-            console.error('Error refetching store items:', err);
+            logger.error('Error refetching store items:', err);
             setError(err instanceof Error ? err.message : 'Failed to refetch items');
             return [];
         } finally {
             setLoading(false);
+            refetchInProgressRef.current = false;
         }
     };
 
@@ -118,14 +129,23 @@ export function useStoreItemsRefetch() {
 }
 
 /**
- * Hook لجلب الأغراض النشطة مع إعادة الجلب
+ * Hook to fetch active items with refetch capability
  */
 export function useActiveStoreItemsRefetch() {
     const [items, setItems] = useState<StoreItemDefinition[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+    const refetchInProgressRef = useRef(false);
 
     const refetch = async () => {
+        // Prevent multiple concurrent refetch calls (race condition protection)
+        if (refetchInProgressRef.current) {
+            logger.warn('[useActiveStoreItemsRefetch] Refetch already in progress, skipping duplicate call');
+            return items; // Return current items
+        }
+
+        refetchInProgressRef.current = true;
+
         try {
             setLoading(true);
             const data = await getStoreItemsActive();
@@ -133,11 +153,12 @@ export function useActiveStoreItemsRefetch() {
             setError(null);
             return data;
         } catch (err) {
-            console.error('Error refetching active store items:', err);
+            logger.error('Error refetching active store items:', err);
             setError(err instanceof Error ? err.message : 'Failed to refetch active items');
             return [];
         } finally {
             setLoading(false);
+            refetchInProgressRef.current = false;
         }
     };
 

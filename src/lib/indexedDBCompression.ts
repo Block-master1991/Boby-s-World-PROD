@@ -2,6 +2,7 @@
 // Extends base indexedDB functionality with data compression for large assets
 
 import { putAsset, getAsset, AssetMetadata, DataType } from './indexedDB';
+import { logger } from '@/utils/logger';
 
 /**
  * Check if CompressionStream API is available
@@ -15,7 +16,7 @@ export function isCompressionSupported(): boolean {
  */
 export async function compressData(data: ArrayBuffer): Promise<ArrayBuffer> {
     if (!isCompressionSupported()) {
-        console.warn('[Compression] CompressionStream not supported, returning uncompressed data');
+        logger.warn('[Compression] CompressionStream not supported, returning uncompressed data');
         return data;
     }
 
@@ -52,14 +53,14 @@ export async function compressData(data: ArrayBuffer): Promise<ArrayBuffer> {
         const compressedSizeMB = compressed.byteLength / (1024 * 1024);
         const ratio = ((1 - compressed.byteLength / data.byteLength) * 100).toFixed(1);
 
-        console.log(
+        logger.log(
             `[Compression] Compressed ${originalSizeMB.toFixed(2)}MB → ${compressedSizeMB.toFixed(2)}MB ` +
             `(${ratio}% reduction) in ${compressionTime.toFixed(0)}ms`
         );
 
         return compressed.buffer;
     } catch (error) {
-        console.error('[Compression] Failed to compress data:', error);
+        logger.error('[Compression] Failed to compress data:', error);
         return data; // Fallback to uncompressed
     }
 }
@@ -69,7 +70,7 @@ export async function compressData(data: ArrayBuffer): Promise<ArrayBuffer> {
  */
 export async function decompressData(compressedData: ArrayBuffer): Promise<ArrayBuffer> {
     if (!isCompressionSupported()) {
-        console.warn('[Decompression] DecompressionStream not supported');
+        logger.warn('[Decompression] DecompressionStream not supported');
         return compressedData;
     }
 
@@ -102,11 +103,11 @@ export async function decompressData(compressedData: ArrayBuffer): Promise<Array
         }
 
         const decompressionTime = performance.now() - startTime;
-        console.log(`[Decompression] Decompressed in ${decompressionTime.toFixed(0)}ms`);
+        logger.log(`[Decompression] Decompressed in ${decompressionTime.toFixed(0)}ms`);
 
         return decompressed.buffer;
     } catch (error) {
-        console.error('[Decompression] Failed to decompress data:', error);
+        logger.error('[Decompression] Failed to decompress data:', error);
         throw error;
     }
 }
@@ -121,7 +122,7 @@ export async function putAssetCompressed(
     const sizeMB = asset.size / (1024 * 1024);
 
     if (sizeMB >= compressionThresholdMB && isCompressionSupported()) {
-        console.log(`[IndexedDB] Compressing large asset: ${asset.name} (${sizeMB.toFixed(2)}MB)`);
+        logger.log(`[IndexedDB] Compressing large asset: ${asset.name} (${sizeMB.toFixed(2)}MB)`);
 
         const compressedData = await compressData(asset.data);
         const compressedAsset = {
@@ -147,7 +148,7 @@ export async function getAssetDecompressed(id: string): Promise<(AssetMetadata &
     if (!asset) return null;
 
     if (asset.compressed) {
-        console.log(`[IndexedDB] Decompressing asset: ${asset.name}`);
+        logger.log(`[IndexedDB] Decompressing asset: ${asset.name}`);
         const decompressedData = await decompressData(asset.data);
 
         return {
@@ -212,7 +213,7 @@ export async function analyzeCompressionForAssets(
         worthCompressing: boolean;
     }>;
 }> {
-    console.log('[Compression] Analyzing compression benefits for assets...');
+    logger.log('[Compression] Analyzing compression benefits for assets...');
 
     let totalOriginal = 0;
     let totalCompressed = 0;
@@ -236,7 +237,7 @@ export async function analyzeCompressionForAssets(
     const totalSavingsMB = totalOriginal - totalCompressed;
     const savingsPercent = totalOriginal > 0 ? (totalSavingsMB / totalOriginal) * 100 : 0;
 
-    console.log(
+    logger.log(
         `[Compression] Analysis complete: ` +
         `${totalOriginal.toFixed(2)}MB → ${totalCompressed.toFixed(2)}MB ` +
         `(${savingsPercent.toFixed(1)}% savings)`

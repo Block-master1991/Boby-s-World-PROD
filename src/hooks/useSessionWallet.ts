@@ -1,9 +1,9 @@
-
 'use client';
 
 import { useState, useEffect, useCallback } from 'react';
 import { useWallet as useActualWallet, type WalletContextState } from '@solana/wallet-adapter-react';
 import type { PublicKey } from '@solana/web3.js';
+import { logger } from '@/utils/logger';
 
 // Exclude properties from WalletContextState that we will redefine or handle differently
 type BaseWalletState = Omit<WalletContextState, 'publicKey' | 'connected' | 'disconnect'>;
@@ -40,11 +40,11 @@ export const useSessionWallet = (): SessionWallet => {
       if (typeof window !== 'undefined') {
         // Remove from storage first to prevent auto-reconnect
         localStorage.removeItem('walletName');
-        console.log('[useSessionWallet] Cleared walletName from localStorage');
+        logger.log('[useSessionWallet] Cleared walletName from localStorage');
       }
       await actualWallet.disconnect();
     } catch (error) {
-      console.error('[useSessionWallet] Error disconnecting:', error);
+      logger.error('[useSessionWallet] Error disconnecting:', error);
     } finally {
       setSessionPublicKey(null);
     }

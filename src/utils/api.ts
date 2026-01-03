@@ -24,27 +24,50 @@ export const setGlobalToast = (func: ReturnType<typeof useToast>['toast']) => {
   }
 };
 
-// ===== التخزين المؤقت للاستجابات =====
-// تم إلغاء التخزين المؤقت بالكامل
+// ===== Response Caching =====
+// Caching has been completely disabled
 
-// ===== إعدادات عامة =====
+// ===== General Settings =====
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
-const REQUEST_TIMEOUT_MS = 60000; // 60 ثانية (increased for mobile/dev)
+const REQUEST_TIMEOUT_MS = 60000; // 60 seconds (increased for mobile/dev)
 
-// ===== دوال مساعدة =====
+// ===== Request Deduplication =====
+// Map to track active requests and prevent race conditions
+const activeRequests = new Map<string, Promise<Response>>();
+const REQUEST_DEDUP_TTL = 5000; // 5 seconds TTL for deduplication
 
-// تأخير (للاستخدام مع إعادة المحاولة)
+// Generate a deduplication key from request details
+function generateRequestKey(input: RequestInfo | URL, init?: RequestInit): string {
+  const url = typeof input === "string" ? input : input.toString();
+  const method = init?.method || 'GET';
+  const body = init?.body ? JSON.stringify(init.body) : '';
+
+  // Create a hash of the request for deduplication
+  return `${method}:${url}:${body}`.slice(0, 200); // Limit key length
+}
+
+// Clean up expired deduplication entries
+setInterval(() => {
+  // This is a simple cleanup - in production you might want more sophisticated tracking
+  activeRequests.clear();
+}, REQUEST_DEDUP_TTL);
+
+// ===== Helper Functions =====
+
+// Delay (for use with retry)
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// عرض رسالة خطأ للمستخدم
+import { logger } from '@/utils/logger';
+
+// Show error message to user
 const showErrorToast = (title: string, description: string) => {
   if (globalToast) {
     globalToast({ title, description, variant: "destructive" });
   }
 };
 
-// التحقق من صحة الاستجابة
+// Validate response
 const validateResponse = async (response: Response): Promise<Response> => {
   const contentType = response.headers.get("content-type");
   if (contentType?.includes("application/json")) {
@@ -52,7 +75,7 @@ const validateResponse = async (response: Response): Promise<Response> => {
   }
 
   const text = await response.text();
-  console.error("[apiFetch] Non-JSON response received:", text);
+  logger.error("[apiFetch] Non-JSON response received:", text);
 
   const error = new Error(
     `Unexpected response type: ${contentType || "none"} (status ${response.status}). Body: ${text.slice(0, 200)}...`
@@ -61,38 +84,38 @@ const validateResponse = async (response: Response): Promise<Response> => {
   throw error;
 };
 
-// معالجة 401 (انتهاء الجلسة)
+// Handle 401 (session expired)
 const handle401Error = async (): Promise<boolean> => {
-  console.warn("[apiFetch] 401 Unauthorized. Trying session refresh...");
+  logger.warn("[apiFetch] 401 Unauthorized. Trying session refresh...");
   if (globalTriggerSessionRefresh) {
     const ok = await globalTriggerSessionRefresh();
     if (ok) {
-      console.log("[apiFetch] Session refreshed successfully.");
+      logger.log("[apiFetch] Session refreshed successfully.");
       return true;
     }
-    console.error("[apiFetch] Session refresh failed.");
-    showErrorToast("انتهت الجلسة", "تعذّر تجديد الجلسة. يرجى تسجيل الدخول مرة أخرى.");
+    logger.error("[apiFetch] Session refresh failed.");
+    showErrorToast("Session Expired", "Failed to refresh session. Please log in again.");
   } else {
-    console.error("[apiFetch] globalTriggerSessionRefresh not set.");
-    showErrorToast("خطأ في النظام", "حدث خطأ في النظام. يرجى تحديث الصفحة.");
+    logger.error("[apiFetch] globalTriggerSessionRefresh not set.");
+    showErrorToast("System Error", "An error occurred in the system. Please refresh the page.");
   }
   return false;
 };
 
-// معالجة 403 (CSRF)
+// Handle 403 (CSRF)
 const handle403Error = async (): Promise<boolean> => {
-  console.warn("[apiFetch] 403 Forbidden. Trying CSRF refresh...");
+  logger.warn("[apiFetch] 403 Forbidden. Trying CSRF refresh...");
   try {
     const csrfRes = await fetch("/api/auth/refresh-csrf", { method: "POST" });
     if (csrfRes.ok) {
-      console.log("[apiFetch] CSRF token refreshed successfully.");
+      logger.log("[apiFetch] CSRF token refreshed successfully.");
       return true;
     }
-    console.error("[apiFetch] Failed to refresh CSRF token.");
-    showErrorToast("خطأ في المزامنة", "تعذّر تحديث الجلسة. رجاءً أعد تحميل الصفحة.");
+    logger.error("[apiFetch] Failed to refresh CSRF token.");
+    showErrorToast("Sync Error", "Failed to refresh session. Please reload the page.");
   } catch (e) {
-    console.error("[apiFetch] CSRF refresh request failed:", e);
-    showErrorToast("خطأ في الشبكة", "فشل الاتصال بالخادم. تحقق من الإنترنت.");
+    logger.error("[apiFetch] CSRF refresh request failed:", e);
+    showErrorToast("Network Error", "Failed to connect to server. Check your internet connection.");
   }
   return false;
 };
@@ -104,6 +127,18 @@ const handle403Error = async (): Promise<boolean> => {
  */
 export const apiFetch: FetchFunction = async (input, init) => {
   const url = typeof input === "string" ? input : input.toString();
+  const requestKey = generateRequestKey(input, init);
+
+  // Check for duplicate request and return the existing promise if found
+  // Skip deduplication for high-frequency game events like adding coins
+  const isHighFrequencyEvent = url.includes('/api/game/addCoin');
+  const existingRequest = isHighFrequencyEvent ? null : activeRequests.get(requestKey);
+
+  if (existingRequest) {
+    logger.log(`[apiFetch] Deduplicating request to: ${url}`);
+    const res = await existingRequest;
+    return res.clone();
+  }
 
   let retries = 0;
 
@@ -112,48 +147,54 @@ export const apiFetch: FetchFunction = async (input, init) => {
     const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
     try {
-      console.log(`[apiFetch] Making request to: ${url}`);
+      logger.log(`Making request to: ${url}`);
       const response = await fetchWithCsrf(input, { ...init, signal: controller.signal });
       clearTimeout(timeoutId);
 
-      // التعامل مع 401
+      // Handle 401
       if (response.status === 401) {
-        console.warn(`[apiFetch] Received 401 for: ${url}`);
+        logger.warn(`Received 401 for: ${url}`);
         if (await handle401Error()) {
-          console.log(`[apiFetch] Retrying after session refresh: ${url}`);
+          logger.log(`Retrying after session refresh: ${url}`);
           return attemptFetch();
         }
         return response;
       }
 
-      // التعامل مع 403
+      // Handle 403
+      // Handle 403
       if (response.status === 403) {
-        console.warn(`[apiFetch] Received 403 for: ${url}`);
-        if (await handle403Error()) {
-          console.log(`[apiFetch] Retrying after CSRF refresh: ${url}`);
-          return attemptFetch();
+        logger.warn(`Received 403 for: ${url}`);
+        // Only try refresh once
+        if (!init?.headers || !(init.headers as any)['X-CSRF-Retry']) {
+          if (await handle403Error()) {
+            logger.log(`Retrying after CSRF refresh: ${url}`);
+            // Add header to prevent infinite loop
+            const newHeaders = { ...(init?.headers || {}), 'X-CSRF-Retry': '1' };
+            return apiFetch(input, { ...init, headers: newHeaders });
+          }
         }
         return response;
       }
 
-      // التعامل مع أخطاء الخادم 5xx
+      // Handle server errors 5xx
       if (response.status >= 500 && response.status < 600) {
         if (retries < MAX_RETRIES) {
-          console.warn(`[apiFetch] Server error ${response.status} for: ${url}. Retry ${retries + 1}/${MAX_RETRIES}`);
+          logger.warn(`Server error ${response.status} for: ${url}. Retry ${retries + 1}/${MAX_RETRIES}`);
           retries++;
           await delay(RETRY_DELAY_MS);
           return attemptFetch();
         }
-        console.error(`[apiFetch] Max retries reached for server error: ${url}`);
+        logger.error(`Max retries reached for server error: ${url}`);
         // Queue for background retry
         swrBackgroundSync.addToSyncQueue(url);
       }
 
-      // تحقق من صحة الاستجابة
+      // Validate response
       const validRes = await validateResponse(response);
 
-      // تم إلغاء التخزين المؤقت بالكامل
-      // لا يتم تخزين أي بيانات مؤقتاً
+      // Caching has been completely disabled
+      // No data is cached at all
 
       return validRes;
     } catch (error: unknown) {
@@ -161,49 +202,68 @@ export const apiFetch: FetchFunction = async (input, init) => {
 
       if (error instanceof Error) {
         if (error.name === "AbortError") {
-          console.error(`[apiFetch] Request aborted due to timeout: ${url}`);
-          showErrorToast("انتهت مهلة الطلب", "استغرق الطلب وقتًا طويلاً. يرجى المحاولة مرة أخرى.");
+          logger.error(`Request aborted due to timeout: ${url}`);
+          showErrorToast("Request Timeout", "The request took too long. Please try again.");
           throw new Error("Request timeout");
         }
 
-        // تحسين error handling للـ network errors
+        // Enhanced error handling for network errors with retry
         if (error.message?.includes('NetworkError') ||
           error.message?.includes('Failed to fetch') ||
           error.message?.includes('fetch resource')) {
 
-          console.error(`[apiFetch] Network error for ${url}:`, error.message);
+          if (retries < MAX_RETRIES) {
+            logger.warn(`Network error for ${url}. Retry ${retries + 1}/${MAX_RETRIES}: ${error.message}`);
+            retries++;
+            await delay(RETRY_DELAY_MS);
+            return attemptFetch();
+          }
 
-          // لا نعرض toast للـ network errors لأنها قد تكون مؤقتة
-          // والـ hooks ستتعامل معها بشكل أفضل
+          logger.error(`Max retries reached for network error: ${url}`, error.message);
 
-          // نعيد throw الخطأ كما هو
+          // Don't show toast for network errors as they may be temporary
+          // and hooks will handle them better
+
+          // Re-throw the error as is
           throw error;
         }
 
-        console.error(`[apiFetch] Fetch error for ${url}:`, error.message);
+        logger.error(`Fetch error for ${url}:`, error.message);
         throw error;
       } else {
-        console.error(`[apiFetch] Unknown error for ${url}:`, error);
+        logger.error(`Unknown error for ${url}:`, error);
         throw new Error("An unknown error occurred");
       }
     }
   };
 
-  try {
-    return await attemptFetch();
-  } catch (error) {
-    // إذا كان network error، نعيد throw للـ caller ليتعامل معه
-    if (error instanceof Error &&
-      (error.message?.includes('NetworkError') ||
-        error.message?.includes('Failed to fetch') ||
-        error.message?.includes('fetch resource'))) {
-      throw error;
-    }
+  // Create the request promise and store it for deduplication
+  const requestPromise = (async () => {
+    try {
+      const result = await attemptFetch();
+      return result;
+    } catch (error) {
+      // If it's a network error, re-throw for caller to handle
+      if (error instanceof Error &&
+        (error.message?.includes('NetworkError') ||
+          error.message?.includes('Failed to fetch') ||
+          error.message?.includes('fetch resource'))) {
+        throw error;
+      }
 
-    // للأخطاء الأخرى، نعرض toast ونعيد throw
-    showErrorToast("خطأ في الطلب", "حدث خطأ أثناء معالجة الطلب. يرجى المحاولة مرة أخرى.");
-    throw error;
-  }
+      // For other errors, show toast and re-throw
+      showErrorToast("Request Error", "An error occurred while processing the request. Please try again.");
+      throw error;
+    } finally {
+      // Clean up the deduplication entry after request completes
+      activeRequests.delete(requestKey);
+    }
+  })();
+
+  // Store the promise for deduplication
+  activeRequests.set(requestKey, requestPromise);
+
+  return requestPromise;
 };
 
 /**
