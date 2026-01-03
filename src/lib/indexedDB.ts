@@ -70,15 +70,25 @@ let dbInstance: IDBDatabase | null = null;
 let initPromise: Promise<IDBDatabase> | null = null;
 
 // Statistics tracking with mutex for thread safety
+// Initialize with safe defaults, update actual limits on first access
 let cacheStats: CacheStats = {
   totalItems: 0,
   totalSize: 0,
-  maxSize: isMobileDevice() ? CACHE_LIMITS.mobile.maxSize : CACHE_LIMITS.desktop.maxSize,
+  maxSize: CACHE_LIMITS.desktop.maxSize, // Default to desktop size, will adjust if mobile
   hitRate: 0,
   missRate: 0,
   evictions: 0,
   lastCleanup: Date.now()
 };
+
+// Lazy update of limits
+if (typeof window !== 'undefined') {
+  setTimeout(() => {
+    if (isMobileDevice()) {
+      cacheStats.maxSize = CACHE_LIMITS.mobile.maxSize;
+    }
+  }, 0);
+}
 
 let accessCount = 0;
 let hitCount = 0;

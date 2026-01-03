@@ -169,6 +169,7 @@ export function verifySizeOnly(
  * Store integrity check results in localStorage for performance
  */
 export function cacheIntegrityCheck(check: IntegrityCheck): void {
+    if (typeof window === 'undefined') return;
     try {
         const cacheKey = `integrity_${check.path}`;
         const cacheData = {
@@ -187,6 +188,7 @@ export function cacheIntegrityCheck(check: IntegrityCheck): void {
  * Retrieve cached integrity check
  */
 export function getCachedIntegrityCheck(path: string, maxAgeMs: number = 24 * 60 * 60 * 1000): IntegrityCheck | null {
+    if (typeof window === 'undefined') return null;
     try {
         const cacheKey = `integrity_${path}`;
         const cached = localStorage.getItem(cacheKey);
@@ -219,6 +221,7 @@ export function getCachedIntegrityCheck(path: string, maxAgeMs: number = 24 * 60
  * Clear all cached integrity checks
  */
 export function clearIntegrityCache(): void {
+    if (typeof window === 'undefined') return;
     try {
         const keys = Object.keys(localStorage);
         keys.forEach(key => {
@@ -240,6 +243,13 @@ export function getIntegrityStats(): {
     oldestCheck: number | null;
     newestCheck: number | null;
 } {
+    if (typeof window === 'undefined') {
+        return {
+            cachedChecks: 0,
+            oldestCheck: null,
+            newestCheck: null
+        };
+    }
     try {
         const keys = Object.keys(localStorage).filter(k => k.startsWith('integrity_'));
         const timestamps: number[] = [];

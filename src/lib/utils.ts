@@ -56,7 +56,7 @@ export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit
 
 // Mobile device detection (for performance optimization)
 export function isMobileDevice(): boolean {
-  if (typeof navigator === 'undefined') return false; // SSR safe
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false; // SSR safe
 
   // Check user agent for common mobile indicators
   const userAgent = navigator.userAgent.toLowerCase();

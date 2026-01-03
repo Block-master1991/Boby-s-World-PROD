@@ -21,9 +21,9 @@ interface SyncStatus {
 }
 
 class OfflineManager {
-    private isOnline = navigator.onLine;
+    private isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     private syncStatus: SyncStatus = {
-        isOnline: navigator.onLine,
+        isOnline: typeof navigator !== 'undefined' ? navigator.onLine : true,
         lastSyncTime: 0,
         pendingItems: 0,
         failedItems: 0,
@@ -43,6 +43,9 @@ class OfflineManager {
     }
 
     private initializeOfflineDetection(): void {
+        // Skip on SSR
+        if (typeof window === 'undefined') return;
+
         window.addEventListener('online', () => {
             logger.log('[OfflineManager] Connection restored');
             this.isOnline = true;
@@ -416,6 +419,7 @@ export const getBackgroundProcessor = (): BackgroundProcessor | null => {
 
 // Utility functions
 export const isOnline = (): boolean => {
+    if (typeof navigator === 'undefined') return true;
     return navigator.onLine;
 };
 
