@@ -142,7 +142,6 @@ export default function AdminPage() {
       fetchLists();
       fetchUserStats();
     }
-    // eslint-disable-next-line
   }, [user, search, whitePage, blackPage]);
 
   // Fetch user statistics
@@ -628,7 +627,7 @@ export default function AdminPage() {
 
           {/* Delete confirmation modal */}
           {confirmDelete && (
-            <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-40 z-50">
+            <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50">
               <div className="bg-white p-6 rounded shadow-lg">
                 <p>Are you sure you want to remove IP <b>{confirmDelete.ip}</b> from the <b>{confirmDelete.list === 'whitelist' ? 'whitelist' : 'blacklist'}</b>?&apos;</p>
                 <div className="flex gap-4 mt-4">

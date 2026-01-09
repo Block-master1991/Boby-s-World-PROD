@@ -150,7 +150,7 @@ const TokenBalance: React.FC = () => {
     }
 
     return (
-        <Card className="w-full shadow-md bg-opacity-80 backdrop-blur-sm">
+        <Card className="w-full shadow-md bg-background/80 backdrop-blur-sm">
             <CardHeader className="p-4 pb-2">
                 <CardTitle className="text-md font-headline flex items-center gap-2"><WalletCards /> Your Balances</CardTitle>
             </CardHeader>

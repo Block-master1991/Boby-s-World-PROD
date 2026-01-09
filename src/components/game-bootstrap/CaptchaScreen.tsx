@@ -20,7 +20,7 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
   const [loadAttempts, setLoadAttempts] = useState(0);
   const [showRetryButton, setShowRetryButton] = useState(false);
   const recaptchaRef = useRef<ReCAPTCHA>(null);
-  const loadTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const loadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { toast } = useToast();
   const [theme, setTheme] = useState<'light' | 'dark'>('light');
   const [captchaTokenForAutoVerify, setCaptchaTokenForAutoVerify] = useState<string | null>(null);
@@ -178,9 +178,8 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
     <div className="relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
       {showOverlay && (
         <div
-          className="fixed inset-0 flex items-center justify-center bg-white bg-opacity-50 text-black text-5xl font-bold cursor-pointer z-50"
+          className="fixed inset-0 flex items-center justify-center bg-white/50 backdrop-blur-md text-black text-5xl font-bold cursor-pointer z-50 text-center"
           onClick={handleOverlayClick}
-          style={{ backdropFilter: 'blur(5px)' }}
         >
           Start Boby World
         </div>

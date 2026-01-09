@@ -7,7 +7,7 @@ import { PawPrint } from 'lucide-react';
 
 const DogMovement: React.FC = () => {
     return (
-        <Card className="w-full shadow-md bg-opacity-80 backdrop-blur-sm">
+        <Card className="w-full shadow-md bg-background/80 backdrop-blur-sm">
             <CardHeader>
                 <CardTitle className="text-md font-headline flex items-center gap-2">
                     <PawPrint className="h-5 w-5 text-primary" /> Controls
