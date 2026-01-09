@@ -28,6 +28,9 @@
       ],
       "utils/*": [
         "./src/utils/*"
+      ],
+      "tailwindcss": [
+        "./node_modules/tailwindcss/dist/lib.d.mts"
       ]
     }
   },

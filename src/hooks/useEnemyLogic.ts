@@ -1017,7 +1017,7 @@ export const useEnemyLogic = ({
       }
     };
 
-    chunkManager.addEventListener('chunk-loaded', onChunkLoaded);
+    chunkManager.addEventListener('chunk-loaded' as any, onChunkLoaded);
 
     // CATCH-UP: Check manually for keys that might have loaded before we listened
     // Use currentDogChunk logic if available, or assume 0,0 for start
@@ -1039,7 +1039,7 @@ export const useEnemyLogic = ({
     }
 
     return () => {
-      chunkManager.removeEventListener('chunk-loaded', onChunkLoaded);
+      chunkManager.removeEventListener('chunk-loaded' as any, onChunkLoaded);
     };
   }, [sceneRef, loadEnemiesForChunk, dogModelRef]);
 

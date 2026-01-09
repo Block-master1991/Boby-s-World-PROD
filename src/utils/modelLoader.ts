@@ -97,7 +97,7 @@ class MemoryManager {
     const img = texture.image;
     if (!img) return 0;
     // Simple approximation: width * height * 4 bytes (RGBA)
-    return img.width * img.height * 4;
+    return (img as any).width * (img as any).height * 4;
   }
 
   public cleanup(): void {

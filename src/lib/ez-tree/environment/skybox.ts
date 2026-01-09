@@ -293,7 +293,7 @@ export class Skybox extends THREE.Object3D {
             current.background = null;
             current.environment = envMap.texture;
 
-            logger.log(`[Skybox] High-quality PMREM environment map applied successfully: texture size=${envMap.texture.image?.width}x${envMap.texture.image?.height}`);
+            logger.log(`[Skybox] High-quality PMREM environment map applied successfully: texture size=${(envMap.texture.image as any)?.width}x${(envMap.texture.image as any)?.height}`);
 
             // Log scene lighting status
             logger.log(`[Skybox] Scene lighting: background=${current.background}, environment=${!!current.environment}`);
