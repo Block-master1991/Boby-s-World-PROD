@@ -7,7 +7,7 @@
  */
 
 import { KMSClient, GenerateDataKeyCommand } from "@aws-sdk/client-kms";
-import { KMSProvider } from './KMSProvider';
+import type { KMSProvider } from './KMSProvider';
 import { logger } from "@/utils/logger";
 
 export class AwsKmsProvider implements KMSProvider {

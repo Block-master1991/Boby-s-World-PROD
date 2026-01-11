@@ -6,22 +6,23 @@ import type { MutableRefObject } from 'react';
 import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils';
-import { Octree } from '@/lib/Octree';
+import type { Octree } from '@/lib/Octree';
 import { getModel, putModel } from '../lib/indexedDB';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS, ENEMY_COLLISION_PENALTY_USDT } from '../lib/constants'; // Import ENEMY_COLLISION_PENALTY_USDT
 import { useDynamicModelLoader } from './useDynamicModelLoader'; // Import useDynamicModelLoader
-import { CoinData } from './useCoinLogic'; // Import CoinData
-import { GameObject, BaseGameObject } from '@/types/game';
+import type { CoinData } from './useCoinLogic'; // Import CoinData
+import type { GameObject, BaseGameObject } from '@/types/game';
 import { getDevicePerformanceConfig } from '@/lib/utils';
 import { logger } from '@/utils/logger';
 
-// New: Enemy Model Cache
+// New: Enemy Model Cache with loading promises to prevent race conditions
 const EnemyModelCache: { [key: string]: { model: THREE.Group; animations: THREE.AnimationClip[] } } = {};
+const EnemyModelPromises: { [key: string]: Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] } | undefined> } = {};
 let areModelsPreloaded = false;
 
-const ENEMY_SPEED = 1.5; // Units per second (was 0.03 per frame)
-const ENEMY_GALLOP_SPEED_MULTIPLIER = 3;
+const ENEMY_SPEED = 1.0; // Units per second (Reduced for realistic patrol)
+const ENEMY_GALLOP_SPEED_MULTIPLIER = 2; // Increased to maintain 4.5 chase speed
 const ENEMY_ATTACK_DISTANCE = 1.5;
 const ENEMY_DEATH_TRIGGER_DISTANCE = 0.5;
 const ENEMY_DEATH_DURATION = 1.5;
@@ -29,7 +30,7 @@ const ENEMY_SINKING_DELAY = 1.0; // Reduced to 1 second delay before sinking sta
 const ENEMY_PROTECTION_RADIUS = 8;
 const ENEMY_CHASE_RADIUS = 16;
 const CROSSFADE_DURATION = 0.2;
-const VISIBLE_ENEMY_DISTANCE = 150; // Matched to coin visibility
+const VISIBLE_ENEMY_DISTANCE = 220; // Expanded to 220 to match coin visibility using existing chunks
 const ENEMIES_PER_COIN_CHUNK = 1;
 
 const ENEMY_ANIMATION_NAMES = {
@@ -133,7 +134,11 @@ export const useEnemyLogic = ({
   const loadingEnemyChunks = React.useRef<Set<string>>(new Set()); // New loading state
   const pendingCoinIds = React.useRef<Set<string>>(new Set()); // New: Track coins currently being processed for spawns
   const reconciliationTimer = React.useRef<number>(0); // New: Timer for periodic reconciliation
+  const frameCountRef = React.useRef<number>(0); // Target for animation throttling
   const currentDogChunk = React.useRef<{ chunkX: number; chunkZ: number } | null>(null);
+
+  // SPAWN QUEUE: Throttled loading for distant enemies
+  const spawnQueueRef = React.useRef<{ coin: CoinData; chunkKey: string; distanceToDog: number }[]>([]);
 
   // Get disposeModelResources from useDynamicModelLoader
   const { cleanupModelPool } = useDynamicModelLoader({
@@ -160,7 +165,7 @@ export const useEnemyLogic = ({
         }
       }
     });
-    logger.log(`[useEnemyLogic] Disposed of enemy model resources.`);
+    // logger.log(`[useEnemyLogic] Disposed of enemy model resources.`);
   }, []);
 
   React.useEffect(() => {
@@ -187,11 +192,11 @@ export const useEnemyLogic = ({
     try {
       const cachedData = await getModel(modelName);
       if (cachedData) {
-        logger.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
+        // logger.log(`[useEnemyLogic] Loading enemy model from IndexedDB: ${modelName}`);
         const gltf = await gltfLoader.current!.parseAsync(cachedData, modelPath);
         return { model: gltf.scene, animations: gltf.animations };
       } else {
-        logger.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
+        // logger.log(`[useEnemyLogic] Fetching enemy model from network: ${modelPath}`);
         const response = await fetch(modelPath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
@@ -254,6 +259,11 @@ export const useEnemyLogic = ({
     logger.log('[useEnemyLogic] Component mounted, starting preload...');
     preloadEnemyModels();
   }, [preloadEnemyModels]);
+
+  const handleNoPenalty = React.useCallback(() => {
+    // --- NO PENALTY: Shield is active and protects the player ---
+    logger.debug('[useEnemyLogic] Action intercepted: Shield is active. No penalty applied.');
+  }, []);
 
   const playAnimation = React.useCallback((enemy: EnemyData, newActionName: string) => {
     const newAction = enemy.actions[newActionName];
@@ -336,14 +346,14 @@ export const useEnemyLogic = ({
       });
 
       enemyInstanceModel.scale.set(0.5, 0.5, 0.5);
-      lod.addLevel(enemyInstanceModel, 25);
+      lod.addLevel(enemyInstanceModel, 0); // High Detail from 0 to VISIBLE_ENEMY_DISTANCE
 
       const lowDetailModel = new THREE.Mesh(
         new THREE.BoxGeometry(0.0001, 0.0001, 0.0001),
         new THREE.MeshBasicMaterial({ color: 0xff0000 })
       );
       lowDetailModel.scale.set(0.5, 0.5, 0.5);
-      lod.addLevel(lowDetailModel, 50);
+      lod.addLevel(lowDetailModel, VISIBLE_ENEMY_DISTANCE); // Invisible beyond this range
 
       const mixer = new THREE.AnimationMixer(enemyInstanceModel);
       const actions: { [key: string]: THREE.AnimationAction } = {};
@@ -502,8 +512,16 @@ export const useEnemyLogic = ({
 
       logger.log(`[EnemyLogic] Loading enemies for chunk ${chunkKey}. Coins found: ${coinsInChunk.length}`);
 
-      // Use spawnEnemyForCoin for each coin
-      await Promise.all(coinsInChunk.map(coin => spawnEnemyForCoin(coin, chunkKey)));
+      const dogPosition = dogModelRef.current?.position || new THREE.Vector3(0, 0, 0);
+
+      // QUEUE SYSTEM: Instead of spawning immediately, add to queue
+      coinsInChunk.forEach(coin => {
+        const distanceToDog = dogPosition.distanceTo(coin.position);
+        spawnQueueRef.current.push({ coin, chunkKey, distanceToDog });
+      });
+      
+      // Sort queue by distance (closest first) to ensure immediate threats appear first
+      spawnQueueRef.current.sort((a, b) => a.distanceToDog - b.distanceToDog);
 
     } catch (error) {
       logger.error(`[EnemyLogic] Critical error loading enemies for chunk ${chunkKey}:`, error);
@@ -511,7 +529,7 @@ export const useEnemyLogic = ({
       loadedEnemyChunks.current.add(chunkKey);
       loadingEnemyChunks.current.delete(chunkKey);
     }
-  }, [sceneRef, coinMeshesRef, spawnEnemyForCoin]);
+  }, [sceneRef, coinMeshesRef]); // Removed spawnEnemyForCoin dependency as it's not called directly anymore
 
   const unloadEnemiesFromChunk = React.useCallback((chunkX: number, chunkZ: number) => {
     if (!sceneRef.current || !loadedEnemyChunks.current.has(getChunkKey(chunkX, chunkZ))) {
@@ -545,7 +563,12 @@ export const useEnemyLogic = ({
       }
       return true;
     });
-    loadedEnemyChunks.current.delete(getChunkKey(chunkX, chunkZ));
+
+    // Clean up pending spawns for this chunk from the queue
+    const targetChunkKey = getChunkKey(chunkX, chunkZ);
+    spawnQueueRef.current = spawnQueueRef.current.filter(item => item.chunkKey !== targetChunkKey);
+
+    loadedEnemyChunks.current.delete(targetChunkKey);
     cleanupModelPool();
   }, [sceneRef, octreeRef, disposeEnemyModelResources, cleanupModelPool]);
 
@@ -691,60 +714,96 @@ export const useEnemyLogic = ({
     );
     frustum.setFromProjectionMatrix(viewProjection);
 
+    // EXPANDED OCTREE QUERY: 150 units to match VISIBLE_ENEMY_DISTANCE
     let visibleEnemies = enemyMeshesRef.current;
     if (octreeRef.current) {
-      const cameraBox = new THREE.Box3().setFromCenterAndSize(camera.position, new THREE.Vector3(50, 50, 50));
-      visibleEnemies = octreeRef.current.query(cameraBox).map(obj => obj.data as unknown as EnemyData);
+      const queryBox = new THREE.Box3().setFromCenterAndSize(
+        camera.position, 
+        new THREE.Vector3(VISIBLE_ENEMY_DISTANCE * 2, 50, VISIBLE_ENEMY_DISTANCE * 2)
+      );
+      visibleEnemies = octreeRef.current.query(queryBox).map(obj => obj.data as unknown as EnemyData);
     }
+
+    // Update frame counter for throttling
+    frameCountRef.current = (frameCountRef.current + 1) % 60;
 
     // Filter out enemies that have sunk and been disposed
     enemyMeshesRef.current = enemyMeshesRef.current.filter(enemy => {
-      // If sinking and sunk far enough, filter it out
       if (enemy.isSinking && enemy.sinkingTimer <= 0 && enemy.lod.position.y < enemy.initialDeathY - 5) {
-        return false; // Remove from the active enemy list
+        return false;
       }
       return true;
     });
 
     visibleEnemies.forEach(enemy => {
-      // Defensive check for mixer
-      if (!enemy.mixer) {
-        //logger.warn(`[useEnemyLogic] Skipping update for enemy ${enemy.uuid} because mixer is undefined.`);
-        return;
-      }
+      if (!enemy.mixer) return;
 
-      // On mobile devices, skip animation updates for performance (except high-end)
-      if (perfConfig.isMobile && perfConfig.performanceLevel !== 'high') {
-        // Still update logic but skip mixer updates
+      const distanceToDog = dogPosition.distanceTo(enemy.lod.position);
+      
+      // TIERED ANIMATION SYSTEM
+      let shouldUpdateAnimation = true;
+
+      // 1. Frustum Culling: Only update animation if the enemy is actually on screen (Frustum Check)
+      // Exception: Keep updates for very close enemies (Tier 1) even if slightly off-screen for sound/feel
+      const isInFrustum = frustum.containsPoint(enemy.lod.position);
+      
+      if (distanceToDog < 60) {
+        // Tier 1: Very close (0-60) - Full animation if in frustum, or if very close even if slightly off
+        shouldUpdateAnimation = isInFrustum || distanceToDog < 15;
+      } else if (distanceToDog < 150) {
+        // Tier 2: Mid-range (60-150) - Only if in frustum AND throttle based on mobile/performance
+        if (!isInFrustum) {
+          shouldUpdateAnimation = false;
+        } else {
+          // Throttle: Mobile updates every 3rd frame, PC every 2nd frame at this distance
+          const throttleRate = perfConfig.isMobile ? 3 : 2;
+          shouldUpdateAnimation = (frameCountRef.current % throttleRate === 0);
+        }
       } else {
-        enemy.mixer.update(delta);
+        // Tier 3: Far-range (150-220) [NEW] - Ultra-Low Mode
+        // Only update if in frustum AND strictly throttled to ~10fps (every 6th frame)
+        if (!isInFrustum) {
+          shouldUpdateAnimation = false;
+        } else {
+           shouldUpdateAnimation = (frameCountRef.current % 6 === 0);
+        }
       }
-      const enemyY = enemy.lod.position.y;
 
-      // Strict Visibility Sync: Enemy is visible ONLY if its linked coin is visible
+      // Performance Overrides
+      if (perfConfig.isMobile && perfConfig.performanceLevel === 'low' && distanceToDog > 40) {
+        shouldUpdateAnimation = false;
+      }
+
+      if (shouldUpdateAnimation) {
+        // Calculate delta multiplier based on tier to maintain correct speed despite throttling
+        let deltaMultiplier = 1;
+        if (distanceToDog > 150) {
+           deltaMultiplier = 6; // Tier 3
+        } else if (distanceToDog > 60) {
+           deltaMultiplier = perfConfig.isMobile ? 3 : 2; // Tier 2
+        }
+        
+        enemy.mixer.update(delta * deltaMultiplier); 
+      }
+
+      const enemyY = enemy.lod.position.y;
       const linkedCoin = coinMeshesRef.current.find(c => c.uuid === enemy.targetCoinId);
 
       if (linkedCoin) {
-        // Inherit visibility from the guarded coin (handles distance culling and collection status)
         enemy.lod.visible = linkedCoin.visible;
       } else {
-        // If coin is missing (collected), keep enemy visible so it can play death animation
-        // The enemy will be removed later by the death/sinking logic check
         enemy.lod.visible = true;
       }
 
-      enemy.visible = enemy.lod.visible; // Keep the EnemyData.visible property in sync
+      enemy.visible = enemy.lod.visible;
 
       // Handle sinking animation
       if (enemy.isSinking) {
         enemy.sinkingTimer -= delta;
+        enemy.lod.position.y -= delta * 0.5; // Sink speed
         if (enemy.sinkingTimer <= 0) {
-          // Start sinking animation
-          const sinkSpeed = 0.5; // Units per second
-          enemy.lod.position.y -= sinkSpeed * delta;
-          enemy.position.copy(enemy.lod.position); // Keep EnemyData.position in sync
+          // Will be removed by the filter at start of next frame
         }
-        return; // Do not process other logic if sinking
       }
 
       if (enemy.isDying) {
@@ -768,7 +827,6 @@ export const useEnemyLogic = ({
         return;
       }
 
-      const distanceToDog = dogPosition.distanceTo(enemy.lod.position); // Use enemy.lod.position
       const distanceToCoin = dogPosition.distanceTo(enemy.targetCoinPosition);
 
       // Find the protected coin by its unique ID
@@ -798,6 +856,7 @@ export const useEnemyLogic = ({
       if (!enemy.isDying && !enemy.isAttacking) {
         targetPosition = new THREE.Vector3();
         let isMoving = false;
+        let moveSpeed = ENEMY_SPEED; // Default to Walk Speed
 
         if (distanceToDog < ENEMY_ATTACK_DISTANCE) {
           targetPosition.copy(enemy.lod.position); // Use enemy.lod.position
@@ -805,11 +864,14 @@ export const useEnemyLogic = ({
           enemy.isAttacking = true;
           enemy.isIdling = false;
         } else if (distanceToCoin < ENEMY_CHASE_RADIUS) {
+          // CHASE MODE
           targetPosition.copy(dogPosition);
           isMoving = true;
           currentAnimation = 'Gallop';
+          moveSpeed = ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER; // Explicitly set Gallop Speed
           enemy.isIdling = false;
         } else {
+          // PATROL MODE
           if (enemy.isIdling) {
             enemy.idleTimer -= delta;
             if (enemy.idleTimer <= 0) {
@@ -821,6 +883,7 @@ export const useEnemyLogic = ({
               enemy.patrolTarget.set(newPatrolX, enemy.lod.position.y, newPatrolZ); // Use enemy.lod.position.y
               isMoving = true;
               currentAnimation = 'Walk';
+              moveSpeed = ENEMY_SPEED; // Explicitly set Walk Speed
             } else {
               currentAnimation = enemy.currentAction?.getClip().name || 'Idle';
             }
@@ -835,6 +898,7 @@ export const useEnemyLogic = ({
             targetPosition.copy(enemy.patrolTarget);
             isMoving = true;
             currentAnimation = 'Walk';
+            moveSpeed = ENEMY_SPEED; // Explicitly set Walk Speed
           }
         }
 
@@ -844,8 +908,8 @@ export const useEnemyLogic = ({
 
         if (isMoving && direction.lengthSq() > movementThreshold) {
           direction.normalize();
-          const currentSpeed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
-          enemy.lod.position.addScaledVector(direction, currentSpeed * delta); // Use enemy.lod.position
+          // Use the explicitly calculated moveSpeed
+          enemy.lod.position.addScaledVector(direction, moveSpeed * delta); // Use enemy.lod.position
           enemy.position.copy(enemy.lod.position); // Keep EnemyData.position in sync
           const lookAtTarget = new THREE.Vector3(targetPosition.x, enemyY, targetPosition.z);
           enemy.lod.lookAt(lookAtTarget); // Use enemy.lod.lookAt
@@ -886,6 +950,7 @@ export const useEnemyLogic = ({
         }
         if (!enemy.hasAppliedDeathEffect) {
           if (isShieldActiveRef.current) {
+            handleNoPenalty();
           } else if (protectionBottleCountRef.current > 0) {
             protectionBottleCountRef.current--;
             onConsumeProtectionBottle();
@@ -948,8 +1013,9 @@ export const useEnemyLogic = ({
               enemy.initialDeathY = 0; // Reset initial death Y
 
               if (!enemy.hasAppliedDeathEffect) {
-                if (isShieldActiveRef.current) {
-                } else if (protectionBottleCountRef.current > 0) {
+                  if (isShieldActiveRef.current) {
+                    handleNoPenalty();
+                  } else if (protectionBottleCountRef.current > 0) {
                   protectionBottleCountRef.current--;
                   onConsumeProtectionBottle();
                   if (dogModelRef.current) {
@@ -984,6 +1050,22 @@ export const useEnemyLogic = ({
         }
       }
     });
+
+    // SPAWN QUEUE PROCESSOR: Process a few enemies each frame to avoid lag
+    if (spawnQueueRef.current.length > 0) {
+        // Sort constantly to ensure we always pick the closest ones even if player moved
+        // Optimization: Sort only every 10 frames or so if queue is huge, but usually fine here
+        // spawnQueueRef.current.sort((a, b) => a.distanceToDog - b.distanceToDog); 
+        
+        // Process up to 3 enemies per frame
+        const itemsToProcess = spawnQueueRef.current.splice(0, 3);
+        itemsToProcess.forEach(item => {
+           // Verify coin is still valid/needed
+           if (!item.coin.collected) {
+             spawnEnemyForCoin(item.coin, item.chunkKey);
+           }
+        });
+    }
   }, [
     dogModelRef,
     isShieldActiveRef,
@@ -1000,7 +1082,8 @@ export const useEnemyLogic = ({
     unloadEnemiesFromChunk,
     addFloatingEffect,
     onCoinCollected,
-    protectionBottleCountRef
+    protectionBottleCountRef,
+    spawnEnemyForCoin
   ]);
 
   // Event-Driven Spawn: Listen for terrain ready signals

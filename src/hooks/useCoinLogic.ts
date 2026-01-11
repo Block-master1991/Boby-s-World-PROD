@@ -4,10 +4,10 @@ import { useCallback, useRef } from 'react';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import type { MutableRefObject } from 'react';
-import { Octree } from '../lib/Octree';
+import type { Octree } from '../lib/Octree';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../lib/chunkUtils';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL, DOG_SPAWN_PROTECTION_RADIUS, ENEMY_COLLISION_PENALTY_USDT } from '../lib/constants';
-import { GameObject, BaseGameObject } from '@/types/game';
+import type { GameObject, BaseGameObject } from '@/types/game';
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
 import { logger } from '@/utils/logger';
 // import FloatingEffect from '@/components/game/FloatingEffect'; // Import FloatingEffect for type hinting
@@ -21,7 +21,7 @@ const COIN_ROTATION_SPEED = 0.03;
 const COIN_VALUE = ENEMY_COLLISION_PENALTY_USDT; // Use the same value as the penalty for consistency
 const COLLECTION_THRESHOLD_BASE = 0.5;
 const COLLECTION_THRESHOLD = COLLECTION_THRESHOLD_BASE + COIN_RADIUS;
-const VISIBLE_COIN_DISTANCE = 150; // Increased to ensure coins are visible in new chunks
+const VISIBLE_COIN_DISTANCE = 220; // Increased to 220 to maximize visibility within loaded chunks
 const COIN_MODEL_PATH = '/models/coin.glb'; // Path to the coin model
 
 // Define CoinData interface
@@ -90,6 +90,8 @@ export const useCoinLogic = ({
   const loadingCoinChunks = useRef<Set<string>>(new Set());
 
   const coinModelPromiseRef = useRef<Promise<void> | null>(null);
+
+  const lastDogPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   // Load the coin model with IndexedDB caching
   const loadCoinModel = useCallback(async () => {
@@ -306,6 +308,9 @@ export const useCoinLogic = ({
     const dog = dogModelRef.current;
     const dogPosition = dog.position;
 
+    // Track displacement to help attracted coins keep pace
+    const displacement = dogPosition.clone().sub(lastDogPositionRef.current);
+
     const { chunkX: currentX, chunkZ: currentZ } = getChunkCoordinates(dogPosition.x, dogPosition.z);
 
     // This logic now only handles unloading chunks that are out of range
@@ -340,50 +345,47 @@ export const useCoinLogic = ({
       if (coin.collected) {
         continue;
       }
+
       let collectedThisFrame = false;
+
       // Only check for collection if the coin is currently visible
       if (coin.visible) {
         const distanceToDog = dogPosition.distanceTo(coin.position);
 
-        // Increase collection distance when magnet is active to ensure collection and prevent coin from getting stuck
         // Increase collection threshold when magnet is active to ensure collection
         const effectiveThreshold = isCoinMagnetActiveRef.current ? COLLECTION_THRESHOLD * 2.0 : COLLECTION_THRESHOLD;
 
+        // 1. CHECK FOR COLLECTION (Standard or Magnet Attraction Finish)
         if (distanceToDog < effectiveThreshold) {
-          // If magnet is active, play the cool animation
-          // If magnet is active, play the attractive animation
-          if (isCoinMagnetActiveRef.current && !coin.userData.isAnimatingCollection) {
-            coin.userData.isAnimatingCollection = true;
-            coin.userData.collectionStartTime = performance.now();
-
-            // IMMEDIATE CREDIT LOGIC (Moved to where Attraction starts for guaranteed pickup)
-            // We give the reward NOW so it feels instant.
-            // We give the reward immediately so player feels responsive
-            // NOTE: Credit is now handled when attraction BEGINS (below).
-            // But if for some reason it wasn't, we do it here as backup.
-            if (!coin.userData.isCredited) {
-              coin.userData.isCredited = true;
-              onCoinCollected();             // Add score/money
-              remainingCoinsRef.current--;   // Update count
-              onRemainingCoinsUpdate(remainingCoinsRef.current);
-            }
-
-            // Trigger effect immediately
-            addFloatingEffect(
-              coin.position.clone(),
-              'coin',
-              coin.value || 0.001,
-              'followTarget',
-              true,
-              undefined,
-              dogModelRef.current
-            );
+          // --- CONSOLIDATED CREDIT BLOCK ---
+          if (!coin.userData.isCredited) {
+            coin.userData.isCredited = true;
+            onCoinCollected();             // Add score/money
+            remainingCoinsRef.current--;   // Update count
+            onRemainingCoinsUpdate(remainingCoinsRef.current);
           }
-          // If NOT magnet (normal pickup), OR if it's normal logic
-          else if (!isCoinMagnetActiveRef.current) {
+
+          if (isCoinMagnetActiveRef.current) {
+            // Magnet collection animation
+            if (!coin.userData.isAnimatingCollection) {
+              coin.userData.isAnimatingCollection = true;
+              coin.userData.collectionStartTime = performance.now();
+              
+              addFloatingEffect(
+                coin.position.clone(),
+                'coin',
+                coin.value || 0.001,
+                'followTarget',
+                true,
+                undefined,
+                dogModelRef.current
+              );
+            }
+          } else {
+            // Standard pickup
             coin.collected = true;
             collectedThisFrame = true;
-            // Standard pickup effect
+            
             addFloatingEffect(
               coin.position.clone(),
               'coin',
@@ -394,12 +396,12 @@ export const useCoinLogic = ({
               dogModelRef.current
             );
           }
-        } else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS && !coin.userData.isAttracted && !coin.userData.isAnimatingCollection) {
-          // If magnet is active, apply attraction directly to the coin model
-          coin.userData.isAttracted = true; // Mark coin as being attracted
+        } 
+        // 2. CHECK FOR MAGNET ATTRACTION START
+        else if (isCoinMagnetActiveRef.current && distanceToDog < COIN_MAGNET_RADIUS && !coin.userData.isAttracted && !coin.userData.isAnimatingCollection) {
+          coin.userData.isAttracted = true;
 
-          // IMMEDIATE CREDIT ON ATTRACTION START
-          // This guarantees "No Coin Left Behind" even if player runs away fast.
+          // --- CONSOLIDATED CREDIT BLOCK (ON ATTRACTION START) ---
           if (!coin.userData.isCredited) {
             coin.userData.isCredited = true;
             onCoinCollected();
@@ -408,79 +410,81 @@ export const useCoinLogic = ({
           }
 
           coin.userData.originalRotationSpeed = coin.rotationSpeed || COIN_ROTATION_SPEED;
-          coin.rotationSpeed = COIN_ROTATION_SPEED * 3; // Increase rotation speed when attracted
-          // Don't mark as collected yet, let the animation complete first
+          coin.rotationSpeed = COIN_ROTATION_SPEED * 3;
         }
       }
 
       if (collectedThisFrame) {
-        // Coin collected, perform actions
-        coin.visible = false; // Mark as invisible
-        onCoinCollected(); // Trigger the collection callback
-        remainingCoinsRef.current--; // Decrement the remaining count
-        onRemainingCoinsUpdate(remainingCoinsRef.current); // Update UI
-        if (sceneRef.current) { // Add null check
-          sceneRef.current.remove(coin); // Remove from Three.js scene
+        // Final cleanup for a fully collected coin (standard pickup)
+        coin.visible = false;
+        if (sceneRef.current) {
+          sceneRef.current.remove(coin);
         }
         if (octreeRef.current) {
           const coinBox = new THREE.Box3().setFromObject(coin);
-          octreeRef.current.remove({ id: `coin_${coin.uuid}`, bounds: coinBox, data: coin }); // Use coin.uuid
+          octreeRef.current.remove({ id: `coin_${coin.uuid}`, bounds: coinBox, data: coin });
         }
-        // Do NOT add this coin to coinsToKeep, effectively removing it
       } else {
-        // This coin was NOT collected this frame
-        // Update its visibility based on distance if it's not already collected
-        // Always check visibility against distance
-        coin.visible = dogPosition.distanceTo(coin.position) < VISIBLE_COIN_DISTANCE;
+        // Update its visibility and animation if it's not already removed from scene
+        const dist = dogPosition.distanceTo(coin.position);
+        coin.visible = dist < VISIBLE_COIN_DISTANCE;
+        
         if (coin.visible) {
-          // Rotate coin around its vertical axis professionally
-          coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
+          // Optimization: Only rotate coins if they are within standard visibility range (150) or attracted
+          // Distant coins (150-220) remain static to save CPU
+          if (dist < 150 || coin.userData.isAttracted || coin.userData.isAnimatingCollection) {
+            coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
+          }
         }
 
-        // Update coin movement if it's in attraction state
         // Update magnet attraction / animation
         if (coin.userData.isAnimatingCollection) {
-          // HANDLE ANIMATION STATE
           const startTime = coin.userData.collectionStartTime || performance.now();
           const elapsed = performance.now() - startTime;
-          const duration = 200; // Fast 200ms animation
+          const duration = 200;
           const progress = Math.min(1, elapsed / duration);
 
-          // Shrink
-          const scale = Math.max(0.1, 2.5 * (1 - progress)); // From 2.5 down to 0.1
+          const scale = Math.max(0.1, 2.5 * (1 - progress));
           coin.scale.set(scale, scale, scale);
-
-          // Super spin
           coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), 0.5);
 
-          // Move to head
           const headPos = dogPosition.clone();
           headPos.y += 1.0;
-          coin.position.lerp(headPos, 0.3);
+          coin.position.lerp(headPos, 0.4); // Aggressive lerp to head
 
           if (progress >= 1) {
             coin.collected = true;
-            collectedThisFrame = true;
-            // Note: Effect was already triggered at start
+            // Removal will happen on next frame or we can do it here
+            coin.visible = false;
+            if (sceneRef.current) sceneRef.current.remove(coin);
+            if (octreeRef.current) {
+              const coinBox = new THREE.Box3().setFromObject(coin);
+              octreeRef.current.remove({ id: `coin_${coin.uuid}`, bounds: coinBox, data: coin });
+            }
           }
-
         } else if (coin.userData.isAttracted) {
-          // Standard attraction logic (move towards dog)
+          // APPLY DISPLACEMENT: Keep pace with the player
+          coin.position.add(displacement);
+
           const targetPosition = dogPosition.clone();
           targetPosition.y += 0.5;
-
           const distanceToDog = dogPosition.distanceTo(coin.position);
-          // SLOWER SPEED: Reduced max speed from 0.25 to 0.12 for smoother feel
-          const speed = Math.min(0.12, 0.02 + (COIN_MAGNET_RADIUS - distanceToDog) / COIN_MAGNET_RADIUS * 0.1);
+          
+          // DYNAMIC LERP SPEED: Up to 0.4 for very fast catch-up
+          const speed = Math.min(0.4, 0.05 + (COIN_MAGNET_RADIUS - distanceToDog) / COIN_MAGNET_RADIUS * 0.35);
           coin.position.lerp(targetPosition, speed);
-
+          
           coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), coin.rotationSpeed || COIN_ROTATION_SPEED);
         }
       }
-      if (!collectedThisFrame) {
-        coinsToKeep.push(coin); // Add to the list of coins to keep
+
+      if (!coin.collected || (coin.collected && coin.visible)) {
+        coinsToKeep.push(coin);
       }
     }
+    
+    // Update last position for next frame displacement calculation
+    lastDogPositionRef.current.copy(dogPosition);
     coinMeshesRef.current = coinsToKeep; // Update the ref with only the coins that were not collected
   }, [
     dogModelRef,

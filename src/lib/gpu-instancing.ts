@@ -1,6 +1,8 @@
 // GPU Instancing System for High-Performance Rendering
 // Optimizes rendering of repetitive objects like trees, grass, and rocks
 
+import type {
+    Camera} from '@/lib/three-chunk';
 import {
     InstancedMesh,
     Matrix4,
@@ -12,8 +14,7 @@ import {
     Sphere,
     Frustum,
     Matrix4 as ThreeMatrix4,
-    Vector3 as ThreeVector3,
-    Camera,
+    Vector3 as ThreeVector3
 } from '@/lib/three-chunk';
 
 interface InstanceData {

@@ -1,4 +1,5 @@
-import { useRef, useCallback, MutableRefObject, useEffect } from 'react';
+import type { MutableRefObject} from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import * as THREE from 'three';
 
 interface UseDogParticlesProps {

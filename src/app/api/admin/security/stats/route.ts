@@ -1,19 +1,14 @@
-
 import { NextResponse } from 'next/server';
 import redis from '@/lib/redis';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from '@/utils/logger';
-
-// import { currentUser } from '@/lib/auth'; // Assuming auth check is needed
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth } from '@/lib/admin-middleware';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
-    // TODO: Add Admin Authorization check here
-    // const user = await currentUser();
-    // if (!user || user.role !== 'admin') return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-
+export const GET = withAdminAuth(async (request: AdminRequest) => {
     try {
         const stats = {
             redisStatus: 'unknown',
@@ -37,10 +32,6 @@ export async function GET() {
                 stats.isPanicMode = panic === '1';
 
                 if (stats.redisStatus === 'connected') {
-                    // Fetch real-time counters (Assuming we implement counters in RateLimiter)
-                    // For now, we might not have global counters, so we mock or fetch what we have
-                    // In a real app, AdvancedRateLimiter should increment a global 'stats:total_requests' key
-
                     const total = await redis.get('stats:total_requests');
                     const blocked = await redis.get('stats:blocked_requests');
 
@@ -82,4 +73,4 @@ export async function GET() {
         logger.error('Error fetching security stats:', error as Error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-}
+});

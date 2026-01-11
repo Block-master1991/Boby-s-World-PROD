@@ -1,7 +1,8 @@
 // Enhanced IndexedDB operations with compression support
 // Extends base indexedDB functionality with data compression for large assets
 
-import { putAsset, getAsset, AssetMetadata, DataType } from './indexedDB';
+import type { AssetMetadata} from './indexedDB';
+import { putAsset, getAsset, DataType } from './indexedDB';
 import { logger } from '@/utils/logger';
 
 /**

@@ -20,12 +20,12 @@ const loggerConfig = {
         level: (label: string) => {
             return { level: label };
         },
-        log: (obj: any) => {
+        log: (obj: Record<string, unknown>) => {
             if (obj.err) {
                 // Handle error objects specially
                 return {
                     ...obj,
-                    err: pino.stdSerializers.err(obj.err)
+                    err: pino.stdSerializers.err(obj.err as any)
                 };
             }
             return obj;
@@ -43,9 +43,10 @@ const loggerConfig = {
             asObject: !isProduction, // Pretty print in development
             transmit: {
                 level: 'info',
-                send: (level: any, logEvent: any) => {
+                send: (level: string | number, logEvent: any) => {
                     // Could send to external logging service here
-                    if (isProduction && level >= 50) { // Error level and above
+                    const numericLevel = typeof level === 'string' ? 30 : level; // Default to info if string
+                    if (isProduction && numericLevel >= 50) { // Error level and above
                         // Send to error reporting service
                         console.error('Critical error:', logEvent);
                     }
@@ -137,7 +138,7 @@ export class Logger {
      * Standard log for informative messages.
      * SILENT in production.
      */
-    log(message: string, ...args: any[]) {
+    log(message: string, ...args: unknown[]) {
         const metadata = args.length > 0 ? { args } : undefined;
         professionalLogger.info(message, metadata);
     }
@@ -146,7 +147,7 @@ export class Logger {
      * Detailed debug information.
      * SILENT in production.
      */
-    debug(message: string, ...args: any[]) {
+    debug(message: string, ...args: unknown[]) {
         const metadata = args.length > 0 ? { args } : undefined;
         professionalLogger.debug(message, metadata);
     }
@@ -155,7 +156,7 @@ export class Logger {
      * Warnings about potential issues.
      * ALWAYS visible.
      */
-    warn(message: string, ...args: any[]) {
+    warn(message: string, ...args: unknown[]) {
         const metadata = args.length > 0 ? { args } : undefined;
         professionalLogger.warn(message, metadata);
     }
@@ -167,7 +168,7 @@ export class Logger {
      * @param errorOrData - Error object, string, or any data to log (will be normalized to Error)
      * @param args - Additional arguments to log
      */
-    error(message: string, errorOrData?: Error | string | unknown, ...args: any[]) {
+    error(message: string, errorOrData?: Error | string | unknown, ...args: unknown[]) {
         const metadata = args.length > 0 ? { args } : undefined;
         professionalLogger.error(message, errorOrData, metadata);
     }
@@ -176,7 +177,7 @@ export class Logger {
      * Special logging for performance-sensitive game loops.
      * SILENT in production.
      */
-    gameLoop(message: string, ...args: any[]) {
+    gameLoop(message: string, ...args: unknown[]) {
         if (!this.isProd) {
             const metadata = args.length > 0 ? { gameLoop: true, args } : { gameLoop: true };
             professionalLogger.debug(message, metadata);
@@ -186,7 +187,7 @@ export class Logger {
     /**
      * Performance timing logs
      */
-    timing(label: string, duration: number, metadata?: any) {
+    timing(label: string, duration: number, metadata?: Record<string, unknown>) {
         professionalLogger.info(`Performance: ${label}`, {
             timing: { label, duration },
             ...metadata
@@ -196,7 +197,7 @@ export class Logger {
     /**
      * Security-related logs (always logged)
      */
-    security(message: string, metadata?: any) {
+    security(message: string, metadata?: Record<string, unknown>) {
         professionalLogger.warn(`SECURITY: ${message}`, {
             security: true,
             ...metadata
@@ -206,7 +207,7 @@ export class Logger {
     /**
      * Audit logs for important actions
      */
-    audit(action: string, userId?: string, metadata?: any) {
+    audit(action: string, userId?: string, metadata?: Record<string, unknown>) {
         professionalLogger.info(`AUDIT: ${action}`, {
             audit: true,
             action,
@@ -226,7 +227,7 @@ export class Logger {
     /**
      * Create child logger with bindings
      */
-    child(bindings: Record<string, any>) {
+    child(bindings: Record<string, unknown>) {
         return professionalLogger.child(bindings);
     }
 }

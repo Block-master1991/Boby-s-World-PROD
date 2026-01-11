@@ -1,7 +1,7 @@
 
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { ADMIN_WALLET_ADDRESS } from '@/lib/constants';
 import { useRouter, usePathname } from 'next/navigation';
@@ -270,184 +270,268 @@ export default function AdminPage() {
   ];
 
   return (
-    <SidebarProvider>
-      <div ref={topRef} className="flex min-h-screen w-full bg-background text-foreground">
-        <Sidebar>
-          <SidebarHeader>
-            <div className="flex items-center gap-2 px-4 py-2">
-              <Database className="h-6 w-6" />
-              <span className="font-semibold">Admin Panel</span>
+    <SidebarProvider
+      ref={topRef}
+      style={{
+        "--sidebar-width": "16rem",
+        "--sidebar-width-mobile": "18rem",
+      } as React.CSSProperties}
+      className="flex min-h-screen w-full bg-background text-foreground group/sidebar-wrapper"
+    >
+      <Sidebar collapsible="icon" variant="inset" className="border-r border-border/50">
+        <SidebarHeader className="border-b border-border/50 bg-sidebar">
+          <div className="flex items-center gap-3 px-4 py-3">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-md">
+              <PawPrint className="h-5 w-5 text-white" />
             </div>
-          </SidebarHeader>
-          <SidebarContent>
-            <SidebarGroup>
-              <SidebarGroupLabel>Navigation</SidebarGroupLabel>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {menuItems.map((item) => (
-                    <SidebarMenuItem key={item.id}>
-                      <SidebarMenuButton
-                        onClick={() => {
-                          setActiveSection(item.id);
-                        }}
-                        isActive={activeSection === item.id}
-                      >
-                        <item.icon className="h-4 w-4" />
-                        <span>{item.label}</span>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          </SidebarContent>
-          <SidebarFooter>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  onClick={async () => {
-                    await logoutAuthHook();
-                    await disconnectFromSession();
-                    router.push('/');
-                  }}
-                  variant="outline"
-                >
-                  <LogOut className="h-4 w-4" />
-                  <span>Logout</span>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarFooter>
-        </Sidebar>
+            <div className="flex flex-col overflow-hidden transition-all group-data-[collapsible=icon]:hidden">
+              <span className="font-bold text-lg truncate">Boby Admin</span>
+              <p className="text-[10px] text-muted-foreground truncate">Control Panel</p>
+            </div>
+          </div>
+        </SidebarHeader>
+        <SidebarContent>
+          <SidebarGroup>
+            <SidebarGroupLabel>Navigation</SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {menuItems.map((item) => (
+                  <SidebarMenuItem key={item.id}>
+                    <SidebarMenuButton
+                      onClick={() => {
+                        setActiveSection(item.id);
+                      }}
+                      isActive={activeSection === item.id}
+                      tooltip={item.label}
+                    >
+                      <item.icon className="h-4 w-4" />
+                      <span>{item.label}</span>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        </SidebarContent>
+        <SidebarFooter>
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton
+                onClick={async () => {
+                  await logoutAuthHook();
+                  await disconnectFromSession();
+                  router.push('/');
+                }}
+                variant="outline"
+                tooltip="Logout"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Logout</span>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </SidebarFooter>
+      </Sidebar>
 
-        <SidebarInset className="flex-1">
-          <header className="flex h-16 shrink-0 items-center gap-2 border-b px-4">
-            <SidebarTrigger className="-ml-1" />
-            <div className="flex items-center gap-2">
-              <Activity className="h-5 w-5" />
-              <h1 className="text-xl font-semibold">
-                {menuItems.find(item => item.id === activeSection)?.label || 'Admin Dashboard'}
+      <SidebarInset className="flex-1 overflow-x-hidden transition-all duration-300 ease-in-out bg-muted/20">
+        <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border/50 px-6 bg-background/60 backdrop-blur-lg shadow-sm">
+          <div className="flex items-center gap-4">
+            <SidebarTrigger className="-ml-1 h-9 w-9 hover:bg-muted/50 transition-colors rounded-lg" />
+            <div className="h-6 w-[1px] bg-border/60" />
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-sm md:hidden">
+                <PawPrint className="h-4 w-4 text-white" />
+              </div>
+              <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
+                {menuItems.find(item => item.id === activeSection)?.label || 'Dashboard'}
               </h1>
             </div>
-            <div className="ml-auto">
-              <Badge variant="outline" className="text-xs">
-                Admin: {user?.publicKey?.slice(0, 8)}...
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="hidden lg:flex items-center gap-3 px-3 py-1.5 rounded-full bg-green-500/5 border border-green-500/20 text-[11px] font-medium text-green-600 uppercase tracking-wider">
+              <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></div>
+              Live System
+            </div>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="px-2.5 py-1 text-xs font-mono bg-muted/50 border-border/50">
+                {user?.publicKey?.slice(0, 6)}...{user?.publicKey?.slice(-4)}
               </Badge>
             </div>
-          </header>
+          </div>
+        </header>
 
-          <main className="flex-1 p-6">
+        <main className="flex-1 p-6 md:p-8 max-w-7xl mx-auto w-full space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-500">
             {activeSection === 'overview' && (
-              <div className="space-y-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Overview</CardTitle>
-                    <CardDescription>Admin panel content for Boby World.</CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    <p>Manage game settings, view player statistics, and oversee the Boby ecosystem.</p>
-                    <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <Card className="bg-card/50">
-                        <CardHeader>
-                          <CardTitle className="text-lg">User Statistics</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {graphqlLoading ? (
-                            <AdminUserStatsSkeleton />
-                          ) : graphqlError ? (
-                            <p className="text-sm text-destructive">Error loading GraphQL stats: {graphqlError}</p>
-                          ) : (
-                            <>
-                              <p className="text-sm text-muted-foreground">Total Players: {graphqlUserStats?.userStats?.totalUsers ?? 'N/A'}</p>
-                              <p className="text-sm text-muted-foreground">Online Now: {graphqlUserStats?.userStats?.onlineUsers ?? 'N/A'}</p>
-                              <p className="text-sm text-muted-foreground">Offline: {graphqlUserStats?.userStats?.offlineUsers ?? 'N/A'}</p>
-                              <Badge variant="secondary" className="mt-2 text-xs">Via GraphQL</Badge>
-                            </>
-                          )}
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-card/50 border-green-500/20">
-                        <CardHeader>
-                          <CardTitle className="text-lg flex items-center gap-2">
-                            Live Activity
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          {activityError ? (
-                            <p className="text-sm text-destructive">Live updates unavailable</p>
-                          ) : (
-                            <>
-                              <p className="text-2xl font-bold text-green-600">{liveActivityData?.onlineUsers ?? 0}</p>
-                              <p className="text-sm text-muted-foreground">Users Online Now</p>
-                              <p className="text-sm text-muted-foreground mt-2">
-                                {liveActivityData?.activeGames ?? 0} Active Games
-                              </p>
-                              <Badge variant="outline" className="mt-2 text-xs border-green-500/30 text-green-600">
-                                Real-time
-                              </Badge>
-                            </>
-                          )}
-                        </CardContent>
-                      </Card>
-                      <Card className="bg-card/50">
-                        <CardHeader>
-                          <CardTitle className="text-lg">Game Settings</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                          <p className="text-sm text-muted-foreground">Modify game parameters here.</p>
-                        </CardContent>
-                      </Card>
+              <div className="space-y-6 animate-in fade-in duration-300">
+                {/* Welcome Banner */}
+                <Card className="border-0 bg-gradient-to-br from-amber-500/10 via-orange-500/10 to-red-500/10">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-2xl">Welcome back, Admin</CardTitle>
+                        <CardDescription className="mt-1">Here's what's happening with Boby World today.</CardDescription>
+                      </div>
+                      <div className="hidden md:block">
+                        <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber-500 to-orange-600 shadow-lg">
+                          <PawPrint className="h-8 w-8 text-white" />
+                        </div>
+                      </div>
                     </div>
-                  </CardContent>
+                  </CardHeader>
                 </Card>
+
+                {/* Stats Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <Card className="relative overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-blue-500/20 to-transparent rounded-bl-full"></div>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Users className="h-4 w-4 text-blue-500" />
+                        User Statistics
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {graphqlLoading ? (
+                        <AdminUserStatsSkeleton />
+                      ) : graphqlError ? (
+                        <p className="text-sm text-destructive">Error loading stats</p>
+                      ) : (
+                        <>
+                          <p className="text-3xl font-bold">{graphqlUserStats?.userStats?.totalUsers ?? 0}</p>
+                          <p className="text-sm text-muted-foreground">Total Players</p>
+                          <div className="mt-3 flex gap-4">
+                            <div>
+                              <p className="text-lg font-semibold text-green-500">{graphqlUserStats?.userStats?.onlineUsers ?? 0}</p>
+                              <p className="text-xs text-muted-foreground">Online</p>
+                            </div>
+                            <div>
+                              <p className="text-lg font-semibold text-slate-400">{graphqlUserStats?.userStats?.offlineUsers ?? 0}</p>
+                              <p className="text-xs text-muted-foreground">Offline</p>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="relative overflow-hidden border-green-500/20 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-green-500/20 to-transparent rounded-bl-full"></div>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Activity className="h-4 w-4 text-green-500" />
+                        Live Activity
+                        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      {activityError ? (
+                        <p className="text-sm text-destructive">Live updates unavailable</p>
+                      ) : (
+                        <>
+                          <p className="text-3xl font-bold text-green-500">{liveActivityData?.onlineUsers ?? 0}</p>
+                          <p className="text-sm text-muted-foreground">Users Online Now</p>
+                          <div className="mt-3">
+                            <p className="text-lg font-semibold">{liveActivityData?.activeGames ?? 0}</p>
+                            <p className="text-xs text-muted-foreground">Active Game Sessions</p>
+                          </div>
+                        </>
+                      )}
+                    </CardContent>
+                  </Card>
+                  
+                  <Card className="relative overflow-hidden border-border/50 hover:shadow-lg transition-all duration-300 hover:-translate-y-1">
+                    <div className="absolute top-0 right-0 w-20 h-20 bg-gradient-to-br from-purple-500/20 to-transparent rounded-bl-full"></div>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                        <Settings className="h-4 w-4 text-purple-500" />
+                        Quick Actions
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setActiveSection('items')}>
+                          <Package className="h-4 w-4 mr-2" />
+                          Manage Store Items
+                        </Button>
+                        <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setActiveSection('security')}>
+                          <Shield className="h-4 w-4 mr-2" />
+                          Security Settings
+                        </Button>
+                        <Button variant="outline" size="sm" className="w-full justify-start" onClick={() => setActiveSection('logs')}>
+                          <FileText className="h-4 w-4 mr-2" />
+                          View Logs
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
               </div>
             )}
 
             {activeSection === 'security' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>Security Management</CardTitle>
-                  <CardDescription>
-                    Manage IP Whitelist & Blacklist. Only valid IPv4 addresses are accepted.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {/* Notification messages */}
-                  {message && (
-                    <div className={`mb-4 p-2 rounded ${message.type === 'success' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}`}>
-                      {message.text}
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-red-500 to-orange-500">
+                        <Shield className="h-5 w-5 text-white" />
+                      </div>
+                      <div>
+                        <CardTitle>Security Management</CardTitle>
+                        <CardDescription>Manage IP Whitelist & Blacklist. Only valid IPv4 addresses are accepted.</CardDescription>
+                      </div>
                     </div>
-                  )}
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    {/* Notification messages */}
+                    {message && (
+                      <div className={`p-3 rounded-lg border flex items-center gap-2 ${message.type === 'success' ? 'bg-green-500/10 border-green-500/20 text-green-600' : 'bg-red-500/10 border-red-500/20 text-red-600'}`}>
+                        {message.type === 'success' ? '✓' : '⚠'} {message.text}
+                      </div>
+                    )}
 
-                  {/* Search */}
-                  <div className="flex gap-2 mb-4">
-                    <input
-                      type="text"
-                      placeholder="Search for IP..."
-                      value={search}
-                      onChange={e => { setSearch(e.target.value); setWhitePage(1); setBlackPage(1); }}
-                      className="border rounded px-2 py-1"
-                    />
-                    <Search className="w-5 h-5 text-muted-foreground" />
-                  </div>
-
-                  {/* Add IP */}
-                  <div className="flex gap-2 mb-6">
-                    <input
-                      type="text"
-                      placeholder="Enter IP address"
-                      value={newIp}
-                      onChange={e => setNewIp(e.target.value)}
-                      className="border rounded px-2 py-1"
-                      disabled={loading}
-                    />
-                    <select value={targetList} onChange={e => setTargetList(e.target.value as 'whitelist' | 'blacklist')} className="border rounded px-2 py-1" disabled={loading}>
-                      <option value="whitelist">Whitelist</option>
-                      <option value="blacklist">Blacklist</option>
-                    </select>
-                    <Button onClick={handleAddIp} disabled={loading || !newIp}>Add IP</Button>
-                  </div>
+                    {/* Search and Add IP */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">Search IPs</label>
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                          <input
+                            type="text"
+                            placeholder="Search for IP..."
+                            value={search}
+                            onChange={e => { setSearch(e.target.value); setWhitePage(1); setBlackPage(1); }}
+                            className="w-full pl-9 pr-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                          />
+                        </div>
+                      </div>
+                      <div className="space-y-2">
+                        <label className="text-sm font-medium text-muted-foreground">Add New IP</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            placeholder="192.168.1.1"
+                            value={newIp}
+                            onChange={e => setNewIp(e.target.value)}
+                            className="flex-1 px-3 py-2 border border-input rounded-lg bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
+                            disabled={loading}
+                          />
+                          <select 
+                            value={targetList} 
+                            onChange={e => setTargetList(e.target.value as 'whitelist' | 'blacklist')} 
+                            className="px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                            disabled={loading}
+                          >
+                            <option value="whitelist">Whitelist</option>
+                            <option value="blacklist">Blacklist</option>
+                          </select>
+                          <Button onClick={handleAddIp} disabled={loading || !newIp}>
+                            Add IP
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
 
                   {/* Lists */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -552,6 +636,7 @@ export default function AdminPage() {
                   </div>
                 </CardContent>
               </Card>
+              </div>
             )}
 
             {activeSection === 'logs' && (
@@ -597,15 +682,25 @@ export default function AdminPage() {
             )}
 
             {activeSection === 'users' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>User Management</CardTitle>
-                  <CardDescription>Manage user accounts and permissions</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">User management features coming soon...</p>
-                </CardContent>
-              </Card>
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="border-dashed border-2 border-muted-foreground/20">
+                  <CardHeader className="text-center">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <Users className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <CardTitle>User Management</CardTitle>
+                    <CardDescription>Manage user accounts, permissions, and player data</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <p className="text-muted-foreground mb-4">User management features are under development.</p>
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                      <Badge variant="outline" className="text-xs">Search Users</Badge>
+                      <Badge variant="outline" className="text-xs">Ban Management</Badge>
+                      <Badge variant="outline" className="text-xs">Activity History</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             )}
 
             {activeSection === 'items' && (
@@ -613,32 +708,53 @@ export default function AdminPage() {
             )}
 
             {activeSection === 'settings' && (
-              <Card>
-                <CardHeader>
-                  <CardTitle>System Settings</CardTitle>
-                  <CardDescription>Configure system parameters and preferences</CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-muted-foreground">System settings coming soon...</p>
-                </CardContent>
-              </Card>
+              <div className="space-y-6 animate-in fade-in duration-300">
+                <Card className="border-dashed border-2 border-muted-foreground/20">
+                  <CardHeader className="text-center">
+                    <div className="mx-auto w-16 h-16 rounded-full bg-muted flex items-center justify-center mb-4">
+                      <Settings className="h-8 w-8 text-muted-foreground" />
+                    </div>
+                    <CardTitle>System Settings</CardTitle>
+                    <CardDescription>Configure system parameters and preferences</CardDescription>
+                  </CardHeader>
+                  <CardContent className="text-center">
+                    <p className="text-muted-foreground mb-4">System configuration options are under development.</p>
+                    <div className="flex flex-col sm:flex-row gap-2 justify-center">
+                      <Badge variant="outline" className="text-xs">Game Parameters</Badge>
+                      <Badge variant="outline" className="text-xs">Economy Settings</Badge>
+                      <Badge variant="outline" className="text-xs">Server Config</Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             )}
           </main>
 
           {/* Delete confirmation modal */}
           {confirmDelete && (
-            <div className="fixed inset-0 flex items-center justify-center bg-black/40 backdrop-blur-sm z-50">
-              <div className="bg-white p-6 rounded shadow-lg">
-                <p>Are you sure you want to remove IP <b>{confirmDelete.ip}</b> from the <b>{confirmDelete.list === 'whitelist' ? 'whitelist' : 'blacklist'}</b>?&apos;</p>
-                <div className="flex gap-4 mt-4">
-                  <Button variant="destructive" onClick={() => handleDeleteIp(confirmDelete.ip, confirmDelete.list)} disabled={loading}>Yes, Delete</Button>
-                  <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={loading}>Cancel</Button>
-                </div>
-              </div>
+            <div className="fixed inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-200">
+              <Card className="w-full max-w-md mx-4 shadow-2xl border-destructive/20">
+                <CardHeader>
+                  <div className="mx-auto w-12 h-12 rounded-full bg-destructive/10 flex items-center justify-center mb-2">
+                    <Trash2 className="h-6 w-6 text-destructive" />
+                  </div>
+                  <CardTitle className="text-center">Confirm Deletion</CardTitle>
+                  <CardDescription className="text-center">
+                    Are you sure you want to remove IP <span className="font-mono font-bold text-foreground">{confirmDelete.ip}</span> from the <span className="font-semibold text-foreground">{confirmDelete.list}</span>?
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-3 justify-end">
+                    <Button variant="outline" onClick={() => setConfirmDelete(null)} disabled={loading}>Cancel</Button>
+                    <Button variant="destructive" onClick={() => handleDeleteIp(confirmDelete.ip, confirmDelete.list)} disabled={loading}>
+                      {loading ? 'Deleting...' : 'Yes, Delete'}
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
           )}
         </SidebarInset>
-      </div>
     </SidebarProvider >
   );
 }

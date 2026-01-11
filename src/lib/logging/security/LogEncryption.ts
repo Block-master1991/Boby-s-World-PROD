@@ -4,6 +4,7 @@
  */
 
 import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
+import { professionalLogger } from '../index';
 
 export interface EncryptionConfig {
     enabled: boolean;
@@ -66,6 +67,7 @@ export class LogEncryption {
         } else {
             // Only warn on server-side to avoid browser console spam
             if (typeof window === 'undefined') {
+                // eslint-disable-next-line no-console
                 console.warn('[LogEncryption] No LOG_ENCRYPTION_KEY found. Generating temporary key. THIS IS NOT SECURE FOR PRODUCTION!');
             }
             this.masterKey = randomBytes(32); // 256 bits
@@ -121,7 +123,7 @@ export class LogEncryption {
             return;
         }
 
-        console.warn('[LogEncryption] Rotating encryption key');
+        professionalLogger.warn('[LogEncryption] Rotating encryption key');
         this.keyId = this.generateKeyId();
         this.keyCreatedAt = Date.now();
         this.initializeMasterKey();
@@ -170,7 +172,7 @@ export class LogEncryption {
                 timestamp: Date.now()
             };
         } catch (error) {
-            console.error('[LogEncryption] Encryption failed:', error);
+            professionalLogger.error('[LogEncryption] Encryption failed', error);
             return null;
         }
     }
@@ -205,7 +207,7 @@ export class LogEncryption {
 
             return decrypted;
         } catch (error) {
-            console.error('[LogEncryption] Decryption failed:', error);
+            professionalLogger.error('[LogEncryption] Decryption failed', error);
             return null;
         }
     }

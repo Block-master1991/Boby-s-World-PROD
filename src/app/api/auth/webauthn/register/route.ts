@@ -6,7 +6,8 @@
 import { NextResponse } from 'next/server';
 import { WebAuthnUtils } from '@/lib/webauthn-utils';
 import redis from '@/lib/redis';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import type { AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withAuth } from '@/lib/auth-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { logger } from '@/utils/logger';
 

@@ -1,5 +1,6 @@
-import { useRef, useState, useCallback, MutableRefObject } from 'react';
-import * as THREE from 'three';
+import type { MutableRefObject } from 'react';
+import { useRef, useState, useCallback } from 'react';
+import type * as THREE from 'three';
 import { v4 as uuidv4 } from 'uuid';
 import FloatingEffect from '@/components/game/FloatingEffect'; // Import the FloatingEffect class
 import { logger } from '@/utils/logger';

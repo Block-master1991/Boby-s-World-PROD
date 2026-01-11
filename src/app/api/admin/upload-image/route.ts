@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
 import { writeFile, mkdir, unlink } from 'fs/promises';
 import { join } from 'path';
-import { withAdminAuth, withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 
 export const POST = withAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
@@ -31,7 +32,7 @@ export const POST = withAdminAuth(withCsrfProtection(async (request: AdminReques
         }
 
         // Clean filename to prevent security issues
-        const filename = file.name.replace(/[^a-zA-Z0-9.\-]/g, '_');
+        const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
         const path = join(uploadDir, filename);
 
         await writeFile(path, buffer);

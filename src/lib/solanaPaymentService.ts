@@ -2,7 +2,8 @@
 import { logger } from 'utils/logger';
 // Centralized Solana Payment Service for professional transaction handling
 
-import { Connection, Transaction, PublicKey, ComputeBudgetProgram, TransactionSignature } from '@solana/web3.js';
+import type { TransactionSignature } from '@solana/web3.js';
+import { Connection, Transaction, PublicKey, ComputeBudgetProgram } from '@solana/web3.js';
 import { Token, TOKEN_PROGRAM_ID, ASSOCIATED_TOKEN_PROGRAM_ID } from '@solana/spl-token';
 import { SOL_NETWORK, BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from './constants';
 

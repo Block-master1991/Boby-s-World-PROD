@@ -2,10 +2,10 @@
 import * as THREE from 'three';
 import { simplex2d } from '../lib/ez-tree/environment/noise';
 import { CHUNK_SIZE } from '../lib/chunkUtils';
-import { GrassOptions } from '../lib/ez-tree/environment/grass';
-import { RockOptions as RocksOptions } from '../lib/ez-tree/environment/rocks';
-import { TreesOptions } from '../lib/ez-tree/environment/trees';
-import { FlowerOptions } from '../lib/ez-tree/environment/flowers';
+import type { GrassOptions } from '../lib/ez-tree/environment/grass';
+import type { RockOptions as RocksOptions } from '../lib/ez-tree/environment/rocks';
+import type { TreesOptions } from '../lib/ez-tree/environment/trees';
+import type { FlowerOptions } from '../lib/ez-tree/environment/flowers';
 import RNG from '../lib/ez-tree/rng';
 import { logger } from 'utils/logger';
 

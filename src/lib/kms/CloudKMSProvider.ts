@@ -3,7 +3,7 @@
  * Template for implementing connection to Google Cloud KMS or AWS KMS
  */
 
-import { KMSProvider } from './KMSProvider';
+import type { KMSProvider } from './KMSProvider';
 import { logger } from '@/utils/logger';
 
 export class CloudKMSProvider implements KMSProvider {

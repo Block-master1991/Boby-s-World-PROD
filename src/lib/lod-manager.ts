@@ -2,7 +2,8 @@
 import { logger } from 'utils/logger';
 // Provides smooth transitions between quality levels based on distance and performance
 
-import { Vector3, Object3D, Mesh, Material, Geometry } from '@/lib/three-chunk';
+import type { Object3D} from '@/lib/three-chunk';
+import { Vector3, Mesh, Material, Geometry } from '@/lib/three-chunk';
 
 interface LODLevel {
     distance: number;

@@ -2,9 +2,12 @@
 import { logger } from 'utils/logger';
 // Prevents gameplay until all assets are cached locally for offline operation
 
-import { putAsset, isAvailable, AssetMetadata, DataType } from './indexedDB';
-import { GAME_ASSET_MANIFEST, getAssetsByPriority, getPriorityOrder, MANIFEST_STATS, AssetInfo } from './gameAssetManifest';
-import { verifyAssetIntegrity, IntegrityCheck } from './assetIntegrity';
+import type { AssetMetadata, DataType } from './indexedDB';
+import { putAsset, isAvailable } from './indexedDB';
+import type { AssetInfo } from './gameAssetManifest';
+import { GAME_ASSET_MANIFEST, getAssetsByPriority, getPriorityOrder, MANIFEST_STATS } from './gameAssetManifest';
+import type { IntegrityCheck } from './assetIntegrity';
+import { verifyAssetIntegrity } from './assetIntegrity';
 
 export interface PreloadProgress {
     totalAssets: number;

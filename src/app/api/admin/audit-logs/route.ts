@@ -1,7 +1,9 @@
 
 import { NextResponse } from 'next/server';
-import { withAdminAuth, AdminRequest } from '@/lib/admin-middleware';
-import { auditLogger, AuditSeverity, AuditLogEntry } from '@/lib/audit-logger';
+import { withAdminAuth } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { auditLogger } from '@/lib/audit-logger';
+import type { AuditSeverity } from '@/lib/audit-logger';
 import { logger } from '@/utils/logger';
 
 export const GET = withAdminAuth(async (request: AdminRequest) => {

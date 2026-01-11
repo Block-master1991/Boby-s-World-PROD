@@ -6,7 +6,8 @@
 import { NextResponse } from 'next/server';
 import redis from '@/lib/redis';
 import { db } from '@/lib/firebase-admin';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import type { AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withAuth } from '@/lib/auth-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 import { WebAuthnUtils } from '@/lib/webauthn-utils';

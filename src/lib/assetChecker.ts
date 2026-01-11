@@ -2,7 +2,8 @@
 // Checks which assets are missing and only loads what's needed
 
 import { getAsset } from './indexedDB';
-import { GAME_ASSET_MANIFEST, AssetInfo } from './gameAssetManifest';
+import type { AssetInfo } from './gameAssetManifest';
+import { GAME_ASSET_MANIFEST } from './gameAssetManifest';
 import { logger } from '@/utils/logger';
 
 export interface AssetCheckResult {

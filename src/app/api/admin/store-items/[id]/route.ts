@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
 import { getStoreItemById, updateStoreItem, deleteStoreItem } from '@/lib/server-items';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
@@ -12,7 +12,7 @@ interface RouteParams {
     }>;
 }
 
-export const GET = withAuth(async (request: AuthenticatedRequest, { params }: RouteParams) => {
+export const GET = withAdminAuth(async (request: AdminRequest, { params }: RouteParams) => {
     try {
         const resolvedParams = await params;
         const itemId = resolvedParams.id;

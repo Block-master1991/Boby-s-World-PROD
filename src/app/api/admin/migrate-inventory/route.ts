@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
@@ -13,7 +13,7 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
         const { spawn } = require('child_process');
         const path = require('path');
 
-        const scriptPath = path.join(process.cwd(), 'scripts', 'migrate-inventory.js');
+        const scriptPath = path.join(process.cwd(), 'scripts', 'migrate-inventory.ts');
 
         return new Promise((resolve) => {
             // Pass environment variables to child process
@@ -24,7 +24,7 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
                 FIREBASE_PRIVATE_KEY: process.env.FIREBASE_PRIVATE_KEY,
             };
 
-            const migrationProcess = spawn('node', [scriptPath], {
+            const migrationProcess = spawn('npx', ['ts-node', '-r', 'dotenv/config', scriptPath], {
                 stdio: ['inherit', 'pipe', 'pipe'],
                 cwd: process.cwd(),
                 env: envVars
@@ -93,7 +93,7 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
     }
 }));
 
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
+export const GET = withAdminAuth(async (request: AdminRequest) => {
     try {
         // Check previous migration status
         const admin = (await import('firebase-admin')).default;

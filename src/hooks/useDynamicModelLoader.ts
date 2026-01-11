@@ -1,12 +1,14 @@
 'use client';
 
 import * as THREE from 'three';
-import { GLTFLoader, GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { useEffect, useRef, useCallback, MutableRefObject } from 'react';
+import type { MutableRefObject } from 'react';
+import { useEffect, useRef, useCallback } from 'react';
 import { getModel, putModel } from '../lib/indexedDB';
-import { Octree } from '../lib/Octree';
-import { GameObject } from '@/types/game';
+import type { Octree } from '../lib/Octree';
+import type { GameObject } from '@/types/game';
 import { logger } from '@/utils/logger';
 
 // Define a generic interface for objects that need dynamic loading

@@ -10,8 +10,8 @@ export function updateWindShaders(materials: THREE.Material[], time: number): vo
 }
 
 import * as THREE from 'three';
-import { GrassOptions } from '../environment/grass';
-import { FlowerOptions } from '../environment/flowers';
+import type { GrassOptions } from '../environment/grass';
+import type { FlowerOptions } from '../environment/flowers';
 
 export function updateWindShaderUniforms(material: THREE.Material, options: GrassOptions, time: number): void {
   if (!material) return;

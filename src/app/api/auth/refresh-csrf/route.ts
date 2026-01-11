@@ -1,4 +1,5 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
 import { JWTManager } from '@/lib/jwt-utils';
 import { getClientIp } from '@/lib/request-utils';

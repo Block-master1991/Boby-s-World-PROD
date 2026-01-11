@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
 import { initializeStoreItemsInFirestore } from '@/lib/server-items';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth } from '@/lib/admin-middleware';
 
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
+export const GET = withAdminAuth(async (request: AdminRequest) => {
   try {
     await initializeStoreItemsInFirestore();
     return NextResponse.json({ message: 'Store items initialization process started. Check server logs for details.' });

@@ -3,6 +3,8 @@
  * Protects against log flooding and DoS attacks via excessive logging
  */
 
+import { professionalLogger } from '../index';
+
 export interface RateLimitConfig {
     enabled: boolean;
     perUser?: {
@@ -445,7 +447,9 @@ export const rateLimitMiddleware = new RateLimitMiddleware({
         windowMs: 60000
     },
     onLimitExceeded: (identifier, type) => {
-        console.warn(`[RateLimit] Limit exceeded for ${type}: ${identifier}`);
+        professionalLogger.warn(`[RateLimit] Limit exceeded for ${type}: ${identifier}`, {
+            rateLimit: { identifier, type }
+        });
     }
 });
 

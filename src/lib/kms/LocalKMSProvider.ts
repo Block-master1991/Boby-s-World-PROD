@@ -3,7 +3,7 @@
  * Local implementation of KMS using Web Crypto API
  */
 
-import { KMSProvider } from './KMSProvider';
+import type { KMSProvider } from './KMSProvider';
 
 export class LocalKMSProvider implements KMSProvider {
     public readonly name = 'LocalWebCrypto';

@@ -1,7 +1,8 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { initialAssetPreloader, PreloadProgress } from '@/lib/initialAssetPreloader';
+import type { PreloadProgress } from '@/lib/initialAssetPreloader';
+import { initialAssetPreloader } from '@/lib/initialAssetPreloader';
 import { MANIFEST_STATS } from '@/lib/gameAssetManifest';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';

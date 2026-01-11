@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { PurchasePhase, PurchaseProgress } from '@/lib/solanaPaymentService';
+import type { PurchasePhase, PurchaseProgress } from '@/lib/solanaPaymentService';
 import { Card, CardContent } from '@/components/ui/card';
 import { Loader2, CheckCircle2, XCircle, ExternalLink, Send, Shield, Package } from 'lucide-react';
 

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import dynamic from 'next/dynamic';
-import { Octree } from '@/lib/Octree';
+import type { Octree } from '@/lib/Octree';
 
 import { initialAssetPreloader } from '@/lib/initialAssetPreloader';
 
@@ -48,7 +48,7 @@ const GameLoadingOverlay = dynamic(() => import('@/components/game-bootstrap/Gam
 });
 // import { useGameAssetLoader } from '@/hooks/useGameAssetLoader'; // No longer needed here
 
-import { GameObject } from '@/types/game';
+import type { GameObject } from '@/types/game';
 
 import { useAuth } from '@/hooks/useAuth';
 import { useSessionWallet } from '@/hooks/useSessionWallet';

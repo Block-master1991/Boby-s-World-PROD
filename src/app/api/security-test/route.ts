@@ -4,7 +4,8 @@
  * GET /api/security-test?component=keyvault - Test specific component
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { securityTestSuite } from '@/lib/securityTest';
 import { SecurityScheduler } from '@/lib/security-scheduler';
 import { logger } from 'utils/logger';

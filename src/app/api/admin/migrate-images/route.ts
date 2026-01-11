@@ -2,7 +2,8 @@ import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
-import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 
 export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {

@@ -78,11 +78,11 @@ export class LoggerCore {
             },
             formatters: {
                 level: (label: string) => ({ level: label }),
-                log: (obj: any) => {
+                log: (obj: Record<string, unknown>) => {
                     if (obj.err) {
                         return {
                             ...obj,
-                            err: pino.stdSerializers.err(obj.err)
+                            err: pino.stdSerializers.err(obj.err as Error)
                         };
                     }
                     return obj;
@@ -160,7 +160,7 @@ export class LoggerCore {
      */
     error(message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, any>): void {
         let error: Error | undefined;
-        let meta: Record<string, any> | undefined;
+        let meta: Record<string, unknown> | undefined;
 
         // Determine if second parameter is error or metadata
         if (errorOrMetadata instanceof Error) {
@@ -261,11 +261,13 @@ export class LoggerCore {
 
         // Log with or without error
         if (error) {
-            pinoMethod({ err: error, ...processedMetadata }, sanitizedMessage);
+            pinoMethod({ err: error, ...processedMetadata, msg: sanitizedMessage }, sanitizedMessage);
         } else if (Object.keys(processedMetadata).length > 0) {
-            pinoMethod(processedMetadata, sanitizedMessage);
+            pinoMethod({ ...processedMetadata, msg: sanitizedMessage }, sanitizedMessage);
         } else {
-            pinoMethod(sanitizedMessage);
+            // PASSING STRING AS FIRST ARGUMENT: This ensures Pino/browser-console displays 
+            // the message directly instead of as an object { msg: "..." }.
+            pinoMethod(sanitizedMessage || '[Empty Message]');
         }
     }
 
@@ -287,7 +289,7 @@ export class LoggerCore {
             let errorMessage: string;
 
             if (typeof errorOrData === 'object' && errorOrData !== null) {
-                const obj = errorOrData as any;
+                const obj = errorOrData as Record<string, unknown>;
 
                 if (obj.message) {
                     errorMessage = String(obj.message);
@@ -305,7 +307,7 @@ export class LoggerCore {
 
             // Preserve stack trace if available
             if (typeof errorOrData === 'object' && errorOrData !== null && 'stack' in errorOrData) {
-                err.stack = String((errorOrData as any).stack);
+                err.stack = String((errorOrData as Record<string, unknown>).stack);
             }
 
             return err;
@@ -317,7 +319,7 @@ export class LoggerCore {
     /**
      * Create child logger with additional context
      */
-    child(bindings: Record<string, any>): LoggerCore {
+    child(bindings: Record<string, unknown>): LoggerCore {
         const childLogger = new LoggerCore(this.config);
         childLogger.pinoLogger = this.pinoLogger.child(bindings);
         return childLogger;
@@ -368,27 +370,27 @@ export class ContextualLogger {
         return contextManager.runWithContext(fullContext, fn);
     }
 
-    trace(message: string, metadata?: Record<string, any>): void {
+    trace(message: string, metadata?: Record<string, unknown>): void {
         this.run(async () => this.core.trace(message, metadata));
     }
 
-    debug(message: string, metadata?: Record<string, any>): void {
+    debug(message: string, metadata?: Record<string, unknown>): void {
         this.run(async () => this.core.debug(message, metadata));
     }
 
-    info(message: string, metadata?: Record<string, any>): void {
+    info(message: string, metadata?: Record<string, unknown>): void {
         this.run(async () => this.core.info(message, metadata));
     }
 
-    warn(message: string, metadata?: Record<string, any>): void {
+    warn(message: string, metadata?: Record<string, unknown>): void {
         this.run(async () => this.core.warn(message, metadata));
     }
 
-    error(message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, any>): void {
+    error(message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, unknown>): void {
         this.run(async () => this.core.error(message, errorOrMetadata, metadata));
     }
 
-    fatal(message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, any>): void {
+    fatal(message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, unknown>): void {
         this.run(async () => this.core.fatal(message, errorOrMetadata, metadata));
     }
 }

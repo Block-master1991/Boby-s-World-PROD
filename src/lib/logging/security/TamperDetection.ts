@@ -4,6 +4,7 @@
  */
 
 import { createHash, createHmac } from 'crypto';
+import { professionalLogger } from '../index';
 
 export interface TamperDetectionConfig {
     enabled: boolean;
@@ -73,6 +74,7 @@ export class TamperDetection {
 
         // Only warn on server-side
         if (typeof window === 'undefined') {
+            // eslint-disable-next-line no-console
             console.warn('[TamperDetection] No LOG_SIGNING_SECRET found. Using temporary secret. NOT SECURE FOR PRODUCTION!');
         }
 
@@ -116,7 +118,7 @@ export class TamperDetection {
 
             return entry;
         } catch (error) {
-            console.error('[TamperDetection] Signing failed:', error);
+            professionalLogger.error('[TamperDetection] Signing failed', error);
             return null;
         }
     }
@@ -260,6 +262,7 @@ export class TamperDetection {
      * Alert about tampering attempt
      */
     private alertTampering(entry: SignedLogEntry, errors: string[]): void {
+        // eslint-disable-next-line no-console
         console.error('[SECURITY ALERT] Log tampering detected!', {
             sequence: entry.sequence,
             timestamp: entry.timestamp,

@@ -5,7 +5,8 @@
 
 import { NextResponse } from 'next/server';
 import { db } from '@/lib/firebase-admin';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import type { AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withAuth } from '@/lib/auth-middleware';
 import { logger } from '@/utils/logger';
 
 // Define the actual handler function

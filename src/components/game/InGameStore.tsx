@@ -28,11 +28,12 @@ import { Badge } from '@/components/ui/badge';
 import StoreItemSkeleton from '@/components/shared/StoreItemSkeleton';
 import { useMarketData, useGraphQLMutation } from '@/hooks/useGraphQL';
 import { GAME_MUTATIONS } from '@/lib/graphql-client';
-import { StoreItemDefinition } from '@/lib/server-items';
+import type { StoreItemDefinition } from '@/lib/server-items';
 import { WebAuthnTransactionSigner } from '@/lib/WebAuthnTransactionSigner';
 
 import { uint8ArrayToBase64url } from '@/utils/base64';
-import { solanaPaymentService, PurchaseProgress } from '@/lib/solanaPaymentService';
+import type { PurchaseProgress } from '@/lib/solanaPaymentService';
+import { solanaPaymentService } from '@/lib/solanaPaymentService';
 import { PurchaseStatusOverlay } from '@/components/game/PurchaseStatusOverlay';
 import { History } from 'lucide-react';
 

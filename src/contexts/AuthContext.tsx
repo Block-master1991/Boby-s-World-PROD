@@ -1,7 +1,8 @@
 'use client';
 
 import { uint8ArrayToBase64url, safeBufferFromBase64url } from '@/utils/base64';
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, ReactNode, useRef } from 'react';
+import type { ReactNode} from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useWallet } from '@solana/wallet-adapter-react';
 import type { WalletSignMessageError } from '@solana/wallet-adapter-base';
 import { useToast } from '@/hooks/use-toast';

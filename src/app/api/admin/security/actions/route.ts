@@ -1,15 +1,13 @@
-
 import { NextResponse } from 'next/server';
 import redis from '@/lib/redis';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
 import { logger } from '@/utils/logger';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withSignedAdminAuth } from '@/lib/admin-middleware';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
 
-// import { currentUser } from '@/lib/auth';
-
-export async function POST(request: Request) {
-    // TODO: Add Admin Authorization check
-
+export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
     try {
         const body = await request.json();
         const { action, ip, enabled } = body;
@@ -55,4 +53,4 @@ export async function POST(request: Request) {
         logger.error('Security Action Failed:', error as Error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-}
+}));

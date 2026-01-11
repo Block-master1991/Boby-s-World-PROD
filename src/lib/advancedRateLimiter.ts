@@ -6,7 +6,7 @@
 import redis from './redis';
 import { getClientIp } from './request-utils';
 import { isIpInList, blockIp } from './ip-list';
-import { DeviceInfo } from './advancedSessionManager';
+import type { DeviceInfo } from './advancedSessionManager';
 import { securityLogger, SecurityEventLevel } from './securityLogger';
 import { logger } from 'utils/logger';
 

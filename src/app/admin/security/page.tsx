@@ -24,7 +24,6 @@ interface SecurityStats {
 export default function SecurityDashboard() {
     const [stats, setStats] = useState<SecurityStats | null>(null);
     const [loading, setLoading] = useState(true);
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [error, setError] = useState<string | null>(null);
     const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
     const [processing, setProcessing] = useState<string | null>(null);

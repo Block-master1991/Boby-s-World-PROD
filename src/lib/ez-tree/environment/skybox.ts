@@ -272,12 +272,15 @@ export class Skybox extends THREE.Object3D {
     const perfConfig = getDevicePerformanceConfig();
 
     const findAndApply = () => {
-      let current: THREE.Object3D | null = this;
-      while (current && !(current instanceof THREE.Scene)) {
-        current = current.parent;
-      }
+      let scene: THREE.Scene | null = null;
+      this.traverseAncestors((ancestor) => {
+        if (ancestor instanceof THREE.Scene) {
+          scene = ancestor;
+        }
+      });
 
-      if (current instanceof THREE.Scene) {
+      if (scene) {
+        const current = scene as THREE.Scene;
         // Professional HDR environment mapping using PMREMGenerator
         if (this.renderer) {
           try {

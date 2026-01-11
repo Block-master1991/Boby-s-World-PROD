@@ -242,6 +242,7 @@ export class EnhancedAuditLogger {
     ): Promise<void> {
         // TODO: Implement Slack/email alerts
         // For now, just log to console
+        // eslint-disable-next-line no-console
         console.error('[CRITICAL AUDIT EVENT]', {
             eventType,
             message,

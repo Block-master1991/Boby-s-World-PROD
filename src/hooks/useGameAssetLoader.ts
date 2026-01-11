@@ -1,9 +1,10 @@
 'use client';
 
-import { useState, useEffect, useCallback, MutableRefObject, useRef } from 'react';
+import type { MutableRefObject} from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import * as THREE from 'three';
 import { Octree } from '@/lib/Octree';
-import { GameObject } from '@/types/game';
+import type { GameObject } from '@/types/game';
 import { Environment } from '@/lib/ez-tree/environment/environment';
 import { Grass } from '@/lib/ez-tree/environment/grass';
 import { Rocks } from '@/lib/ez-tree/environment/rocks';

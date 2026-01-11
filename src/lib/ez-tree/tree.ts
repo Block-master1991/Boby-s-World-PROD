@@ -7,7 +7,7 @@ import { loadPreset } from './presets/index';
 import { getBarkTexture, getLeafTexture } from './textures';
 import { appendWindShader, applyProfessionalFade } from './shaders/windShaderUtils'; // Import utilities
 import { TreesOptions } from './environment/trees'; // Import TreesOptions for wind parameters
-import { GrassOptions } from './environment/grass'; // Import GrassOptions for wind parameters
+import type { GrassOptions } from './environment/grass'; // Import GrassOptions for wind parameters
 
 interface BranchGeometryData {
   verts: number[];

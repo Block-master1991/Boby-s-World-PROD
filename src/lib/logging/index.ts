@@ -9,6 +9,8 @@ export { LogLevel, toPinoLevel, fromPinoLevel, getLogLevelFromEnv } from './core
 export { contextManager, withContext, getCorrelationId, type LogContext } from './core/LogContext';
 export { LogFormatter, productionFormatter, developmentFormatter, getFormatter } from './core/LogFormatter';
 
+import type { LogContext } from './core/LogContext';
+
 // Security exports - Phase 1
 export { PIIRedactor, defaultPIIRedactor, redactPII, type PIIRedactionConfig } from './security/PIIRedactor';
 export { LogSanitizer, defaultSanitizer, sanitizeLog, type SanitizerConfig } from './security/LogSanitizer';
@@ -161,7 +163,7 @@ export const logger = {
         professionalLogger.fatal(message, errorOrMetadata, metadata),
 
     // Contextual logging
-    withContext: (context: Partial<import('./core/LogContext').LogContext>) =>
+    withContext: (context: Partial<LogContext>) =>
         professionalLogger.withContext(context),
 
     // Child logger

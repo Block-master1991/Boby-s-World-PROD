@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
-import { AuthenticatedRequest, createAuthErrorResponse, withAuth } from './auth-middleware';
+import type { AuthenticatedRequest} from './auth-middleware';
+import { createAuthErrorResponse, withAuth } from './auth-middleware';
 import { securityIntegration } from './securityIntegration';
 import { auditLogger } from './audit-logger';
 import { getClientIp } from './request-utils';

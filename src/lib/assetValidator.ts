@@ -3,7 +3,8 @@ import { logger } from 'utils/logger';
 // Provides validation and integrity checks for offline-first gameplay
 
 import { getModel } from './indexedDB';
-import { GAME_ASSET_MANIFEST, getAssetsByPriority, AssetInfo } from './gameAssetManifest';
+import type { AssetInfo } from './gameAssetManifest';
+import { GAME_ASSET_MANIFEST, getAssetsByPriority } from './gameAssetManifest';
 
 export interface ValidationResult {
     isValid: boolean;

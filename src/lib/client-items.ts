@@ -7,7 +7,7 @@ import { logger } from 'utils/logger';
  * They use GraphQL or API routes instead of direct Firebase admin calls
  */
 
-import { StoreItemDefinition } from './server-items';
+import type { StoreItemDefinition } from './server-items';
 
 // ===== Client-safe functions for store items =====
 

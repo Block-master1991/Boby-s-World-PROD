@@ -3,7 +3,8 @@
  * POST /api/auth/webauthn/authenticate
  */
 
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { randomBytes } from 'crypto';
 import { WebAuthnUtils } from '@/lib/webauthn-utils';
 import redis from '@/lib/redis';

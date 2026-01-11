@@ -6,7 +6,7 @@ import { useMemo } from 'react';
 import { ConnectionProvider, WalletProvider } from '@solana/wallet-adapter-react';
 import { WalletAdapterNetwork } from '@solana/wallet-adapter-base';
 import { WalletModalProvider } from '@solana/wallet-adapter-react-ui';
-import { WalletAdapter } from '@solana/wallet-adapter-base';
+import type { WalletAdapter } from '@solana/wallet-adapter-base';
 import { WalletConnectWalletAdapter } from '@solana/wallet-adapter-walletconnect';
 import { SOL_NETWORK } from '@/lib/constants';
 import { useIsMobile } from '@/hooks/use-mobile';

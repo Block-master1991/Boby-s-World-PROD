@@ -13,7 +13,10 @@
     "analyze:view": "npx webpack-bundle-analyzer .next/static/chunks/*.js",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:coverage": "jest --coverage"
+    "test:coverage": "jest --coverage",
+    "script:unblock": "ts-node -r dotenv/config scripts/unblock-localhost.ts",
+    "script:measure": "ts-node -r dotenv/config scripts/measureAssets.ts",
+    "script:update-manifest": "ts-node -r dotenv/config scripts/updateManifest.ts"
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.965.0",
@@ -87,6 +90,7 @@
     "@types/react-dom": "^19.2.3",
     "@types/react-google-recaptcha": "^2.1.9",
     "@types/three": "^0.182.0",
+    "@typescript-eslint/eslint-plugin": "^8.52.0",
     "autocannon": "^8.0.0",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.1",

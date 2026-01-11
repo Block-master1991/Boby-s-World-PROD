@@ -157,8 +157,8 @@ export class JWTManager {
       const decoded = jwt.verify(token, this.REFRESH_TOKEN_SECRET) as JWTPayload;
       logger.log(`[JWTManager] Refresh token JTI: ${decoded.jti} successfully passed signature verification. Type: ${decoded.type}, Sub: ${decoded.sub}, Exp: ${new Date(decoded.exp * 1000).toISOString()}`);
 
-      if (await TokenBlacklistManager.isBlacklisted(decoded.jti)) {
-        logger.warn(`[JWTManager] Refresh token ${decoded.jti} is blacklisted.`);
+      if (await TokenBlacklistManager.isBlacklisted(decoded.jti, 30)) {
+        logger.warn(`[JWTManager] Refresh token ${decoded.jti} is blacklisted (checked with 30s grace period).`);
         return null;
       }
 

@@ -157,7 +157,7 @@ export default class TreeOptions {
    */
   copy(source: TreeOptions): void {
     for (const key in source) {
-      if (source.hasOwnProperty(key) && this.hasOwnProperty(key)) {
+      if (Object.prototype.hasOwnProperty.call(source, key) && Object.prototype.hasOwnProperty.call(this, key)) {
         if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
           // Recursively copy for nested objects
           // Ensure the target property is an object before attempting to copy into it

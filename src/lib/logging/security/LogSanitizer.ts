@@ -17,7 +17,7 @@ const DEFAULT_CONFIG: SanitizerConfig = {
     removeHTML: true,
     removeScripts: true,
     removeSQLPatterns: true,
-    maxLength: 10000,
+    maxLength: 50000,
     allowedTags: []
 };
 
@@ -35,25 +35,26 @@ const DANGEROUS_PATTERNS = {
     // SQL injection patterns
     sql: [
         /(\b(SELECT|INSERT|UPDATE|DELETE|DROP|CREATE|ALTER|EXEC|EXECUTE)\b)/gi,
-        /(--|\;|\/\*|\*\/)/g,
+        /(--|;|\/\*|\*\/)/g,
         /(\bOR\b|\bAND\b)\s+[\w\d]+\s*=\s*[\w\d]+/gi
     ],
 
     // Command injection
     commands: [
-        /(\||&|;|\$\(|\`)/g,
+        /(\||&|;|\$\(|`)/g,
         /\b(rm|mv|cp|cat|chmod|chown|kill)\b/gi
     ],
 
     // Path traversal
     pathTraversal: [
-        /\.\.[\/\\]/g,
+        /\.\.[/\\]/g,
         /\/etc\/passwd/gi,
         /\/proc\//gi
     ],
 
     // LDAP injection
     ldap: [
+        // eslint-disable-next-line no-control-regex
         /[*()\\\u0000]/g
     ]
 };
@@ -71,18 +72,18 @@ export class LogSanitizer {
     /**
      * Sanitize any value before logging
      */
-    sanitize(value: any): any {
+    sanitize<T>(value: T): T {
         if (!this.config.enabled) {
             return value;
         }
 
-        return this.sanitizeValue(value);
+        return this.sanitizeValue(value) as T;
     }
 
     /**
      * Recursively sanitize values
      */
-    private sanitizeValue(value: any): any {
+    private sanitizeValue(value: unknown): unknown {
         // Null or undefined
         if (value == null) {
             return value;
@@ -123,7 +124,7 @@ export class LogSanitizer {
 
         // Object - sanitize each property
         if (typeof value === 'object') {
-            const sanitized: any = {};
+            const sanitized: Record<string, unknown> = {};
 
             for (const [key, val] of Object.entries(value)) {
                 // Skip functions and symbols
@@ -161,10 +162,11 @@ export class LogSanitizer {
         }
 
         // Remove null bytes
-        result = result.replace(/\0/g, '');
+        result = result.replace(/\u0000/g, ''); // eslint-disable-line no-control-regex
 
         // Remove control characters (except newlines and tabs)
-        result = result.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        // eslint-disable-next-line no-control-regex
+        result = result.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '');
 
         // Remove/escape HTML if configured
         if (this.config.removeHTML) {
@@ -201,7 +203,7 @@ export class LogSanitizer {
 
         // Remove only non-allowed tags
         const allowedPattern = this.config.allowedTags.join('|');
-        const regex = new RegExp(`<(?!\/?(${allowedPattern})\\b)[^>]*>`, 'gi');
+        const regex = new RegExp(`<(?!(?:/)?(${allowedPattern})\\b)[^>]*>`, 'gi');
         return str.replace(regex, '');
     }
 
@@ -304,13 +306,13 @@ export const defaultSanitizer = new LogSanitizer({
     removeHTML: true,
     removeScripts: true,
     removeSQLPatterns: true,
-    maxLength: 10000
+    maxLength: 50000
 });
 
 /**
  * Helper function for quick sanitization
  */
-export function sanitizeLog(data: any, config?: Partial<SanitizerConfig>): any {
+export function sanitizeLog<T>(data: T, config?: Partial<SanitizerConfig>): T {
     const sanitizer = config ? new LogSanitizer(config) : defaultSanitizer;
     return sanitizer.sanitize(data);
 }

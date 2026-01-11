@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
-import { getStoreItems, getStoreItemsActive, getStoreItem, StoreItemDefinition } from '@/lib/items';
+import type { StoreItemDefinition } from '@/lib/items';
+import { getStoreItems, getStoreItemsActive, getStoreItem } from '@/lib/items';
 import { logger } from '@/utils/logger';
 
 /**

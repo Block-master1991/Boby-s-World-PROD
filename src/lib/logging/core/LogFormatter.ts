@@ -11,7 +11,7 @@ export interface LogEntry {
     message: string;
     timestamp: number;
     context?: LogContext;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     error?: Error;
 }
 
@@ -83,7 +83,7 @@ export class LogFormatter {
      * Format as JSON (production)
      */
     private formatJSON(entry: LogEntry): string {
-        const output: Record<string, any> = {};
+        const output: Record<string, unknown> = {};
 
         if (this.config.includeTimestamp) {
             output.timestamp = this.formatTimestamp(entry.timestamp);
@@ -176,13 +176,13 @@ export class LogFormatter {
             case 'unix':
                 return String(timestamp);
 
-            case 'relative':
+            case 'relative':{
                 const diff = Date.now() - timestamp;
                 if (diff < 1000) return `${diff}ms ago`;
                 if (diff < 60000) return `${Math.floor(diff / 1000)}s ago`;
                 if (diff < 3600000) return `${Math.floor(diff / 60000)}m ago`;
                 return `${Math.floor(diff / 3600000)}h ago`;
-
+            }
             case 'iso':
             default:
                 return new Date(timestamp).toISOString();

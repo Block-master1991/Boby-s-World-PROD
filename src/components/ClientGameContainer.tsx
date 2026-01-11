@@ -11,7 +11,7 @@ import { useAudio } from '@/contexts/AudioContext';
 import { useToast } from '@/hooks/use-toast';
 import { logger } from '@/utils/logger';
 
-import { GameContainerProps } from './GameContainer';
+import type { GameContainerProps } from './GameContainer';
 
 // Dynamic imports with better loading strategy
 const DynamicGameContainer = dynamic<GameContainerProps>(() => import('./GameContainer'), {

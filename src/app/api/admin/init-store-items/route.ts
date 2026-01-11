@@ -3,8 +3,8 @@ import { logger } from '@/utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getAllStoreItems, createStoreItem, updateStoreItem } from '@/lib/server-items';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withSignedAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
@@ -156,7 +156,7 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
     }
 }));
 
-export const GET = withAuth(async (request: AuthenticatedRequest) => {
+export const GET = withAdminAuth(async (request: AdminRequest) => {
     try {
         const items = await getAllStoreItems();
 

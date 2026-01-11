@@ -4,6 +4,13 @@
  * Uses Transferable Objects for zero-copy memory transfer.
  */
 
+/// <reference lib="webworker" />
+
+type HDRWorkerMessage =
+  | { status: 'progress'; progress: number }
+  | { status: 'success'; width: number; height: number; data: Float32Array; isHalf: boolean; quality: string; format: string }
+  | { status: 'error'; error: string };
+
 import { logger } from 'utils/logger';
 
 // Simple RGBE Parser (Minimal implementation of RGBELoader logic for Worker context)
@@ -66,11 +73,11 @@ self.onmessage = async (e: MessageEvent) => {
         logger.log(`[HDRWorker] Fetch complete (${(buffer.byteLength / 1024 / 1024).toFixed(1)}MB). Optimized Parsing...`);
 
         const result = await parseRGBEAsync(buffer, (progress) => {
-            (self as any).postMessage({ status: 'progress', progress });
+            self.postMessage({ status: 'progress', progress });
         });
         if (!result) throw new Error("Failed to parse or invalid HDR format");
 
-        (self as any).postMessage({
+        self.postMessage({
             status: 'success',
             width: result.width,
             height: result.height,

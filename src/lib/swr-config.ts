@@ -2,7 +2,7 @@
 import { logger } from 'utils/logger';
 // Provides intelligent caching, revalidation, and background sync
 
-import { SWRConfiguration } from 'swr';
+import type { SWRConfiguration } from 'swr';
 
 interface SWRError extends Error {
     status?: number;

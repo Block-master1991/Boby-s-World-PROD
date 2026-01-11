@@ -93,7 +93,9 @@ const handle401Error = async (): Promise<boolean> => {
       logger.log("[apiFetch] Session refreshed successfully.");
       return true;
     }
-    logger.error("[apiFetch] Session refresh failed.");
+    // Downgraded to warn because this often happens during intentional logouts 
+    // where background requests are still in flight.
+    logger.warn("[apiFetch] Session refresh failed (expected after logout).");
     showErrorToast("Session Expired", "Failed to refresh session. Please log in again.");
   } else {
     logger.error("[apiFetch] globalTriggerSessionRefresh not set.");

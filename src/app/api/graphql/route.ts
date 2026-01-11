@@ -1,11 +1,12 @@
-import { NextRequest, NextResponse } from 'next/server';
+import type { NextRequest} from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
 import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getClientIp } from '@/lib/request-utils';
 import { AdvancedRateLimiter } from '@/lib/advancedRateLimiter';
 import { validateTokenFromRequest } from '@/lib/auth-middleware';
-import { CreateItemInput, UpdateItemInput } from '@/lib/server-items';
+import type { CreateItemInput, UpdateItemInput } from '@/lib/server-items';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { extractMutationName, checkGraphQLMutationRateLimit } from '@/lib/graphql-rate-limiter';
 import { auditLogger } from '@/lib/audit-logger';
@@ -928,29 +929,32 @@ const resolvers = {
                 }
 
                 const userRef = db.collection('players').doc(userId);
-                const userDoc = await userRef.get();
 
-                if (!userDoc.exists) {
+                // Use transaction to prevent race conditions
+                const result = await db.runTransaction(async (transaction) => {
+                    const userDoc = await transaction.get(userRef);
+
+                    if (!userDoc.exists) {
+                        throw new Error('User not found');
+                    }
+
+                    const userData = userDoc.data();
+                    const currentBalance = userData?.gameUSDTBalance || 0;
+                    const newBalance = currentBalance + amount;
+
+                    transaction.update(userRef, {
+                        gameUSDTBalance: newBalance,
+                        lastUpdated: new Date(),
+                        lastInteraction: FieldValue.serverTimestamp()
+                    });
+
                     return {
-                        success: false,
-                        error: 'User not found'
+                        success: true,
+                        newBalance
                     };
-                }
-
-                const userData = userDoc.data();
-                const currentBalance = userData?.gameUSDTBalance || 0;
-                const newBalance = currentBalance + amount;
-
-                await userRef.update({
-                    gameUSDTBalance: newBalance,
-                    lastUpdated: new Date(),
-                    lastInteraction: FieldValue.serverTimestamp()
                 });
 
-                return {
-                    success: true,
-                    newBalance
-                };
+                return result;
             } catch (error) {
                 logger.error('[GraphQL] Error adding coins:', error);
                 return {
@@ -1504,7 +1508,9 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
             if (publicKeyMatch) {
                 const publicKey = publicKeyMatch[1];
                 try {
-                    const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/login?publicKey=${encodeURIComponent(publicKey)}`, {
+                    // Use dynamic origin from the request to ensure it works in all environments (preview, prod, localhost)
+                    const baseUrl = request.nextUrl.origin;
+                    const response = await fetch(`${baseUrl}/api/auth/login?publicKey=${encodeURIComponent(publicKey)}`, {
                         method: 'GET',
                     });
 
@@ -1522,7 +1528,9 @@ export const POST = withCsrfProtection(async (request: NextRequest) => {
         } else if (query.includes('login(') && variables?.input) {
             // Handle login mutation
             try {
-                const response = await fetch(`${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/api/auth/login`, {
+                // Use dynamic origin from the request
+                const baseUrl = request.nextUrl.origin;
+                const response = await fetch(`${baseUrl}/api/auth/login`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',

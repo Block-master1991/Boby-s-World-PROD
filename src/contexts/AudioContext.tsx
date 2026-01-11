@@ -1,7 +1,8 @@
 'use client';
 
-import React, { createContext, useContext, useState, useRef, ReactNode } from 'react';
-import { SoundManagerRef } from '@/components/game/SoundManager';
+import type { ReactNode } from 'react';
+import React, { createContext, useContext, useState, useRef } from 'react';
+import type { SoundManagerRef } from '@/components/game/SoundManager';
 
 interface AudioContextType {
   soundManagerRef: React.RefObject<SoundManagerRef | null>;

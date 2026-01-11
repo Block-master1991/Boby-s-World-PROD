@@ -6,7 +6,7 @@ import * as THREE from 'three';
 
 import type { MutableRefObject } from 'react';
 import { Octree } from '../lib/Octree';
-import { GameObject } from '@/types/game';
+import type { GameObject } from '@/types/game';
 import { getDevicePerformanceConfig } from '@/lib/utils';
 import { logger } from '@/utils/logger';
 

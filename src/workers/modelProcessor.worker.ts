@@ -26,7 +26,7 @@ self.onmessage = async (event: MessageEvent<WorkerEventData>) => {
 
   try {
     switch (type) {
-      case 'COMPRESS_GEOMETRY':
+      case 'COMPRESS_GEOMETRY': {
         const compressedGeometry = compressGeometryAdvanced(data);
         // Transferable objects for performance
         const transferables = Object.values(compressedGeometry.attributes).map(attr => attr.array);
@@ -38,6 +38,7 @@ self.onmessage = async (event: MessageEvent<WorkerEventData>) => {
           data: compressedGeometry as WorkerResponseData['data']
         }, { transfer: transferables });
         break;
+      }
       default:
         throw new Error(`Unknown worker type: ${type}`);
     }

@@ -6,7 +6,7 @@
 import { keyVault } from './keyVaultService';
 import { sessionManager } from './advancedSessionManager';
 import { AdvancedRateLimiter } from './advancedRateLimiter';
-import { DeviceInfo } from './advancedSessionManager';
+import type { DeviceInfo } from './advancedSessionManager';
 import { logger } from 'utils/logger';
 
 export interface SecurityContext {

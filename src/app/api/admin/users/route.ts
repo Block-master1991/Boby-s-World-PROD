@@ -1,9 +1,10 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
 import { db, initializeAdminApp } from '@/lib/firebase-admin';
-import * as admin from 'firebase-admin';
+import type * as admin from 'firebase-admin';
 
-import { withAdminAuth, AdminRequest } from '@/lib/admin-middleware';
+import type { AdminRequest } from '@/lib/admin-middleware';
+import { withAdminAuth } from '@/lib/admin-middleware';
 
 export const GET = withAdminAuth(async (request: AdminRequest) => {
   try {

@@ -15,9 +15,9 @@ import {
 import type { GLTF } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { useEffect, useRef, useCallback } from 'react';
 import type { MutableRefObject } from 'react';
-import { Octree } from '../lib/Octree'; // Import Octree
+import type { Octree } from '../lib/Octree'; // Import Octree
 import { getModel, putModel } from '../lib/indexedDB'; // Import IndexedDB utilities
-import { GameObject } from '@/types/game';
+import type { GameObject } from '@/types/game';
 import { logger } from '@/utils/logger';
 
 const NORMAL_DOG_SPEED = 6.0; // Normal walking speed (units per second)

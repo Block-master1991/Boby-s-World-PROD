@@ -2,10 +2,10 @@ import * as THREE from 'three';
 import { logger } from 'utils/logger';
 import { WORLD_MIN_BOUND, WORLD_MAX_BOUND } from '../constants';
 import { RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../chunkUtils';
-import { Grass } from '../ez-tree/environment/grass';
-import { Rocks } from '../ez-tree/environment/rocks';
-import { Trees } from '../ez-tree/environment/trees';
-import { Flowers } from '../ez-tree/environment/flowers';
+import type { Grass } from '../ez-tree/environment/grass';
+import type { Rocks } from '../ez-tree/environment/rocks';
+import type { Trees } from '../ez-tree/environment/trees';
+import type { Flowers } from '../ez-tree/environment/flowers';
 
 // Define an interface for the content of a chunk
 interface ChunkContent {

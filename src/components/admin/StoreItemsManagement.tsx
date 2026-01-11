@@ -18,7 +18,7 @@ import { useSessionWallet } from '@/hooks/useSessionWallet';
 import { createSignedAdminHeaders } from '@/utils/frontend-auth';
 import { AdminItemSkeleton } from './AdminItemSkeleton';
 import { AdminStatSkeleton } from './AdminStatSkeleton';
-import { fetchWithCsrf } from '@/lib/utils';
+import { apiFetch } from '@/utils/api';
 import { logger } from '@/utils/logger';
 
 interface StoreItem {
@@ -64,7 +64,7 @@ export function StoreItemsManagement() {
     const loadItems = async () => {
         try {
             setLoading(true);
-            const response = await fetch('/api/admin/store-items');
+            const response = await apiFetch('/api/admin/store-items');
             const data = await response.json();
 
             if (data.success) {
@@ -93,7 +93,7 @@ export function StoreItemsManagement() {
         try {
             setInitializing(true);
             const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, {});
-            const response = await fetchWithCsrf('/api/admin/init-store-items', {
+            const response = await apiFetch('/api/admin/init-store-items', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -148,7 +148,7 @@ export function StoreItemsManagement() {
 
             const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, formData);
 
-            const response = await fetchWithCsrf(url, {
+            const response = await apiFetch(url, {
                 method,
                 headers: {
                     'Content-Type': 'application/json',
@@ -165,7 +165,7 @@ export function StoreItemsManagement() {
                     const oldFilename = editingItem.image.replace('/items/', '');
                     try {
                         const delSignedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, { filename: oldFilename });
-                        await fetchWithCsrf(`/api/admin/upload-image?filename=${oldFilename}`, {
+                        await apiFetch(`/api/admin/upload-image?filename=${oldFilename}`, {
                             method: 'DELETE',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -208,7 +208,7 @@ export function StoreItemsManagement() {
     const deleteItem = async (item: StoreItem) => {
         try {
             const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, { id: item.id });
-            const response = await fetchWithCsrf(`/api/admin/store-items/${item.id}`, {
+            const response = await apiFetch(`/api/admin/store-items/${item.id}`, {
                 method: 'DELETE',
                 headers: {
                     'Content-Type': 'application/json',
@@ -225,7 +225,7 @@ export function StoreItemsManagement() {
                     const filename = item.image.replace('/items/', '');
                     try {
                         const imgSignedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, { filename });
-                        await fetchWithCsrf(`/api/admin/upload-image?filename=${filename}`, {
+                        await apiFetch(`/api/admin/upload-image?filename=${filename}`, {
                             method: 'DELETE',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -291,7 +291,7 @@ export function StoreItemsManagement() {
             // Remove Content-Type so the browser sets the correct multipart boundary for FormData
             const { 'Content-Type': _, ...headers } = signedHeaders as any;
 
-            const response = await fetchWithCsrf('/api/admin/upload-image', {
+            const response = await apiFetch('/api/admin/upload-image', {
                 method: 'POST',
                 headers,
                 body: uploadFormData
@@ -321,7 +321,7 @@ export function StoreItemsManagement() {
         try {
             setMigrating(true);
             const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, {});
-            const response = await fetchWithCsrf('/api/admin/migrate-inventory', {
+            const response = await apiFetch('/api/admin/migrate-inventory', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -353,7 +353,7 @@ export function StoreItemsManagement() {
         try {
             setMigratingImages(true);
             const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, {});
-            const response = await fetchWithCsrf('/api/admin/migrate-images', {
+            const response = await apiFetch(`/api/admin/migrate-images`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -399,42 +399,27 @@ export function StoreItemsManagement() {
     }, []);
 
     return (
-        <div className="container mx-auto">
-            <div className="flex items-center justify-between mb-6">
-                <div>
-                    <h2 className="text-2xl font-bold">Store Items Management</h2>
-                    <p className="text-muted-foreground">Manage store items, prices, and availability</p>
+        <div className="space-y-6 animate-in fade-in duration-300">
+            {/* Header */}
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 shadow-md">
+                        <Package className="h-5 w-5 text-white" />
+                    </div>
+                    <div>
+                        <h2 className="text-2xl font-bold">Store Items</h2>
+                        <p className="text-sm text-muted-foreground">Manage store items, prices, and availability</p>
+                    </div>
                 </div>
 
-                <div className="flex gap-2">
-                    <Button onClick={initializeItems} disabled={initializing} variant="outline" size="sm">
-                        <RefreshCw className={`h-4 w-4 mr-2 ${initializing ? 'animate-spin' : ''}`} />
-                        Initialize
-                    </Button>
-
+                <div className="flex flex-wrap gap-2">
                     <Button onClick={loadItems} disabled={loading} variant="outline" size="sm">
                         <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
-
-                    <Button
-                        onClick={runMigration}
-                        disabled={migrating}
-                        variant="destructive"
-                        size="sm"
-                    >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${migrating ? 'animate-spin' : ''}`} />
-                        Migrate Inv
-                    </Button>
-
-                    <Button
-                        onClick={runImageMigration}
-                        disabled={migratingImages}
-                        variant="destructive"
-                        size="sm"
-                    >
-                        <RefreshCw className={`h-4 w-4 mr-2 ${migratingImages ? 'animate-spin' : ''}`} />
-                        Migrate Images
+                    <Button onClick={initializeItems} disabled={initializing} variant="outline" size="sm">
+                        <RefreshCw className={`h-4 w-4 mr-2 ${initializing ? 'animate-spin' : ''}`} />
+                        Initialize
                     </Button>
 
                     <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
@@ -560,51 +545,63 @@ export function StoreItemsManagement() {
             </div>
 
             {/* Stats Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 {loading ? (
                     <><AdminStatSkeleton /><AdminStatSkeleton /><AdminStatSkeleton /><AdminStatSkeleton /></>
                 ) : (
                     <>
-                        <Card>
+                        <Card className="relative overflow-hidden hover:shadow-md transition-all duration-200">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-blue-500/10 to-transparent rounded-bl-full"></div>
                             <CardContent className="p-4">
-                                <div className="flex items-center">
-                                    <Package className="h-8 w-8 text-blue-500 mr-3" />
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
+                                        <Package className="h-5 w-5 text-blue-500" />
+                                    </div>
                                     <div>
                                         <p className="text-2xl font-bold">{items.length}</p>
-                                        <p className="text-sm text-muted-foreground">Total Items</p>
+                                        <p className="text-xs text-muted-foreground">Total Items</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card>
+                        <Card className="relative overflow-hidden hover:shadow-md transition-all duration-200">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-green-500/10 to-transparent rounded-bl-full"></div>
                             <CardContent className="p-4">
-                                <div className="flex items-center">
-                                    <div className="h-8 w-8 bg-green-500 rounded-full mr-3" />
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
+                                        <div className="h-3 w-3 bg-green-500 rounded-full"></div>
+                                    </div>
                                     <div>
-                                        <p className="text-2xl font-bold">{items.filter(i => i.isActive).length}</p>
-                                        <p className="text-sm text-muted-foreground">Active</p>
+                                        <p className="text-2xl font-bold text-green-500">{items.filter(i => i.isActive).length}</p>
+                                        <p className="text-xs text-muted-foreground">Active</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card>
+                        <Card className="relative overflow-hidden hover:shadow-md transition-all duration-200">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-amber-500/10 to-transparent rounded-bl-full"></div>
                             <CardContent className="p-4">
-                                <div className="flex items-center">
-                                    <div className="h-8 w-8 bg-yellow-500 rounded-full mr-3" />
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                                        <div className="h-3 w-3 bg-amber-500 rounded-full"></div>
+                                    </div>
                                     <div>
-                                        <p className="text-2xl font-bold">{items.filter(i => i.type === 'consumable').length}</p>
-                                        <p className="text-sm text-muted-foreground">Consumable</p>
+                                        <p className="text-2xl font-bold text-amber-500">{items.filter(i => i.type === 'consumable').length}</p>
+                                        <p className="text-xs text-muted-foreground">Consumable</p>
                                     </div>
                                 </div>
                             </CardContent>
                         </Card>
-                        <Card>
+                        <Card className="relative overflow-hidden hover:shadow-md transition-all duration-200">
+                            <div className="absolute top-0 right-0 w-16 h-16 bg-gradient-to-br from-purple-500/10 to-transparent rounded-bl-full"></div>
                             <CardContent className="p-4">
-                                <div className="flex items-center">
-                                    <div className="h-8 w-8 bg-purple-500 rounded-full mr-3" />
+                                <div className="flex items-center gap-3">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-purple-500/10">
+                                        <div className="h-3 w-3 bg-purple-500 rounded-full"></div>
+                                    </div>
                                     <div>
-                                        <p className="text-2xl font-bold">{items.filter(i => i.type === 'permanent').length}</p>
-                                        <p className="text-sm text-muted-foreground">Permanent</p>
+                                        <p className="text-2xl font-bold text-purple-500">{items.filter(i => i.type === 'permanent').length}</p>
+                                        <p className="text-xs text-muted-foreground">Permanent</p>
                                     </div>
                                 </div>
                             </CardContent>

@@ -1,6 +1,7 @@
 
 import { logger } from 'utils/logger';
-import Redis, { Cluster } from 'ioredis';
+import type { Cluster } from 'ioredis';
+import Redis from 'ioredis';
 
 let redisInstance: Redis | Cluster | null = null;
 

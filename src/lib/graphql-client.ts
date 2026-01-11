@@ -1,9 +1,10 @@
 // GraphQL Client with URQL for Efficient API Communication
 // Simplified version for better compatibility
 
+import type {
+    Client} from 'urql';
 import {
     createClient,
-    Client,
     cacheExchange,
     fetchExchange,
 } from 'urql';

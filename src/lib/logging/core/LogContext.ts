@@ -4,29 +4,32 @@
  */
 
 // Safe imports
-// eslint-disable-next-line @typescript-eslint/no-var-requires
 const randomUUID = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID.bind(crypto) :
     (typeof require !== 'undefined' ? require('crypto').randomUUID : () => 'uuid-' + Math.random());
 
 // Safe AsyncLocalStorage import for both Node.js and Browser environments
-let AsyncLocalStorage: any;
+interface AsyncLocalStorageLike<T> {
+    run<R>(store: T, callback: () => R | Promise<R>): R | Promise<R>;
+    getStore(): T | undefined;
+    snapshot?(): AsyncLocalStorageLike<T>;
+}
+
+// Initialize AsyncLocalStorage
+let AsyncLocalStorageConstructor: new <T>() => AsyncLocalStorageLike<T>;
 
 try {
     if (typeof window === 'undefined' && typeof global !== 'undefined') {
         // Use Node.js built-in AsyncLocalStorage
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        AsyncLocalStorage = require('async_hooks').AsyncLocalStorage;
+        AsyncLocalStorageConstructor = require('async_hooks').AsyncLocalStorage;
+    } else {
+        throw new Error('Not in Node.js environment');
     }
-} catch (e) {
-    // Ignore error
-}
-
-// Fallback for Browser or environments without AsyncLocalStorage
-if (!AsyncLocalStorage) {
-    class MockAsyncLocalStorage<T> {
+} catch {
+    // Fallback for Browser or environments without AsyncLocalStorage
+    AsyncLocalStorageConstructor = class MockAsyncLocalStorage<T> implements AsyncLocalStorageLike<T> {
         private store: T | undefined;
 
-        run(store: T, callback: () => any) {
+        run<R>(store: T, callback: () => R | Promise<R>): R | Promise<R> {
             // Check if callback returns a promise
             // Note: This basic mock doesn't handle async context propagation properly in browser
             // but prevents crashes. In browser, correlation ID is usually explicitly passed or single-use.
@@ -38,11 +41,14 @@ if (!AsyncLocalStorage) {
             }
         }
 
-        getStore() {
+        getStore(): T | undefined {
             return this.store;
         }
-    }
-    AsyncLocalStorage = MockAsyncLocalStorage;
+
+        snapshot?(): AsyncLocalStorageLike<T> {
+            return new MockAsyncLocalStorage<T>();
+        }
+    };
 }
 
 export interface LogContext {
@@ -52,14 +58,14 @@ export interface LogContext {
     requestId?: string;
     traceId?: string;
     spanId?: string;
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 /**
  * Async Local Storage for context propagation
  * Works across async boundaries automatically
  */
-const asyncLocalStorage = new AsyncLocalStorage();
+const asyncLocalStorage = new AsyncLocalStorageConstructor<LogContext>();
 
 /**
  * Context Manager for logging

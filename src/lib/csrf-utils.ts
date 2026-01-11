@@ -1,6 +1,7 @@
 import { initializeAdminApp } from './firebase-admin';
 import { logger } from 'utils/logger';
-import { getFirestore, FieldValue, Transaction, Firestore } from 'firebase-admin/firestore';
+import type { Transaction, Firestore } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import { randomBytes } from 'crypto';
 
 const CSRF_TOKEN_EXPIRY_MINUTES = 30; // CSRF token expiry time

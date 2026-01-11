@@ -62,9 +62,9 @@ const PII_PATTERNS = {
 
     // API keys and tokens (common patterns)
     apiKey: {
-        pattern: /\b(?:api[_-]?key|token|secret|password|passwd|pwd)["']?\s*[:=]\s*["']?([A-Za-z0-9_\-]{16,})/gi,
+        pattern: /\b(?:api[_-]?key|token|secret|password|passwd|pwd)["']?\s*[:=]\s*["']?([A-Za-z0-9_-]{16,})/gi,
         replacement: (match: string) => {
-            return match.replace(/([A-Za-z0-9_\-]{16,})/g, '[REDACTED]');
+            return match.replace(/([A-Za-z0-9_-]{16,})/g, '[REDACTED]');
         }
     },
 
@@ -76,7 +76,7 @@ const PII_PATTERNS = {
 
     // OAuth tokens
     bearerToken: {
-        pattern: /\b(?:Bearer|bearer)\s+([A-Za-z0-9_\-\.]+)/g,
+        pattern: /\b(?:Bearer|bearer)\s+([A-Za-z0-9_.-]+)/g,
         replacement: 'Bearer [REDACTED]'
     }
 };
@@ -125,18 +125,18 @@ export class PIIRedactor {
     /**
      * Redact PII from any data structure
      */
-    redact(data: any): any {
+    redact<T>(data: T): T {
         if (!this.config.enabled) {
             return data;
         }
 
-        return this.redactValue(data);
+        return this.redactValue(data) as T;
     }
 
     /**
      * Recursively redact values
      */
-    private redactValue(value: any, fieldName?: string): any {
+    private redactValue(value: unknown, fieldName?: string): unknown {
         // Null or undefined
         if (value == null) {
             return value;
@@ -166,7 +166,7 @@ export class PIIRedactor {
 
         // Object - redact each property
         if (typeof value === 'object') {
-            const redacted: any = {};
+            const redacted: Record<string, unknown> = {};
 
             for (const [key, val] of Object.entries(value)) {
                 // Skip functions
@@ -275,7 +275,7 @@ export const defaultPIIRedactor = new PIIRedactor({
 /**
  * Helper function for quick redaction
  */
-export function redactPII(data: any, config?: Partial<PIIRedactionConfig>): any {
+export function redactPII<T>(data: T, config?: Partial<PIIRedactionConfig>): T {
     const redactor = config ? new PIIRedactor(config) : defaultPIIRedactor;
     return redactor.redact(data);
 }

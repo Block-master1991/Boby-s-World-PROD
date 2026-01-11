@@ -3,6 +3,8 @@
  * Buffers logs in memory and flushes in batches for improved performance
  */
 
+import { professionalLogger } from '../index';
+
 export interface BufferingConfig {
     enabled: boolean;
     maxSize?: number;           // Maximum buffer size before auto-flush
@@ -115,7 +117,7 @@ export class BufferingMiddleware {
             );
 
         } catch (error) {
-            console.error('[BufferingMiddleware] Flush failed:', error);
+            professionalLogger.error('[BufferingMiddleware] Flush failed', error);
 
             // On error, try to preserve logs
             // In production, these should go to a dead letter queue

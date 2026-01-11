@@ -368,7 +368,7 @@ class BackgroundSyncManager {
         if (typeof window === 'undefined' || typeof navigator === 'undefined') return;
 
         // Register background sync if available
-        if ('serviceWorker' in navigator && 'sync' in (window as any).ServiceWorkerRegistration?.prototype) {
+        if ('serviceWorker' in navigator && (window as any).ServiceWorkerRegistration && (window as any).ServiceWorkerRegistration.prototype && 'sync' in (window as any).ServiceWorkerRegistration.prototype) {
             navigator.serviceWorker.ready.then((registration: ServiceWorkerRegistration) => {
                 // Register sync for game data
                 const syncManager = (registration as any).sync;

@@ -367,13 +367,9 @@ export async function POST(request: Request) {
     }
 
     // === Issue CSRF Token using helper ===
-    return await setCsrfTokenResponse(response, publicKey, requestHost);
-
-    // End of process
     logger.log('[LOGIN] Login process completed successfully');
     await auditLogger.logLoginSuccess(publicKey, { ip, userAgent });
-    return response;
-
+    return await setCsrfTokenResponse(response, publicKey, requestHost);
   } catch (error) {
     let responseError = 'Authentication failed (JWT Flow)';
     let responseDetails = 'Internal server error. Check server logs for more details.';

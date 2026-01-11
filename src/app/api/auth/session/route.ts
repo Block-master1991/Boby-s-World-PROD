@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { logger } from '@/utils/logger';
-import { withAuth, AuthenticatedRequest, createAuthErrorResponse } from '@/lib/auth-middleware';
+import type { AuthenticatedRequest} from '@/lib/auth-middleware';
+import { withAuth, createAuthErrorResponse } from '@/lib/auth-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
@@ -13,9 +14,17 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
 
     // 1. Strict Nonce Verification (Consistency Check)
     const storedNonce = request.cookies.get('nonce')?.value;
+    const host = request.headers.get('host') || '';
+    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
+    const isDev = process.env.NODE_ENV === 'development';
+
     if (!storedNonce || jwtPayload.nonce !== storedNonce) {
-      logger.warn(`[SESSION CHECK] Nonce mismatch or missing! Payload: ${jwtPayload.nonce}, Cookie: ${storedNonce}`);
-      return createAuthErrorResponse('Session nonce invalid or missing. Please login again.', 'NONCE_MISMATCH', 401, undefined, true);
+      if (isDev || isLocalhost) {
+        logger.warn(`[SESSION CHECK] ⚠️ Nonce mismatch bypassed in development. Payload: ${jwtPayload.nonce}, Cookie: ${storedNonce}`);
+      } else {
+        logger.warn(`[SESSION CHECK] Nonce mismatch or missing! Payload: ${jwtPayload.nonce}, Cookie: ${storedNonce}`);
+        return createAuthErrorResponse('Session nonce invalid or missing. Please login again.', 'NONCE_MISMATCH', 401, undefined, true);
+      }
     }
 
     const response = NextResponse.json({

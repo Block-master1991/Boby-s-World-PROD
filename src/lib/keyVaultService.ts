@@ -4,7 +4,7 @@
  */
 
 import { randomBytes, createHash } from 'crypto';
-import { KMSProvider } from './kms/KMSProvider';
+import type { KMSProvider } from './kms/KMSProvider';
 import { LocalKMSProvider } from './kms/LocalKMSProvider';
 import { MASTER_ENCRYPTION_KEY } from './server-constants';
 import { logger } from '@/utils/logger';

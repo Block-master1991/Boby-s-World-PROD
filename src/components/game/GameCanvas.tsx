@@ -18,8 +18,8 @@ import {
     Color,
 } from '@/lib/three-chunk';
 
-import { Octree } from '@/lib/Octree'; // Import Octree
-import { GameObject } from '@/types/game';
+import type { Octree } from '@/lib/Octree'; // Import Octree
+import type { GameObject } from '@/types/game';
 
 import { useDogLogic } from '@/hooks/useDogLogic';
 import { useCoinLogic } from '@/hooks/useCoinLogic';

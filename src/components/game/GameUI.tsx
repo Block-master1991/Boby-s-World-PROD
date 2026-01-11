@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetTrigger, SheetLoading } from '@/components/ui
 import { Button } from '@/components/ui/button';
 import Image from 'next/image';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
-import { GameObject } from '@/types/game';
+import type { GameObject } from '@/types/game';
 
 import { useToast } from '@/hooks/use-toast';
 import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from '@/lib/items'; // Get store items with icons
@@ -148,7 +148,7 @@ const JOYSTICK_KNOB_SIZE = 40;
 const MAX_JOYSTICK_TRAVEL = (JOYSTICK_BASE_SIZE / 2) - (JOYSTICK_KNOB_SIZE / 2);
 
 
-import { Octree } from '@/lib/Octree'; // Import Octree
+import type { Octree } from '@/lib/Octree'; // Import Octree
 
 interface GameUIProps {
     octreeRef: React.MutableRefObject<Octree<GameObject> | null>;

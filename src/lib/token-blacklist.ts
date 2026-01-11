@@ -1,8 +1,9 @@
 
 import { logger } from 'utils/logger';
 import { initializeAdminApp } from './firebase-admin';
-import * as admin from 'firebase-admin'; // Import admin namespace for QueryDocumentSnapshot
-import { getFirestore, FieldValue, Timestamp as AdminTimestamp } from 'firebase-admin/firestore'; // Explicitly import AdminTimestamp
+import type * as admin from 'firebase-admin'; // Import admin namespace for QueryDocumentSnapshot
+import type { Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
+import { getFirestore, FieldValue } from 'firebase-admin/firestore'; // Explicitly import AdminTimestamp
 
 interface BlacklistedTokenDoc {
   jti: string; 
@@ -49,12 +50,12 @@ export class TokenBlacklistManager {
 
   }
 
-  static async isBlacklisted(jti: string): Promise<boolean> {
+  static async isBlacklisted(jti: string, gracePeriodSeconds: number = 0): Promise<boolean> {
     try {
       await initializeAdminApp(); 
       const blacklistCol = this.getBlacklistCollection();
       
-      logger.log(`[TokenBlacklist] Checking blacklist for JTI: ${jti}`);
+      logger.log(`[TokenBlacklist] Checking blacklist for JTI: ${jti}${gracePeriodSeconds > 0 ? ` (with ${gracePeriodSeconds}s grace period)` : ''}`);
       const tokenDoc = await blacklistCol.doc(jti).get();
 
       if (!tokenDoc.exists) {
@@ -63,13 +64,25 @@ export class TokenBlacklistManager {
       }
 
       const tokenData = tokenDoc.data() as BlacklistedTokenDoc;
+      const revokedAtMs = tokenData.revokedAt.toMillis();
+      const now = Date.now();
+
       logger.log(`[TokenBlacklist] Token JTI: ${jti} found in blacklist. Reason: ${tokenData.reason}, RevokedAt: ${tokenData.revokedAt.toDate().toISOString()}`);
+
+      // Apply grace period if requested (typically for refresh tokens consumed in parallel)
+      if (gracePeriodSeconds > 0 && tokenData.reason === 'expired') {
+        const elapsedSeconds = (now - revokedAtMs) / 1000;
+        if (elapsedSeconds <= gracePeriodSeconds) {
+          logger.log(`[TokenBlacklist] Token JTI: ${jti} is within grace period (${Math.round(elapsedSeconds)}s <= ${gracePeriodSeconds}s). Treating as NOT blacklisted.`);
+          return false;
+        }
+      }
 
       // Optional: Clean up very old tokens if their original expiry + buffer has passed.
       // This prevents the blacklist from growing indefinitely with tokens that would be long expired anyway.
       // Consider a longer buffer, e.g., refresh token expiry (7 days) + a few more days.
       const originalExpiryWithBufferMs = (tokenData.exp * 1000) + (10 * 24 * 60 * 60 * 1000); // 10 days buffer
-      if (originalExpiryWithBufferMs < Date.now()) {
+      if (originalExpiryWithBufferMs < now) {
         logger.log(`[TokenBlacklist] Cleaning up very old blacklisted token JTI: ${jti} (original expiry + buffer passed). Deleting from blacklist.`);
         await tokenDoc.ref.delete();
         return false; // Treat as not blacklisted if it's extremely old and cleaned up.

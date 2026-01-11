@@ -5,7 +5,8 @@ import { logger } from 'utils/logger';
 import { NextResponse } from 'next/server';
 import { initializeAdminApp } from '@/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
-import { withAuth, AuthenticatedRequest } from '@/lib/auth-middleware';
+import type { AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withAuth } from '@/lib/auth-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
 
 export interface PurchaseRecord {

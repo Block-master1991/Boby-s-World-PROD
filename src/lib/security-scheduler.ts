@@ -3,7 +3,8 @@
  * Manages automated periodic execution of security tests
  */
 
-import { securityTestSuite, TestResult } from './securityTest';
+import type { TestResult } from './securityTest';
+import { securityTestSuite } from './securityTest';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
 import { auditLogger } from './audit-logger';
 import { initializeAdminApp } from './firebase-admin';

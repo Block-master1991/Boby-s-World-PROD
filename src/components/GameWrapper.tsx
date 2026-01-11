@@ -3,8 +3,8 @@
 import React, { useState, useEffect } from 'react';
 import type { PublicKey } from '@solana/web3.js';
 import GameCanvas from './game/GameCanvas';
-import { Octree } from '@/lib/Octree';
-import { GameObject } from '@/types/game';
+import type { Octree } from '@/lib/Octree';
+import type { GameObject } from '@/types/game';
 import { checkCriticalAssets } from '@/lib/assetChecker';
 import { logger } from '@/utils/logger';
 

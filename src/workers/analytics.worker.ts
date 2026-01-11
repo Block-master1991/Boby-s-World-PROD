@@ -1,15 +1,102 @@
 // Analytics and Performance Monitoring WebWorker
 // Handles performance data processing and analytics in background
 
+/// <reference lib="webworker" />
+
 import { logger } from 'utils/logger';
 
-interface PerformanceEvent {
-    type: 'metric' | 'error' | 'user_action' | 'game_event';
-    timestamp: number;
-    data: any;
-    sessionId: string;
-    userId?: string;
+type MetricData = {
+    fps?: number;
+    loadTime?: number;
+    memoryUsage?: number;
+};
+
+type ErrorData = {
+    type?: string;
+};
+
+type UserActionData = {
+    action?: string;
+};
+
+type GameEventData = {
+    event?: string;
+};
+
+type PerformanceEvent =
+  | {
+      type: 'metric';
+      timestamp: number;
+      data: MetricData;
+      sessionId: string;
+      userId?: string;
+    }
+  | {
+      type: 'error';
+      timestamp: number;
+      data: ErrorData;
+      sessionId: string;
+      userId?: string;
+    }
+  | {
+      type: 'user_action';
+      timestamp: number;
+      data: UserActionData;
+      sessionId: string;
+      userId?: string;
+    }
+  | {
+      type: 'game_event';
+      timestamp: number;
+      data: GameEventData;
+      sessionId: string;
+      userId?: string;
+    };
+
+interface ProcessedMetrics {
+    fps: { samples: number[]; avg: number; min: number; max: number };
+    loadTimes: { samples: number[]; avg: number; p95: number };
+    memoryUsage: { samples: number[]; avg: number; peak: number };
+    errors: { count: number; types: Record<string, number> };
+    userActions: { count: number; types: Record<string, number> };
+    gameEvents: { count: number; types: Record<string, number> };
 }
+
+interface QualitySettings {
+    lodDistance: number;
+    shadowQuality: number;
+    particleCount: number;
+    textureQuality: number;
+    antialias: boolean;
+}
+
+interface CurrentConditions {
+    deviceType: 'mobile' | 'desktop';
+    batteryLevel?: number;
+    networkType?: string;
+}
+
+type PerformanceEventInput =
+  | {
+      type: 'metric';
+      data: MetricData;
+      userId?: string;
+    }
+  | {
+      type: 'error';
+      data: ErrorData;
+      userId?: string;
+    }
+  | {
+      type: 'user_action';
+      data: UserActionData;
+      userId?: string;
+    }
+  | {
+      type: 'game_event';
+      data: GameEventData;
+      userId?: string;
+    };
 
 interface AnalyticsBatch {
     events: PerformanceEvent[];
@@ -23,7 +110,7 @@ class AnalyticsProcessor {
     private batchSize = 50;
     private flushInterval = 30000; // 30 seconds
     private sessionId: string;
-    private flushTimer: NodeJS.Timeout | null = null;
+    private flushTimer: ReturnType<typeof setInterval> | null = null;
 
     constructor(sessionId: string) {
         this.sessionId = sessionId;
@@ -31,7 +118,7 @@ class AnalyticsProcessor {
     }
 
     // Add event to buffer
-    addEvent(event: Omit<PerformanceEvent, 'timestamp' | 'sessionId'>): void {
+    addEvent(event: PerformanceEventInput): void {
         const fullEvent: PerformanceEvent = {
             ...event,
             timestamp: Date.now(),
@@ -47,7 +134,7 @@ class AnalyticsProcessor {
     }
 
     // Process and aggregate performance metrics
-    processMetrics(events: PerformanceEvent[]): any {
+    processMetrics(events: PerformanceEvent[]): ProcessedMetrics {
         const metrics = {
             fps: { samples: [], avg: 0, min: Infinity, max: 0 },
             loadTimes: { samples: [], avg: 0, p95: 0 },
@@ -62,21 +149,24 @@ class AnalyticsProcessor {
                 case 'metric':
                     this.processMetricEvent(event.data, metrics);
                     break;
-                case 'error':
+                case 'error': {
                     metrics.errors.count++;
                     const errorType = event.data.type || 'unknown';
                     metrics.errors.types[errorType] = (metrics.errors.types[errorType] || 0) + 1;
                     break;
-                case 'user_action':
+                }
+                case 'user_action': {
                     metrics.userActions.count++;
                     const actionType = event.data.action || 'unknown';
                     metrics.userActions.types[actionType] = (metrics.userActions.types[actionType] || 0) + 1;
                     break;
-                case 'game_event':
+                }
+                case 'game_event': {
                     metrics.gameEvents.count++;
                     const gameEventType = event.data.event || 'unknown';
                     metrics.gameEvents.types[gameEventType] = (metrics.gameEvents.types[gameEventType] || 0) + 1;
                     break;
+                }
             }
         });
 
@@ -86,7 +176,7 @@ class AnalyticsProcessor {
         return metrics;
     }
 
-    private processMetricEvent(data: any, metrics: any): void {
+    private processMetricEvent(data: MetricData, metrics: ProcessedMetrics): void {
         if (data.fps !== undefined) {
             metrics.fps.samples.push(data.fps);
             metrics.fps.min = Math.min(metrics.fps.min, data.fps);
@@ -103,7 +193,7 @@ class AnalyticsProcessor {
         }
     }
 
-    private calculateAggregates(metrics: any): void {
+    private calculateAggregates(metrics: ProcessedMetrics): void {
         // FPS aggregates
         if (metrics.fps.samples.length > 0) {
             metrics.fps.avg = metrics.fps.samples.reduce((a: number, b: number) => a + b, 0) / metrics.fps.samples.length;
@@ -183,7 +273,7 @@ class PerformancePredictor {
         fps: number;
         memoryUsage: number;
         drawCalls: number;
-        qualitySettings: any;
+        qualitySettings: QualitySettings;
     }> = [];
 
     private maxHistorySize = 100;
@@ -193,7 +283,7 @@ class PerformancePredictor {
         fps: number;
         memoryUsage: number;
         drawCalls: number;
-        qualitySettings: any;
+        qualitySettings: QualitySettings;
     }): void {
         this.performanceHistory.push({
             timestamp: Date.now(),
@@ -206,11 +296,7 @@ class PerformancePredictor {
     }
 
     // Predict optimal quality settings
-    predictOptimalSettings(currentConditions: {
-        deviceType: 'mobile' | 'desktop';
-        batteryLevel?: number;
-        networkType?: string;
-    }): any {
+    predictOptimalSettings(currentConditions: CurrentConditions): QualitySettings {
         if (this.performanceHistory.length < 5) {
             // Not enough data, return conservative defaults
             return this.getConservativeDefaults(currentConditions.deviceType);
@@ -225,7 +311,7 @@ class PerformancePredictor {
         return this.calculateOptimalSettings(avgFps, avgMemory, currentConditions);
     }
 
-    private getConservativeDefaults(deviceType: 'mobile' | 'desktop'): any {
+    private getConservativeDefaults(deviceType: 'mobile' | 'desktop'): QualitySettings {
         if (deviceType === 'mobile') {
             return {
                 lodDistance: 25,
@@ -245,7 +331,7 @@ class PerformancePredictor {
         }
     }
 
-    private calculateOptimalSettings(avgFps: number, avgMemory: number, conditions: any): any {
+    private calculateOptimalSettings(avgFps: number, avgMemory: number, conditions: CurrentConditions): QualitySettings {
         const settings = { ...this.getConservativeDefaults(conditions.deviceType) };
 
         // Adjust based on FPS
@@ -315,7 +401,7 @@ self.onmessage = async (event) => {
             }
             break;
 
-        case 'GET_STATS':
+        case 'GET_STATS': {
             const stats = {
                 analytics: analyticsProcessor?.getStats(),
                 performanceHistory: performancePredictor ?
@@ -323,6 +409,7 @@ self.onmessage = async (event) => {
             };
             self.postMessage({ type: 'STATS_RESPONSE', stats });
             break;
+        }
 
         case 'FORCE_FLUSH':
             if (analyticsProcessor) {
