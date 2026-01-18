@@ -1,4 +1,4 @@
-import { isProd } from '../../config/env';
+import { env, isProd } from '../../config/env';
 /**
  * Log Levels with Priority System
  * Higher number = higher priority
@@ -74,7 +74,7 @@ export function shouldLog(messageLevel: LogLevel, configuredLevel: LogLevel): bo
  * Get log level from environment or default
  */
 export function getLogLevelFromEnv(): LogLevel {
-    const envLevel = process.env.LOG_LEVEL?.toUpperCase();
+    const envLevel = env.LOG_LEVEL.toUpperCase();
 
     if (envLevel && envLevel in LogLevel) {
         return LogLevel[envLevel as LogLevelName];

@@ -1,4 +1,4 @@
-import { isProd } from '../../config/env';
+import { env, isProd } from '../../config/env';
 /**
  * Console Transport - Enhanced Console Logging
  * Pretty-printed logs for development, JSON for production
@@ -272,7 +272,7 @@ export class ConsoleTransport {
  */
 export const consoleTransport = new ConsoleTransport({
     enabled: true,
-    level: (process.env['LOG_LEVEL'] as 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal') || 'info',
+    level: env.LOG_LEVEL as 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal',
     pretty: !isProd,
     colors: !isProd,
     timestamps: true,

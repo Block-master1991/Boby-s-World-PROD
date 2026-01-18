@@ -1,17 +1,14 @@
-import type { NextRequest} from 'next/server';
-import { NextResponse } from 'next/server';
+import { env } from '@/lib/config/env';
+import { initializeAdminApp } from '@/lib/firebase-admin';
 import { logger } from '@/utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import { initializeAdminApp } from '@/lib/firebase-admin';
-
-// IMPORTANT: This key should be moved to environment variables in Vercel.
-// Generate a strong, random key for production.
-const CRON_SECRET = process.env.CRON_SECRET || 'your-super-secret-key-for-testing';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
 export async function GET(request: NextRequest) {
   // 1. Authenticate the request
   const authHeader = request.headers.get('authorization');
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${env.CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 

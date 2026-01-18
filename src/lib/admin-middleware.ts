@@ -1,4 +1,4 @@
-import { isDev } from '@/lib/config/env';
+import { env, isDev } from '@/lib/config/env';
 import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
 import { auditLogger } from './audit-logger';
@@ -8,10 +8,9 @@ import { getClientIp } from './request-utils';
 import { securityIntegration } from './securityIntegration';
 import { constructSignedMessage, verifySignature } from './signature-verification';
 
-// Hardcoded Admin Wallet (Must match env var or use directly here)
-// Hardcoded Admin Wallet (Must match env var or use directly here)
-const ADMIN_WALLET_ADDRESS = process.env["NEXT_PUBLIC_ADMIN_WALLET_ADDRESS"];
-const ALLOWED_ADMIN_IPS = (process.env["ALLOWED_ADMIN_IPS"] || "").split(",").filter(Boolean);
+// Administrative configuration from validated environment
+const ADMIN_WALLET_ADDRESS = env.NEXT_PUBLIC_ADMIN_WALLET_ADDRESS;
+const ALLOWED_ADMIN_IPS = (env.ALLOWED_ADMIN_IPS || "").split(",").filter(Boolean);
 
 export interface AdminRequest extends AuthenticatedRequest {
     isAdmin: true;

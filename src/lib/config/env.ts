@@ -29,6 +29,21 @@ const envSchema = z.object({
   AWS_CLOUDFRONT_DISTRIBUTION_ID: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
+  
+  // Logging & Monitoring
+  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
+  LOG_ENCRYPTION_ENABLED: z.string().transform(v => v === 'true').optional(),
+  LOG_ENCRYPTION_KEY: z.string().optional(),
+  LOG_TAMPER_DETECTION: z.string().transform(v => v === 'true').optional(),
+  LOG_SIGNING_SECRET: z.string().optional(),
+
+  // Security & Admin
+  CRON_SECRET: z.string().optional(),
+  ADMIN_TOKEN: z.string().optional(),
+  ALLOWED_ADMIN_IPS: z.string().optional(),
+  
+  // Infrastructure
+  REDIS_CLUSTER_MODE: z.string().transform(v => v === 'true').optional(),
 
   // Client-side / Public variables (Must be prefixed with NEXT_PUBLIC_)
   NEXT_PUBLIC_SOLANA_RPC_URL: z.string().url().default('https://api.mainnet-beta.solana.com'),
@@ -43,6 +58,8 @@ const envSchema = z.object({
   NEXT_PUBLIC_FIREBASE_APP_ID: z.string().optional(),
   NEXT_PUBLIC_CDN_BASE_URL: z.string().url().default('https://cdn.bobyworld.com'),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
+  NEXT_PUBLIC_VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
+  NEXT_PUBLIC_VERCEL_URL: z.string().optional(),
 });
 
 // Parse and validate process.env
@@ -64,6 +81,12 @@ export const env = _env.success ? _env.data : (process.env as unknown as z.infer
  * Smart environment detection
  */
 export const getAppEnv = (): AppEnv => {
+  // 1. Explicit Vercel environment (preferred for Vercel deployments)
+  if (process.env['NEXT_PUBLIC_VERCEL_ENV']) {
+    return process.env['NEXT_PUBLIC_VERCEL_ENV'] as AppEnv;
+  }
+
+  // 2. Client-side host detection
   if (typeof window !== 'undefined') {
     const { host } = window.location;
     if (host.includes('localhost') || host.includes('127.0.0.1')) return 'development';
@@ -71,6 +94,7 @@ export const getAppEnv = (): AppEnv => {
     return 'production';
   }
   
+  // 3. Fallback to NODE_ENV
   if (process.env.NODE_ENV === 'test') return 'test';
   if (process.env.NODE_ENV === 'development') return 'development';
   return 'production';
@@ -110,6 +134,37 @@ export const getAppDomain = (requestHost?: string): string => {
   } catch {
     return 'localhost';
   }
+};
+
+/**
+ * Smart base domain detection (e.g., example.com from sub.example.com)
+ * Used for cookies and WebAuthn RPID
+ */
+export const getAppBaseDomain = (requestHost?: string): string => {
+  const domain = getAppDomain(requestHost);
+  
+  if (domain === 'localhost' || domain === '127.0.0.1') {
+    return 'localhost';
+  }
+
+  // Handle tunneling services
+  if (domain.includes('ngrok-free.app') || domain.includes('ngrok.io')) {
+    return domain;
+  }
+
+  // Handle Vercel subdomains (e.g., something.vercel.app)
+  // We MUST NOT use .vercel.app as a base domain because it's a public suffix
+  if (domain.endsWith('.vercel.app')) {
+    return domain;
+  }
+
+  const parts = domain.split('.');
+  if (parts.length >= 2) {
+    // Basic TLD check (simplified)
+    return parts.slice(-2).join('.');
+  }
+  
+  return domain;
 };
 
 /**

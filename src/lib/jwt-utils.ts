@@ -1,7 +1,7 @@
 import { logger } from '@/utils/logger';
 import { createHash, randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
-import { isProd } from './config/env';
+import { getAppBaseDomain, isProd } from './config/env';
 import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './server-constants';
 import { TokenBlacklistManager } from './token-blacklist';
 
@@ -265,17 +265,17 @@ export class JWTManager {
     let cookieDomain: string | undefined = undefined;
 
     if (requestHost) {
-      // Extract base domain from host (e.g., "divine-bedbug-valued.ngrok-free.app:443" -> "divine-bedbug-valued.ngrok-free.app")
+      const baseDomain = getAppBaseDomain(requestHost);
       const hostWithoutPort = requestHost.split(':')[0] ?? requestHost;
-      // For ngrok or other cross-origin development, we need SameSite=None and Secure=true
-      // if the request is coming from an HTTPS origin.
-      // We assume if requestHost is provided, it's the public-facing domain.
-      if (hostWithoutPort.includes('ngrok')) { // Specific check for ngrok in dev
+      
+      // For ngrok or other cross-origin development
+      if (hostWithoutPort.includes('ngrok')) {
         secureCookie = true;
         sameSiteValue = 'none';
-        cookieDomain = hostWithoutPort; // Set domain for cross-origin cookies
-      } else if (isProd) {
-        cookieDomain = hostWithoutPort; // In production, set domain to host
+        cookieDomain = hostWithoutPort;
+      } else if (baseDomain !== 'localhost') {
+        // Use leading dot for cross-subdomain support in production/staging
+        cookieDomain = `.${baseDomain}`;
       }
     }
 

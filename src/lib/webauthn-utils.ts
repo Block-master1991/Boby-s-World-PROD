@@ -1,5 +1,6 @@
 import { logger } from '@/utils/logger';
 import { createHash, randomBytes } from 'crypto';
+import { getAppBaseDomain } from './config/env';
 
 // Authenticator Metadata Mapping (MDS) - List of some popular device definitions
 const AUTHENTICATOR_METADATA: Record<string, string> = {
@@ -87,23 +88,7 @@ export class WebAuthnUtils {
      * Get Relying Party ID - supports subdomains
      */
     public static getRPID(host: string): string {
-        // Strip port if present
-        const [domain] = host.split(':');
-        
-        if (!domain) return 'localhost';
-
-        if (domain.includes('localhost')) return 'localhost';
-
-        // 🚀 Special handling for ngrok and tunneling services to avoid SecurityError
-        if (domain.includes('ngrok-free.app') || domain.includes('ngrok.io')) {
-            return domain;
-        }
-
-        const parts = domain.split('.');
-        if (parts.length >= 2) {
-            return parts.slice(-2).join('.');
-        }
-        return domain;
+        return getAppBaseDomain(host);
     }
 
     /**

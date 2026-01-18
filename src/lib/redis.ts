@@ -1,7 +1,7 @@
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis';
 import Redis from 'ioredis';
 import { logger } from 'utils/logger';
-import { isDev } from './config/env';
+import { env, isDev } from './config/env';
 
 let redisInstance: Redis | Cluster | null = null;
 
@@ -69,10 +69,10 @@ const getStandardOptions = (tlsOptions: object): RedisOptions => ({
 });
 
 const getRedis = (): Redis | Cluster => {
-    if (!redisInstance && process.env.REDIS_URL) {
+    if (!redisInstance && env.REDIS_URL) {
         try {
-            const connectionUrl = sanitizeRedisUrl(process.env.REDIS_URL);
-            const isCluster = process.env.REDIS_CLUSTER_MODE === 'true';
+            const connectionUrl = sanitizeRedisUrl(env.REDIS_URL);
+            const isCluster = env.REDIS_CLUSTER_MODE;
             const isTls = connectionUrl.startsWith('rediss://');
 
             // Common TLS options
