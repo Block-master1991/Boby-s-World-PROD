@@ -12,7 +12,7 @@ export class WorkerManager {
     if (this.isBrowser) {
       for (let i = 0; i < this.MAX_WORKERS; i++) {
         // Updated to use the correct path for the production worker
-        const worker = new Worker(new URL('../workers/modelProcessor.worker.ts', import.meta.url));
+        const worker = new Worker(new URL('../../workers/modelProcessor.worker.ts', import.meta.url));
         worker.onmessage = this._onWorkerMessage.bind(this);
         this.workers.push(worker);
       }
