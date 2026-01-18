@@ -12,29 +12,30 @@ export const USDC_MINT_ADDRESS = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
 export const SOL_TOKEN_MINT_ADDRESS = 'So11111111111111111111111111111111111111112';
 // 1 Billion Lamports per SOL
 export const LAMPORTS_PER_SOL = 1_000_000_000;
+import { env, isProd } from './config/env';
+
 // Default Public Mainnet-beta RPC
-export const SOL_NETWORK = process.env.NEXT_PUBLIC_SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+export const SOL_NETWORK = env.NEXT_PUBLIC_SOLANA_RPC_URL;
 
-export const RECAPTCHA_SITE_KEY = process.env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
+export const RECAPTCHA_SITE_KEY = env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY;
 
-export const STORE_TREASURY_WALLET_ADDRESS = process.env.NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS;
+export const STORE_TREASURY_WALLET_ADDRESS = env.NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS;
 
-export const ADMIN_WALLET_ADDRESS = process.env.NEXT_PUBLIC_ADMIN_WALLET_ADDRESS;
+export const ADMIN_WALLET_ADDRESS = env.NEXT_PUBLIC_ADMIN_WALLET_ADDRESS;
 
+export const FIREBASE_PROJECT_ID = env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
 
-export const FIREBASE_PROJECT_ID = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID;
+export const FIREBASE_API_KEY = env.NEXT_PUBLIC_FIREBASE_API_KEY;
 
-export const FIREBASE_API_KEY = process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+export const FIREBASE_AUTH_DOMAIN = env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
 
-export const FIREBASE_AUTH_DOMAIN = process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN;
+export const FIREBASE_STORAGE_BUCKET = env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
 
-export const FIREBASE_STORAGE_BUCKET = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+export const FIREBASE_MESSAGING_SENDER_ID = env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID;
 
-export const FIREBASE_MESSAGING_SENDER_ID = process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID;
+export const FIREBASE_APP_ID = env.NEXT_PUBLIC_FIREBASE_APP_ID;
 
-export const FIREBASE_APP_ID = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
-
-export const {JUPITER_API_KEY} = process.env;
+export const { JUPITER_API_KEY } = env;
 
 // World boundaries and enemy protection radius
 // Note: World bounds optimized for performance while maintaining infinite feel
@@ -115,20 +116,20 @@ export const ASSET_COMPRESSION_CONFIG = {
 
 // CDN Configuration
 export const CDN_CONFIG = {
-  enabled: process.env.NODE_ENV === 'production',
+  enabled: isProd,
   primaryProvider: 'cloudflare', // cloudflare, aws, vercel
 
   cloudflare: {
-    zoneId: process.env.CLOUDFLARE_ZONE_ID,
-    apiToken: process.env.CLOUDFLARE_API_TOKEN,
-    baseUrl: 'https://cdn.bobyworld.com',
+    zoneId: env.CLOUDFLARE_ZONE_ID,
+    apiToken: env.CLOUDFLARE_API_TOKEN,
+    baseUrl: env.NEXT_PUBLIC_CDN_BASE_URL,
     regions: ['us-east-1', 'eu-west-1', 'asia-east-1']
   },
 
   aws: {
-    cloudFrontDistributionId: process.env.AWS_CLOUDFRONT_DISTRIBUTION_ID,
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    cloudFrontDistributionId: env.AWS_CLOUDFRONT_DISTRIBUTION_ID,
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
     region: 'us-east-1',
     bucketName: 'boby-world-assets'
   },
@@ -170,7 +171,7 @@ export const BUILD_ASSET_PROCESSING = {
   },
 
   cdn: {
-    uploadAfterBuild: process.env.NODE_ENV === 'production',
+    uploadAfterBuild: isProd,
     invalidateOldAssets: true,
     generateCDNManifest: true
   }

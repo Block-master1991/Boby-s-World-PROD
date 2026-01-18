@@ -1,11 +1,6 @@
 import { logger } from '@/utils/logger';
 
-const CDN_CONFIG = {
-    enabled: true,
-    cloudflare: {
-        baseUrl: 'https://cdn.example.com' // Placeholder
-    }
-};
+import { CDN_CONFIG } from '@/lib/config/env';
 
 /* eslint-disable @typescript-eslint/no-unused-vars */
 export class CDNManager {
@@ -39,6 +34,6 @@ export class CDNManager {
 
     getOptimalAssetUrl(assetPath: string): string {
         if (!CDN_CONFIG.enabled) return assetPath;
-        return `${CDN_CONFIG.cloudflare.baseUrl}/${assetPath}`;
+        return `${CDN_CONFIG.baseUrl}/${assetPath}`;
     }
 }
