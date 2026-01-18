@@ -3,7 +3,31 @@
  * Provides capabilities to filter and search logs
  */
 
-import { enhancedAuditLogger, type EnhancedAuditLogEntry } from '../specialized/EnhancedAuditLogger';
+export interface LogEntry {
+    timestamp: number;
+    level: string;
+    message: string;
+    metadata?: {
+        userId?: string;
+        ipAddress?: string;
+        latency?: number;
+        path?: string;
+        correlationId?: string;
+    };
+    eventType?: string;
+    _type?: string;
+}
+
+export interface LogStats {
+    totalLogs: number;
+    errors: number;
+    warnings: number;
+    avgLatency: number;
+    recentActivity: Array<{
+        time: string;
+        count: number;
+    }>;
+}
 
 export interface LogQueryFilters {
     level?: string;
@@ -18,7 +42,7 @@ export interface LogQueryFilters {
 }
 
 export interface LogQueryResult {
-    logs: any[];
+    logs: LogEntry[];
     total: number;
     scannedCount: number;
 }
@@ -27,16 +51,16 @@ export interface LogQueryResult {
  * Abstract Log Storage Backend
  */
 export interface LogStorageBackend {
-    query(filters: LogQueryFilters): Promise<LogQueryResult>;
-    save(log: any): Promise<void>;
-    getStats(): Promise<any>;
+    query(filters: LogQueryFilters): LogQueryResult;
+    save(log: LogEntry): void;
+    getStats(): LogStats;
 }
 
 /**
  * Memory Storage Backend (For Dev/Testing)
  */
 export class MemoryLogStorage implements LogStorageBackend {
-    private logs: any[] = [];
+    private logs: LogEntry[] = [];
     private maxLogs = 10000;
 
     constructor() {
@@ -44,19 +68,19 @@ export class MemoryLogStorage implements LogStorageBackend {
         this.generateMockData();
     }
 
-    async getStats(): Promise<any> {
-        const stats = {
+    getStats(): LogStats {
+        const stats: LogStats = {
             totalLogs: this.logs.length,
             errors: this.logs.filter(l => l.level === 'error').length,
             warnings: this.logs.filter(l => l.level === 'warn').length,
             avgLatency: 0,
-            recentActivity: [] as any[]
+            recentActivity: []
         };
 
         // Calc avg latency for performance logs
         const perfLogs = this.logs.filter(l => l.metadata?.latency);
         if (perfLogs.length > 0) {
-            const sum = perfLogs.reduce((acc, l) => acc + l.metadata.latency, 0);
+            const sum = perfLogs.reduce((acc, l) => acc + l.metadata!.latency!, 0);
             stats.avgLatency = Math.round(sum / perfLogs.length);
         }
 
@@ -77,7 +101,7 @@ export class MemoryLogStorage implements LogStorageBackend {
             .map(([h, count]) => ({ hour: h, count }))
             .sort((a, b) => a.hour - b.hour)
             .map(item => ({
-                time: new Date(item.hour * 3600000).getHours() + ':00',
+                time: `${new Date(item.hour * 3600000).getHours()}:00`,
                 count: item.count
             }));
 
@@ -97,7 +121,7 @@ export class MemoryLogStorage implements LogStorageBackend {
 
             this.logs.push({
                 timestamp: now - timeOffset,
-                level: isError ? 'error' : levels[Math.floor(Math.random() * levels.length)],
+                level: isError ? 'error' : levels[Math.floor(Math.random() * levels.length)]!,
                 message: `Sample Log Entry #${i}`,
                 metadata: {
                     userId: `user_${Math.floor(Math.random() * 10)}`,
@@ -105,8 +129,8 @@ export class MemoryLogStorage implements LogStorageBackend {
                     latency: Math.floor(Math.random() * 200),
                     path: '/api/test'
                 },
-                eventType: events[Math.floor(Math.random() * events.length)],
-                _type: types[Math.floor(Math.random() * types.length)]
+                eventType: events[Math.floor(Math.random() * events.length)]!,
+                _type: types[Math.floor(Math.random() * types.length)]!
             });
         }
 
@@ -114,21 +138,21 @@ export class MemoryLogStorage implements LogStorageBackend {
         this.logs.sort((a, b) => b.timestamp - a.timestamp);
     }
 
-    async save(log: any): Promise<void> {
+    save(log: LogEntry): void {
         this.logs.unshift(log);
         if (this.logs.length > this.maxLogs) {
             this.logs.pop();
         }
     }
 
-    async query(filters: LogQueryFilters): Promise<LogQueryResult> {
+    query(filters: LogQueryFilters): LogQueryResult {
         let filtered = this.logs;
 
         if (filters.level && filters.level !== 'all') {
             filtered = filtered.filter(l => l.level === filters.level);
         }
         if (filters.userId) {
-            filtered = filtered.filter(l => l.metadata?.userId?.includes(filters.userId));
+            filtered = filtered.filter(l => l.metadata?.userId && l.metadata.userId.includes(filters.userId!));
         }
         if (filters.correlationId) {
             filtered = filtered.filter(l => l.metadata?.correlationId === filters.correlationId);
@@ -185,17 +209,17 @@ export class LogQueryService {
         this.backend = backend;
     }
 
-    async search(filters: LogQueryFilters): Promise<LogQueryResult> {
+    search(filters: LogQueryFilters): LogQueryResult {
         return this.backend.query(filters);
     }
 
-    async getStats(): Promise<any> {
+    getStats(): LogStats {
         return this.backend.getStats();
     }
 
     // Helper to add logs from anywhere
-    async ingest(log: any) {
-        await this.backend.save(log);
+    ingest(log: LogEntry): void {
+        this.backend.save(log);
     }
 }
 

@@ -1,6 +1,5 @@
 
-import { encryptData, decryptData } from '../src/utils/encryption';
-import CryptoJS from 'crypto-js';
+import { decryptData, encryptData } from '../src/utils/encryption';
 
 const colors = {
     reset: "\x1b[0m",
@@ -64,8 +63,11 @@ try {
 
     // Tamper with the ciphertext (middle part)
     // We change the last character of the ciphertext
-    const tamperedCipher = parts[1].substring(0, parts[1].length - 4) + "AAAA";
-    const tamperedPayload = `${parts[0]}:${tamperedCipher}:${parts[2]}`; // Keep valid signature
+    // Tamper with the ciphertext (middle part)
+    // We change the last character of the ciphertext
+    const cipherPart = parts[1] ?? '';
+    const tamperedCipher = `${cipherPart.substring(0, cipherPart.length - 4)  }AAAA`;
+    const tamperedPayload = `${parts[0] ?? ''}:${tamperedCipher}:${parts[2] ?? ''}`; // Keep valid signature
 
     // NOTE: In our implementation, we sign (IV:Ciphertext).
     // So if Ciphertext changes, the signature MUST mismatch.

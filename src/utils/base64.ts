@@ -31,7 +31,10 @@ export function uint8ArrayToBase64url(bytes: Uint8Array | Buffer): string {
     let binary = '';
     const len = bytes.byteLength;
     for (let i = 0; i < len; i++) {
-        binary += String.fromCharCode(bytes[i]);
+        const byte = bytes[i];
+        if (byte !== undefined) {
+            binary += String.fromCharCode(byte);
+        }
     }
 
     // Encode to base64

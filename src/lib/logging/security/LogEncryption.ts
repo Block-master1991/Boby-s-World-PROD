@@ -1,18 +1,24 @@
-/**
- * Log Encryption - AES-256-GCM Encryption for Sensitive Logs
- * Encrypts sensitive log data before storage
- */
+import type { EncryptedData, EncryptionConfig, ILogEncryption } from './EncryptionTypes';
 
-import { createCipheriv, createDecipheriv, randomBytes, createHash } from 'crypto';
-import { professionalLogger } from '../index';
+import { professionalLogger } from '../logger-instance';
 
-export interface EncryptionConfig {
-    enabled: boolean;
-    algorithm?: string;
-    keyDerivation?: 'pbkdf2' | 'direct';
-    encryptedFields?: string[];
-    keyRotationDays?: number;
-}
+// Lazy logger accessor not strictly needed with ESM live bindings, 
+// but we keep a helper if we want to ensure it's available or mock it.
+const getLogger = () => professionalLogger;
+
+// Safe cross-runtime crypto detection (Node, Browser, Edge)
+const getCrypto = () => {
+    try {
+        if (typeof window === 'undefined') {
+            // Node/Edge environment: Use eval to prevent Webpack from bundling node:crypto for Edge Runtime
+            // eslint-disable-next-line no-eval
+            return eval('require("node:crypto")');
+        }
+        return window.crypto || null;
+    } catch {
+        return null;
+    }
+};
 
 const DEFAULT_CONFIG: EncryptionConfig = {
     enabled: false,
@@ -23,23 +29,11 @@ const DEFAULT_CONFIG: EncryptionConfig = {
 };
 
 /**
- * Encrypted data structure
- */
-export interface EncryptedData {
-    encrypted: string;      // Base64 encoded encrypted data
-    iv: string;            // Base64 encoded IV
-    authTag: string;       // Base64 encoded auth tag
-    algorithm: string;     // Algorithm used
-    keyId?: string;        // Key identifier (for rotation)
-    timestamp: number;     // Encryption timestamp
-}
-
-/**
  * Log Encryption Class
  */
-export class LogEncryption {
+export class LogEncryption implements ILogEncryption {
     private config: EncryptionConfig;
-    private masterKey: Buffer | null = null;
+    private masterKey: Buffer | Uint8Array | null = null;
     private keyId: string;
     private keyCreatedAt: number;
 
@@ -47,124 +41,70 @@ export class LogEncryption {
         this.config = { ...DEFAULT_CONFIG, ...config };
         this.keyId = this.generateKeyId();
         this.keyCreatedAt = Date.now();
-
-        // Initialize master key
-        if (this.config.enabled) {
-            this.initializeMasterKey();
-        }
+        if (this.config.enabled) this.initializeMasterKey();
     }
 
-    /**
-     * Initialize master encryption key
-     */
     private initializeMasterKey(): void {
-        // Get key from environment or generate one
-        const envKey = process.env.LOG_ENCRYPTION_KEY;
-
+        const envKey = process.env['LOG_ENCRYPTION_KEY'];
         if (envKey) {
-            // Derive key from environment variable
             this.masterKey = this.deriveKey(envKey);
         } else {
-            // Only warn on server-side to avoid browser console spam
             if (typeof window === 'undefined') {
                 // eslint-disable-next-line no-console
                 console.warn('[LogEncryption] No LOG_ENCRYPTION_KEY found. Generating temporary key. THIS IS NOT SECURE FOR PRODUCTION!');
             }
-            this.masterKey = randomBytes(32); // 256 bits
+            const cryptoModule = getCrypto();
+            this.masterKey = cryptoModule?.randomBytes ? cryptoModule.randomBytes(32) : null;
         }
     }
 
-    /**
-     * Derive encryption key from password/secret
-     */
-    private deriveKey(secret: string, salt?: Buffer): Buffer {
+    private deriveKey(secret: string, salt?: Buffer | Uint8Array): Buffer | Uint8Array | null {
+        const cryptoModule = getCrypto();
+        if (!cryptoModule) return null;
+        
         if (this.config.keyDerivation === 'direct') {
-            // Direct: hash the secret to get 256-bit key
-            return createHash('sha256').update(secret).digest();
+            return cryptoModule.createHash('sha256').update(secret).digest();
         }
 
-        // PBKDF2: more secure key derivation
-        const crypto = require('crypto');
-        const usedSalt = salt || Buffer.from('boby-world-logs'); // Default salt (should be unique per app)
-
-        return crypto.pbkdf2Sync(
-            secret,
-            usedSalt,
-            100000, // iterations
-            32,     // key length (256 bits)
-            'sha256'
-        );
+        const usedSalt = salt || Buffer.from('boby-world-logs');
+        return cryptoModule.pbkdf2Sync(secret, usedSalt, 100000, 32, 'sha256');
     }
 
-    /**
-     * Generate unique key ID
-     */
     private generateKeyId(): string {
         return `key-${Date.now()}-${Math.random().toString(36).substring(2, 10)}`;
     }
 
-    /**
-     * Check if key rotation is needed
-     */
     private needsKeyRotation(): boolean {
-        if (!this.config.keyRotationDays) {
-            return false;
-        }
-
+        if (!this.config.keyRotationDays) return false;
         const daysSinceCreation = (Date.now() - this.keyCreatedAt) / (1000 * 60 * 60 * 24);
         return daysSinceCreation >= this.config.keyRotationDays;
     }
 
-    /**
-     * Rotate encryption key
-     */
     rotateKey(): void {
-        if (!this.config.enabled) {
-            return;
-        }
-
-        professionalLogger.warn('[LogEncryption] Rotating encryption key');
+        if (!this.config.enabled) return;
+        getLogger().warn('[LogEncryption] Rotating encryption key');
         this.keyId = this.generateKeyId();
         this.keyCreatedAt = Date.now();
         this.initializeMasterKey();
     }
 
-    /**
-     * Encrypt data
-     */
     encrypt(data: string | object): EncryptedData | null {
-        if (!this.config.enabled || !this.masterKey) {
-            return null;
-        }
-
+        if (!this.config.enabled || !this.masterKey) return null;
         try {
-            // Check for key rotation
-            if (this.needsKeyRotation()) {
-                this.rotateKey();
-            }
-
-            // Convert data to string if needed
+            if (this.needsKeyRotation()) this.rotateKey();
             const plaintext = typeof data === 'string' ? data : JSON.stringify(data);
+            const cryptoModule = getCrypto();
+            if (!cryptoModule?.createCipheriv) return null;
 
-            // Generate random IV (Initialization Vector)
-            const iv = randomBytes(16); // 128 bits for GCM
+            const iv = cryptoModule.randomBytes(16);
+            const cipher = cryptoModule.createCipheriv(this.config.algorithm!, this.masterKey, iv);
 
-            // Create cipher
-            const cipher = createCipheriv(
-                this.config.algorithm!,
-                this.masterKey,
-                iv
-            ) as any; // Type assertion needed for getAuthTag
-
-            // Encrypt
             let encrypted = cipher.update(plaintext, 'utf8', 'base64');
             encrypted += cipher.final('base64');
-
-            // Get auth tag (GCM mode)
             const authTag = cipher.getAuthTag();
 
             return {
-                encrypted: encrypted,
+                encrypted,
                 iv: iv.toString('base64'),
                 authTag: authTag.toString('base64'),
                 algorithm: this.config.algorithm!,
@@ -172,143 +112,85 @@ export class LogEncryption {
                 timestamp: Date.now()
             };
         } catch (error) {
-            professionalLogger.error('[LogEncryption] Encryption failed', error);
+            getLogger().error('[LogEncryption] Encryption failed', error);
             return null;
         }
     }
 
-    /**
-     * Decrypt data
-     */
     decrypt(encryptedData: EncryptedData): string | null {
-        if (!this.config.enabled || !this.masterKey) {
-            return null;
-        }
-
+        if (!this.config.enabled || !this.masterKey) return null;
         try {
-            // Convert from base64
-            const iv = Buffer.from(encryptedData.iv, 'base64');
-            const authTag = Buffer.from(encryptedData.authTag, 'base64');
-            const encrypted = encryptedData.encrypted;
+            const { iv: ivB64, authTag: authTagB64, encrypted, algorithm } = encryptedData;
+            const iv = Buffer.from(ivB64, 'base64');
+            const authTag = Buffer.from(authTagB64, 'base64');
 
-            // Create decipher
-            const decipher = createDecipheriv(
-                encryptedData.algorithm,
-                this.masterKey,
-                iv
-            ) as any; // Type assertion needed for setAuthTag
+            const cryptoModule = getCrypto();
+            if (!cryptoModule?.createDecipheriv) return null;
 
-            // Set auth tag
+            const decipher = cryptoModule.createDecipheriv(algorithm, this.masterKey, iv);
             decipher.setAuthTag(authTag);
 
-            // Decrypt
             let decrypted = decipher.update(encrypted, 'base64', 'utf8');
             decrypted += decipher.final('utf8');
-
             return decrypted;
         } catch (error) {
-            professionalLogger.error('[LogEncryption] Decryption failed', error);
+            getLogger().error('[LogEncryption] Decryption failed', error);
             return null;
         }
     }
 
-    /**
-     * Encrypt specific fields in an object
-     */
-    encryptFields(data: any): any {
-        if (!this.config.enabled || !data || typeof data !== 'object') {
-            return data;
-        }
-
-        const result = Array.isArray(data) ? [...data] : { ...data };
+    encryptFields<T>(data: T): T {
+        if (!this.config.enabled || !data || typeof data !== 'object') return data;
+        const result = (Array.isArray(data) ? [...data] : { ...data }) as Record<string, unknown> | unknown[];
 
         for (const [key, value] of Object.entries(result)) {
-            // Check if this field should be encrypted
             if (this.shouldEncryptField(key)) {
                 if (value !== null && value !== undefined) {
-                    const encrypted = this.encrypt(value);
+                    const encrypted = this.encrypt(value as string | object);
                     if (encrypted) {
-                        result[key] = {
-                            _encrypted: true,
-                            ...encrypted
-                        };
+                        (result as Record<string, unknown>)[key] = { _encrypted: true, ...encrypted };
                     }
                 }
             } else if (typeof value === 'object' && value !== null) {
-                // Recursively encrypt nested objects
-                result[key] = this.encryptFields(value);
+                (result as Record<string, unknown>)[key] = this.encryptFields(value);
             }
         }
-
-        return result;
+        return result as T;
     }
 
-    /**
-     * Decrypt specific fields in an object
-     */
-    decryptFields(data: any): any {
-        if (!this.config.enabled || !data || typeof data !== 'object') {
-            return data;
-        }
-
-        const result = Array.isArray(data) ? [...data] : { ...data };
+    decryptFields<T>(data: T): T {
+        if (!this.config.enabled || !data || typeof data !== 'object') return data;
+        const result = (Array.isArray(data) ? [...data] : { ...data }) as Record<string, unknown> | unknown[];
 
         for (const [key, value] of Object.entries(result)) {
             if (this.isEncryptedField(value)) {
-                // Decrypt this field
                 const decrypted = this.decrypt(value as EncryptedData);
                 if (decrypted) {
                     try {
-                        // Try to parse as JSON
-                        result[key] = JSON.parse(decrypted);
+                        (result as Record<string, unknown>)[key] = JSON.parse(decrypted);
                     } catch {
-                        // Keep as string
-                        result[key] = decrypted;
+                        (result as Record<string, unknown>)[key] = decrypted;
                     }
                 }
             } else if (typeof value === 'object' && value !== null) {
-                // Recursively decrypt nested objects
-                result[key] = this.decryptFields(value);
+                (result as Record<string, unknown>)[key] = this.decryptFields(value);
             }
         }
-
-        return result;
+        return result as T;
     }
 
-    /**
-     * Check if a field should be encrypted
-     */
     private shouldEncryptField(fieldName: string): boolean {
         const normalized = fieldName.toLowerCase();
-        return this.config.encryptedFields?.some(field =>
-            normalized.includes(field.toLowerCase())
-        ) || false;
+        return this.config.encryptedFields?.some(field => normalized.includes(field.toLowerCase())) || false;
     }
 
-    /**
-     * Check if a value is an encrypted field
-     */
-    private isEncryptedField(value: any): boolean {
-        return (
-            typeof value === 'object' &&
-            value !== null &&
-            value._encrypted === true &&
-            'encrypted' in value &&
-            'iv' in value &&
-            'authTag' in value
-        );
+    private isEncryptedField(value: unknown): boolean {
+        const val = value as Record<string, unknown>;
+        return typeof val === 'object' && val !== null && val['_encrypted'] === true && 'encrypted' in val && 'iv' in val && 'authTag' in val;
     }
 
-    /**
-     * Export encrypted data as string (for storage)
-     */
-    exportEncrypted(encryptedData: EncryptedData): string {
-        return JSON.stringify(encryptedData);
-    }
+    exportEncrypted(encryptedData: EncryptedData): string { return JSON.stringify(encryptedData); }
 
-    /**
-     * Import encrypted data from string
-     */
     importEncrypted(encryptedString: string): EncryptedData | null {
         try {
             return JSON.parse(encryptedString) as EncryptedData;
@@ -317,44 +199,19 @@ export class LogEncryption {
         }
     }
 
-    /**
-     * Update configuration
-     */
     updateConfig(config: Partial<EncryptionConfig>): void {
         this.config = { ...this.config, ...config };
-
-        if (this.config.enabled && !this.masterKey) {
-            this.initializeMasterKey();
-        }
+        if (this.config.enabled && !this.masterKey) this.initializeMasterKey();
     }
 
-    /**
-     * Get current key ID
-     */
-    getCurrentKeyId(): string {
-        return this.keyId;
-    }
+    getCurrentKeyId(): string { return this.keyId; }
 }
 
-/**
- * Default instance - only created on server side
- */
 const isServer = typeof window === 'undefined';
 export const defaultEncryption = new LogEncryption({
-    enabled: isServer && process.env.LOG_ENCRYPTION_ENABLED === 'true',
+    enabled: isServer && process.env['LOG_ENCRYPTION_ENABLED'] === 'true',
     algorithm: 'aes-256-gcm'
 });
 
-/**
- * Helper function for quick encryption
- */
-export function encryptLog(data: string | object): EncryptedData | null {
-    return defaultEncryption.encrypt(data);
-}
-
-/**
- * Helper function for quick decryption
- */
-export function decryptLog(encryptedData: EncryptedData): string | null {
-    return defaultEncryption.decrypt(encryptedData);
-}
+export function encryptLog(data: string | object): EncryptedData | null { return defaultEncryption.encrypt(data); }
+export function decryptLog(encryptedData: EncryptedData): string | null { return defaultEncryption.decrypt(encryptedData); }

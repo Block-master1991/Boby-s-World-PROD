@@ -4,17 +4,30 @@
  * Syncs with GAME_ASSET_MANIFEST to ensure data integrity.
  */
 
+import crypto from 'crypto';
 import 'dotenv/config';
 import fs from 'fs';
 import path from 'path';
-import crypto from 'crypto';
-import { professionalLogger } from '../src/lib/logging';
-import { GAME_ASSET_MANIFEST } from '../src/lib/gameAssetManifest';
-import type { AssetInfo } from '../src/lib/gameAssetManifest';
+import type { AssetInfo } from '../src/lib/gameAssetManifest.js';
+import { GAME_ASSET_MANIFEST } from '../src/lib/gameAssetManifest.js';
+import { professionalLogger } from '../src/lib/logging/index.js';
 
 // Configuration
 const PUBLIC_DIR = path.join(process.cwd(), 'public');
 const OUTPUT_PATH = path.join(process.cwd(), 'scripts', 'measured-assets.json');
+
+interface MeasurementResult extends AssetInfo {
+    exists: boolean;
+    error?: string;
+}
+
+interface SummaryStats {
+    total: number;
+    found: number;
+    missing: number;
+    estimatedTotalMB: number;
+    actualTotalMB: number;
+}
 
 /**
  * Calculate SHA-256 hash for a file
@@ -32,14 +45,14 @@ function calculateSHA256(filePath: string): Promise<string> {
 /**
  * Measure a single asset
  */
-async function measureAsset(asset: AssetInfo): Promise<any> {
+async function measureAsset(asset: AssetInfo): Promise<MeasurementResult> {
     const fullPath = path.join(PUBLIC_DIR, asset.path);
 
     if (!fs.existsSync(fullPath)) {
         return {
             ...asset,
             exists: false,
-            error: 'File not found at ' + fullPath
+            error: `File not found at ${fullPath}`
         };
     }
 
@@ -55,69 +68,51 @@ async function measureAsset(asset: AssetInfo): Promise<any> {
             actualSizeMB: Math.round(actualSizeMB * 1000) / 1000,
             lastModified: stats.mtime.toISOString()
         };
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         return {
             ...asset,
             exists: false,
-            error: error.message
+            error: errorMessage
         };
     }
 }
 
-/**
- * Main measurement function
- */
-async function measureAllAssets() {
-    const correlationId = `asset-measure-${Date.now()}`;
-    professionalLogger.info('--- Asset Measurement & Verification Started ---', { correlationId });
-
-    const results: any[] = [];
-    let stats = {
-        total: GAME_ASSET_MANIFEST.length,
-        found: 0,
-        missing: 0,
-        estimatedTotalMB: 0,
-        actualTotalMB: 0
-    };
-
-    for (const asset of GAME_ASSET_MANIFEST) {
-        professionalLogger.debug(`Measuring: ${asset.path}`, { correlationId });
-        const measurement = await measureAsset(asset);
+function processMeasurement(measurement: MeasurementResult, summary: SummaryStats, correlationId: string) {
+    if (measurement.exists) {
+        summary.found++;
+        summary.estimatedTotalMB += measurement.estimatedSizeMB;
+        summary.actualTotalMB += (measurement.actualSizeMB || 0);
         
-        if (measurement.exists) {
-            stats.found++;
-            stats.estimatedTotalMB += asset.estimatedSizeMB;
-            stats.actualTotalMB += (measurement.actualSizeMB || 0);
-            
-            const diff = (measurement.actualSizeMB || 0) - asset.estimatedSizeMB;
-            const percentDiff = (diff / asset.estimatedSizeMB) * 100;
-            
-            if (Math.abs(percentDiff) > 20) {
-                professionalLogger.warn(`Significant size discrepancy for ${asset.path}`, {
-                    correlationId,
-                    estimated: asset.estimatedSizeMB,
-                    actual: measurement.actualSizeMB,
-                    diffPercent: percentDiff.toFixed(2) + '%'
-                });
-            }
-        } else {
-            stats.missing++;
-            professionalLogger.error(`Missing asset detected: ${asset.path}`, { 
-                correlationId, 
-                error: measurement.error 
+        const diff = (measurement.actualSizeMB || 0) - measurement.estimatedSizeMB;
+        const percentDiff = (diff / measurement.estimatedSizeMB) * 100;
+        
+        if (Math.abs(percentDiff) > 20) {
+            professionalLogger.warn(`Significant size discrepancy for ${measurement.path}`, {
+                correlationId,
+                estimated: measurement.estimatedSizeMB,
+                actual: measurement.actualSizeMB,
+                diffPercent: `${percentDiff.toFixed(2)}%`
             });
         }
-        results.push(measurement);
+    } else {
+        summary.missing++;
+        professionalLogger.error(`Missing asset detected: ${measurement.path}`, { 
+            correlationId, 
+            error: measurement.error 
+        });
     }
+}
 
-    const accuracy = stats.estimatedTotalMB > 0 
-        ? ((1 - Math.abs(stats.actualTotalMB - stats.estimatedTotalMB) / stats.estimatedTotalMB) * 100).toFixed(2)
+function saveResults(results: MeasurementResult[], summary: SummaryStats, correlationId: string) {
+    const accuracy = summary.estimatedTotalMB > 0 
+        ? ((1 - Math.abs(summary.actualTotalMB - summary.estimatedTotalMB) / summary.estimatedTotalMB) * 100).toFixed(2)
         : '0';
 
     const outputData = {
         measuredAt: new Date().toISOString(),
         summary: {
-            ...stats,
+            ...summary,
             accuracy: parseFloat(accuracy)
         },
         assets: results
@@ -131,11 +126,36 @@ async function measureAllAssets() {
         outputPath: OUTPUT_PATH
     });
 
-    if (stats.found > 0) {
+    if (summary.found > 0) {
         console.log('\n\x1b[34m💡 To update your manifest with actual data, run:\x1b[0m');
         console.log('\x1b[1m   npm run script:update-manifest\x1b[0m\n');
     }
+}
 
+/**
+ * Main measurement function
+ */
+async function measureAllAssets() {
+    const correlationId = `asset-measure-${Date.now()}`;
+    professionalLogger.info('--- Asset Measurement & Verification Started ---', { correlationId });
+
+    const summary: SummaryStats = {
+        total: GAME_ASSET_MANIFEST.length,
+        found: 0,
+        missing: 0,
+        estimatedTotalMB: 0,
+        actualTotalMB: 0
+    };
+
+    // Use Promise.all to avoid await-in-loop and speed up measurement
+    const results = await Promise.all(GAME_ASSET_MANIFEST.map(asset => {
+        professionalLogger.debug(`Measuring: ${asset.path}`, { correlationId });
+        return measureAsset(asset);
+    }));
+
+    results.forEach(m => processMeasurement(m, summary, correlationId));
+
+    saveResults(results, summary, correlationId);
     process.exit(0);
 }
 

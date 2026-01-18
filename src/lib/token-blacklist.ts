@@ -1,15 +1,48 @@
-
+import type { BlacklistedTokenDocument } from '@/types/database';
+import type * as admin from 'firebase-admin';
+import type { Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
 import { logger } from 'utils/logger';
 import { initializeAdminApp } from './firebase-admin';
-import type * as admin from 'firebase-admin'; // Import admin namespace for QueryDocumentSnapshot
-import type { Timestamp as AdminTimestamp } from 'firebase-admin/firestore';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore'; // Explicitly import AdminTimestamp
 
-interface BlacklistedTokenDoc {
-  jti: string; 
-  exp: number; // Original expiry of the token in seconds since epoch
-  reason: 'logout' | 'security_breach' | 'expired';
-  revokedAt: AdminTimestamp; // Firestore Admin SDK Timestamp
+// Local alias for backward compatibility or brevity
+type BlacklistedTokenDoc = BlacklistedTokenDocument;
+type TimestampProperty = BlacklistedTokenDocument['revokedAt'];
+
+/**
+ * Helper to normalize various timestamp formats into Date and milliseconds.
+ */
+function normalizeTimestamp(ts: TimestampProperty): { ms: number; date: Date } {
+  if (!ts) {
+    const now = new Date();
+    return { ms: now.getTime(), date: now };
+  }
+
+  // Handle Date objects
+  if (ts instanceof Date) {
+    return { ms: ts.getTime(), date: ts };
+  }
+
+  // Handle strings (ISO or other formats)
+  if (typeof ts === 'string') {
+    const date = new Date(ts);
+    return { ms: isNaN(date.getTime()) ? Date.now() : date.getTime(), date: isNaN(date.getTime()) ? new Date() : date };
+  }
+
+  // Handle numbers (assumed to be milliseconds)
+  if (typeof ts === 'number') {
+    return { ms: ts, date: new Date(ts) };
+  }
+
+  // Handle Firestore Timestamps (they have toMillis and toDate methods)
+  if (ts && typeof ts === 'object' && 'toMillis' in ts && 'toDate' in ts) {
+    const timestamp = ts as { toMillis: () => number; toDate: () => Date };
+    return { ms: timestamp.toMillis(), date: timestamp.toDate() };
+  }
+
+  // Fallback
+  const fallback = new Date();
+  return { ms: fallback.getTime(), date: fallback };
 }
 
 export class TokenBlacklistManager {
@@ -31,7 +64,8 @@ export class TokenBlacklistManager {
       const docSnap = await docRef.get();
 
       if (docSnap.exists) {
-        logger.warn(`[TokenBlacklist] Token JTI: ${jti} is already in the blacklist. Current reason: ${docSnap.data()?.reason}. New reason: ${reason}. Not overwriting.`);
+        const data = docSnap.data() as BlacklistedTokenDocument;
+        logger.warn(`[TokenBlacklist] Token JTI: ${jti} is already in the blacklist. Current reason: ${data.reason}. New reason: ${reason}. Not overwriting.`);
         return;
       }
       
@@ -63,11 +97,11 @@ export class TokenBlacklistManager {
         return false; 
       }
 
-      const tokenData = tokenDoc.data() as BlacklistedTokenDoc;
-      const revokedAtMs = tokenData.revokedAt.toMillis();
+      const tokenData = tokenDoc.data() as BlacklistedTokenDocument;
+      const { ms: revokedAtMs, date: revokedAtDate } = normalizeTimestamp(tokenData.revokedAt);
       const now = Date.now();
 
-      logger.log(`[TokenBlacklist] Token JTI: ${jti} found in blacklist. Reason: ${tokenData.reason}, RevokedAt: ${tokenData.revokedAt.toDate().toISOString()}`);
+      logger.log(`[TokenBlacklist] Token JTI: ${jti} found in blacklist. Reason: ${tokenData.reason}, RevokedAt: ${revokedAtDate.toISOString()}`);
 
       // Apply grace period if requested (typically for refresh tokens consumed in parallel)
       if (gracePeriodSeconds > 0 && tokenData.reason === 'expired') {
@@ -79,13 +113,8 @@ export class TokenBlacklistManager {
       }
 
       // Optional: Clean up very old tokens if their original expiry + buffer has passed.
-      // This prevents the blacklist from growing indefinitely with tokens that would be long expired anyway.
-      // Consider a longer buffer, e.g., refresh token expiry (7 days) + a few more days.
-      const originalExpiryWithBufferMs = (tokenData.exp * 1000) + (10 * 24 * 60 * 60 * 1000); // 10 days buffer
-      if (originalExpiryWithBufferMs < now) {
-        logger.log(`[TokenBlacklist] Cleaning up very old blacklisted token JTI: ${jti} (original expiry + buffer passed). Deleting from blacklist.`);
-        await tokenDoc.ref.delete();
-        return false; // Treat as not blacklisted if it's extremely old and cleaned up.
+      if (await this.shouldCleanupOldToken(tokenDoc, tokenData, now)) {
+        return false;
       }
       
       return true; // Found in blacklist and not super-expired for cleanup
@@ -124,7 +153,8 @@ export class TokenBlacklistManager {
 
       const batch = db.batch();
       querySnapshot.docs.forEach(doc => {
-        logger.log(`[TokenBlacklist] Scheduling deletion for old blacklisted token: ${doc.id} (originally expired at ${new Date((doc.data().exp as number) * 1000).toISOString()})`);
+        const data = doc.data() as BlacklistedTokenDocument;
+        logger.log(`[TokenBlacklist] Scheduling deletion for old blacklisted token: ${doc.id} (originally expired at ${new Date(data.exp * 1000).toISOString()})`);
         batch.delete(doc.ref);
       });
       await batch.commit();
@@ -178,50 +208,10 @@ export class TokenBlacklistManager {
       
       // Get total count using aggregation
       const totalCountSnapshot = await this.getBlacklistCollection().count().get();
-      const totalBlacklisted = totalCountSnapshot.data().count;
-      
-      // For byReason, use a more efficient approach with pagination
-      const byReason: Record<string, number> = {};
-      let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
+      const totalBlacklisted = totalCountSnapshot.data()['count'] as number;
       const batchSize = 1000;
-      let hasMore = true;
-      let processedDocs = 0;
       
-      logger.log(`[TokenBlacklist] Starting stats computation for ${totalBlacklisted} total blacklisted tokens`);
-      
-      while (hasMore) {
-        let query = this.getBlacklistCollection()
-          .select('reason')
-          .limit(batchSize);
-          
-        if (lastDoc) {
-          query = query.startAfter(lastDoc);
-        }
-        
-        const snapshot = await query.get();
-        
-        if (snapshot.empty) {
-          hasMore = false;
-          break;
-        }
-        
-        snapshot.docs.forEach(doc => {
-          const data = doc.data() as BlacklistedTokenDoc;
-          byReason[data.reason] = (byReason[data.reason] || 0) + 1;
-          processedDocs++;
-        });
-        
-        lastDoc = snapshot.docs[snapshot.docs.length - 1];
-        
-        if (snapshot.docs.length < batchSize) {
-          hasMore = false;
-        }
-        
-        // Log progress for large collections
-        if (totalBlacklisted > 10000 && processedDocs % 5000 === 0) {
-          logger.log(`[TokenBlacklist] Stats computation progress: ${processedDocs}/${totalBlacklisted} documents processed`);
-        }
-      }
+      const byReason = await this.aggregateStatsByReason(totalBlacklisted, batchSize);
       
       const stats = { totalBlacklisted, byReason };
       
@@ -234,11 +224,56 @@ export class TokenBlacklistManager {
       logger.log(`[TokenBlacklist] Stats computed:`, stats);
       return stats;
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      logger.error(`[TokenBlacklist] Error getting blacklist stats:`, errorMessage, errorStack);
-      this.statsCache = null; // Invalidate cache on error
+      logger.error(`[TokenBlacklist] Error getting blacklist stats:`, error as Error);
+      this.statsCache = null; 
       return null;
     }
+  }
+
+  private static fetchStatsBatch(lastDoc: admin.firestore.QueryDocumentSnapshot | null, batchSize: number) {
+    const query = this.getBlacklistCollection().select('reason').limit(batchSize);
+    const paginatedQuery = lastDoc ? query.startAfter(lastDoc) : query;
+    return paginatedQuery.get();
+  }
+
+  private static async shouldCleanupOldToken(
+    tokenDoc: admin.firestore.DocumentSnapshot, 
+    tokenData: BlacklistedTokenDocument, 
+    now: number
+  ): Promise<boolean> {
+    const originalExpiryWithBufferMs = (tokenData.exp * 1000) + (10 * 24 * 60 * 60 * 1000);
+    if (originalExpiryWithBufferMs < now) {
+      logger.log(`[TokenBlacklist] Cleaning up old token JTI: ${tokenDoc.id}. Original expiry passed.`);
+      await tokenDoc.ref.delete();
+      return true;
+    }
+    return false;
+  }
+
+  private static async aggregateStatsByReason(totalBlacklisted: number, batchSize: number): Promise<Record<string, number>> {
+    const byReason: Record<string, number> = {};
+    let lastDoc: admin.firestore.QueryDocumentSnapshot | null = null;
+    let hasMore = true;
+    let processedDocs = 0;
+
+    while (hasMore) {
+      /* eslint-disable-next-line no-await-in-loop */
+      const snapshot = await this.fetchStatsBatch(lastDoc, batchSize);
+      if (snapshot.empty) break;
+
+      snapshot.docs.forEach(doc => {
+        const data = doc.data() as BlacklistedTokenDoc;
+        byReason[data.reason] = (byReason[data.reason] || 0) + 1;
+      });
+
+      processedDocs += snapshot.docs.length;
+      lastDoc = (snapshot.docs[snapshot.docs.length - 1] as admin.firestore.QueryDocumentSnapshot) || null;
+      if (snapshot.docs.length < batchSize) hasMore = false;
+      
+      if (totalBlacklisted > 10000 && processedDocs % 5000 === 0) {
+        logger.log(`[TokenBlacklist] Progress: ${processedDocs}/${totalBlacklisted}`);
+      }
+    }
+    return byReason;
   }
 }

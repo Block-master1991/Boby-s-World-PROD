@@ -6,9 +6,9 @@
  * 2. Encryption is done locally using DEK for high performance (Zero Network Latency for encrypt/decrypt)
  */
 
-import { KMSClient, GenerateDataKeyCommand } from "@aws-sdk/client-kms";
-import type { KMSProvider } from './KMSProvider';
 import { logger } from "@/utils/logger";
+import { GenerateDataKeyCommand, KMSClient } from "@aws-sdk/client-kms";
+import type { KMSProvider } from './KMSProvider';
 
 export class AwsKmsProvider implements KMSProvider {
     public readonly name = 'AWS_KMS';
@@ -19,7 +19,10 @@ export class AwsKmsProvider implements KMSProvider {
     constructor(config: { region: string; accessKeyId?: string; secretAccessKey?: string; keyId: string }) {
         this.keyId = config.keyId;
 
-        const clientConfig: any = {
+        const clientConfig: {
+            region: string;
+            credentials?: { accessKeyId: string; secretAccessKey: string };
+        } = {
             region: config.region
         };
 
@@ -38,7 +41,7 @@ export class AwsKmsProvider implements KMSProvider {
     /**
      * Generate Data Key (DEK) from KMS
      */
-    async generateKey(algorithm: any): Promise<CryptoKey> {
+    async generateKey(algorithm: AesKeyAlgorithm): Promise<CryptoKey> {
         try {
             logger.log('[AwsKmsProvider] Generating data key via AWS KMS...');
             const command = new GenerateDataKeyCommand({
@@ -91,7 +94,7 @@ export class AwsKmsProvider implements KMSProvider {
     /**
      * Decryption is done locally
      */
-    async decrypt(key: CryptoKey, data: ArrayBuffer): Promise<ArrayBuffer> {
+    decrypt(key: CryptoKey, data: ArrayBuffer): Promise<ArrayBuffer> {
         const dataArray = new Uint8Array(data);
         const iv = dataArray.slice(0, 12);
         const ciphertext = dataArray.slice(12);
@@ -103,9 +106,10 @@ export class AwsKmsProvider implements KMSProvider {
         );
     }
 
-    async securelyClearKey(key: CryptoKey): Promise<void> {
+    securelyClearKey(key: CryptoKey): Promise<void> {
         // WebCrypto keys are managed by the JS engine, but we notify logging
-        logger.log('[AwsKmsProvider] Key usage completed. Ensure garbage collection removes reference.');
+        logger.log(`[AwsKmsProvider] Key usage completed for key type: ${key.algorithm}. Ensure garbage collection removes reference.`);
+        return Promise.resolve();
     }
 
     async validateIntegrity(key: CryptoKey): Promise<boolean> {
@@ -117,7 +121,7 @@ export class AwsKmsProvider implements KMSProvider {
             const decrypted = await this.decrypt(key, encrypted);
             const decoded = new TextDecoder().decode(decrypted);
             return decoded === 'integrity-check';
-        } catch (e) {
+        } catch {
             return false;
         }
     }

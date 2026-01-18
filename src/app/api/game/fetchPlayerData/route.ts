@@ -1,56 +1,48 @@
-import { NextResponse } from 'next/server';
-import { logger } from 'utils/logger';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
+/**
+ * API Route: Fetch Player Data
+ * GET /api/game/fetchPlayerData
+ */
+
 import type { AuthenticatedRequest } from '@/lib/auth-middleware';
 import { withAuth } from '@/lib/auth-middleware';
 import { initializeAdminApp } from '@/lib/firebase-admin';
+import type { PlayerDocument } from '@/types/database';
+import { COLLECTIONS } from '@/types/database';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
+import { createInitialPlayerData, handleFetchError } from './fetchHelpers';
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
-  logger.log("[API] /api/game/fetchPlayerData called"); // Updated log message
-
   try {
-    await initializeAdminApp(); // Initialize inside the handler
+    await initializeAdminApp();
     const db = getFirestore();
-
     const userPublicKey = request.user.sub;
+    const playerDocRef = db.collection(COLLECTIONS.PLAYERS).doc(userPublicKey);
 
-    const playerDocRef = db.collection('players').doc(userPublicKey);
     const docSnap = await playerDocRef.get();
 
     if (!docSnap.exists) {
-      // Create new player data if it doesn't exist
-      const initialPlayerData = {
-        walletAddress: userPublicKey,
-        createdAt: FieldValue.serverTimestamp(),
-        lastLogin: FieldValue.serverTimestamp(),
-        inventory: [],
-        gameUSDTBalance: 0,
-      };
-      await playerDocRef.set(initialPlayerData);
-      // Return 200 OK with initial data for a new player
+      const initialData = createInitialPlayerData(userPublicKey);
+      await playerDocRef.set(initialData);
       return NextResponse.json({ gameUSDTBalance: 0, inventory: [] }, { status: 200 });
     }
 
-    await playerDocRef.update({ lastLogin: FieldValue.serverTimestamp() });
-    const data = docSnap.data();
-    return NextResponse.json({
-      gameUSDTBalance: data?.gameUSDTBalance || 0,
-      inventory: data?.inventory || [],
+    // Record login/interaction
+    await playerDocRef.update({ 
+      lastLogin: FieldValue.serverTimestamp(),
+      lastInteraction: FieldValue.serverTimestamp()
     });
+
+    const data = docSnap.data() as PlayerDocument;
+    
+    return NextResponse.json({
+      gameUSDTBalance: data['gameUSDTBalance'] || 0,
+      inventory: data['inventory'] || [],
+    });
+
   } catch (error) {
-    logger.error('[fetchPlayerData] Error:', error as Error); // Updated log message
-    let errorMessage = error instanceof Error ? error.message : 'Failed to fetch player data';
-    let statusCode = 500;
-
-    if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {
-      errorMessage = "Server configuration error: Firebase Admin SDK not properly set up.";
-      statusCode = 500; // Still a server error
-    } else if (errorMessage.includes("Authentication required")) {
-      statusCode = 401;
-    } else if (errorMessage.includes("Player data not found")) {
-      statusCode = 404;
-    }
-
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+    logger.error('[Fetch Player Data] Error:', error instanceof Error ? error.message : String(error));
+    return handleFetchError(error);
   }
 });

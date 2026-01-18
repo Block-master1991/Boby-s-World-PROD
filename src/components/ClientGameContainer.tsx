@@ -1,15 +1,15 @@
 "use client";
 
-import dynamic from 'next/dynamic';
-import { Suspense, useState, useEffect } from 'react';
-import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
-import { useAuthContext } from '@/contexts/AuthContext';
 import { PasskeyOnboardingModal } from '@/components/auth/PasskeyOnboardingModal';
 import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
-import { RECAPTCHA_SITE_KEY } from '@/lib/constants';
+import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
 import { useAudio } from '@/contexts/AudioContext';
+import { useAuthContext } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { RECAPTCHA_SITE_KEY } from '@/lib/constants';
 import { logger } from '@/utils/logger';
+import dynamic from 'next/dynamic';
+import { Suspense, useEffect, useState } from 'react';
 
 import type { GameContainerProps } from './GameContainer';
 
@@ -23,36 +23,27 @@ const DynamicGameContainer = dynamic<GameContainerProps>(() => import('./GameCon
 export const loadBobyWorldMode = () => import('./GameContainer');
 export const loadRunningGameMode = () => import('./game/RunningGameUI');
 
-export default function ClientGameContainer() {
-  const { isAuthenticated, hasPasskey, isLoading } = useAuthContext();
-  const [showOnboarding, setShowOnboarding] = useState(false);
+function useCaptchaLogic(isAuthenticated: boolean) {
   const [captchaVerified, setCaptchaVerified] = useState(false);
   const { setHasUserInteracted, soundManagerRef } = useAudio();
   const { toast } = useToast();
 
-  const siteKey = RECAPTCHA_SITE_KEY;
-
-  // Initialize from sessionStorage on mount
   useEffect(() => {
     try {
-      const stored = sessionStorage.getItem('captcha_verified_session');
-      if (stored === 'true') {
+      if (sessionStorage.getItem('captcha_verified_session') === 'true') {
         setCaptchaVerified(true);
       }
-    } catch (e) {
-      logger.warn("Failed to access sessionStorage:", e);
+    } catch {
+      logger.warn("Failed to access sessionStorage");
     }
   }, []);
 
   useEffect(() => {
     if (isAuthenticated && !captchaVerified) {
       setCaptchaVerified(true);
-      // Also save to session storage if authenticated
       try {
         sessionStorage.setItem('captcha_verified_session', 'true');
-      } catch (e) {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
   }, [isAuthenticated, captchaVerified]);
 
@@ -62,20 +53,23 @@ export default function ClientGameContainer() {
     setHasUserInteracted(true);
     soundManagerRef.current?.playCurrentTrack();
     toast({ title: 'Verification Successful', description: 'You can now connect your wallet.', duration: 3000 });
-
-    // Persist verification for this session
     try {
       sessionStorage.setItem('captcha_verified_session', 'true');
-    } catch (e) {
-      logger.warn("Failed to save captcha state:", e);
+    } catch {
+      logger.warn("Failed to save captcha state");
     }
   };
+
+  return { captchaVerified, handleCaptchaSuccess };
+}
+
+function useOnboardingLogic(isLoading: boolean, isAuthenticated: boolean, hasPasskey: boolean) {
+  const [showOnboarding, setShowOnboarding] = useState(false);
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !hasPasskey) {
       const dismissed = localStorage.getItem('passkey_onboarding_dismissed');
       const now = Date.now();
-      // Show if not dismissed or if dismissed more than 3 days ago (less aggressive than 7 days)
       if (!dismissed || (now - parseInt(dismissed)) > 3 * 24 * 60 * 60 * 1000) {
         setShowOnboarding(true);
       }
@@ -87,12 +81,40 @@ export default function ClientGameContainer() {
     localStorage.setItem('passkey_onboarding_dismissed', Date.now().toString());
   };
 
-  // If auth is still checking, show primary loading
+  return { showOnboarding, handleCloseOnboarding };
+}
+
+function useClientGameContainerLogic() {
+  const { isAuthenticated, hasPasskey, isLoading } = useAuthContext();
+  const { captchaVerified, handleCaptchaSuccess } = useCaptchaLogic(isAuthenticated);
+  const { showOnboarding, handleCloseOnboarding } = useOnboardingLogic(isLoading, isAuthenticated, hasPasskey);
+
+  return {
+    isAuthenticated,
+    isLoading,
+    showOnboarding,
+    captchaVerified,
+    siteKey: RECAPTCHA_SITE_KEY,
+    handleCaptchaSuccess,
+    handleCloseOnboarding,
+  };
+}
+
+export default function ClientGameContainer() {
+  const {
+    isAuthenticated,
+    isLoading,
+    showOnboarding,
+    captchaVerified,
+    siteKey,
+    handleCaptchaSuccess,
+    handleCloseOnboarding,
+  } = useClientGameContainerLogic();
+
   if (isLoading) {
     return <LoadingScreen message="" showLogo variant="indeterminate" />;
   }
 
-  // If not authenticated and captcha not verified, show Captcha ASAP
   if (!isAuthenticated && !captchaVerified) {
     if (!siteKey) {
       return <LoadingScreen message="Preparing verification..." showLogo variant="indeterminate" />;

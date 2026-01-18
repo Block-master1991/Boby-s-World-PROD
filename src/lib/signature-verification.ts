@@ -1,7 +1,7 @@
 
-import { logger } from 'utils/logger';
-import nacl from 'tweetnacl';
 import bs58 from 'bs58';
+import nacl from 'tweetnacl';
+import { logger } from 'utils/logger';
 
 /**
  * Verifies a cryptographic signature for a given payload.
@@ -29,7 +29,7 @@ export function verifySignature(content: string, signature: string, publicKey: s
  * Constructs the canonical message string to be signed.
  * Format: "timestamp.body_json_string"
  */
-export function constructSignedMessage(timestamp: string, body: any): string {
+export function constructSignedMessage(timestamp: string, body: unknown): string {
     const bodyString = typeof body === 'string' ? body : JSON.stringify(body);
     return `${timestamp}.${bodyString}`;
 }

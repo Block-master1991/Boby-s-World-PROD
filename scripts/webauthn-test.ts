@@ -3,10 +3,10 @@
  * Tests the cryptographic and logic functions of WebAuthnUtils
  */
 
-import { WebAuthnUtils } from '../src/lib/webauthn-utils';
 import assert from 'assert';
+import { WebAuthnUtils } from '../src/lib/webauthn-utils.js';
 
-async function runTests() {
+function runTests() {
     console.log('🧪 Starting WebAuthn Utility Tests...');
 
     try {

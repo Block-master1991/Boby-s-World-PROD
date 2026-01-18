@@ -3,9 +3,10 @@
  * Logs all security-critical events to Firestore and sends Slack alerts
  */
 
+import type { Query } from 'firebase-admin/firestore';
 import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { sendSlackAlert } from './slack-alert';
 import { logger } from 'utils/logger';
+import { sendSlackAlert } from './slack-alert';
 
 export type AuditEventType =
     | 'LOGIN_SUCCESS'
@@ -22,6 +23,9 @@ export type AuditEventType =
     | 'SESSION_EXPIRED'
     | 'TRANSACTION'
     | 'ACCOUNT_RECOVERY_INITIATED'
+    | 'ACCOUNT_RECOVERY_VERIFIED'
+    | 'ACCOUNT_RECOVERY_CANCELLED'
+    | 'PASSKEY_REGISTRATION_INITIATED'
     | 'PASSKEY_DELETED'
     | 'ADMIN_ACTION';
 
@@ -35,7 +39,7 @@ export interface AuditEventMetadata {
     deviceFingerprint?: string;
     endpoint?: string;
     errorDetails?: string;
-    [key: string]: any;
+    [key: string]: string | number | boolean | null | undefined | string[] | number[] | Record<string, unknown> | unknown;
 }
 
 export interface AuditLogEntry {
@@ -73,7 +77,7 @@ class AuditLogger {
             const db = getFirestore();
 
             // 1. Sanitize & Encrypt Sensitive Metadata if payload is large or critical
-            let processedMetadata = { ...metadata };
+            const processedMetadata = { ...metadata };
 
             // Professional: We can hash or encrypt IP/Identifiers for privacy
             // For now, we'll ensure the message itself is sanitized
@@ -85,7 +89,7 @@ class AuditLogger {
                 message: sanitizedMessage,
                 metadata: processedMetadata,
                 timestamp: Timestamp.now(),
-                environment: process.env.NODE_ENV || 'development'
+                environment: process.env['NODE_ENV'] || 'development'
             };
 
             // Store in Firestore
@@ -232,26 +236,29 @@ class AuditLogger {
     ): Promise<AuditLogEntry[]> {
         try {
             const db = getFirestore();
-            let query = db.collection(this.collectionName).orderBy('timestamp', 'desc').limit(limit);
+            let query: Query = db.collection(this.collectionName);
+            
+            // Add ordering and limit
+            query = query.orderBy('timestamp', 'desc').limit(limit);
 
             if (filters.eventType) {
-                query = query.where('eventType', '==', filters.eventType) as any;
+                query = query.where('eventType', '==', filters.eventType);
             }
             if (filters.severity) {
-                query = query.where('severity', '==', filters.severity) as any;
+                query = query.where('severity', '==', filters.severity);
             }
             if (filters.userId) {
-                query = query.where('metadata.userId', '==', filters.userId) as any;
+                query = query.where('metadata.userId', '==', filters.userId);
             }
             if (filters.startDate) {
-                query = query.where('timestamp', '>=', Timestamp.fromDate(filters.startDate)) as any;
+                query = query.where('timestamp', '>=', Timestamp.fromDate(filters.startDate));
             }
             if (filters.endDate) {
-                query = query.where('timestamp', '<=', Timestamp.fromDate(filters.endDate)) as any;
+                query = query.where('timestamp', '<=', Timestamp.fromDate(filters.endDate));
             }
 
-            const snapshot = await query.get();
-            return snapshot.docs.map(doc => doc.data() as AuditLogEntry);
+            const snapshot = await (query as Query<AuditLogEntry>).get();
+            return snapshot.docs.map(doc => doc.data());
         } catch (error) {
             logger.error('[AuditLogger] Failed to query logs:', error);
             return [];

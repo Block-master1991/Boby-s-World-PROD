@@ -1,5 +1,15 @@
 import * as THREE from 'three';
 
+export interface BranchOptions {
+  origin?: THREE.Vector3;
+  orientation?: THREE.Euler;
+  length?: number;
+  radius?: number;
+  level?: number;
+  sectionCount?: number;
+  segmentCount?: number;
+}
+
 export class Branch {
   public origin: THREE.Vector3;
   public orientation: THREE.Euler;
@@ -11,20 +21,19 @@ export class Branch {
 
   /**
    * Generates a new branch
-   * @param {THREE.Vector3} origin The starting point of the branch
-   * @param {THREE.Euler} orientation The starting orientation of the branch
-   * @param {number} length The length of the branch
-   * @param {number} radius The radius of the branch at its starting point
+   * @param {BranchOptions} options The options for the branch
    */
-  constructor(
-    origin: THREE.Vector3 = new THREE.Vector3(),
-    orientation: THREE.Euler = new THREE.Euler(),
-    length: number = 0,
-    radius: number = 0,
-    level: number = 0,
-    sectionCount: number = 0,
-    segmentCount: number = 0,
-  ) {
+  constructor(options: BranchOptions = {}) {
+    const {
+      origin = new THREE.Vector3(),
+      orientation = new THREE.Euler(),
+      length = 0,
+      radius = 0,
+      level = 0,
+      sectionCount = 0,
+      segmentCount = 0,
+    } = options;
+
     this.origin = origin.clone();
     this.orientation = orientation.clone();
     this.length = length;

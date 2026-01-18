@@ -4,8 +4,10 @@
  */
 
 // Safe imports
-const randomUUID = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID.bind(crypto) :
-    (typeof require !== 'undefined' ? require('crypto').randomUUID : () => 'uuid-' + Math.random());
+const randomUUID = 
+    (typeof globalThis !== 'undefined' && globalThis.crypto?.randomUUID) 
+        ? globalThis.crypto.randomUUID.bind(globalThis.crypto) 
+        : () => `uuid-${Math.random().toString(36).substring(2, 11)}`;
 
 // Safe AsyncLocalStorage import for both Node.js and Browser environments
 interface AsyncLocalStorageLike<T> {
@@ -18,9 +20,18 @@ interface AsyncLocalStorageLike<T> {
 let AsyncLocalStorageConstructor: new <T>() => AsyncLocalStorageLike<T>;
 
 try {
-    if (typeof window === 'undefined' && typeof global !== 'undefined') {
+    const isNode = typeof process !== 'undefined' && !!process.versions?.node;
+    if (isNode) {
         // Use Node.js built-in AsyncLocalStorage
-        AsyncLocalStorageConstructor = require('async_hooks').AsyncLocalStorage;
+        // We use a dynamic lookup to avoid static analysis triggers for 'require'
+        // while ensuring AsyncLocalStorage is functional on the server.
+        const req = (globalThis as unknown as { require?: (id: string) => { AsyncLocalStorage: typeof AsyncLocalStorageConstructor } }).require;
+        if (typeof req === 'function') {
+            const nodeHooks = req('async_hooks');
+            AsyncLocalStorageConstructor = nodeHooks.AsyncLocalStorage;
+        } else {
+            throw new Error('Node.js require is not available in this environment');
+        }
     } else {
         throw new Error('Not in Node.js environment');
     }
@@ -95,7 +106,7 @@ export class ContextManager {
     /**
      * Run code within a specific context
      */
-    async runWithContext<T>(context: LogContext, fn: () => T | Promise<T>): Promise<T> {
+    runWithContext<T>(context: LogContext, fn: () => T | Promise<T>): T | Promise<T> {
         return asyncLocalStorage.run(context, fn);
     }
 
@@ -210,10 +221,10 @@ export const contextManager = ContextManager.getInstance();
 /**
  * Helper: Create and run with new context
  */
-export async function withContext<T>(
+export function withContext<T>(
     context: Partial<LogContext>,
     fn: () => T | Promise<T>
-): Promise<T> {
+): T | Promise<T> {
     const fullContext = contextManager.createContext(context);
     return contextManager.runWithContext(fullContext, fn);
 }

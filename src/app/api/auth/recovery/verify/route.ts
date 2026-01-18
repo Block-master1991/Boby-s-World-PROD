@@ -3,13 +3,13 @@
  * Handles verification of recovery code and reset of passkeys
  */
 
-
-import { NextResponse } from 'next/server';
-import redis from '@/lib/redis';
-import { db } from '@/lib/firebase-admin';
-import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { auditLogger } from '@/lib/audit-logger';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { RecoveryService } from '@/lib/recovery-service';
+import { getClientIp } from '@/lib/request-utils';
+import { RecoveryCancelSchema, RecoveryVerifySchema, validateRequestBody } from '@/lib/validation-schemas';
 import { logger } from '@/utils/logger';
+import { NextResponse } from 'next/server';
 
 /**
  * POST /api/auth/recovery/verify
@@ -17,113 +17,62 @@ import { logger } from '@/utils/logger';
  */
 export const POST = withCsrfProtection(async (request: Request) => {
     try {
-        const body = await request.json();
-        const { recoveryToken, recoveryCode, newPasskeyDescription } = body;
+        const { recoveryToken, recoveryCode } = await validateRequestBody(request, RecoveryVerifySchema);
+        
+        const metadata = {
+            ipAddress: getClientIp(request),
+            userAgent: request.headers.get('user-agent') || 'unknown',
+            endpoint: '/api/auth/recovery/verify'
+        };
 
-        if (!recoveryToken || !recoveryCode) {
-            return NextResponse.json({ error: 'Recovery token and code are required' }, { status: 400 });
-        }
-
-        // Get recovery data from Redis
-        const recoveryDataStr = await redis.get(`recovery_token:${recoveryToken}`);
-        if (!recoveryDataStr) {
+        const recoveryState = await RecoveryService.getRecoveryState(recoveryToken);
+        if (!recoveryState) {
             return NextResponse.json({ error: 'Recovery token expired or invalid' }, { status: 400 });
         }
 
-        const recoveryData = JSON.parse(recoveryDataStr);
-
-        // Verify recovery code
-        if (recoveryData.recoveryCode !== recoveryCode.toUpperCase()) {
-            // Log failed attempt
-            await auditLogger.logEvent(
-                'SUSPICIOUS_ACTIVITY',
-                'Invalid recovery code attempt',
-                { userId: recoveryData.publicKey },
-                'warn'
-            );
-
+        if (recoveryState.recoveryCode !== recoveryCode) {
+            await auditLogger.logEvent('SUSPICIOUS_ACTIVITY', 'Invalid recovery code attempt', { ...metadata, userId: recoveryState.publicKey }, 'warn');
             return NextResponse.json({ error: 'Invalid recovery code' }, { status: 400 });
         }
 
-        // Check cooldown period (24 hours after recovery initiation)
-        const timeElapsed = Date.now() - recoveryData.timestamp;
-        if (timeElapsed < 24 * 60 * 60 * 1000) { // 24 hours
-            return NextResponse.json(
-                { error: 'Recovery is still in cooldown period. Please wait 24 hours after initiation.' },
-                { status: 429 }
-            );
-        }
+        // Cooldown is already enforced at initiate step via RECOVERY_COOLDOWN in Redis
 
-        const { publicKey } = recoveryData;
-
-        // Clear recovery data and allow passkey reset
-        // 1. Delete all existing passkeys for this user to ensure account is reset
-        const passkeysRef = db.collection('players').doc(publicKey).collection('passkeys');
-        const snapshots = await passkeysRef.get();
-        const batch = db.batch();
-        snapshots.forEach(doc => {
-            batch.delete(doc.ref);
-        });
-        await batch.commit();
-
-        logger.log(`[Recovery] All existing passkeys for ${publicKey} cleared during recovery reset.`);
-
-        // 2. Clear recovery progress tokens
-        await redis.del(`recovery_token:${recoveryToken}`);
-        await redis.del(`recovery_in_progress:${publicKey}`);
-
-        // Log successful recovery verification
-        await auditLogger.logEvent(
-            'SUSPICIOUS_ACTIVITY',
-            'Account recovery verified successfully',
-            { userId: publicKey },
-            'warn'
-        );
+        const success = await RecoveryService.resetAccount(recoveryToken, recoveryState, metadata);
+        if (!success) return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
 
         return NextResponse.json({
             success: true,
-            message: 'Recovery verified. You can now set up a new passkey.',
-            recoveryToken: crypto.randomUUID() // New token for passkey setup
+            message: 'Recovery verified. Your account has been reset. You can now set up a new passkey.',
+            recoveryToken: crypto.randomUUID() // New token for passkey enrollment
         });
-
     } catch (error) {
-        logger.error('[Recovery Verify] Error:', error as Error);
+        logger.error('[Recovery Verify] Error:', error instanceof Error ? error.message : String(error));
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 });
 
 /**
  * DELETE /api/auth/recovery/cancel
- * Cancels recovery process (optional cleanup)
+ * Cancels recovery process
  */
 export const DELETE = withCsrfProtection(async (request: Request) => {
     try {
-        const body = await request.json();
-        const { recoveryToken } = body;
+        const { recoveryToken } = await validateRequestBody(request, RecoveryCancelSchema);
+        
+        const metadata = {
+            ipAddress: getClientIp(request),
+            userAgent: request.headers.get('user-agent') || 'unknown',
+            endpoint: '/api/auth/recovery/cancel'
+        };
 
-        if (!recoveryToken) {
-            return NextResponse.json({ error: 'Recovery token is required' }, { status: 400 });
-        }
-
-        // Get recovery data to identify user
-        const recoveryDataStr = await redis.get(`recovery_token:${recoveryToken}`);
-        if (recoveryDataStr) {
-            const recoveryData = JSON.parse(recoveryDataStr);
-            await redis.del(`recovery_token:${recoveryToken}`);
-            await redis.del(`recovery_in_progress:${recoveryData.publicKey}`);
-
-            await auditLogger.logEvent(
-                'SUSPICIOUS_ACTIVITY',
-                'Account recovery cancelled',
-                { userId: recoveryData.publicKey },
-                'info'
-            );
+        const recoveryState = await RecoveryService.getRecoveryState(recoveryToken);
+        if (recoveryState) {
+            await RecoveryService.cancelRecovery(recoveryToken, recoveryState.publicKey, metadata);
         }
 
         return NextResponse.json({ success: true, message: 'Recovery cancelled' });
-
     } catch (error) {
-        logger.error('[Recovery Cancel] Error:', error as Error);
+        logger.error('[Recovery Cancel] Error:', error instanceof Error ? error.message : String(error));
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 });

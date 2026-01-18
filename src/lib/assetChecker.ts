@@ -1,10 +1,10 @@
 // Smart Asset Verification System
 // Checks which assets are missing and only loads what's needed
 
-import { getAsset } from './indexedDB';
+import { logger } from '@/utils/logger';
 import type { AssetInfo } from './gameAssetManifest';
 import { GAME_ASSET_MANIFEST } from './gameAssetManifest';
-import { logger } from '@/utils/logger';
+import { getAsset } from './indexedDB';
 
 export interface AssetCheckResult {
     totalAssets: number;
@@ -26,7 +26,7 @@ export async function checkAssetAvailability(): Promise<AssetCheckResult> {
         try {
             const cached = await getAsset(asset.path);
             return { asset, present: !!(cached && cached.data) };
-        } catch (error) {
+        } catch {
             // Asset not found or error accessing it
             return { asset, present: false };
         }
@@ -75,6 +75,7 @@ export async function checkCriticalAssets(): Promise<boolean> {
 
     for (const asset of criticalAssets) {
         try {
+            // eslint-disable-next-line no-await-in-loop
             const cached = await getAsset(asset.path);
             if (!cached || !cached.data) {
                 logger.warn(`[AssetChecker] Critical asset missing: ${asset.path}`);

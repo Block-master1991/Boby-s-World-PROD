@@ -5,8 +5,8 @@
  */
 
 import 'dotenv/config';
-import { initializeAdminApp, db } from '../src/lib/firebase-admin';
 import { Timestamp } from 'firebase-admin/firestore';
+import { db, initializeAdminApp } from '../src/lib/firebase-admin';
 import { professionalLogger } from '../src/lib/logging';
 
 // Initial items data
@@ -71,7 +71,6 @@ async function initializeStoreItems() {
 
     try {
         await initializeAdminApp();
-
         if (!db) {
             throw new Error('Firestore database not initialized. Check your environment variables.');
         }
@@ -85,49 +84,55 @@ async function initializeStoreItems() {
             items: existingItemIds 
         });
 
-        const batch = db.batch();
-        let addedCount = 0;
-
-        for (const item of initialItems) {
-            if (!existingItemIds.includes(item.id)) {
-                professionalLogger.info(`➕ Adding new store item: ${item.name}`, { 
-                    correlationId, 
-                    itemId: item.id 
-                });
-                const docRef = db.collection('storeItems').doc(item.id);
-                batch.set(docRef, item);
-                addedCount++;
-            } else {
-                professionalLogger.debug(`✅ Item already exists: ${item.name}`, { 
-                    correlationId, 
-                    itemId: item.id 
-                });
-            }
-        }
+        const addedCount = await processStoreItems(existingItemIds, correlationId);
 
         if (addedCount > 0) {
-            await batch.commit();
             professionalLogger.info(`🎉 Successfully synchronized ${addedCount} new items!`, { correlationId });
         } else {
             professionalLogger.info('📋 Inventory is already up-to-date.', { correlationId });
         }
 
-        // Final Summary
-        const finalSnapshot = await db.collection('storeItems').get();
-        const summary = finalSnapshot.docs.map(doc => {
-            const data = doc.data();
-            return `${data.name} (${doc.id}): ${data.price} coins [${data.isActive ? 'ACTIVE' : 'INACTIVE'}]`;
-        });
-
-        professionalLogger.info('📋 Final Store Inventory Summary:', { correlationId, inventory: summary });
+        await logInventorySummary(correlationId);
         process.exit(0);
-    } catch (error: any) {
-        professionalLogger.fatal('Store items initialization failed', { 
-            correlationId, 
-            error: error.message 
-        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        professionalLogger.fatal('Store items initialization failed', { correlationId, error: err.message });
         process.exit(1);
     }
+}
+
+async function processStoreItems(existingIds: string[], correlationId: string): Promise<number> {
+    const batch = db.batch();
+    let addedCount = 0;
+
+    for (const item of initialItems) {
+        if (!existingIds.includes(item.id)) {
+            professionalLogger.info(`➕ Adding new store item: ${item.name}`, { correlationId, itemId: item.id });
+            const docRef = db.collection('storeItems').doc(item.id);
+            batch.set(docRef, item);
+            addedCount++;
+        } else {
+            professionalLogger.debug(`✅ Item already exists: ${item.name}`, { correlationId, itemId: item.id });
+        }
+    }
+
+    if (addedCount > 0) {
+        await batch.commit();
+    }
+    return addedCount;
+}
+
+async function logInventorySummary(correlationId: string) {
+    const finalSnapshot = await db.collection('storeItems').get();
+    const summary = finalSnapshot.docs.map(doc => {
+        const data = doc.data();
+        const name = data['name'] as string;
+        const price = data['price'] as number;
+        const isActive = data['isActive'] as boolean;
+        return `${name} (${doc.id}): ${price} coins [${isActive ? 'ACTIVE' : 'INACTIVE'}]`;
+    });
+
+    professionalLogger.info('📋 Final Store Inventory Summary:', { correlationId, inventory: summary });
 }
 
 // Run the initialization

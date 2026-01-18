@@ -5,29 +5,44 @@
  */
 
 import 'dotenv/config';
-import { initializeAdminApp, db } from '../src/lib/firebase-admin';
-import { professionalLogger } from '../src/lib/logging';
 import { Timestamp } from 'firebase-admin/firestore';
+import { db, initializeAdminApp } from '../src/lib/firebase-admin';
+import { professionalLogger } from '../src/lib/logging';
 
+// Improved Interface for ExactOptionalPropertyTypes compliance
 interface InventoryItem {
     id: string;
-    itemType?: string;
+    itemType?: string | undefined;
     name: string;
     quantity: number;
-    rarity?: string;
-    image?: string;
-    description?: string;
-    dataAiHint?: string;
-    instanceId?: string; // Old system
+    rarity?: string | undefined;
+    image?: string | undefined;
+    description?: string | undefined;
+    dataAiHint?: string | undefined;
+    instanceId?: string | undefined; // Old system
 }
 
 interface MigrationBackup {
     userId: string;
     timestamp: string;
-    oldInventory: any[];
+    oldInventory: unknown[];
     newInventory?: InventoryItem[];
     migratedAt: string | null;
     success: boolean;
+}
+
+interface MigrationStats {
+    processed: number;
+    migrated: number;
+    items: number;
+    skipped: number;
+}
+
+// Grouped Context to solving max-params
+interface MigrationContext {
+    stats: MigrationStats;
+    backups: MigrationBackup[];
+    correlationId: string;
 }
 
 async function migrateInventoryData() {
@@ -39,111 +54,112 @@ async function migrateInventoryData() {
         if (!db) throw new Error('Firestore not initialized');
 
         professionalLogger.debug('📖 Scanning for players with obsolete inventory formats...', { correlationId });
-        const usersSnapshot = await db.collection('players')
-            .where('inventory', '!=', null)
-            .get();
+        const usersSnapshot = await db.collection('players').where('inventory', '!=', null).get();
 
         professionalLogger.info(`👥 Found ${usersSnapshot.size} potential users to audit`, { correlationId });
 
-        let stats = {
-            processed: 0,
-            migrated: 0,
-            items: 0,
-            skipped: 0
+        const context: MigrationContext = {
+            stats: { processed: 0, migrated: 0, items: 0, skipped: 0 },
+            backups: [],
+            correlationId
         };
-        const backups: MigrationBackup[] = [];
 
-        for (const userDoc of usersSnapshot.docs) {
-            const userId = userDoc.id;
-            const userData = userDoc.data();
-            const oldInventory: any[] = userData.inventory || [];
-
-            if (oldInventory.length === 0) {
-                stats.skipped++;
-                continue;
-            }
-
-            // Check if this user needs migration (look for instanceId)
-            const needsMigration = oldInventory.some(item => item.instanceId);
-            if (!needsMigration) {
-                stats.skipped++;
-                continue;
-            }
-
-            professionalLogger.info(`📦 Migrating user ${userId} (${oldInventory.length} items)`, { correlationId });
-
-            const backup: MigrationBackup = {
-                userId,
-                timestamp: new Date().toISOString(),
-                oldInventory: [...oldInventory],
-                migratedAt: null,
-                success: false
-            };
-
-            // Convert format
-            const newInventory = convertInventoryFormat(oldInventory);
-            
-            // Validate
-            const validation = validateMigration(oldInventory, newInventory);
-            if (!validation.isValid) {
-                professionalLogger.error(`❌ Validation failed for user ${userId}`, { 
-                    correlationId, 
-                    errors: validation.errors 
-                });
-                continue;
-            }
-
-            // Update database
-            await db.collection('players').doc(userId).update({
-                inventory: newInventory,
-                migratedAt: Timestamp.now(),
-                migrationVersion: '2.0',
-                lastUpdated: Timestamp.now()
-            });
-
-            backup.migratedAt = new Date().toISOString();
-            backup.success = true;
-            backup.newInventory = newInventory;
-            backups.push(backup);
-
-            stats.processed++;
-            stats.migrated++;
-            stats.items += oldInventory.length;
-
-            professionalLogger.info(`✅ Migration successful for ${userId}`, { 
-                correlationId, 
-                aggregatedCount: newInventory.length 
-            });
-        }
+        await processMigrationBatch(usersSnapshot.docs, context);
 
         // Save migration report
         await db.collection('system').doc('inventory-migration-v2').set({
-            stats,
+            stats: context.stats,
             completedAt: Timestamp.now(),
             correlationId
         });
 
-        professionalLogger.info('🎉 Migration completed successfully!', { 
-            correlationId, 
-            statistics: stats 
-        });
+        professionalLogger.info('🎉 Migration completed successfully!', { correlationId, statistics: context.stats });
         process.exit(0);
-
-    } catch (error: any) {
-        professionalLogger.fatal('Critical failure during inventory migration', { 
-            correlationId, 
-            error: error.message 
-        });
+    } catch (error: unknown) {
+        const err = error as Error;
+        professionalLogger.fatal('Critical failure during inventory migration', { correlationId, error: err.message });
         process.exit(1);
     }
 }
 
-function convertInventoryFormat(oldInventory: any[]): InventoryItem[] {
+async function processMigrationBatch(
+    docs: FirebaseFirestore.QueryDocumentSnapshot[],
+    context: MigrationContext
+) {
+    const BATCH_SIZE = 10; // Process in chunks to avoid overwhelming DB but allow parallelism
+    
+    for (let i = 0; i < docs.length; i += BATCH_SIZE) {
+        const chunk = docs.slice(i, i + BATCH_SIZE);
+        // Process chunks sequentially, but items within chunk in parallel
+        // eslint-disable-next-line no-await-in-loop
+        await Promise.all(chunk.map(userDoc => processSingleUser(userDoc, context)));
+    }
+}
+
+async function processSingleUser(
+    userDoc: FirebaseFirestore.QueryDocumentSnapshot,
+    context: MigrationContext
+) {
+    const userId = userDoc.id;
+    const userData = userDoc.data();
+    const oldInventory = (userData['inventory'] as InventoryItem[]) || [];
+
+    if (oldInventory.length === 0 || !oldInventory.some(item => item.instanceId)) {
+        context.stats.skipped++;
+        return;
+    }
+
+    professionalLogger.info(`📦 Migrating user ${userId} (${oldInventory.length} items)`, { correlationId: context.correlationId });
+    await migrateUser(userId, oldInventory, context);
+}
+
+async function migrateUser(
+    userId: string,
+    oldInventory: InventoryItem[],
+    context: MigrationContext
+) {
+    const newInventory = convertInventoryFormat(oldInventory);
+    const validation = validateMigration(oldInventory, newInventory);
+
+    if (!validation.isValid) {
+        professionalLogger.error(`❌ Validation failed for user ${userId}`, { 
+            correlationId: context.correlationId, 
+            errors: validation.errors 
+        });
+        return;
+    }
+
+    await db.collection('players').doc(userId).update({
+        inventory: newInventory,
+        migratedAt: Timestamp.now(),
+        migrationVersion: '2.0',
+        lastUpdated: Timestamp.now()
+    });
+
+    context.backups.push({
+        userId,
+        timestamp: new Date().toISOString(),
+        oldInventory: [...oldInventory],
+        newInventory,
+        migratedAt: new Date().toISOString(),
+        success: true
+    });
+
+    context.stats.processed++;
+    context.stats.migrated++;
+    context.stats.items += oldInventory.length;
+
+    professionalLogger.info(`✅ Migration successful for ${userId}`, { 
+        correlationId: context.correlationId, 
+        aggregatedCount: newInventory.length 
+    });
+}
+
+function convertInventoryFormat(oldInventory: InventoryItem[]): InventoryItem[] {
     const itemMap = new Map<string, InventoryItem>();
 
     for (const item of oldInventory) {
         const itemId = String(item.id);
-
         if (!itemMap.has(itemId)) {
             itemMap.set(itemId, {
                 id: itemId,
@@ -156,25 +172,18 @@ function convertInventoryFormat(oldInventory: any[]): InventoryItem[] {
                 dataAiHint: item.dataAiHint
             });
         }
-
         const existing = itemMap.get(itemId)!;
         existing.quantity += item.quantity || 1;
     }
-
     return Array.from(itemMap.values());
 }
 
 function getItemTypeFromId(itemId: string): string {
-    const types: Record<string, string> = {
-        '1': 'consumable',
-        '2': 'consumable',
-        '3': 'consumable',
-        '4': 'consumable'
-    };
+    const types: Record<string, string> = { '1': 'consumable', '2': 'consumable', '3': 'consumable', '4': 'consumable' };
     return types[itemId] || 'consumable';
 }
 
-function validateMigration(oldInventory: any[], newInventory: InventoryItem[]) {
+function validateMigration(oldInventory: InventoryItem[], newInventory: InventoryItem[]) {
     const errors: string[] = [];
     const oldTotal = oldInventory.reduce((sum, item) => sum + (item.quantity || 1), 0);
     const newTotal = newInventory.reduce((sum, item) => sum + item.quantity, 0);

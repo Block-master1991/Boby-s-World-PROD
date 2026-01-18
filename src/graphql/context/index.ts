@@ -1,0 +1,52 @@
+import { validateTokenFromRequest } from '@/lib/auth-middleware';
+import type { JWTPayload } from '@/lib/jwt-utils';
+import { logger } from '@/utils/logger';
+import type { NextRequest } from 'next/server';
+import { createPlayerLoader } from '../loaders/player.loader';
+import { pubsub } from '../pubsub';
+
+interface GameJWTPayload extends JWTPayload {
+  role?: string;
+}
+
+export interface GraphQLContext {
+  request: NextRequest;
+  user: { id: string; publicKey: string } | null;
+  role: string | null;
+  loaders: {
+    player: ReturnType<typeof createPlayerLoader>;
+  };
+  pubsub: typeof pubsub;
+}
+
+export const buildContext = async ({ request }: { request: NextRequest }): Promise<GraphQLContext> => {
+  const loaders = {
+    player: createPlayerLoader(),
+  };
+
+  try {
+    const userPayload = await validateTokenFromRequest(request);
+    
+    if (userPayload?.sub) {
+      // Use type assertion with interface instead of 'any'
+      const role = (userPayload as GameJWTPayload).role || 'player';
+      return {
+        request,
+        user: { id: userPayload.sub, publicKey: userPayload.sub },
+        role,
+        loaders,
+        pubsub,
+      };
+    }
+  } catch (error) {
+    logger.error('[GraphQL Context] Auth error:', error);
+  }
+
+  return {
+    request,
+    user: null,
+    role: null,
+    loaders,
+    pubsub,
+  };
+};

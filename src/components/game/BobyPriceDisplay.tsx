@@ -1,109 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { AlertCircle, PawPrint, RefreshCw } from 'lucide-react';
-import Image from 'next/image';
 import { Button } from '@/components/ui/button';
-import { useMarketData, useBobyPriceUpdates } from '@/hooks/useGraphQL';
-import { logger } from "@/utils/logger";
+import { getDisplayErrorMessage, useBobyPriceLogic } from '@/hooks/useBobyPriceLogic';
+import { PawPrint, RefreshCw } from 'lucide-react';
+import Image from 'next/image';
+import React from 'react';
+import { ErrorView, PriceView } from './BobyPriceDisplayComponents';
 
 const BobyPriceDisplay: React.FC = () => {
-    // Maintain same variable names and structure
-    const [price, setPrice] = useState<number | null>(null);
-    const [isLoading, setIsLoading] = useState(true);
-    const [errorInfo, setErrorInfo] = useState<{ message: string, details?: string, cause?: unknown, status?: number } | null>(null);
-    const [priceChange, setPriceChange] = useState<{ percent: number, direction: 'up' | 'down' | 'same' } | null>(null);
-
-    // Use GraphQL hook instead of REST API (same functionality)
-    const { data: marketData, loading: graphqlLoading, error: graphqlError, execute: refreshPrice } = useMarketData();
-
-    // Real-time price updates subscription
-    const { data: priceUpdates, error: subscriptionError } = useBobyPriceUpdates();
-
-    // Extract price maintaining same logic
-    const currentPrice = marketData?.marketData?.bobyPrice || null;
-
-    // Handle real-time price updates from subscription
-    useEffect(() => {
-        if (priceUpdates) {
-            const newPrice = priceUpdates.price;
-            const changePercent = priceUpdates.changePercent;
-
-            // Update price and change indicator
-            setPrice(newPrice);
-            setPriceChange({
-                percent: Math.abs(changePercent),
-                direction: changePercent > 0 ? 'up' : changePercent < 0 ? 'down' : 'same'
-            });
-
-            // Clear any existing errors
-            setErrorInfo(null);
-        }
-    }, [priceUpdates]);
-
-    // Update state when GraphQL data changes (same effect as fetchPrice)
-    useEffect(() => {
-        setIsLoading(graphqlLoading);
-        if (graphqlError || subscriptionError) {
-            const errorMessage = graphqlError || subscriptionError;
-            setErrorInfo({
-                message: errorMessage || 'Failed to fetch price',
-                details: 'Failed to fetch price via GraphQL'
-            });
-            setPrice(null);
-        } else if (currentPrice !== null && !priceUpdates) { // Only set from marketData if no subscription data
-            setPrice(currentPrice);
-            setErrorInfo(null);
-            setPriceChange(null); // Clear change indicator for initial load
-        }
-    }, [currentPrice, graphqlLoading, graphqlError, subscriptionError, priceUpdates]);
-
-    // Maintain same fetchPrice function interface for refresh button
-    const fetchPrice = useCallback(async (isInitialLoad = false) => {
-        if (!isInitialLoad) {
-            setIsLoading(true);
-        }
-        setErrorInfo(null);
-
-        try {
-            // Use GraphQL refresh function (same functionality)
-            await refreshPrice();
-        } catch (e: unknown) {
-            logger.error("[BobyPriceDisplay] Error refreshing price:", e);
-            setErrorInfo({
-                message: (e instanceof Error) ? e.message : 'Failed to refresh price',
-                details: 'GraphQL refresh failed'
-            });
-            setPrice(null);
-            setIsLoading(false);
-        }
-    }, [refreshPrice]);
-
-    // Maintain same auto-refresh logic (5 seconds interval)
-    useEffect(() => {
-        // Initial load happens automatically via useMarketData hook
-        const intervalId = setInterval(() => fetchPrice(false), 5000); // Refresh every 5 seconds
-        return () => clearInterval(intervalId);
-    }, [fetchPrice]);
-
-
-    let displayErrorMessage = 'Could not fetch price.';
-    if (errorInfo) {
-        if (errorInfo.status === 429) {
-            displayErrorMessage = "Rate limit exceeded. Please try again later.";
-        } else if (errorInfo.cause && typeof errorInfo.cause === 'object' && 'code' in errorInfo.cause && errorInfo.cause.code === 'ENOTFOUND') {
-            displayErrorMessage = "Network error: Price service unreachable.";
-        } else if (errorInfo.status === 404 && (errorInfo.message.includes("Price data unavailable") || (errorInfo.details && errorInfo.details.includes("Price data unavailable")) || errorInfo.message.includes("API"))) {
-            displayErrorMessage = "Price data currently unavailable.";
-        } else if (errorInfo.message.includes("Failed to fetch price from API") || (errorInfo.details && errorInfo.details.includes("API"))) {
-            displayErrorMessage = "Price service returned an error.";
-        } else if (errorInfo.message.includes("not found in API response") || (errorInfo.details && errorInfo.details.includes("not found in API response"))) {
-            displayErrorMessage = "BOBY token not found in response.";
-        }
-        else {
-            displayErrorMessage = errorInfo.message;
-        }
-    }
+    const { price, isLoading, errorInfo, fetchPrice } = useBobyPriceLogic();
+    const displayErrorMessage = getDisplayErrorMessage(errorInfo);
 
     return (
         <div className="p-2.5 mb-3 rounded-md bg-card/60 border border-border/70 shadow-sm">
@@ -115,18 +21,12 @@ const BobyPriceDisplay: React.FC = () => {
                 <div className="flex items-center gap-1.5">
                     {isLoading && <PawPrint className="h-4 w-4 animate-pulse text-primary" />}
                     {!isLoading && errorInfo && (
-                        <div className="flex items-center text-destructive text-xs" title={errorInfo.details || displayErrorMessage}>
-                            <AlertCircle className="h-4 w-4 mr-1 rtl:ml-1 flex-shrink-0" />
-                            <span className="hidden sm:inline truncate" style={{ maxWidth: '100px' }}>{displayErrorMessage}</span>
-                            <span className="sm:hidden">Error</span>
-                        </div>
+                        <ErrorView message={displayErrorMessage} details={errorInfo.details} />
                     )}
                     {!isLoading && !errorInfo && price !== null && (
-                        <span className="font-semibold text-primary tabular-nums">
-                            ${price.toLocaleString(undefined, { minimumFractionDigits: 4, maximumFractionDigits: 8 })}
-                        </span>
+                        <PriceView price={price} />
                     )}
-                    {!isLoading && !errorInfo && price === null && !errorInfo && (
+                    {!isLoading && !errorInfo && price === null && (
                         <span className="text-xs text-muted-foreground">Unavailable</span>
                     )}
                     <Button variant="ghost" size="icon" onClick={() => fetchPrice(false)} className="h-6 w-6 text-muted-foreground hover:text-primary" title="Refresh Price">

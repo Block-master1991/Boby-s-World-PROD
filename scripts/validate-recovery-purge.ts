@@ -4,10 +4,10 @@
  * after a successful recovery cooldown.
  */
 
-import { initializeAdminApp } from '../src/lib/firebase-admin';
 import { getFirestore } from 'firebase-admin/firestore';
+import { initializeAdminApp } from '../src/lib/firebase-admin';
 
-async function validatePurge(testPublicKey: string) {
+export async function validatePurge(testPublicKey: string) {
     console.log(`[TEST] Starting purge validation for: ${testPublicKey}`);
 
     await initializeAdminApp();

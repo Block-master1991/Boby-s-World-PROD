@@ -3,8 +3,8 @@
  * Formats log entries for different outputs
  */
 
-import type { LogLevel } from './LogLevel';
 import type { LogContext } from './LogContext';
+import type { LogLevel } from './LogLevel';
 
 export interface LogEntry {
     level: LogLevel;
@@ -86,37 +86,37 @@ export class LogFormatter {
         const output: Record<string, unknown> = {};
 
         if (this.config.includeTimestamp) {
-            output.timestamp = this.formatTimestamp(entry.timestamp);
+            output['timestamp'] = this.formatTimestamp(entry.timestamp);
         }
 
         if (this.config.includeLevel) {
-            output.level = this.getLevelName(entry.level);
+            output['level'] = this.getLevelName(entry.level);
         }
 
-        output.message = entry.message;
+        output['message'] = entry.message;
 
         if (this.config.includeContext && entry.context) {
-            output.correlationId = entry.context.correlationId;
+            output['correlationId'] = entry.context.correlationId;
 
             if (entry.context.userId) {
-                output.userId = entry.context.userId;
+                output['userId'] = entry.context.userId;
             }
 
             if (entry.context.sessionId) {
-                output.sessionId = entry.context.sessionId;
+                output['sessionId'] = entry.context.sessionId;
             }
 
             if (entry.context.traceId) {
-                output.traceId = entry.context.traceId;
+                output['traceId'] = entry.context.traceId;
             }
         }
 
         if (entry.metadata && Object.keys(entry.metadata).length > 0) {
-            output.metadata = entry.metadata;
+            output['metadata'] = entry.metadata;
         }
 
         if (entry.error) {
-            output.error = {
+            output['error'] = {
                 name: entry.error.name,
                 message: entry.error.message,
                 stack: entry.error.stack
@@ -157,12 +157,12 @@ export class LogFormatter {
         // Metadata
         if (entry.metadata && Object.keys(entry.metadata).length > 0) {
             const metadataStr = JSON.stringify(entry.metadata, null, 2);
-            parts.push('\n' + this.colorize(COLORS.dim, metadataStr));
+            parts.push(`\n${this.colorize(COLORS.dim, metadataStr)}`);
         }
 
         // Error
         if (entry.error) {
-            parts.push('\n' + this.colorize(COLORS.red, entry.error.stack || entry.error.message));
+            parts.push(`\n${this.colorize(COLORS.red, entry.error.stack || entry.error.message)}`);
         }
 
         return parts.join(' ');
@@ -243,7 +243,8 @@ export class LogFormatter {
      * Apply color to text
      */
     private colorize(color: string, text: string): string {
-        if (!this.config.colors || typeof process === 'undefined' || !process.stdout?.isTTY) {
+        const isProduction = process.env.NODE_ENV === 'production';
+        if (!this.config.colors || isProduction) {
             return text;
         }
 

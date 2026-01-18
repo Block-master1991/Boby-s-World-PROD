@@ -1,7 +1,7 @@
+import '@solana/wallet-adapter-react-ui/styles.css'; // Added Solana wallet UI styles
 import type { Metadata } from 'next';
 import { Inter } from 'next/font/google';
 import './globals.css';
-import '@solana/wallet-adapter-react-ui/styles.css'; // Added Solana wallet UI styles
 import RootLayoutClient from './RootLayoutClient'; // Import the new client component
 
 const inter = Inter({ subsets: ['latin'] });
@@ -17,18 +17,28 @@ export const metadata: Metadata = {
   manifest: '/manifest.json',
 };
 
+
+
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://www.google.com" />
         <link rel="preconnect" href="https://www.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://challenges.cloudflare.com" />
         <link rel="dns-prefetch" href="https://www.google.com" />
         <link rel="dns-prefetch" href="https://www.gstatic.com" />
+        <link rel="dns-prefetch" href="https://challenges.cloudflare.com" />
+        {/* Solana RPC Preconnect */}
+        <link rel="preconnect" href="https://api.mainnet-beta.solana.com" />
+        <link rel="dns-prefetch" href="https://api.mainnet-beta.solana.com" />
+        {/* Firebase Preconnect */}
+        <link rel="preconnect" href="https://firestore.googleapis.com" />
+        <link rel="preconnect" href="https://identitytoolkit.googleapis.com" />
       </head>
       <body className={inter.className}>
         <RootLayoutClient>{children}</RootLayoutClient>

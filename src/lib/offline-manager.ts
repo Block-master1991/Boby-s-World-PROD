@@ -1,25 +1,16 @@
 // Offline Capabilities Manager
 import { logger } from 'utils/logger';
+import {
+    addBackgroundTask,
+    getBackgroundProcessor,
+    initializeBackgroundProcessing
+} from './BackgroundProcessor';
+import { clearObjectStore, getAllFromStore, openIndexedDB } from './offline/db';
+import type { OfflineQueueItem, SyncStatus } from './offline/types';
+// --- Re-exports for backward compatibility ---
+export { addBackgroundTask, getBackgroundProcessor, initializeBackgroundProcessing };
+export type { OfflineQueueItem, SyncStatus };
 // Handles offline functionality and data synchronization
-
-interface OfflineQueueItem {
-    id: string;
-    type: 'api_call' | 'game_action' | 'user_data';
-    data: any;
-    timestamp: number;
-    priority: number;
-    retryCount: number;
-    maxRetries: number;
-}
-
-interface SyncStatus {
-    isOnline: boolean;
-    lastSyncTime: number;
-    pendingItems: number;
-    failedItems: number;
-    syncInProgress: boolean;
-}
-
 class OfflineManager {
     private isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
     private syncStatus: SyncStatus = {
@@ -29,7 +20,6 @@ class OfflineManager {
         failedItems: 0,
         syncInProgress: false,
     };
-
     private offlineQueue: OfflineQueueItem[] = [];
     private syncCallbacks: Array<(status: SyncStatus) => void> = [];
     private maxQueueSize = 1000;
@@ -63,9 +53,10 @@ class OfflineManager {
     // Queue operation for offline execution
     queueOperation(
         type: OfflineQueueItem['type'],
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         data: any,
-        priority: number = 1,
-        maxRetries: number = 3
+        priority = 1,
+        maxRetries = 3
     ): string {
         const id = `op_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
@@ -114,6 +105,7 @@ class OfflineManager {
 
         for (const item of itemsToProcess) {
             try {
+                // eslint-disable-next-line no-await-in-loop
                 await this.executeQueuedOperation(item);
                 this.offlineQueue = this.offlineQueue.filter(i => i.id !== item.id);
                 processedCount++;
@@ -156,6 +148,7 @@ class OfflineManager {
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     private async executeApiCall(data: any): Promise<void> {
         const response = await fetch(data.url, data.options || {});
         if (!response.ok) {
@@ -163,12 +156,14 @@ class OfflineManager {
         }
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, require-await
     private async executeGameAction(data: any): Promise<void> {
         // Implement game action replay logic
         // This would depend on your specific game mechanics
         logger.log('[OfflineManager] Executing game action:', data);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any, require-await
     private async syncUserData(data: any): Promise<void> {
         // Implement user data synchronization
         logger.log('[OfflineManager] Syncing user data:', data);
@@ -177,12 +172,12 @@ class OfflineManager {
     // Persist queue to IndexedDB for persistence across sessions
     private async persistQueue(): Promise<void> {
         try {
-            const db = await this.openIndexedDB();
+            const db = await openIndexedDB();
             const transaction = db.transaction(['offlineQueue'], 'readwrite');
             const store = transaction.objectStore('offlineQueue');
 
             // Clear existing data
-            await this.clearObjectStore(store);
+            await clearObjectStore(store);
 
             // Store current queue
             for (const item of this.offlineQueue) {
@@ -198,11 +193,11 @@ class OfflineManager {
     // Load persisted queue on initialization
     private async loadPersistedQueue(): Promise<void> {
         try {
-            const db = await this.openIndexedDB();
+            const db = await openIndexedDB();
             const transaction = db.transaction(['offlineQueue'], 'readonly');
             const store = transaction.objectStore('offlineQueue');
 
-            const items = await this.getAllFromStore(store);
+            const items = await getAllFromStore(store);
             this.offlineQueue = items;
             this.updateSyncStatus({ pendingItems: this.offlineQueue.length });
 
@@ -210,39 +205,6 @@ class OfflineManager {
         } catch (error) {
             logger.error('[OfflineManager] Failed to load persisted queue:', error);
         }
-    }
-
-    private async openIndexedDB(): Promise<IDBDatabase> {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open('BobyWorldOffline', 1);
-
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => resolve(request.result);
-
-            request.onupgradeneeded = (event) => {
-                const db = (event.target as IDBOpenDBRequest).result;
-
-                if (!db.objectStoreNames.contains('offlineQueue')) {
-                    db.createObjectStore('offlineQueue', { keyPath: 'id' });
-                }
-            };
-        });
-    }
-
-    private async clearObjectStore(store: IDBObjectStore): Promise<void> {
-        return new Promise((resolve, reject) => {
-            const request = store.clear();
-            request.onsuccess = () => resolve();
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    private async getAllFromStore(store: IDBObjectStore): Promise<any[]> {
-        return new Promise((resolve, reject) => {
-            const request = store.getAll();
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
     }
 
     private startPeriodicSync(): void {
@@ -302,97 +264,8 @@ class OfflineManager {
     }
 }
 
-// Background Processing Manager
-class BackgroundProcessor {
-    private tasks: Array<{
-        id: string;
-        task: () => Promise<void>;
-        priority: number;
-        timeout: number;
-    }> = [];
-
-    private isProcessing = false;
-    private processingTimer: NodeJS.Timeout | null = null;
-
-    // Add background task
-    addTask(task: () => Promise<void>, priority: number = 1, timeout: number = 30000): string {
-        const id = `task_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        this.tasks.push({
-            id,
-            task,
-            priority,
-            timeout,
-        });
-
-        // Sort by priority (higher first)
-        this.tasks.sort((a, b) => b.priority - a.priority);
-
-        // Start processing if not already running
-        if (!this.isProcessing) {
-            this.startProcessing();
-        }
-
-        return id;
-    }
-
-    private async startProcessing(): Promise<void> {
-        if (this.isProcessing || this.tasks.length === 0) return;
-
-        this.isProcessing = true;
-
-        while (this.tasks.length > 0) {
-            const task = this.tasks.shift()!;
-            const startTime = Date.now();
-
-            try {
-                // Create timeout promise
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('Task timeout')), task.timeout);
-                });
-
-                // Race between task and timeout
-                await Promise.race([task.task(), timeoutPromise]);
-
-                const duration = Date.now() - startTime;
-                logger.log(`[BackgroundProcessor] Task ${task.id} completed in ${duration}ms`);
-
-            } catch (error) {
-                logger.error(`[BackgroundProcessor] Task ${task.id} failed:`, error);
-            }
-
-            // Small delay between tasks to prevent blocking
-            await new Promise(resolve => setTimeout(resolve, 10));
-        }
-
-        this.isProcessing = false;
-    }
-
-    // Get processing stats
-    getStats() {
-        return {
-            queuedTasks: this.tasks.length,
-            isProcessing: this.isProcessing,
-        };
-    }
-
-    // Clear all pending tasks
-    clearTasks(): void {
-        this.tasks = [];
-    }
-
-    dispose(): void {
-        this.clearTasks();
-        if (this.processingTimer) {
-            clearTimeout(this.processingTimer);
-            this.processingTimer = null;
-        }
-    }
-}
-
 // Singleton instances
 let offlineManager: OfflineManager | null = null;
-let backgroundProcessor: BackgroundProcessor | null = null;
 
 // Factory functions
 export const initializeOfflineCapabilities = (): OfflineManager => {
@@ -402,20 +275,11 @@ export const initializeOfflineCapabilities = (): OfflineManager => {
     return offlineManager;
 };
 
-export const initializeBackgroundProcessing = (): BackgroundProcessor => {
-    if (!backgroundProcessor) {
-        backgroundProcessor = new BackgroundProcessor();
-    }
-    return backgroundProcessor;
-};
-
 export const getOfflineManager = (): OfflineManager | null => {
     return offlineManager;
 };
 
-export const getBackgroundProcessor = (): BackgroundProcessor | null => {
-    return backgroundProcessor;
-};
+export { OfflineManager };
 
 // Utility functions
 export const isOnline = (): boolean => {
@@ -425,22 +289,12 @@ export const isOnline = (): boolean => {
 
 export const queueOfflineOperation = (
     type: OfflineQueueItem['type'],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     data: any,
-    priority: number = 1
+    priority = 1
 ): string | null => {
     if (offlineManager) {
         return offlineManager.queueOperation(type, data, priority);
-    }
-    return null;
-};
-
-export const addBackgroundTask = (
-    task: () => Promise<void>,
-    priority: number = 1,
-    timeout: number = 30000
-): string | null => {
-    if (backgroundProcessor) {
-        return backgroundProcessor.addTask(task, priority, timeout);
     }
     return null;
 };

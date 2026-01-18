@@ -8,12 +8,16 @@ import { pinoLogger } from '../utils/logger';
 // Client-specific logger instance
 export const clientLogger = pinoLogger.child({ component: 'Client' });
 
+export interface LogMetadata {
+    [key: string]: unknown;
+}
+
 // Performance monitoring
 export const performanceLogger = {
     /**
      * Log performance metrics
      */
-    logMetric(name: string, value: number, metadata?: any) {
+    logMetric(name: string, value: number, metadata?: LogMetadata) {
         clientLogger.info({
             performance: { name, value },
             ...metadata
@@ -26,7 +30,7 @@ export const performanceLogger = {
     async timeFunction<T>(
         label: string,
         fn: () => Promise<T>,
-        metadata?: any
+        metadata?: LogMetadata
     ): Promise<T> {
         const start = performance.now();
         try {
@@ -60,7 +64,7 @@ export const errorLogger = {
     /**
      * Log React error boundaries
      */
-    logBoundaryError(error: Error, errorInfo: any, componentName?: string) {
+    logBoundaryError(error: Error, errorInfo: unknown, componentName?: string) {
         clientLogger.error({
             err: error,
             errorInfo,
@@ -72,7 +76,7 @@ export const errorLogger = {
     /**
      * Log unhandled promise rejections
      */
-    logUnhandledRejection(reason: any, promise: Promise<any>) {
+    logUnhandledRejection(reason: unknown, promise: Promise<unknown>) {
         clientLogger.error({
             reason,
             promise: promise.toString(),
@@ -83,7 +87,14 @@ export const errorLogger = {
     /**
      * Log global JavaScript errors
      */
-    logGlobalError(message: string, source?: string, lineno?: number, colno?: number, error?: Error) {
+    logGlobalError(details: {
+        message: string;
+        source?: string;
+        lineno?: number;
+        colno?: number;
+        error?: Error;
+    }) {
+        const { message, source, lineno, colno, error } = details;
         clientLogger.error({
             err: error,
             source,
@@ -99,7 +110,7 @@ export const interactionLogger = {
     /**
      * Log user interactions (without sensitive data)
      */
-    logInteraction(action: string, element?: string, metadata?: any) {
+    logInteraction(action: string, element?: string, metadata?: LogMetadata) {
         // Only log in development or for specific actions
         if (process.env.NODE_ENV === 'development' || action.includes('error') || action.includes('fail')) {
             clientLogger.debug({
@@ -115,7 +126,7 @@ export const gameLogger = {
     /**
      * Log game events
      */
-    logGameEvent(event: string, data?: any) {
+    logGameEvent(event: string, data?: LogMetadata) {
         clientLogger.debug({
             gameEvent: event,
             data
@@ -132,7 +143,7 @@ export const gameLogger = {
     /**
      * Log game errors specifically
      */
-    logGameError(error: Error, context?: any) {
+    logGameError(error: Error, context?: LogMetadata) {
         clientLogger.error({
             err: error,
             gameError: true,
@@ -143,9 +154,6 @@ export const gameLogger = {
 
 // Export all loggers
 export {
-    clientLogger as default,
-    performanceLogger as perf,
-    errorLogger as errors,
-    interactionLogger as interactions,
-    gameLogger as game
+    clientLogger as default, errorLogger as errors, gameLogger as game, interactionLogger as interactions, performanceLogger as perf
 };
+

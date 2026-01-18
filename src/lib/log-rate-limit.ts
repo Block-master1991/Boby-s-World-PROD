@@ -1,6 +1,15 @@
-// You can place this in a separate file src/lib/log-rate-limit.ts
 import { getFirestore } from 'firebase-admin/firestore';
-export async function logRateLimitExceeded(ip: string, endpoint: string, userAgent: string, publicKey?: string, timestamp?: number) {
+
+export interface RateLimitLogData {
+  ip: string;
+  endpoint: string;
+  userAgent: string;
+  publicKey?: string;
+  timestamp?: number;
+}
+
+export async function logRateLimitExceeded(data: RateLimitLogData) {
+  const { ip, endpoint, userAgent, publicKey, timestamp } = data;
   const db = getFirestore();
   await db.collection('rateLimitLogs').add({
     ip,

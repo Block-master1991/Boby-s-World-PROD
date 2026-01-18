@@ -4,8 +4,8 @@
  * Provides advanced protection for sensitive operations
  */
 
-import redis from './redis';
 import { logger } from 'utils/logger';
+import redis from './redis';
 
 /**
  * Rate limits per mutation (requests per minute)
@@ -60,17 +60,38 @@ export interface MutationRateLimitResult {
 export function extractMutationName(query: string): string | null {
     // Match mutation { mutationName( or mutation MutationName { mutationName(
     const mutationMatch = query.match(/mutation\s*(?:\w+\s*)?\{[\s\n]*(\w+)\s*\(/);
-    if (mutationMatch && mutationMatch[1]) {
+    if (mutationMatch?.[1]) {
         return mutationMatch[1];
     }
 
     // Fallback: try to match just the mutation name
     const simpleMatch = query.match(/mutation\s*\{[\s\n]*(\w+)/);
-    if (simpleMatch && simpleMatch[1]) {
+    if (simpleMatch?.[1]) {
         return simpleMatch[1];
     }
 
     return null;
+}
+
+interface RateLimitExceededParams {
+    mutationName: string;
+    identifier: string;
+    redisKey: string;
+    limit: number;
+    windowSeconds: number;
+}
+
+async function handleRateLimitExceeded(params: RateLimitExceededParams): Promise<MutationRateLimitResult> {
+    const { mutationName, identifier, redisKey, limit, windowSeconds } = params;
+    const ttl = await redis.ttl(redisKey);
+    logger.warn(`[GraphQL-RateLimit] Mutation ${mutationName} rate limit exceeded for ${identifier}. Count: ${limit}/${limit}`);
+    return {
+        allowed: false,
+        remaining: 0,
+        limit,
+        retryAfterSeconds: ttl > 0 ? ttl : windowSeconds,
+        mutationName
+    };
 }
 
 /**
@@ -83,59 +104,30 @@ export async function checkGraphQLMutationRateLimit(
 ): Promise<MutationRateLimitResult> {
     const config = MUTATION_LIMITS[mutationName] || DEFAULT_MUTATION_LIMIT;
     const { limit, windowSeconds } = config;
-
-    // Use both IP and userId for rate limiting key (if authenticated)
     const identifier = userId ? `${clientIp}:${userId}` : clientIp;
     const redisKey = `graphql:ratelimit:${mutationName}:${identifier}`;
 
     try {
-        // Get current count
         const current = await redis.get(redisKey);
         const count = current ? parseInt(current, 10) : 0;
 
         if (count >= limit) {
-            // Get TTL to calculate retry after
-            const ttl = await redis.ttl(redisKey);
-
-            logger.warn(`[GraphQL-RateLimit] Mutation ${mutationName} rate limit exceeded for ${identifier}. Count: ${count}/${limit}`);
-
-            return {
-                allowed: false,
-                remaining: 0,
-                limit,
-                retryAfterSeconds: ttl > 0 ? ttl : windowSeconds,
-                mutationName
-            };
+            return await handleRateLimitExceeded({ mutationName, identifier, redisKey, limit, windowSeconds });
         }
 
-        // Increment counter with expiry
         if (count === 0) {
-            // First request in window - set with expiry
             await redis.set(redisKey, '1', 'EX', windowSeconds);
         } else {
-            // Increment existing counter
             await redis.incr(redisKey);
         }
 
         const remaining = Math.max(0, limit - count - 1);
-
         logger.log(`[GraphQL-RateLimit] Mutation ${mutationName} allowed for ${identifier}. Count: ${count + 1}/${limit}, Remaining: ${remaining}`);
 
-        return {
-            allowed: true,
-            remaining,
-            limit,
-            mutationName
-        };
+        return { allowed: true, remaining, limit, mutationName };
     } catch (error) {
         logger.error(`[GraphQL-RateLimit] Error checking rate limit for ${mutationName}:`, error);
-        // On error, allow the request but log it
-        return {
-            allowed: true,
-            remaining: limit,
-            limit,
-            mutationName
-        };
+        return { allowed: true, remaining: limit, limit, mutationName };
     }
 }
 

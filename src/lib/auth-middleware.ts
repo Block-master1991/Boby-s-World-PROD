@@ -1,11 +1,11 @@
-import type { NextRequest} from 'next/server';
-import { NextResponse } from 'next/server';
-import { JWTManager, type JWTPayload } from './jwt-utils'; // Ensure type is imported if not already
 import { getClientIp } from '@/lib/request-utils'; // Helper function to extract IP from request
 import { cookies, headers } from 'next/headers';
-import { securityIntegration } from './securityIntegration';
-import { auditLogger } from './audit-logger';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
+import { auditLogger } from './audit-logger';
+import { JWTManager, type JWTPayload } from './jwt-utils'; // Ensure type is imported if not already
+import { securityIntegration } from './securityIntegration';
 
 export async function verifySessionOrReject(request: Request): Promise<{ user: { publicKey: string } }> {
   const cookieStore = await cookies();
@@ -41,42 +41,46 @@ export interface AuthenticatedRequest extends NextRequest {
   user: JWTPayload;
 }
 
-function extractAuthRequestMetadata(request: NextRequest | Request): {
+export interface AuthMetadata {
   accessToken: string | null;
   refreshToken: string | null;
   userAgent: string;
   ip: string;
-  cookieHeader?: string | null;
-} {
-  const isEdge = typeof (request as NextRequest).cookies?.get === 'function';
+  cookieHeader: string | null;
+}
 
-  const cookieHeader = 'headers' in request ? request.headers.get('cookie') : undefined;
+export interface AuthErrorOptions {
+  message: string;
+  code: string;
+  status?: number;
+  details?: string;
+  clearCookies?: boolean;
+}
+
+function extractAuthRequestMetadata(request: NextRequest | Request): AuthMetadata {
+  const isEdge = typeof (request as NextRequest).cookies?.get === "function";
+  const cookieHeader = "headers" in request ? request.headers.get("cookie") : null;
 
   const accessToken = isEdge
-    ? (request as NextRequest).cookies.get('accessToken')?.value ?? null
+    ? (request as NextRequest).cookies.get("accessToken")?.value ?? null
     : cookieHeader
-      ? JWTManager.extractTokenFromCookies(cookieHeader, 'accessToken')
+      ? JWTManager.extractTokenFromCookies(cookieHeader, "accessToken")
       : null;
 
   const refreshToken = isEdge
-    ? (request as NextRequest).cookies.get('refreshToken')?.value ?? null
+    ? (request as NextRequest).cookies.get("refreshToken")?.value ?? null
     : cookieHeader
-      ? JWTManager.extractTokenFromCookies(cookieHeader, 'refreshToken')
+      ? JWTManager.extractTokenFromCookies(cookieHeader, "refreshToken")
       : null;
 
-  const userAgent = request.headers.get('user-agent') || 'unknown';
+  const userAgent = request.headers.get("user-agent") || "unknown";
   const ip = getClientIp(request);
 
-  return { accessToken, refreshToken, userAgent, ip, cookieHeader };
+  return { accessToken, refreshToken, userAgent, ip, cookieHeader: cookieHeader ?? null };
 }
 
-export function createAuthErrorResponse(
-  message: string,
-  code: string,
-  status: number = 401,
-  details?: string,
-  clearCookies: boolean = false
-) {
+export function createAuthErrorResponse(options: AuthErrorOptions) {
+  const { message, code, status = 401, details, clearCookies = false } = options;
   const response = NextResponse.json({
     authenticated: false,
     error: message,
@@ -85,8 +89,7 @@ export function createAuthErrorResponse(
   }, { status });
 
   if (clearCookies) {
-    // List of security keys that must be cleared on critical failure
-    const securityCookies = ['accessToken', 'refreshToken', 'nonce', 'csrfToken', 'secure_session', 'session_seed'];
+    const securityCookies = ["accessToken", "refreshToken", "nonce", "csrfToken", "secure_session", "session_seed"];
     securityCookies.forEach(name => {
       response.cookies.delete(name);
     });
@@ -95,169 +98,141 @@ export function createAuthErrorResponse(
   return response;
 }
 
-export function withAuth(handler: (req: AuthenticatedRequest, ...args: any[]) => Promise<NextResponse>) {
-  return async (request: NextRequest, ...args: any[]): Promise<NextResponse> => {
+async function verifyWafRequest(request: NextRequest): Promise<NextResponse | null> {
+  const { verifyCloudflareRequest } = await import("@/lib/request-utils");
+  if (!verifyCloudflareRequest(request)) {
+    logger.error("[AuthMiddleware] Request bypassed Cloudflare or missing edge headers.");
+    return createAuthErrorResponse({
+      message: "Direct access prohibited. Please use the official domain.",
+      code: "WAF_BYPASS_ATTEMPT",
+      status: 403
+    });
+  }
+  return null;
+}
+
+async function performRateLimit(request: NextRequest, metadata: AuthMetadata): Promise<NextResponse | null> {
+  const { ip, userAgent } = metadata;
+  const { AdvancedRateLimiter } = await import("./advancedRateLimiter");
+  const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(
+    request,
+    ip,
+    { 
+      endpoint: request.nextUrl.pathname, 
+      deviceInfo: securityIntegration.extractDeviceInfo(request) 
+    }
+  );
+
+  if (!rateLimitResult.allowed) {
+    logger.warn(`[AuthMiddleware] Rate limit exceeded for IP ${ip} on path ${request.nextUrl.pathname}`);
+    await auditLogger.logRateLimitHit(ip, request.nextUrl.pathname, { userAgent, ip });
+    return createAuthErrorResponse({
+      message: "Too many requests. Please try again later.",
+      code: "RATE_LIMIT_EXCEEDED",
+      status: 429
+    });
+  }
+  return null;
+}
+
+async function handleTokenAuth(request: NextRequest, metadata: AuthMetadata): Promise<NextResponse | { payload: JWTPayload }> {
+  const { accessToken, refreshToken, userAgent, ip } = metadata;
+  const payload = accessToken ? await JWTManager.verifyAccessToken(accessToken, userAgent, ip) : null;
+  if (payload) {
+    const storedNonce = request.cookies.get("nonce")?.value;
+    const isDev = process.env.NODE_ENV === "development" || ["localhost", "127.0.0.1"].some(h => request.headers.get("host")?.startsWith(h));
+    if (!storedNonce || payload.nonce !== storedNonce) {
+      if (!isDev) {
+        logger.warn(`[AuthMiddleware] Nonce mismatch for ${payload.sub}. Revoking session.`);
+        return createAuthErrorResponse({ message: "Session nonce invalid. Please login again.", code: "NONCE_MISMATCH", status: 401, clearCookies: true });
+      }
+      logger.warn(`[AuthMiddleware] ⚠️ Nonce mismatch bypassed in dev. Payload: ${payload.nonce}, Cookie: ${storedNonce}`);
+    }
+    return { payload };
+  }
+  if (!refreshToken) {
+    return createAuthErrorResponse({ message: "Authentication required.", code: "NO_TOKENS", status: 401, clearCookies: true });
+  }
+  const refreshResult = await JWTManager.refreshAccessToken(refreshToken, userAgent, ip);
+  if (!refreshResult) {
+    return createAuthErrorResponse({ message: "Invalid session. Please login again.", code: "INVALID_OR_EXPIRED_TOKEN", status: 401, clearCookies: true });
+  }
+  const newPayload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
+  return newPayload 
+    ? { payload: newPayload } 
+    : createAuthErrorResponse({ message: "Session refresh failed verification.", code: "REFRESH_VERIFY_FAILED", status: 401, clearCookies: true });
+}
+
+async function validateSecureSession(request: NextRequest, payload: JWTPayload, metadata: AuthMetadata): Promise<NextResponse | { nextSeed: string | undefined }> {
+  const secureSessionId = request.cookies.get("secure_session")?.value;
+  if (!secureSessionId) return { nextSeed: undefined };
+
+  const { ip, userAgent } = metadata;
+  const sessionValidation = await securityIntegration.validateSession(secureSessionId, request);
+  if (!sessionValidation.valid) {
+    logger.log(`[AuthMiddleware withAuth] Stateful session validation failed: ${sessionValidation.error}`);
+    await auditLogger.logSessionViolation(payload.sub, secureSessionId, sessionValidation.error || "Unknown reason", { userAgent, ip });
+    return createAuthErrorResponse({
+      message: "Session revoked or suspicious. Please login again.",
+      code: "SESSION_STATE_INVALID",
+      status: 401,
+      clearCookies: true
+    });
+  }
+
+  const isHighFreq = ["/api/game/addCoin", "/api/graphql"].some(path => request.nextUrl.pathname.startsWith(path));
+  if (isHighFreq) return { nextSeed: undefined };
+
+  const host = request.headers.get("host") || "";
+  const isDev = process.env.NODE_ENV === "development" || host.startsWith("localhost") || host.startsWith("127.0.0.1");
+  const providedSeed = request.cookies.get("session_seed")?.value;
+
+  if (!providedSeed) {
+    if (isDev) return { nextSeed: undefined };
+    return createAuthErrorResponse({ message: "Missing security sequence seed.", code: "MISSING_SESSION_SEED", status: 401 });
+  }
+
+  const seedResult = await securityIntegration.validateAndRotateSeed(secureSessionId, providedSeed);
+  if (!seedResult.valid) {
+    if (isDev) return { nextSeed: undefined };
+    return createAuthErrorResponse({ message: "Invalid session security seed.", code: "INVALID_SESSION_SEED", status: 401 });
+  }
+
+  return { nextSeed: seedResult.nextSeed };
+}
+
+export function withAuth<T extends unknown[]>(handler: (req: AuthenticatedRequest, ...args: T) => Promise<NextResponse>) {
+  return async (request: NextRequest, ...args: T): Promise<NextResponse> => {
     try {
-      // 0. Cloudflare WAF Verification
-      const { verifyCloudflareRequest } = await import('@/lib/request-utils');
-      if (!verifyCloudflareRequest(request)) {
-        logger.error('[AuthMiddleware] Request bypassed Cloudflare or missing edge headers.');
-        return createAuthErrorResponse('Direct access prohibited. Please use the official domain.', 'WAF_BYPASS_ATTEMPT', 403);
-      }
+      const wafRes = await verifyWafRequest(request);
+      if (wafRes) return wafRes;
 
-      const { accessToken, refreshToken, userAgent, ip } = extractAuthRequestMetadata(request);
+      const metadata = extractAuthRequestMetadata(request);
+      const rlRes = await performRateLimit(request, metadata);
+      if (rlRes) return rlRes;
 
-      logger.log('[AuthMiddleware withAuth] Attempting to get accessToken from cookies. Found:', accessToken ? 'Yes' : 'No');
+      const authResult = await handleTokenAuth(request, metadata);
+      if ("status" in authResult) return authResult;
 
-      // 1. Rate Limiting check before heavy operations
-      const { AdvancedRateLimiter } = await import('./advancedRateLimiter');
-      const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(
-        request,
-        ip, // Use IP as primary identifier for rate limiting before token verification
-        request.nextUrl.pathname,
-        securityIntegration.extractDeviceInfo(request)
-      );
-
-      if (!rateLimitResult.allowed) {
-        logger.warn(`[AuthMiddleware] Rate limit exceeded for IP ${ip} on path ${request.nextUrl.pathname}`);
-        await auditLogger.logRateLimitHit(ip, request.nextUrl.pathname, { userAgent, ip });
-        return createAuthErrorResponse('Too many requests. Please try again later.', 'RATE_LIMIT_EXCEEDED', 429);
-      }
-
-      if (!accessToken && !refreshToken) {
-        logger.warn('[AuthMiddleware withAuth] No tokens found in cookies.');
-        return createAuthErrorResponse('Authentication required.', 'NO_TOKENS', 401);
-      }
-
-      let payload = accessToken ? await JWTManager.verifyAccessToken(accessToken, userAgent, ip) : null;
-      logger.log('[AuthMiddleware withAuth] Initial access token verification payload:', payload);
-
-
-      if (!payload) {
-        logger.log('[AuthMiddleware withAuth] Access token invalid or expired. Attempting to refresh. Refresh token found:', refreshToken ? 'Yes' : 'No');
-
-        if (refreshToken) {
-          const refreshResult = await JWTManager.refreshAccessToken(refreshToken, userAgent, ip);
-          logger.log('[AuthMiddleware withAuth] Refresh token result:', refreshResult);
-
-          if (refreshResult) {
-            payload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
-            logger.log('[AuthMiddleware withAuth] Verification payload of newly refreshed access token:', payload);
-            if (!payload) {
-              logger.error("[AuthMiddleware withAuth] Failed to verify newly refreshed access token. This is unexpected.");
-              return createAuthErrorResponse('Session refresh succeeded, but new token verification failed. Please login again.', 'REFRESH_VERIFY_FAILED', 401);
-            }
-
-            (request as AuthenticatedRequest).user = payload;
-            const response = await handler(request as AuthenticatedRequest);
-
-            // 1. Issue/update CSRF token on refresh
-            const { CSRFManager } = await import('@/lib/csrf-utils');
-            const csrfToken = await CSRFManager.getOrCreateToken(payload.sub);
-
-            const requestHost = request.headers.get('host') || undefined; // Extract host
-            logger.log('[AuthMiddleware withAuth] Setting new tokens in cookies after refresh. Request Host:', requestHost);
-            response.cookies.set('accessToken', refreshResult.accessToken,
-              JWTManager.createSecureCookieOptions(15 * 60, requestHost) // Max age in seconds, pass requestHost
-            );
-            response.cookies.set('refreshToken', refreshResult.newRefreshToken,
-              JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost) // Max age in seconds, pass requestHost
-            );
-            response.cookies.set('csrfToken', csrfToken, {
-              httpOnly: false,
-              secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-              sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-              maxAge: 30 * 60,
-              path: '/',
-            });
-            
-            // 2. Refresh Nonce cookie to match session lifetime
-            const existingNonce = request.cookies.get('nonce')?.value;
-            if (existingNonce) {
-               response.cookies.set('nonce', existingNonce, 
-                 JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
-               );
-            }
-
-            return response;
-          } else {
-            logger.warn('[AuthMiddleware withAuth] Refresh token attempt failed.');
-          }
-        } else {
-          logger.warn('[AuthMiddleware withAuth] No refresh token found to attempt refresh.');
-        }
-        return createAuthErrorResponse('Invalid or expired access token, and refresh failed or not possible.', 'INVALID_OR_EXPIRED_TOKEN', 401, undefined, true);
-      }
-
-      // === Advanced Session Validation for withAuth ===
-      const secureSessionId = request.cookies.get('secure_session')?.value;
-      const host = request.headers.get('host') || '';
-      const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-      const isDev = process.env.NODE_ENV === 'development';
-
-      if (secureSessionId) {
-        const sessionValidation = await securityIntegration.validateSession(secureSessionId, request);
-        if (!sessionValidation.valid) {
-          logger.log(`[AuthMiddleware withAuth] Stateful session validation failed: ${sessionValidation.error}`);
-          await auditLogger.logSessionViolation(
-            payload.sub,
-            secureSessionId,
-            sessionValidation.error || 'Unknown reason',
-            { userAgent, ip }
-          );
-          return createAuthErrorResponse('Session revoked or suspicious. Please login again.', 'SESSION_STATE_INVALID', 401, undefined, true);
-        }
-
-        // === Session Binding 2.0: Rotating Seed Verification ===
-        // ✅ FIX: Bypass seed rotation for high-frequency game endpoints to prevent race conditions
-        const isHighFrequencyEndpoint = ['/api/game/addCoin', '/api/graphql'].some(path => request.nextUrl.pathname.startsWith(path));
-
-        if (!isHighFrequencyEndpoint) {
-          const providedSeed = request.cookies.get('session_seed')?.value;
-          if (providedSeed) {
-            const seedResult = await securityIntegration.validateAndRotateSeed(secureSessionId, providedSeed);
-            if (!seedResult.valid) {
-              if (isDev || isLocalhost) {
-                logger.warn(`[AuthMiddleware] ⚠️ Seed validation fail bypassed in development for session ${secureSessionId}`);
-              } else {
-                logger.warn(`[AuthMiddleware] Invalid session seed for session ${secureSessionId}`);
-                // ✅ FIX: Don't clear cookies on seed mismatch - allow client to resync
-                return createAuthErrorResponse('Invalid session security seed. Please retry.', 'INVALID_SESSION_SEED', 401, undefined, false);
-              }
-            }
-
-            // The new seed will be set in the response later
-            (request as any)._nextSeed = seedResult.nextSeed;
-          } else {
-            if (isDev || isLocalhost) {
-              logger.warn(`[AuthMiddleware] ⚠️ Missing session seed bypassed in development for session ${secureSessionId}`);
-            } else {
-              logger.warn(`[AuthMiddleware] Missing session seed for secure session ${secureSessionId}`);
-              // ✅ FIX: Don't clear cookies on missing seed - allow client to get new seed
-              return createAuthErrorResponse('Missing security sequence seed.', 'MISSING_SESSION_SEED', 401, undefined, false);
-            }
-          }
-        }
-      }
+      const { payload } = authResult;
+      const sessionResult = await validateSecureSession(request, payload, metadata);
+      if ("status" in sessionResult) return sessionResult;
 
       (request as AuthenticatedRequest).user = payload;
       const response = await handler(request as AuthenticatedRequest, ...args);
 
-      // Set the new seed in cookies if it was rotated
-      if ((request as any)._nextSeed) {
-        const requestHost = request.headers.get('host') || undefined;
-        response.cookies.set('session_seed', (request as any)._nextSeed,
+      if (sessionResult.nextSeed) {
+        const requestHost = request.headers.get("host") || undefined;
+        response.cookies.set("session_seed", sessionResult.nextSeed,
           JWTManager.createSecureCookieOptions(30 * 60, requestHost)
         );
       }
 
       return response;
-
     } catch (error: unknown) {
-      const errorMessage = error instanceof Error ? error.message : 'An unknown error occurred';
-      const errorStack = error instanceof Error ? error.stack : undefined;
-      logger.error('[AuthMiddleware withAuth] Error in middleware:', errorMessage, errorStack);
-      return createAuthErrorResponse('Authentication processing error.', 'AUTH_MIDDLEWARE_ERROR', 500);
+      const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
+      logger.error("[AuthMiddleware withAuth] Error in middleware:", errorMessage);
+      return createAuthErrorResponse({ message: "Authentication processing error.", code: "AUTH_MIDDLEWARE_ERROR", status: 500 });
     }
   };
 }
@@ -301,13 +276,13 @@ export async function validateTokenFromRequest(request: Request): Promise<JWTPay
       return null;
     }
 
-    logger.log('[validateTokenFromRequest] Attempting to verify accessToken:', accessToken.substring(0, 20) + "...");
+    logger.log("[validateTokenFromRequest] Attempting to verify accessToken:", `${accessToken.substring(0, 20)}...`);
     const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
 
     if (payload) {
-      logger.log('[validateTokenFromRequest] Access token verification successful. Payload sub:', payload.sub);
+      logger.log("[validateTokenFromRequest] Access token verification successful. Payload sub:", payload.sub);
     } else {
-      logger.warn('[validateTokenFromRequest] Access token verification failed (returned null). Token was:', accessToken.substring(0, 20) + "...");
+      logger.warn("[validateTokenFromRequest] Access token verification failed (returned null). Token was:", `${accessToken.substring(0, 20)}...`);
     }
     return payload;
 

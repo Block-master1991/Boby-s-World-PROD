@@ -4,27 +4,11 @@
  */
 
 import { professionalLogger } from '../index';
-
-export type BusinessEventType =
-    | 'USER_SIGNUP'
-    | 'USER_LOGIN'
-    | 'ORDER_PLACED'
-    | 'PAYMENT_SUCCESS'
-    | 'PAYMENT_FAILED'
-    | 'SUBSCRIPTION_RENEWED'
-    | 'SUBSCRIPTION_CANCELLED'
-    | 'FEATURE_USED'
-    | 'A_B_TEST_EVENT'
-    | 'BASKET_ABANDONED';
-
-export interface BusinessEvent {
-    type: BusinessEventType;
-    userId?: string;
-    value?: number;    // Monetary value or count
-    currency?: string;
-    properties?: Record<string, any>;
-    timestamp: number;
-}
+import type {
+    BusinessEvent,
+    LogBusinessEventParams,
+    LogFunnelParams
+} from '../types/BusinessTypes';
 
 /**
  * Business Logger Class
@@ -44,12 +28,9 @@ export class BusinessLogger {
     /**
      * Log a business event (KPI)
      */
-    logEvent(
-        type: BusinessEventType,
-        properties: Record<string, any> = {},
-        value?: number,
-        currency: string = 'USD'
-    ): void {
+    logEvent(params: LogBusinessEventParams): void {
+        const { type, properties = {}, value, currency = 'USD' } = params;
+        
         const event: BusinessEvent = {
             type,
             userId: properties.userId,
@@ -68,13 +49,9 @@ export class BusinessLogger {
     /**
      * Track Funnel Step
      */
-    logFunnelStep(
-        funnelName: string,
-        stepName: string,
-        stepNumber: number,
-        correlationId: string,
-        properties: Record<string, any> = {}
-    ): void {
+    logFunnelStep(params: LogFunnelParams): void {
+        const { funnelName, stepName, stepNumber, correlationId, properties = {} } = params;
+
         professionalLogger.info(`[FUNNEL] ${funnelName} - Step ${stepNumber}: ${stepName}`, {
             business: true,
             funnel: {
@@ -96,11 +73,14 @@ export class BusinessLogger {
         action: 'EXPOSURE' | 'CONVERSION',
         userId: string
     ): void {
-        this.logEvent('A_B_TEST_EVENT', {
-            experimentId,
-            variantId,
-            action,
-            userId
+        this.logEvent({
+            type: 'A_B_TEST_EVENT',
+            properties: {
+                experimentId,
+                variantId,
+                action,
+                userId
+            }
         });
     }
 }

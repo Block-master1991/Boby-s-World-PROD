@@ -71,7 +71,7 @@ export class ConsoleTransport {
     log(
         level: string,
         message: string,
-        metadata?: Record<string, any>,
+        metadata?: Record<string, unknown>,
         error?: Error
     ): void {
         if (!this.config.enabled) {
@@ -79,8 +79,9 @@ export class ConsoleTransport {
         }
 
         // Check level
-        const levelNum = LOG_LEVELS[level.toLowerCase()] || LOG_LEVELS.info;
-        const configLevelNum = LOG_LEVELS[this.config.level || 'info'];
+        const levelKey = level.toLowerCase();
+        const levelNum = (LOG_LEVELS[levelKey] ?? LOG_LEVELS['info']) ?? 30;
+        const configLevelNum = (LOG_LEVELS[this.config.level || 'info'] ?? LOG_LEVELS['info']) ?? 30;
 
         if (levelNum < configLevelNum) {
             return; // Below minimum level
@@ -100,7 +101,7 @@ export class ConsoleTransport {
     private logPretty(
         level: string,
         message: string,
-        metadata?: Record<string, any>,
+        metadata?: Record<string, unknown>,
         error?: Error
     ): void {
         const parts: string[] = [];
@@ -117,8 +118,9 @@ export class ConsoleTransport {
         parts.push(coloredLevel);
 
         // Correlation ID
-        if (metadata?.correlationId) {
-            const shortId = metadata.correlationId.substring(0, 8);
+        if (metadata && metadata['correlationId']) {
+            const correlationId = String(metadata['correlationId']);
+            const shortId = correlationId.substring(0, 8);
             parts.push(this.colorize(COLORS.cyan, `[${shortId}]`));
         }
 
@@ -135,7 +137,7 @@ export class ConsoleTransport {
             if (Object.keys(filteredMetadata).length > 0) {
                 try {
                     consoleMethod(this.colorize(COLORS.dim, JSON.stringify(filteredMetadata, null, 2)));
-                } catch (err) {
+                } catch {
                     consoleMethod(this.colorize(COLORS.dim, '[Circular or Unserializable Metadata]'));
                 }
             }
@@ -153,21 +155,21 @@ export class ConsoleTransport {
     private logJSON(
         level: string,
         message: string,
-        metadata?: Record<string, any>,
+        metadata?: Record<string, unknown>,
         error?: Error
     ): void {
-        const logEntry: Record<string, any> = {
+        const logEntry: Record<string, unknown> = {
             level,
             message,
             timestamp: new Date().toISOString()
         };
 
         if (metadata && Object.keys(metadata).length > 0) {
-            logEntry.metadata = this.filterMetadata(metadata);
+            logEntry['metadata'] = this.filterMetadata(metadata);
         }
 
         if (error) {
-            logEntry.error = {
+            logEntry['error'] = {
                 name: error.name,
                 message: error.message,
                 stack: error.stack
@@ -181,13 +183,13 @@ export class ConsoleTransport {
     /**
      * Filter metadata (remove internal fields)
      */
-    private filterMetadata(metadata: Record<string, any>): Record<string, any> {
+    private filterMetadata(metadata: Record<string, unknown>): Record<string, unknown> {
         const filtered = { ...metadata };
 
         // Remove internal fields
-        delete filtered.correlationId; // Already shown separately
-        delete filtered.args;           // Internal
-        delete filtered.gameLoop;       // Internal flag
+        delete filtered['correlationId']; // Already shown separately
+        delete filtered['args'];           // Internal
+        delete filtered['gameLoop'];       // Internal flag
 
         return filtered;
     }
@@ -195,7 +197,7 @@ export class ConsoleTransport {
     /**
      * Get appropriate console method
      */
-    private getConsoleMethod(level: string): (...args: any[]) => void {
+    private getConsoleMethod(level: string): (...args: unknown[]) => void {
         switch (level.toLowerCase()) {
             case 'fatal':
             case 'error':
@@ -214,7 +216,8 @@ export class ConsoleTransport {
      * Colorize text
      */
     private colorize(color: string, text: string): string {
-        if (!this.config.colors || typeof process === 'undefined' || !process.stdout?.isTTY) {
+        const isProduction = process.env['NODE_ENV'] === 'production';
+        if (!this.config.colors || isProduction) {
             return text;
         }
 
@@ -269,9 +272,9 @@ export class ConsoleTransport {
  */
 export const consoleTransport = new ConsoleTransport({
     enabled: true,
-    level: process.env.LOG_LEVEL as any || 'info',
-    pretty: process.env.NODE_ENV !== 'production',
-    colors: process.env.NODE_ENV !== 'production',
+    level: (process.env['LOG_LEVEL'] as 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal') || 'info',
+    pretty: process.env['NODE_ENV'] !== 'production',
+    colors: process.env['NODE_ENV'] !== 'production',
     timestamps: true,
     includeMetadata: true
 });
@@ -282,7 +285,7 @@ export const consoleTransport = new ConsoleTransport({
 export function logToConsole(
     level: string,
     message: string,
-    metadata?: Record<string, any>,
+    metadata?: Record<string, unknown>,
     error?: Error
 ): void {
     consoleTransport.log(level, message, metadata, error);

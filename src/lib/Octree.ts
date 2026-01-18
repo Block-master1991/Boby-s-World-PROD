@@ -70,8 +70,8 @@ class Octree<T> {
     }
 
     private subdivide(node: OctreeNode<T>): void {
-        const min = node.bounds.min;
-        const max = node.bounds.max;
+        const {min} = node.bounds;
+        const {max} = node.bounds;
         const halfSize = new THREE.Vector3().subVectors(max, min).multiplyScalar(0.5);
 
         const subBounds = [
@@ -86,7 +86,7 @@ class Octree<T> {
         ];
 
         for (let i = 0; i < 8; i++) {
-            node.children[i] = new OctreeNode<T>(subBounds[i], node.depth + 1);
+            node.children[i] = new OctreeNode<T>(subBounds[i]!, node.depth + 1);
         }
 
         const objectsToRedistribute = node.objects;
@@ -232,3 +232,4 @@ class Octree<T> {
 
 export { Octree };
 export type { OctreeObject };
+

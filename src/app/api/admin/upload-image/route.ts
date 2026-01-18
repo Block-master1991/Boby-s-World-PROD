@@ -1,10 +1,10 @@
-import { NextResponse } from 'next/server';
-import { logger } from '@/utils/logger';
-import { writeFile, mkdir, unlink } from 'fs/promises';
-import { join } from 'path';
 import type { AdminRequest } from '@/lib/admin-middleware';
 import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { logger } from '@/utils/logger';
+import { mkdir, unlink, writeFile } from 'fs/promises';
+import { NextResponse } from 'next/server';
+import { join } from 'path';
 
 export const POST = withAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
     try {
@@ -27,7 +27,7 @@ export const POST = withAdminAuth(withCsrfProtection(async (request: AdminReques
         // Ensure directory exists
         try {
             await mkdir(uploadDir, { recursive: true });
-        } catch (err) {
+        } catch {
             // Directory might already exist
         }
 

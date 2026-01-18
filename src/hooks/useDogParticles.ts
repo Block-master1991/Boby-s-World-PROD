@@ -1,5 +1,5 @@
-import type { MutableRefObject} from 'react';
-import { useRef, useCallback, useEffect } from 'react';
+import type { MutableRefObject } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 
 interface UseDogParticlesProps {
@@ -9,48 +9,33 @@ interface UseDogParticlesProps {
   isRunning: boolean; // true if dog is in running animation
 }
 
-export const useDogParticles = ({ sceneRef, dogMeshRef, dogSpeed, isRunning }: UseDogParticlesProps) => {
-  const particleSystemRef = useRef<THREE.Points | null>(null);
-  const particlesGeometryRef = useRef<THREE.BufferGeometry | null>(null);
-  const particlesMaterialRef = useRef<THREE.PointsMaterial | null>(null);
+const useParticleState = () => {
   const particlePositions = useRef<Float32Array>(new Float32Array());
   const particleVelocities = useRef<Float32Array>(new Float32Array());
   const particleOpacities = useRef<Float32Array>(new Float32Array());
   const particleAges = useRef<Float32Array>(new Float32Array());
   const particleMaxAges = useRef<Float32Array>(new Float32Array());
+  return { particlePositions, particleVelocities, particleOpacities, particleAges, particleMaxAges };
+};
 
-  const maxParticles = 500; // Max number of particles
-  const particleSize = 0.05;
-  const baseEmissionRate = 0.5; // Particles per frame when walking
-  const runningEmissionMultiplier = 3; // Multiplier when running
+const useParticleInitialization = (sceneRef: MutableRefObject<THREE.Scene | null>, state: ReturnType<typeof useParticleState>) => {
+  const particleSystemRef = useRef<THREE.Points | null>(null);
+  const particlesGeometryRef = useRef<THREE.BufferGeometry | null>(null);
 
   useEffect(() => {
     if (!sceneRef.current) return;
-    
     const scene = sceneRef.current;
-
     particlesGeometryRef.current = new THREE.BufferGeometry();
-    particlesMaterialRef.current = new THREE.PointsMaterial({
-      color: 0x8B4513, // Brown color for dust
-      size: particleSize,
-      transparent: true,
-      blending: THREE.AdditiveBlending,
-      depthWrite: false,
-      vertexColors: false, // We'll manage opacity via attributes
-    });
-
-    particlePositions.current = new Float32Array(maxParticles * 3);
-    particleVelocities.current = new Float32Array(maxParticles * 3);
-    particleOpacities.current = new Float32Array(maxParticles);
-    particleAges.current = new Float32Array(maxParticles);
-    particleMaxAges.current = new Float32Array(maxParticles);
-
-    particlesGeometryRef.current.setAttribute('position', new THREE.BufferAttribute(particlePositions.current, 3));
-    particlesGeometryRef.current.setAttribute('opacity', new THREE.BufferAttribute(particleOpacities.current, 1)); // Custom attribute for opacity
-
-    particleSystemRef.current = new THREE.Points(particlesGeometryRef.current, particlesMaterialRef.current);
-    sceneRef.current.add(particleSystemRef.current);
-
+    const material = new THREE.PointsMaterial({ color: 0x8B4513, size: 0.05, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+    state.particlePositions.current = new Float32Array(500 * 3);
+    state.particleVelocities.current = new Float32Array(500 * 3);
+    state.particleOpacities.current = new Float32Array(500);
+    state.particleAges.current = new Float32Array(500).fill(0);
+    state.particleMaxAges.current = new Float32Array(500).fill(0);
+    particlesGeometryRef.current.setAttribute('position', new THREE.BufferAttribute(state.particlePositions.current, 3));
+    particlesGeometryRef.current.setAttribute('opacity', new THREE.BufferAttribute(state.particleOpacities.current, 1));
+    particleSystemRef.current = new THREE.Points(particlesGeometryRef.current, material);
+    scene.add(particleSystemRef.current);
     return () => {
       if (particleSystemRef.current) {
         scene.remove(particleSystemRef.current);
@@ -59,85 +44,82 @@ export const useDogParticles = ({ sceneRef, dogMeshRef, dogSpeed, isRunning }: U
       }
     };
   }, [sceneRef]);
+  return { particleSystemRef, particlesGeometryRef };
+};
 
+const useParticleLifecycle = (
+  state: ReturnType<typeof useParticleState>,
+  particlesGeometryRef: MutableRefObject<THREE.BufferGeometry | null>
+) => {
   const emitParticle = useCallback((position: THREE.Vector3) => {
     if (!particlesGeometryRef.current) return;
-
     let index = -1;
-    // Find an inactive particle slot
-    for (let i = 0; i < maxParticles; i++) {
-      if (particleAges.current[i] >= particleMaxAges.current[i]) {
-        index = i;
-        break;
-      }
+    for (let i = 0; i < 500; i++) {
+        const age = state.particleAges.current[i];
+        const maxAge = state.particleMaxAges.current[i];
+        if (age !== undefined && maxAge !== undefined && age >= maxAge) { index = i; break; }
     }
-
-    if (index === -1) return; // No available particle slots
-
+    if (index === -1) return;
     const i3 = index * 3;
-    const i1 = index;
+    state.particlePositions.current[i3] = position.x + (Math.random() - 0.5) * 0.2;
+    state.particlePositions.current[i3 + 1] = position.y - 0.1;
+    state.particlePositions.current[i3 + 2] = position.z + (Math.random() - 0.5) * 0.2;
+    state.particleVelocities.current[i3] = (Math.random() - 0.5) * 0.01;
+    state.particleVelocities.current[i3 + 1] = 0.01 + Math.random() * 0.02;
+    state.particleVelocities.current[i3 + 2] = (Math.random() - 0.5) * 0.01;
+    state.particleOpacities.current[index] = 1.0;
+    state.particleAges.current[index] = 0;
+    state.particleMaxAges.current[index] = 50 + Math.random() * 50;
+  }, [state, particlesGeometryRef]);
 
-    // Initial position (slightly behind and below the dog's feet)
-    particlePositions.current[i3] = position.x + (Math.random() - 0.5) * 0.2;
-    particlePositions.current[i3 + 1] = position.y - 0.1; // Slightly below dog
-    particlePositions.current[i3 + 2] = position.z + (Math.random() - 0.5) * 0.2;
+  return { emitParticle };
+};
 
-    // Initial velocity (upwards and slightly outwards)
-    particleVelocities.current[i3] = (Math.random() - 0.5) * 0.01;
-    particleVelocities.current[i3 + 1] = 0.01 + Math.random() * 0.02; // Upwards
-    particleVelocities.current[i3 + 2] = (Math.random() - 0.5) * 0.01;
+const updateSingleParticle = (
+  i: number,
+  state: ReturnType<typeof useParticleState>,
+  positions: Float32Array,
+  opacities: Float32Array
+) => {
+  const i3 = i * 3;
+  const age = state.particleAges.current[i];
+  const maxAge = state.particleMaxAges.current[i];
+  if (age === undefined || maxAge === undefined || age >= maxAge) {
+    if (opacities[i] !== undefined) opacities[i] = 0;
+    return;
+  }
+  positions[i3] = (positions[i3] ?? 0) + (state.particleVelocities.current[i3] ?? 0);
+  positions[i3 + 1] = (positions[i3 + 1] ?? 0) + (state.particleVelocities.current[i3 + 1] ?? 0);
+  positions[i3 + 2] = (positions[i3 + 2] ?? 0) + (state.particleVelocities.current[i3 + 2] ?? 0);
+  const vY = state.particleVelocities.current[i3 + 1];
+  if (vY !== undefined) state.particleVelocities.current[i3 + 1] = vY - 0.001;
+  const newAge = age + 1;
+  state.particleAges.current[i] = newAge;
+  opacities[i] = 1.0 - (newAge / maxAge);
+};
 
-    particleOpacities.current[i1] = 1.0;
-    particleAges.current[i1] = 0;
-    particleMaxAges.current[i1] = 50 + Math.random() * 50; // Particle lifetime in frames
-  }, []);
+export const useDogParticles = ({ sceneRef, dogMeshRef, dogSpeed, isRunning }: UseDogParticlesProps) => {
+  const state = useParticleState();
+  const { particleSystemRef, particlesGeometryRef } = useParticleInitialization(sceneRef, state);
+  const { emitParticle } = useParticleLifecycle(state, particlesGeometryRef);
 
   const updateParticles = useCallback(() => {
-    if (!particleSystemRef.current || !particlesGeometryRef.current || !dogMeshRef.current) return;
-
-    const positions = particlesGeometryRef.current.attributes.position.array as Float32Array;
-    const opacities = particlesGeometryRef.current.attributes.opacity.array as Float32Array;
-
-    // Emit new particles based on dog's movement
-    if (dogSpeed > 0.01) { // Only emit if dog is moving
-      const emissionRate = isRunning ? baseEmissionRate * runningEmissionMultiplier : baseEmissionRate;
-      const numToEmit = Math.floor(emissionRate);
-      for (let i = 0; i < numToEmit; i++) {
-        emitParticle(dogMeshRef.current.position);
-      }
-      if (Math.random() < (emissionRate - numToEmit)) { // Fractional emission
-        emitParticle(dogMeshRef.current.position);
-      }
+    const geom = particlesGeometryRef.current;
+    if (!particleSystemRef.current || !geom || !dogMeshRef.current) return;
+    const posAttr = geom.attributes['position'];
+    const opacAttr = geom.attributes['opacity'];
+    if (!posAttr || !opacAttr) return;
+    const positions = posAttr.array as Float32Array;
+    const opacities = opacAttr.array as Float32Array;
+    if (dogSpeed > 0.01) {
+      const rate = isRunning ? 1.5 : 0.5;
+      for (let i = 0; i < Math.floor(rate); i++) emitParticle(dogMeshRef.current.position);
+      if (Math.random() < (rate % 1)) emitParticle(dogMeshRef.current.position);
     }
+    for (let i = 0; i < 500; i++) updateSingleParticle(i, state, positions, opacities);
+    posAttr.needsUpdate = true;
+    opacAttr.needsUpdate = true;
+  }, [dogMeshRef, dogSpeed, isRunning, emitParticle, state, particlesGeometryRef, particleSystemRef]);
 
-    // Update existing particles
-    for (let i = 0; i < maxParticles; i++) {
-      const i3 = i * 3;
-      const i1 = i;
-
-      if (particleAges.current[i1] < particleMaxAges.current[i1]) {
-        // Update position based on velocity
-        positions[i3] += particleVelocities.current[i3];
-        positions[i3 + 1] += particleVelocities.current[i3 + 1];
-        positions[i3 + 2] += particleVelocities.current[i3 + 2];
-
-        // Apply gravity (simple downward force)
-        particleVelocities.current[i3 + 1] -= 0.001;
-
-        // Update opacity based on age
-        particleAges.current[i1]++;
-        opacities[i1] = 1.0 - (particleAges.current[i1] / particleMaxAges.current[i1]);
-      } else {
-        // Make particle invisible if its age is maxed
-        opacities[i1] = 0;
-      }
-    }
-
-    particlesGeometryRef.current.attributes.position.needsUpdate = true;
-    particlesGeometryRef.current.attributes.opacity.needsUpdate = true;
-  }, [dogMeshRef, dogSpeed, isRunning, emitParticle]);
-
-  return {
-    updateParticles,
-  };
+  return { updateParticles };
 };

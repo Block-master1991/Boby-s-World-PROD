@@ -3,31 +3,29 @@
  * GET /api/auth/webauthn/manage
  */
 
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase-admin';
 import type { AuthenticatedRequest } from '@/lib/auth-middleware';
 import { withAuth } from '@/lib/auth-middleware';
+import { WebAuthnService } from '@/lib/webauthn-service';
 import { logger } from '@/utils/logger';
+import { NextResponse } from 'next/server';
 
-// Define the actual handler function
-const handler = async (request: AuthenticatedRequest) => {
+/**
+ * Returns a sanitized list of passkeys for the authenticated user.
+ * Sensitive data like raw public keys are removed in the service layer.
+ */
+export const GET = withAuth(async (request: AuthenticatedRequest) => {
     try {
-        const userId = request.user.sub; // Get userId from authenticated session
+        const userId = request.user.sub;
 
         if (!userId) {
             return NextResponse.json({ error: 'Authenticated UserID required' }, { status: 401 });
         }
 
-        const passkeysSnapshot = await db.collection('players').doc(userId).collection('passkeys').get();
-        const passkeys = passkeysSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })); // Include document ID
+        const passkeys = await WebAuthnService.listUserPasskeys(userId);
 
-        logger.log("Returning passkeys:", passkeys); // Debugging line
-        return NextResponse.json({ success: true, passkeys: passkeys }); // Explicitly pass passkeys object
+        return NextResponse.json({ success: true, passkeys });
     } catch (error) {
-        logger.error('[WebAuthn Manage GET] Error:', error as Error);
+        logger.error('[WebAuthn Manage GET] Error:', error instanceof Error ? error.message : String(error));
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
-};
-
-// Export the handler wrapped with middleware
-export const GET = withAuth(handler);
+});

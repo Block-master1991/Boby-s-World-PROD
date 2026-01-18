@@ -138,7 +138,7 @@ export class PIIRedactor {
      */
     private redactValue(value: unknown, fieldName?: string): unknown {
         // Null or undefined
-        if (value == null) {
+        if (value === null || value === undefined) {
             return value;
         }
 
@@ -191,7 +191,7 @@ export class PIIRedactor {
         let result = str;
 
         // Apply built-in patterns
-        for (const [name, config] of Object.entries(PII_PATTERNS)) {
+        for (const [, config] of Object.entries(PII_PATTERNS)) {
             if (typeof config.replacement === 'function') {
                 result = result.replace(config.pattern, config.replacement);
             } else {
@@ -222,11 +222,9 @@ export class PIIRedactor {
 
         // Partial match in strict mode
         if (this.config.strictMode) {
-            for (const sensitive of SENSITIVE_FIELD_NAMES) {
-                if (normalized.includes(sensitive)) {
-                    return true;
-                }
-            }
+            return Array.from(SENSITIVE_FIELD_NAMES).some(sensitive => 
+                normalized.includes(sensitive)
+            );
         }
 
         return false;

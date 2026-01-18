@@ -1,12 +1,20 @@
-import { NextResponse } from 'next/server';
+import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
+import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { initializeAdminApp } from '@/lib/firebase-admin';
+import { createStoreItem, getAllStoreItems, updateStoreItem, type StoreItemDefinition } from '@/lib/server-items';
+import type { StoreItemDocument } from '@/types/database';
 import { logger } from '@/utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import { initializeAdminApp } from '@/lib/firebase-admin';
-import { getAllStoreItems, createStoreItem, updateStoreItem } from '@/lib/server-items';
-import type { AdminRequest } from '@/lib/admin-middleware';
-import { withAdminAuth, withSignedAdminAuth } from '@/lib/admin-middleware';
-import { withCsrfProtection } from '@/lib/csrf-middleware';
-import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+import { NextResponse } from 'next/server';
+
+// Helper to map specialized definition to universal document type
+function mapToDocument(item: StoreItemDefinition): StoreItemDocument {
+    return {
+        ...item,
+        usdPrice: item.price, // Map price to usdPrice as they are semantically equivalent here
+    };
+}
 
 // Initial items data
 const initialItems = [
@@ -56,20 +64,13 @@ const initialItems = [
     },
 ];
 
-export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
-    try {
-        await initializeAdminApp();
-        const db = getFirestore();
-
-        logger.log('🔍 Checking existing store items...');
-
-        // 1. ID Synchronization
-        // Ensure Document ID matches internal id field
-        logger.log('🔄 Checking for ID mismatches...');
-        const storeSnapshot = await db.collection('storeItems').get();
-
-        for (const doc of storeSnapshot.docs) {
-            const data = doc.data();
+function synchronizeIds(db: FirebaseFirestore.Firestore) {
+    logger.log('🔄 Checking for ID mismatches...');
+    
+    // Using explicit promise return to avoid "async function has no await"
+    return db.collection('storeItems').get().then((storeSnapshot) => {
+        const migrationPromises = storeSnapshot.docs.map((doc) => {
+            const data = doc.data() as Partial<StoreItemDocument>;
             const documentId = doc.id;
             const internalId = data.id;
 
@@ -77,74 +78,103 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
                 logger.log(`⚠️ ID Mismatch found: Document ID "${documentId}" != Internal ID "${internalId}"`);
                 logger.log(`🔄 Migrating document to correct ID...`);
 
-                // Create new document with correct ID
-                await db.collection('storeItems').doc(internalId).set(data);
-                // Delete old document with random ID
-                await db.collection('storeItems').doc(documentId).delete();
+                // Transactional migration for safety
+                return db.runTransaction((t) => {
+                    t.set(db.collection('storeItems').doc(internalId), data);
+                    t.delete(db.collection('storeItems').doc(documentId));
+                    logger.log(`✅ Migration complete for ID "${internalId}"`);
+                    return Promise.resolve();
+                });
+            }
+            return Promise.resolve();
+        });
 
-                logger.log(`✅ Migration complete for ID "${internalId}"`);
+        return Promise.all(migrationPromises);
+    });
+}
+
+async function processItems(existingItems: StoreItemDocument[]) {
+    const existingIds = existingItems.map(item => item.id);
+    const results: StoreItemDocument[] = [];
+    let addedCount = 0;
+
+    // Parallelize processing with Promise.all
+    await Promise.all(initialItems.map(async (item) => {
+        if (!existingIds.includes(item.id)) {
+            logger.log(`➕ Adding item: ${item.name} (ID: ${item.id})`);
+            const result = await createStoreItem(item);
+            
+            if (result.success && result.item) {
+                results.push(mapToDocument(result.item));
+                addedCount++;
+                logger.log(`✅ Successfully added: ${item.name}`);
+            } else {
+                logger.error(`❌ Failed to add item ${item.name}: ${result.message}`);
+            }
+        } else {
+            logger.log(`🔄 Updating existing item: ${item.name} (ID: ${item.id})`);
+            const result = await updateStoreItem(item.id, {
+                name: item.name,
+                description: item.description,
+                price: item.price,
+                image: item.image,
+                type: item.type,
+                rarity: item.rarity,
+                isActive: item.isActive,
+            });
+
+            if (result.success && result.item) {
+                results.push(mapToDocument(result.item));
+                logger.log(`✅ Successfully updated: ${item.name}`);
+            } else {
+                logger.error(`❌ Failed to update item ${item.name}: ${result.message}`);
             }
         }
+    }));
+
+    return { results, addedCount };
+}
+
+export const POST = withSignedAdminAuth(withCsrfProtection(async (request) => {
+    try {
+        await initializeAdminApp();
+        const db = getFirestore();
+
+        logger.log('🔍 Checking existing store items...');
+
+        // 1. ID Synchronization
+        await synchronizeIds(db);
 
         // Get existing items after synchronization
         const existingItems = await getAllStoreItems();
-        const existingIds = existingItems.map(item => item.id);
-
-        logger.log(`📊 Found ${existingItems.length} existing items:`, existingIds);
+        // Manually map to strictly typed documents to ensure usdPrice exists
+        const typedExistingItems: StoreItemDocument[] = existingItems.map(mapToDocument);
+        
+        logger.log(`📊 Found ${typedExistingItems.length} existing items`);
 
         // Add missing items or update existing ones
-        let addedCount = 0;
-        const results = [];
-
-        for (const item of initialItems) {
-            if (!existingIds.includes(item.id)) {
-                logger.log(`➕ Adding item: ${item.name} (ID: ${item.id})`);
-
-                const newItem = await createStoreItem(item);
-                results.push(newItem);
-                addedCount++;
-
-                logger.log(`✅ Successfully added: ${item.name}`);
-            } else {
-                logger.log(`🔄 Updating existing item: ${item.name} (ID: ${item.id})`);
-
-                // Update existing item with new values from initialItems
-                const updatedItem = await updateStoreItem(item.id, {
-                    name: item.name,
-                    description: item.description,
-                    price: item.price,
-                    image: item.image,
-                    type: item.type,
-                    rarity: item.rarity,
-                    isActive: item.isActive,
-                });
-
-                results.push(updatedItem);
-                logger.log(`✅ Successfully updated: ${item.name}`);
-            }
-        }
+        const { results, addedCount } = await processItems(typedExistingItems);
 
         logger.log(`\n🎉 Initialization complete!`);
         logger.log(`📊 Added ${addedCount} new items`);
-        logger.log(`📊 Total items in store: ${existingItems.length + addedCount}`);
+        logger.log(`📊 Total items in store: ${typedExistingItems.length + addedCount}`);
 
         const response = NextResponse.json({
             success: true,
             message: `Successfully initialized store items`,
             stats: {
-                existingItems: existingItems.length,
+                existingItems: typedExistingItems.length,
                 addedItems: addedCount,
-                totalItems: existingItems.length + addedCount,
+                totalItems: typedExistingItems.length + addedCount,
             },
             addedItems: results,
         });
 
-        // Use unified helper to update CSRF
         const requestHost = request.headers.get('host') || undefined;
         return await setCsrfTokenResponse(response, request.user.sub, requestHost);
 
     } catch (error) {
-        logger.error('❌ Error initializing store items:', error as Error);
+        logger.error('❌ Error initializing store items:', error instanceof Error ? error.message : String(error));
         return NextResponse.json(
             {
                 success: false,
@@ -156,17 +186,18 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
     }
 }));
 
-export const GET = withAdminAuth(async (request: AdminRequest) => {
+export const GET = withAdminAuth(async () => {
     try {
         const items = await getAllStoreItems();
+        const typedItems = items.map(mapToDocument);
 
         return NextResponse.json({
             success: true,
-            items: items,
-            count: items.length,
+            items: typedItems,
+            count: typedItems.length,
         });
     } catch (error) {
-        logger.error('❌ Error fetching store items:', error as Error);
+        logger.error('❌ Error fetching store items:', error instanceof Error ? error.message : String(error));
         return NextResponse.json(
             {
                 success: false,

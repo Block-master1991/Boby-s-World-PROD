@@ -1,15 +1,15 @@
-import { NextResponse } from 'next/server';
-import { logger } from '@/utils/logger';
-import type { AuthenticatedRequest} from '@/lib/auth-middleware';
-import { withAuth, createAuthErrorResponse } from '@/lib/auth-middleware';
+import type { AuthenticatedRequest } from '@/lib/auth-middleware';
+import { createAuthErrorResponse, withAuth } from '@/lib/auth-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+import { logger } from '@/utils/logger';
+import { NextResponse } from 'next/server';
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   logger.log('[SESSION CHECK] Secured session check request');
   try {
     const jwtPayload = request.user;
     if (!jwtPayload) {
-      return createAuthErrorResponse('Not authenticated.', 'NOT_AUTHENTICATED', 401);
+      return createAuthErrorResponse({ message: 'Not authenticated.', code: 'NOT_AUTHENTICATED', status: 401 });
     }
 
     // 1. Strict Nonce Verification (Consistency Check)
@@ -23,7 +23,12 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         logger.warn(`[SESSION CHECK] ⚠️ Nonce mismatch bypassed in development. Payload: ${jwtPayload.nonce}, Cookie: ${storedNonce}`);
       } else {
         logger.warn(`[SESSION CHECK] Nonce mismatch or missing! Payload: ${jwtPayload.nonce}, Cookie: ${storedNonce}`);
-        return createAuthErrorResponse('Session nonce invalid or missing. Please login again.', 'NONCE_MISMATCH', 401, undefined, true);
+        return createAuthErrorResponse({
+          message: 'Session nonce invalid or missing. Please login again.',
+          code: 'NONCE_MISMATCH',
+          status: 401,
+          clearCookies: true
+        });
       }
     }
 
@@ -41,6 +46,6 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     return await setCsrfTokenResponse(response, jwtPayload.sub, requestHost);
   } catch (error) {
     logger.error('[SESSION CHECK] Unexpected error:', error as Error);
-    return createAuthErrorResponse('Session check failed.', 'INTERNAL_ERROR', 500);
+    return createAuthErrorResponse({ message: 'Session check failed.', code: 'INTERNAL_ERROR', status: 500 });
   }
 });

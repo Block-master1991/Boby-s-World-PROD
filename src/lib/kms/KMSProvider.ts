@@ -3,7 +3,6 @@
  * Interface for Key Management Service providers
  */
 
-
 export interface KMSProvider {
     readonly name: string;
     readonly isHardwareBacked: boolean;
@@ -11,7 +10,7 @@ export interface KMSProvider {
     /**
      * Generate a new key
      */
-    generateKey(algorithm: any): Promise<CryptoKey>;
+    generateKey(algorithm: AlgorithmIdentifier): Promise<CryptoKey>;
 
     /**
      * Encrypt data

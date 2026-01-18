@@ -45,26 +45,38 @@ interface LeavesOptions {
 }
 
 export default class TreeOptions {
-  public seed: number;
-  public type: TreeType;
-  public bark: BarkOptions;
-  public branch: BranchOptions;
-  public leaves: LeavesOptions;
-  public windStrength: { x: number; y: number; z: number };
-  public windFrequency: number;
-  public windScale: number;
+  public seed!: number;
+  public type!: TreeType;
+  public bark!: BarkOptions;
+  public branch!: BranchOptions;
+  public leaves!: LeavesOptions;
+  public windStrength!: { x: number; y: number; z: number };
+  public windFrequency!: number;
+  public windScale!: number;
   
   // Index signature to allow string indexing
   [key: string]: number | TreeType | BarkOptions | BranchOptions | LeavesOptions | object | { x: number; y: number; z: number };
 
   constructor() {
+    this.initializeBasicProperties();
+    this.initializeWindProperties();
+    this.initializeBarkProperties();
+    this.initializeBranchProperties();
+    this.initializeLeavesProperties();
+  }
+
+  private initializeBasicProperties(): void {
     this.seed = 0;
     this.type = TreeType.Deciduous;
+  }
 
+  private initializeWindProperties(): void {
     this.windStrength = { x: 0.1, y: 0, z: 0.1 }; // Greatly reduced wind strength for trees
     this.windFrequency = 0.1; // Greatly reduced wind frequency for trees
     this.windScale = 70; // Default wind scale for trees
+  }
 
+  private initializeBarkProperties(): void {
     this.bark = {
       type: BarkType.Oak,
       tint: 0xffffff,
@@ -72,72 +84,29 @@ export default class TreeOptions {
       textured: true,
       textureScale: { x: 1, y: 1 },
     };
+  }
 
+  private initializeBranchProperties(): void {
     this.branch = {
       levels: 3,
-      angle: {
-        1: 70,
-        2: 60,
-        3: 60,
-      },
-      children: {
-        0: 7,
-        1: 7,
-        2: 5,
-      },
+      angle: { 1: 70, 2: 60, 3: 60 },
+      children: { 0: 7, 1: 7, 2: 5 },
       force: {
         direction: { x: 0, y: 1, z: 0 },
         strength: 0.01,
       },
-      gnarliness: {
-        0: 0.15,
-        1: 0.2,
-        2: 0.3,
-        3: 0.02,
-      },
-      length: {
-        0: 15,
-        1: 15,
-        2: 8,
-        3: 0.8,
-      },
-      radius: {
-        0: 1.2,
-        1: 0.6,
-        2: 0.6,
-        3: 0.6,
-      },
-      sections: {
-        0: 12,
-        1: 10,
-        2: 8,
-        3: 6,
-      },
-      segments: {
-        0: 8,
-        1: 6,
-        2: 4,
-        3: 3,
-      },
-      start: {
-        1: 0.4,
-        2: 0.3,
-        3: 0.3,
-      },
-      taper: {
-        0: 0.7,
-        1: 0.7,
-        2: 0.7,
-        3: 0.7,
-      },
-      twist: {
-        0: 0,
-        1: 0,
-        2: 0,
-        3: 0,
-      },
+      gnarliness: { 0: 0.15, 1: 0.2, 2: 0.3, 3: 0.02 },
+      length: { 0: 15, 1: 15, 2: 8, 3: 0.8 },
+      radius: { 0: 1.2, 1: 0.6, 2: 0.6, 3: 0.6 },
+      sections: { 0: 12, 1: 10, 2: 8, 3: 6 },
+      segments: { 0: 8, 1: 6, 2: 4, 3: 3 },
+      start: { 1: 0.4, 2: 0.3, 3: 0.3 },
+      taper: { 0: 0.7, 1: 0.7, 2: 0.7, 3: 0.7 },
+      twist: { 0: 0, 1: 0, 2: 0, 3: 0 },
     };
+  }
 
+  private initializeLeavesProperties(): void {
     this.leaves = {
       type: LeafType.Oak,
       billboard: Billboard.Double,
@@ -153,25 +122,36 @@ export default class TreeOptions {
 
   /**
    * Copies the values from source into this object
-   * @param {TreeOptions} source 
+   * @param {TreeOptions} source
    */
   copy(source: TreeOptions): void {
     for (const key in source) {
-      if (Object.prototype.hasOwnProperty.call(source, key) && Object.prototype.hasOwnProperty.call(this, key)) {
-        if (typeof source[key] === 'object' && source[key] !== null && !Array.isArray(source[key])) {
-          // Recursively copy for nested objects
-          // Ensure the target property is an object before attempting to copy into it
-          if (typeof this[key] === 'object' && this[key] !== null) {
-            Object.assign(this[key], source[key]);
-          } else {
-            // If target property is not an object, just assign the source object
-            this[key] = source[key];
-          }
+      if (!Object.prototype.hasOwnProperty.call(source, key) ||
+          !Object.prototype.hasOwnProperty.call(this, key)) {
+        continue;
+      }
+
+      const sourceValue = source[key];
+      if (sourceValue === undefined) {
+        continue;
+      }
+
+      // Handle nested objects recursively
+      if (this.isPlainObject(sourceValue)) {
+        const targetValue = this[key];
+        if (this.isPlainObject(targetValue)) {
+          Object.assign(targetValue, sourceValue);
         } else {
-          // For primitive values or arrays, directly assign
-          this[key] = source[key];
+          this[key] = sourceValue;
         }
+      } else {
+        // For primitive values or arrays, directly assign
+        this[key] = sourceValue;
       }
     }
+  }
+
+  private isPlainObject(value: unknown): value is Record<string, unknown> {
+    return typeof value === 'object' && value !== null && !Array.isArray(value);
   }
 }

@@ -30,7 +30,7 @@ const DEFAULT_CONFIG: RetentionConfig = {
 export class RetentionService {
     private static instance: RetentionService;
     private config: RetentionConfig;
-    private interval: NodeJS.Timeout | null = null;
+    private interval: ReturnType<typeof setInterval> | null = null;
 
     // In a real app, these would interact with storage APIs
     private deleteHook: ((type: string, before: number) => Promise<number>) | null = null;
@@ -66,10 +66,17 @@ export class RetentionService {
 
     startScheduler() {
         if (this.interval) clearInterval(this.interval);
-        this.interval = setInterval(() => this.runRetentionChecks(), this.config.checkInterval);
+        this.interval = setInterval(() => {
+            this.runRetentionChecks().catch(err => {
+                professionalLogger.error('[RetentionService] Scheduler check failed', err);
+            });
+        }, this.config.checkInterval);
 
         // Don't keep process alive (Node.js)
-        if (this.interval.unref) this.interval.unref();
+        const timer = this.interval as unknown as { unref?: () => void };
+        if (timer && typeof timer.unref === 'function') {
+            timer.unref();
+        }
     }
 
     async runRetentionChecks() {
@@ -78,25 +85,28 @@ export class RetentionService {
             return;
         }
 
+        const activeDeleteHook = this.deleteHook;
+        const activeArchiveHook = this.archiveHook;
+
         professionalLogger.info('[RetentionService] Starting retention checks...');
 
-        for (const policy of this.config.policies) {
+        // Process all policies in parallel for better performance
+        await Promise.all(this.config.policies.map(async (policy) => {
             try {
-                // Calculate cutoff timestamps
                 const now = Date.now();
                 const deleteCutoff = now - (policy.daysToKeep * 24 * 60 * 60 * 1000);
 
                 // 1. Archiving
-                if (policy.archiveAfterDays && this.archiveHook) {
+                if (policy.archiveAfterDays && activeArchiveHook) {
                     const archiveCutoff = now - (policy.archiveAfterDays * 24 * 60 * 60 * 1000);
-                    const archivedCount = await this.archiveHook(policy.logType, archiveCutoff);
+                    const archivedCount = await activeArchiveHook(policy.logType, archiveCutoff);
                     if (archivedCount > 0) {
                         professionalLogger.info(`[Retention] Archived ${archivedCount} ${policy.logType} logs older than ${policy.archiveAfterDays} days`);
                     }
                 }
 
                 // 2. Deletion
-                const deletedCount = await this.deleteHook(policy.logType, deleteCutoff);
+                const deletedCount = await activeDeleteHook(policy.logType, deleteCutoff);
                 if (deletedCount > 0) {
                     professionalLogger.info(`[Retention] Deleted ${deletedCount} ${policy.logType} logs older than ${policy.daysToKeep} days`);
                 }
@@ -104,7 +114,7 @@ export class RetentionService {
             } catch (err) {
                 professionalLogger.error(`[Retention] Failed processing policy for ${policy.logType}`, err);
             }
-        }
+        }));
 
         professionalLogger.info('[RetentionService] Retention checks completed');
     }

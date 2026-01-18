@@ -1,7 +1,7 @@
-import { initializeAdminApp } from './firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
-import redis from './redis';
 import { logger } from '@/utils/logger';
+import { getFirestore } from 'firebase-admin/firestore';
+import { initializeAdminApp } from './firebase-admin';
+import redis from './redis';
 
 // Get IP status from Redis cache or Firestore
 export async function isIpInList(list: 'whitelist' | 'blacklist', ip: string): Promise<boolean> {
@@ -28,13 +28,13 @@ export async function isIpInList(list: 'whitelist' | 'blacklist', ip: string): P
     await initializeAdminApp();
     const db = getFirestore();
     const doc = await db.collection(`ratelimit_${list}`).doc(ip).get();
-    const exists = doc.exists;
+    const {exists} = doc;
 
     // Cache the result in Redis (e.g., 10 minutes)
     if (redis) {
       try {
         await redis.set(redisKey, exists ? '1' : '0', 'EX', 600);
-      } catch (e) { /* ignore redis set error */ }
+      } catch { /* ignore redis set error */ }
     }
     return exists;
   } catch (error) {

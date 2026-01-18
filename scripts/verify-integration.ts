@@ -1,23 +1,23 @@
 
-import { encryptData, decryptData } from '../src/utils/encryption';
+import { decryptData, encryptData } from '../src/utils/encryption';
 
 // Mock LocalStorage
 class MockStorage {
-    private store: { [key: string]: string } = {};
+    private store: Record<string, string> = {};
 
-    getItem(key: string) {
+    getItem(key: string): string | null {
         return this.store[key] || null;
     }
 
-    setItem(key: string, value: string) {
+    setItem(key: string, value: string): void {
         this.store[key] = value;
     }
 
-    removeItem(key: string) {
+    removeItem(key: string): void {
         delete this.store[key];
     }
 
-    clear() {
+    clear(): void {
         this.store = {};
     }
 }
@@ -25,12 +25,13 @@ class MockStorage {
 const localStorage = new MockStorage();
 const PERSISTENCE_KEY = 'offline_penalty_queue_v1';
 
+interface PenaltyItem {
+    id: string;
+    amount: number;
+}
+
 // Simulation of GameUI Logic
-const queue: any[] = [];
-const addToQueue = (item: any) => {
-    queue.push(item);
-    saveQueue();
-};
+const queue: PenaltyItem[] = [];
 
 const saveQueue = () => {
     if (queue.length === 0) {
@@ -39,10 +40,15 @@ const saveQueue = () => {
     }
     const encoded = encryptData(queue);
     localStorage.setItem(PERSISTENCE_KEY, encoded);
-    console.log("💾 Saved to Storage (Encrypted):", encoded.substring(0, 30) + "...");
+    console.log("💾 Saved to Storage (Encrypted):", `${encoded.substring(0, 30)}...`);
 };
 
-const loadQueue = () => {
+const addToQueue = (item: PenaltyItem) => {
+    queue.push(item);
+    saveQueue();
+};
+
+const loadQueue = (): PenaltyItem[] => {
     const stored = localStorage.getItem(PERSISTENCE_KEY);
     if (!stored) return [];
 
@@ -50,10 +56,11 @@ const loadQueue = () => {
         const parsed = decryptData(stored);
         if (Array.isArray(parsed)) {
             console.log("📂 Loaded from Storage (Decrypted):", parsed);
-            return parsed;
+            return parsed as PenaltyItem[];
         }
-    } catch (e) {
-        console.error("Load failed", e);
+    } catch (e: unknown) {
+        const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+        console.error("Load failed", errorMessage);
     }
     return [];
 };
@@ -64,7 +71,7 @@ console.log("\n🚀 Starting Persistence Integration Test...\n");
 
 // 1. Simulate adding a penalty
 console.log("Step 1: User hits enemy (Adding Penalty)...");
-const penaltyItem = { id: "penalty-1", amount: 50 };
+const penaltyItem: PenaltyItem = { id: "penalty-1", amount: 50 };
 addToQueue(penaltyItem);
 
 // 2. Verify Storage contains encrypted data
@@ -87,7 +94,7 @@ if (storedValue?.includes("amount")) {
 console.log("\nStep 2: Simulating Page Reload (Clearing Memory)...");
 const memoryQueueAfterReload = loadQueue();
 
-if (memoryQueueAfterReload.length === 1 && memoryQueueAfterReload[0].id === "penalty-1") {
+if (memoryQueueAfterReload.length === 1 && memoryQueueAfterReload[0]?.id === "penalty-1") {
     console.log("✅ Verified: Data recovered successfully after reload.");
 } else {
     console.error("❌ FAIL: Data recovery failed.", memoryQueueAfterReload);
@@ -96,7 +103,7 @@ if (memoryQueueAfterReload.length === 1 && memoryQueueAfterReload[0].id === "pen
 
 // 4. Simulate Processing & Removal
 console.log("\nStep 3: Simulating Successful Server Sync (Removing Item)...");
-// Assume server processed it, remove from queue
+// Assume server processed it, remove from item
 queue.shift(); // Remove simulated item
 saveQueue(); // Save empty queue
 

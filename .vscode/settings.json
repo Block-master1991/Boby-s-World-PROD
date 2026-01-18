@@ -4,5 +4,75 @@
     "Codegeex.Comment.LanguagePreference": "English",
     "Codegeex.CommitMessage.LanguagePreference": "English",
     "Codegeex.RepoIndex": true,
-    "Codegeex.CommitMessageStyle": "Default"
+    "Codegeex.CommitMessageStyle": "Default",
+
+    // TypeScript settings
+    "typescript.preferences.importModuleSpecifier": "relative",
+    "typescript.preferences.quoteStyle": "double",
+    "typescript.preferences.includePackageJsonAutoImports": "auto",
+    "typescript.suggest.autoImports": true,
+    "typescript.updateImportsOnFileMove.enabled": "always",
+    "typescript.preferences.preferTypeOnlyAutoImports": true,
+    "typescript.inlayHints.parameterNames.enabled": "all",
+    "typescript.inlayHints.variableTypes.enabled": true,
+    "typescript.inlayHints.functionLikeReturnTypes.enabled": true,
+    "typescript.inlayHints.propertyDeclarationTypes.enabled": true,
+
+    // ESLint settings
+    "eslint.enable": true,
+    "eslint.validate": [
+        "javascript",
+        "javascriptreact",
+        "typescript",
+        "typescriptreact"
+    ],
+    "eslint.codeAction.showDocumentation": {
+        "enable": true
+    },
+    "eslint.run": "onType",
+    "eslint.codeActionsOnSave.mode": "all",
+    "eslint.format.enable": true,
+    "eslint.workingDirectories": ["."],
+
+    // Editor settings for better error detection
+    "editor.codeActionsOnSave": {
+        "source.fixAll.eslint": "explicit",
+        "source.organizeImports": "explicit"
+    },
+    "editor.formatOnSave": false, // Will be handled by Prettier
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+
+    // File associations
+    "files.associations": {
+        "*.tsx": "typescriptreact",
+        "*.ts": "typescript",
+        "*.jsx": "javascriptreact",
+        "*.js": "javascript"
+    },
+
+    // Exclude files from search and file watcher
+    "files.exclude": {
+        "**/.git": true,
+        "**/.DS_Store": true,
+        "**/node_modules": true,
+        "**/.next": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/*.log": true
+    },
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/.next": true,
+        "**/dist": true,
+        "**/build": true,
+        "**/*.log": true
+    },
+
+    // Problem matcher for better error display
+    "typescript.tsc.autoDetect": "on",
+
+    // IntelliSense settings
+    "javascript.preferences.importModuleSpecifier": "relative",
+    "javascript.suggest.autoImports": true,
+    "javascript.updateImportsOnFileMove.enabled": "always"
 }

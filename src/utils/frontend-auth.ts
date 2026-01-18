@@ -1,6 +1,6 @@
 
-import { logger } from './logger';
 import bs58 from 'bs58';
+import { logger } from './logger';
 
 /**
  * Creates the necessary headers for a signed admin action.
@@ -14,7 +14,7 @@ import bs58 from 'bs58';
 export async function createSignedAdminHeaders(
     signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | undefined,
     publicKey: { toString: () => string } | null,
-    body: any
+    body: unknown
 ): Promise<HeadersInit> {
     if (!signMessage || !publicKey) {
         throw new Error('Wallet not connected or does not support signing.');

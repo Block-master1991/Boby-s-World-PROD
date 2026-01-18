@@ -1,20 +1,19 @@
 // GPU Instancing System for High-Performance Rendering
 // Optimizes rendering of repetitive objects like trees, grass, and rocks
+/* eslint-disable @typescript-eslint/no-explicit-any */
 
 import type {
-    Camera} from '@/lib/three-chunk';
+    Camera
+} from '@/lib/three-chunk';
 import {
+    Box3,
+    Euler,
+    Frustum,
     InstancedMesh,
     Matrix4,
-    Vector3,
-    Quaternion,
-    Euler,
-    Object3D,
-    Box3,
-    Sphere,
-    Frustum,
     Matrix4 as ThreeMatrix4,
-    Vector3 as ThreeVector3
+    Vector3 as ThreeVector3,
+    Vector3
 } from '@/lib/three-chunk';
 
 interface InstanceData {
@@ -26,8 +25,8 @@ interface InstanceData {
 }
 
 interface InstancedObjectConfig {
-    geometry: any; // Three.js geometry
-    material: any; // Three.js material
+    geometry: any; // Three.js geometry - requires any for Three.js compatibility
+    material: any; // Three.js material - requires any for Three.js compatibility
     maxInstances: number;
     lodDistances?: number[];
     castShadow?: boolean;
@@ -40,7 +39,6 @@ class GPUInstancingManager {
     private activeInstances = new Map<string, number>();
     private cameraFrustum = new Frustum();
     private tempMatrix = new Matrix4();
-    private tempVector = new Vector3();
     private tempBox = new Box3();
 
     constructor(private camera: Camera) { }
@@ -116,8 +114,11 @@ class GPUInstancingManager {
 
         // Move last instance to this position (swap and pop)
         if (index < activeCount - 1) {
-            instances[index] = instances[activeCount - 1];
-            this.updateInstanceMatrix(id, index, instances[index]);
+            const lastInstance = instances[activeCount - 1];
+            if (lastInstance) {
+                instances[index] = lastInstance;
+                this.updateInstanceMatrix(id, index, lastInstance);
+            }
         }
 
         instances.pop();
@@ -128,14 +129,14 @@ class GPUInstancingManager {
     updateInstances(): void {
         this.updateCameraFrustum();
 
-        for (const [id, mesh] of this.instancedMeshes) {
+        for (const [id] of this.instancedMeshes) {
             this.updateLODCulling(id);
         }
     }
 
     // Update camera frustum for culling
     private updateCameraFrustum(): void {
-        const camera = this.camera;
+        const {camera} = this;
         const matrix = new ThreeMatrix4().multiplyMatrices(
             camera.projectionMatrix,
             camera.matrixWorldInverse
@@ -153,6 +154,8 @@ class GPUInstancingManager {
 
         for (let i = 0; i < instances.length; i++) {
             const instance = instances[i];
+            if (!instance) continue;
+
             const distance = cameraPosition.distanceTo(instance.position);
 
             // Frustum culling
@@ -161,11 +164,12 @@ class GPUInstancingManager {
 
             // LOD calculation
             let lodLevel = 0;
-            const config = mesh.userData.config as InstancedObjectConfig;
+            const config = mesh.userData['config'] as InstancedObjectConfig | undefined;
 
-            if (config.lodDistances) {
+            if (config?.lodDistances) {
                 for (let lod = 0; lod < config.lodDistances.length; lod++) {
-                    if (distance > config.lodDistances[lod]) {
+                    const lodDistance = config.lodDistances[lod];
+                    if (lodDistance !== undefined && distance > lodDistance) {
                         lodLevel = lod + 1;
                     }
                 }

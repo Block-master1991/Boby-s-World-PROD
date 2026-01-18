@@ -9,6 +9,49 @@
 
 const TARGET_URL = 'http://localhost:3000/api/graphql'; // Adjust port if needed
 
+function logRequestResult(index: number, status: number | string, duration: number) {
+    console.log(`[Req ${index}] ${typeof status === 'number' && status === 429 ? 'BLOCKED' : 'STATUS'} (${status}) - Took ${duration}ms`);
+}
+
+async function performAttackRequest(index: number) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
+    const start = Date.now();
+    try {
+        const res = await fetch(TARGET_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'User-Agent': 'AttackBot/1.0', // This triggers bot detection too
+            },
+            body: JSON.stringify({ query: "{ hello }" }),
+            signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const duration = Date.now() - start;
+
+        if (res.status === 429) {
+            logRequestResult(index, 429, duration);
+            return { blocked: true, success: false };
+        } 
+        
+        if (res.ok) {
+            console.log(`[Req ${index}] SUCCESS (200) - Took ${duration}ms`);
+            return { blocked: false, success: true };
+        }
+
+        logRequestResult(index, res.status, duration);
+        return { blocked: res.status === 403, success: false };
+
+    } catch (error: unknown) {
+        clearTimeout(timeoutId);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.log(`[Req ${index}] ERROR: ${errorMessage}`);
+        return { blocked: false, success: false };
+    }
+}
+
 async function simulateAttack() {
     console.log(`[Attack] Starting flood attack on ${TARGET_URL}...`);
 
@@ -16,40 +59,14 @@ async function simulateAttack() {
     let successfulCount = 0;
 
     for (let i = 0; i < 50; i++) {
-        try {
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 2000);
+        // eslint-disable-next-line no-await-in-loop
+        const result = await performAttackRequest(i);
+        if (result.blocked) blockedCount++;
+        if (result.success) successfulCount++;
 
-            const start = Date.now();
-            const res = await fetch(TARGET_URL, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'User-Agent': 'AttackBot/1.0', // This triggers bot detection too
-                },
-                body: JSON.stringify({ query: "{ hello }" }),
-                signal: controller.signal
-            });
-            clearTimeout(timeoutId);
-
-            if (res.status === 429) {
-                console.log(`[Req ${i}] BLOCKED (429) - Took ${Date.now() - start}ms`);
-                blockedCount++;
-            } else if (res.ok) {
-                console.log(`[Req ${i}] SUCCESS (200) - Took ${Date.now() - start}ms`);
-                successfulCount++;
-            } else {
-                console.log(`[Req ${i}] STATUS ${res.status} - Took ${Date.now() - start}ms`);
-                // Assume block if 403/Forbidden often used for blacklist
-                if (res.status === 403) blockedCount++;
-            }
-
-            // Fast flood, but slight delay to prevent OS socket exhaustion locally
-            await new Promise(r => setTimeout(r, 50));
-
-        } catch (e: any) {
-            console.log(`[Req ${i}] ERROR: ${e.message}`);
-        }
+        // Fast flood, but slight delay to prevent OS socket exhaustion locally
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise(r => setTimeout(r, 50));
     }
 
     console.log('\n--- Simulation Results ---');
@@ -63,4 +80,7 @@ async function simulateAttack() {
     }
 }
 
-simulateAttack();
+simulateAttack().catch(err => {
+    console.error('Simulation failed:', err);
+    process.exit(1);
+});

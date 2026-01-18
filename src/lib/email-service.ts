@@ -14,8 +14,8 @@ export interface EmailOptions {
 
 export class EmailService {
     private static instance: EmailService;
-    private readonly apiKey = process.env.RESEND_API_KEY;
-    private readonly fromEmail = process.env.FROM_EMAIL || 'security@boby.world';
+    private readonly apiKey = process.env['RESEND_API_KEY'];
+    private readonly fromEmail = process.env['FROM_EMAIL'] || 'security@boby.world';
 
     private constructor() { }
 
@@ -29,7 +29,7 @@ export class EmailService {
     /**
      * Sends a recovery email with the provided code.
      */
-    public async sendRecoveryEmail(to: string, code: string): Promise<boolean> {
+    public sendRecoveryEmail(to: string, code: string): Promise<boolean> {
         const subject = 'Boby World - Account Recovery Code';
         const text = `Your account recovery code is: ${code}. This code will expire in 1 hour. If you did not request this, please ignore this email.`;
         const html = `
@@ -47,6 +47,13 @@ export class EmailService {
         `;
 
         return this.sendEmail({ to, subject, text, html });
+    }
+
+    /**
+     * Sends a custom email with subject and text.
+     */
+    public sendCustomEmail(to: string, subject: string, text: string): Promise<boolean> {
+        return this.sendEmail({ to, subject, text, html: `<div style="font-family: sans-serif; padding: 20px; color: #333;">${text}</div>` });
     }
 
     /**

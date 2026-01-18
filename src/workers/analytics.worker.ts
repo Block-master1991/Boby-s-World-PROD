@@ -4,106 +4,18 @@
 /// <reference lib="webworker" />
 
 import { logger } from 'utils/logger';
+import {
+    PerformancePredictor,
+    type AnalyticsBatch,
+    type CurrentConditions,
+    type MetricData,
+    type PerformanceEvent,
+    type PerformanceEventInput,
+    type ProcessedMetrics,
+    type QualitySettings
+} from './analyticsUtils';
 
-type MetricData = {
-    fps?: number;
-    loadTime?: number;
-    memoryUsage?: number;
-};
-
-type ErrorData = {
-    type?: string;
-};
-
-type UserActionData = {
-    action?: string;
-};
-
-type GameEventData = {
-    event?: string;
-};
-
-type PerformanceEvent =
-  | {
-      type: 'metric';
-      timestamp: number;
-      data: MetricData;
-      sessionId: string;
-      userId?: string;
-    }
-  | {
-      type: 'error';
-      timestamp: number;
-      data: ErrorData;
-      sessionId: string;
-      userId?: string;
-    }
-  | {
-      type: 'user_action';
-      timestamp: number;
-      data: UserActionData;
-      sessionId: string;
-      userId?: string;
-    }
-  | {
-      type: 'game_event';
-      timestamp: number;
-      data: GameEventData;
-      sessionId: string;
-      userId?: string;
-    };
-
-interface ProcessedMetrics {
-    fps: { samples: number[]; avg: number; min: number; max: number };
-    loadTimes: { samples: number[]; avg: number; p95: number };
-    memoryUsage: { samples: number[]; avg: number; peak: number };
-    errors: { count: number; types: Record<string, number> };
-    userActions: { count: number; types: Record<string, number> };
-    gameEvents: { count: number; types: Record<string, number> };
-}
-
-interface QualitySettings {
-    lodDistance: number;
-    shadowQuality: number;
-    particleCount: number;
-    textureQuality: number;
-    antialias: boolean;
-}
-
-interface CurrentConditions {
-    deviceType: 'mobile' | 'desktop';
-    batteryLevel?: number;
-    networkType?: string;
-}
-
-type PerformanceEventInput =
-  | {
-      type: 'metric';
-      data: MetricData;
-      userId?: string;
-    }
-  | {
-      type: 'error';
-      data: ErrorData;
-      userId?: string;
-    }
-  | {
-      type: 'user_action';
-      data: UserActionData;
-      userId?: string;
-    }
-  | {
-      type: 'game_event';
-      data: GameEventData;
-      userId?: string;
-    };
-
-interface AnalyticsBatch {
-    events: PerformanceEvent[];
-    batchId: string;
-    startTime: number;
-    endTime: number;
-}
+// --- Analytics Processor Class ---
 
 class AnalyticsProcessor {
     private eventBuffer: PerformanceEvent[] = [];
@@ -123,11 +35,10 @@ class AnalyticsProcessor {
             ...event,
             timestamp: Date.now(),
             sessionId: this.sessionId,
-        };
+        } as PerformanceEvent;
 
         this.eventBuffer.push(fullEvent);
 
-        // Auto-flush if buffer is full
         if (this.eventBuffer.length >= this.batchSize) {
             this.flushEvents();
         }
@@ -135,13 +46,13 @@ class AnalyticsProcessor {
 
     // Process and aggregate performance metrics
     processMetrics(events: PerformanceEvent[]): ProcessedMetrics {
-        const metrics = {
+        const metrics: ProcessedMetrics = {
             fps: { samples: [], avg: 0, min: Infinity, max: 0 },
             loadTimes: { samples: [], avg: 0, p95: 0 },
             memoryUsage: { samples: [], avg: 0, peak: 0 },
-            errors: { count: 0, types: {} as Record<string, number> },
-            userActions: { count: 0, types: {} as Record<string, number> },
-            gameEvents: { count: 0, types: {} as Record<string, number> },
+            errors: { count: 0, types: {} },
+            userActions: { count: 0, types: {} },
+            gameEvents: { count: 0, types: {} },
         };
 
         events.forEach(event => {
@@ -170,9 +81,7 @@ class AnalyticsProcessor {
             }
         });
 
-        // Calculate aggregates
         this.calculateAggregates(metrics);
-
         return metrics;
     }
 
@@ -194,46 +103,38 @@ class AnalyticsProcessor {
     }
 
     private calculateAggregates(metrics: ProcessedMetrics): void {
-        // FPS aggregates
-        if (metrics.fps.samples.length > 0) {
-            metrics.fps.avg = metrics.fps.samples.reduce((a: number, b: number) => a + b, 0) / metrics.fps.samples.length;
-        }
+        const calculateAvg = (samples: number[]) => 
+            samples.length > 0 ? samples.reduce((a, b) => a + b, 0) / samples.length : 0;
 
-        // Load time aggregates
+        metrics.fps.avg = calculateAvg(metrics.fps.samples);
+        metrics.memoryUsage.avg = calculateAvg(metrics.memoryUsage.samples);
+
         if (metrics.loadTimes.samples.length > 0) {
-            const sorted = metrics.loadTimes.samples.sort((a: number, b: number) => a - b);
+            const sorted = [...metrics.loadTimes.samples].sort((a, b) => a - b);
             const p95Index = Math.floor(sorted.length * 0.95);
-            metrics.loadTimes.avg = sorted.reduce((a: number, b: number) => a + b, 0) / sorted.length;
-            metrics.loadTimes.p95 = sorted[p95Index];
-        }
-
-        // Memory aggregates
-        if (metrics.memoryUsage.samples.length > 0) {
-            metrics.memoryUsage.avg = metrics.memoryUsage.samples.reduce((a: number, b: number) => a + b, 0) / metrics.memoryUsage.samples.length;
+            metrics.loadTimes.avg = calculateAvg(sorted);
+            metrics.loadTimes.p95 = sorted[p95Index] ?? 0;
         }
     }
 
-    private async flushEvents(): Promise<void> {
+    flushEvents(): void {
         if (this.eventBuffer.length === 0) return;
 
         const batch: AnalyticsBatch = {
             events: [...this.eventBuffer],
-            batchId: `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            batchId: `batch_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
             startTime: this.eventBuffer[0]?.timestamp || Date.now(),
             endTime: Date.now(),
         };
 
-        // Process the batch
         const processedData = this.processMetrics(batch.events);
 
-        // Send to main thread for storage/transmission
         self.postMessage({
             type: 'ANALYTICS_BATCH_READY',
             batch,
             processedData,
         });
 
-        // Clear buffer
         this.eventBuffer = [];
     }
 
@@ -243,18 +144,12 @@ class AnalyticsProcessor {
         }, this.flushInterval);
     }
 
-    // Get current stats
     getStats() {
         return {
             bufferedEvents: this.eventBuffer.length,
             batchSize: this.batchSize,
             flushInterval: this.flushInterval,
         };
-    }
-
-    // Force flush remaining events
-    async forceFlush(): Promise<void> {
-        await this.flushEvents();
     }
 
     dispose(): void {
@@ -266,169 +161,81 @@ class AnalyticsProcessor {
     }
 }
 
-// Performance prediction and optimization
-class PerformancePredictor {
-    private performanceHistory: Array<{
-        timestamp: number;
-        fps: number;
-        memoryUsage: number;
-        drawCalls: number;
-        qualitySettings: QualitySettings;
-    }> = [];
+// --- Main Worker Initialization ---
 
-    private maxHistorySize = 100;
-
-    // Record performance snapshot
-    recordPerformanceSnapshot(snapshot: {
-        fps: number;
-        memoryUsage: number;
-        drawCalls: number;
-        qualitySettings: QualitySettings;
-    }): void {
-        this.performanceHistory.push({
-            timestamp: Date.now(),
-            ...snapshot,
-        });
-
-        if (this.performanceHistory.length > this.maxHistorySize) {
-            this.performanceHistory.shift();
-        }
-    }
-
-    // Predict optimal quality settings
-    predictOptimalSettings(currentConditions: CurrentConditions): QualitySettings {
-        if (this.performanceHistory.length < 5) {
-            // Not enough data, return conservative defaults
-            return this.getConservativeDefaults(currentConditions.deviceType);
-        }
-
-        // Analyze recent performance
-        const recentHistory = this.performanceHistory.slice(-10);
-        const avgFps = recentHistory.reduce((sum, h) => sum + h.fps, 0) / recentHistory.length;
-        const avgMemory = recentHistory.reduce((sum, h) => sum + h.memoryUsage, 0) / recentHistory.length;
-
-        // Predict based on device type and performance
-        return this.calculateOptimalSettings(avgFps, avgMemory, currentConditions);
-    }
-
-    private getConservativeDefaults(deviceType: 'mobile' | 'desktop'): QualitySettings {
-        if (deviceType === 'mobile') {
-            return {
-                lodDistance: 25,
-                shadowQuality: 0.5,
-                particleCount: 50,
-                textureQuality: 0.7,
-                antialias: false,
-            };
-        } else {
-            return {
-                lodDistance: 50,
-                shadowQuality: 0.8,
-                particleCount: 100,
-                textureQuality: 1.0,
-                antialias: true,
-            };
-        }
-    }
-
-    private calculateOptimalSettings(avgFps: number, avgMemory: number, conditions: CurrentConditions): QualitySettings {
-        const settings = { ...this.getConservativeDefaults(conditions.deviceType) };
-
-        // Adjust based on FPS
-        if (avgFps > 50) {
-            settings.lodDistance *= 1.5;
-            settings.particleCount *= 1.5;
-        } else if (avgFps < 30) {
-            settings.lodDistance *= 0.7;
-            settings.particleCount *= 0.5;
-            settings.shadowQuality *= 0.5;
-        }
-
-        // Adjust based on memory
-        const memoryMB = avgMemory / (1024 * 1024);
-        if (memoryMB > 200) {
-            settings.textureQuality *= 0.8;
-        } else if (memoryMB < 100) {
-            settings.textureQuality = Math.min(1.0, settings.textureQuality * 1.2);
-        }
-
-        // Device-specific adjustments
-        if (conditions.deviceType === 'mobile') {
-            if (conditions.batteryLevel && conditions.batteryLevel < 20) {
-                settings.lodDistance *= 0.8;
-                settings.particleCount *= 0.5;
-            }
-        }
-
-        return settings;
-    }
-}
-
-// Main worker logic
 let analyticsProcessor: AnalyticsProcessor | null = null;
 let performancePredictor: PerformancePredictor | null = null;
 
-// Message handler
-self.onmessage = async (event) => {
-    const { type, data } = event.data;
+// --- Message Handlers ---
 
-    switch (type) {
-        case 'INIT_ANALYTICS':
+interface HandlerData {
+    sessionId?: string;
+    event?: PerformanceEventInput;
+    snapshot?: {
+        fps: number;
+        memoryUsage: number;
+        drawCalls: number;
+        qualitySettings: QualitySettings;
+    };
+    conditions?: CurrentConditions;
+}
+
+const handlers: Record<string, (data: HandlerData) => Promise<void> | void> = {
+    INIT_ANALYTICS: (data) => {
+        if (data.sessionId) {
             analyticsProcessor = new AnalyticsProcessor(data.sessionId);
             performancePredictor = new PerformancePredictor();
             self.postMessage({ type: 'ANALYTICS_INITIALIZED' });
-            break;
-
-        case 'ADD_EVENT':
-            if (analyticsProcessor) {
-                analyticsProcessor.addEvent(data.event);
-            }
-            break;
-
-        case 'RECORD_PERFORMANCE':
-            if (performancePredictor) {
-                performancePredictor.recordPerformanceSnapshot(data.snapshot);
-            }
-            break;
-
-        case 'PREDICT_SETTINGS':
-            if (performancePredictor) {
-                const optimalSettings = performancePredictor.predictOptimalSettings(data.conditions);
-                self.postMessage({
-                    type: 'OPTIMAL_SETTINGS_PREDICTED',
-                    settings: optimalSettings
-                });
-            }
-            break;
-
-        case 'GET_STATS': {
-            const stats = {
-                analytics: analyticsProcessor?.getStats(),
-                performanceHistory: performancePredictor ?
-                    `History size: ${performancePredictor['performanceHistory'].length}` : 'No data',
-            };
-            self.postMessage({ type: 'STATS_RESPONSE', stats });
-            break;
         }
+    },
+    ADD_EVENT: (data) => {
+        if (data.event) {
+            analyticsProcessor?.addEvent(data.event);
+        }
+    },
+    RECORD_PERFORMANCE: (data) => {
+        if (data.snapshot) {
+            performancePredictor?.recordPerformanceSnapshot(data.snapshot);
+        }
+    },
+    PREDICT_SETTINGS: (data) => {
+        if (performancePredictor && data.conditions) {
+            const settings = performancePredictor.predictOptimalSettings(data.conditions);
+            self.postMessage({ type: 'OPTIMAL_SETTINGS_PREDICTED', settings });
+        }
+    },
+    GET_STATS: () => {
+        const stats = {
+            analytics: analyticsProcessor?.getStats(),
+            performanceHistory: performancePredictor ? 
+                `History size: ${performancePredictor.getHistoryCount()}` : 'No data',
+        };
+        self.postMessage({ type: 'STATS_RESPONSE', stats });
+    },
+    FORCE_FLUSH: () => {
+        analyticsProcessor?.flushEvents();
+        self.postMessage({ type: 'FLUSH_COMPLETED' });
+    },
+    DISPOSE: () => {
+        analyticsProcessor?.dispose();
+        analyticsProcessor = null;
+        performancePredictor = null;
+        self.postMessage({ type: 'DISPOSED' });
+    }
+};
 
-        case 'FORCE_FLUSH':
-            if (analyticsProcessor) {
-                await analyticsProcessor.forceFlush();
-                self.postMessage({ type: 'FLUSH_COMPLETED' });
-            }
-            break;
+self.onmessage = async (event) => {
+    const { type, data } = event.data;
+    const handler = handlers[type];
 
-        case 'DISPOSE':
-            if (analyticsProcessor) {
-                analyticsProcessor.dispose();
-                analyticsProcessor = null;
-            }
-            performancePredictor = null;
-            self.postMessage({ type: 'DISPOSED' });
-            break;
-
-        default:
-            logger.warn(`[AnalyticsWorker] Unknown message type: ${type}`);
+    if (handler) {
+        try {
+            await handler(data as HandlerData);
+        } catch (error) {
+            logger.error(`[AnalyticsWorker] Error handling ${type}:`, error);
+        }
+    } else {
+        logger.warn(`[AnalyticsWorker] Unknown message type: ${type}`);
     }
 };
 
@@ -440,4 +247,4 @@ setInterval(() => {
             bufferedEvents: analyticsProcessor.getStats().bufferedEvents,
         });
     }
-}, 10000); // Every 10 seconds
+}, 10000);

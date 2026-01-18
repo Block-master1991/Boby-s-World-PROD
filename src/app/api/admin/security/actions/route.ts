@@ -1,11 +1,11 @@
-import { NextResponse } from 'next/server';
-import redis from '@/lib/redis';
-import { initializeAdminApp } from '@/lib/firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
-import { logger } from '@/utils/logger';
 import type { AdminRequest } from '@/lib/admin-middleware';
 import { withSignedAdminAuth } from '@/lib/admin-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { initializeAdminApp } from '@/lib/firebase-admin';
+import redis from '@/lib/redis';
+import { logger } from '@/utils/logger';
+import { getFirestore } from 'firebase-admin/firestore';
+import { NextResponse } from 'next/server';
 
 export const POST = withSignedAdminAuth(withCsrfProtection(async (request: AdminRequest) => {
     try {
@@ -42,9 +42,8 @@ export const POST = withSignedAdminAuth(withCsrfProtection(async (request: Admin
                     await redis.del('security:panic_mode');
                 }
                 return NextResponse.json({ success: true, panicMode: enabled });
-            } else {
-                return NextResponse.json({ error: 'Redis unavailable for Panic Mode' }, { status: 503 });
             }
+            return NextResponse.json({ error: 'Redis unavailable for Panic Mode' }, { status: 503 });
         }
 
         return NextResponse.json({ error: 'Invalid action' }, { status: 400 });

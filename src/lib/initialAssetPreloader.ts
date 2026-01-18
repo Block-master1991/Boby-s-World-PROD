@@ -1,99 +1,50 @@
 // Initial Asset Preloader - Forces complete preload of all game assets into IndexedDB
 import { logger } from 'utils/logger';
-// Prevents gameplay until all assets are cached locally for offline operation
-
-import type { AssetMetadata, DataType } from './indexedDB';
-import { putAsset, isAvailable } from './indexedDB';
-import type { AssetInfo } from './gameAssetManifest';
-import { GAME_ASSET_MANIFEST, getAssetsByPriority, getPriorityOrder, MANIFEST_STATS } from './gameAssetManifest';
-import type { IntegrityCheck } from './assetIntegrity';
 import { verifyAssetIntegrity } from './assetIntegrity';
+import type { AssetInfo } from './gameAssetManifest';
+import { getAssetsByPriority, getPriorityOrder, MANIFEST_STATS } from './gameAssetManifest';
+import type { AssetMetadata } from './indexedDB';
+import { isAvailable, putAsset } from './indexedDB';
+import type { PreloadOptions, PreloadProgress } from './preloadTypes';
+import {
+    fetchAsset,
+    getAssetDataType,
+    getInitialProgress,
+    getMimeType,
+    getPriorityNum,
+    isMobile,
+    retryDelay
+} from './preloaderUtils';
 
-export interface PreloadProgress {
-    totalAssets: number;
-    loadedAssets: number;
-    currentAsset?: string;
-    loadedSizeMB: number;
-    totalSizeMB: number;
-    currentPriority: 'critical' | 'high' | 'medium' | 'low';
-    phase: string;
-    isComplete: boolean;
-    errors: string[];
-    // ✨ Enhanced fields
-    verifiedAssets: number;      // Number of verified files
-    corruptedAssets: number;     // Number of corrupted files
-    downloadSpeed: number;       // Download speed MB/s
-    integrityChecks: IntegrityCheck[];  // Integrity check results
-}
-
-export interface PreloadOptions {
-    onProgress?: (progress: PreloadProgress) => void;
-    maxConcurrentLoads?: number;
-    timeoutMs?: number;
-    retryAttempts?: number;
+// GLOBAL SCOPE EXTENSION
+declare global {
+    interface Window {
+        __INITIAL_PRELOAD_ACTIVE__?: boolean;
+    }
 }
 
 class InitialAssetPreloader {
     private isPreloading = false;
     private preloadPromise: Promise<boolean> | null = null;
     private abortController: AbortController | null = null;
+    private progress: PreloadProgress = getInitialProgress();
+    private actualTotalSizeMB = 0;
+    private downloadStartTime = 0;
+    private totalBytesLoaded = 0;
 
-    private progress: PreloadProgress = {
-        totalAssets: MANIFEST_STATS.totalAssets,
-        loadedAssets: 0,
-        loadedSizeMB: 0,
-        totalSizeMB: 0, // Will be calculated from actual loaded data
-        currentPriority: 'critical',
-        phase: 'checking', // Start with checking phase
-        isComplete: false,
-        errors: [],
-        verifiedAssets: 0,
-        corruptedAssets: 0,
-        downloadSpeed: 0,
-        integrityChecks: []
-    };
-
-    private actualTotalSizeMB = 0; // Track actual total size loaded
-    private downloadStartTime = 0; // Track download start for speed calculation
-    private totalBytesLoaded = 0; // Track total bytes for speed calculation
-
-    /**
-     * Start preloading all assets - blocks until complete
-     */
     async preloadAllAssets(options: PreloadOptions = {}): Promise<boolean> {
-        if (!isAvailable()) {
-            logger.error('[InitialAssetPreloader] IndexedDB not available');
-            return false;
+        if (!isAvailable()) return false;
+
+        if (this.isPreloading && this.preloadPromise) {
+            return this.preloadPromise;
         }
 
-        if (this.isPreloading) {
-            logger.log('[InitialAssetPreloader] Preload already in progress');
-            return this.preloadPromise!;
-        }
-
-        this.isPreloading = true;
-        this.abortController = new AbortController();
-        this.progress = {
-            totalAssets: MANIFEST_STATS.totalAssets,
-            loadedAssets: 0,
-            loadedSizeMB: 0,
-            totalSizeMB: MANIFEST_STATS.totalEstimatedSizeMB,
-            currentPriority: 'critical',
-            phase: 'initializing',
-            isComplete: false,
-            errors: [],
-            verifiedAssets: 0,
-            corruptedAssets: 0,
-            downloadSpeed: 0,
-            integrityChecks: []
-        };
-
-        const isMobile = typeof window !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        this.initPreloadState();
         const {
             onProgress,
-            maxConcurrentLoads = isMobile ? 2 : 3, // Reduce concurrency on mobile
-            timeoutMs = 600000, // Increase to 10 minutes for slow networks
-            retryAttempts = 5 // Increase retries for unstable connections
+            maxConcurrentLoads = isMobile() ? 2 : 3,
+            timeoutMs = 600000,
+            retryAttempts = 5
         } = options;
 
         this.preloadPromise = this.performPreload(maxConcurrentLoads, timeoutMs, retryAttempts, onProgress);
@@ -105,367 +56,216 @@ class InitialAssetPreloader {
             onProgress?.(this.progress);
             return result;
         } finally {
-            this.isPreloading = false;
-            this.preloadPromise = null;
-            this.abortController = null;
+            this.cleanup();
         }
     }
 
-    private async performPreload(
-        maxConcurrentLoads: number,
-        timeoutMs: number,
-        retryAttempts: number,
-        onProgress?: (progress: PreloadProgress) => void
-    ): Promise<boolean> {
-        // 🚀 CRITICAL: Signal IndexedDB to skip LRU cleanup during initial preload
-        (globalThis as any).__INITIAL_PRELOAD_ACTIVE__ = true;
-        logger.log('[InitialAssetPreloader] 🛡️ LRU cleanup disabled for initial preload');
+    private initPreloadState() {
+        this.isPreloading = true;
+        this.abortController = new AbortController();
+        this.progress = getInitialProgress();
+    }
 
-        const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => {
-                reject(new Error('Preload timeout'));
-            }, timeoutMs);
-        });
+    private cleanup() {
+        this.isPreloading = false;
+        this.preloadPromise = null;
+        this.abortController = null;
+    }
+
+    private async performPreload(
+        maxConcurrent: number,
+        timeout: number,
+        retries: number,
+        onProgress?: (p: PreloadProgress) => void
+    ): Promise<boolean> {
+        if (typeof window !== 'undefined') window.__INITIAL_PRELOAD_ACTIVE__ = true;
+        logger.log('[InitialAssetPreloader] 🛡️ LRU cleanup disabled');
 
         try {
-            // Start download timer
             this.downloadStartTime = Date.now();
             this.totalBytesLoaded = 0;
+            const timeoutPromise = new Promise<never>((_, reject) => {
+                 setTimeout(() => reject(new Error('Preload timeout')), timeout);
+            });
 
             await Promise.race([
-                this.loadAssetsByPriority(maxConcurrentLoads, retryAttempts, onProgress),
+                this.loadActiveAssets(maxConcurrent, retries, onProgress),
                 timeoutPromise
             ]);
             return true;
         } catch (error) {
-            logger.error('[InitialAssetPreloader] Preload failed:', error);
-            this.progress.errors.push(error instanceof Error ? error.message : 'Unknown error');
+            logger.error('[InitialAssetPreloader] Failed:', error);
+            this.progress.errors.push(error instanceof Error ? error.message : 'Unknown');
             return false;
         } finally {
-            // Re-enable LRU cleanup after preload
-            delete (globalThis as any).__INITIAL_PRELOAD_ACTIVE__;
+            if (typeof window !== 'undefined') delete window.__INITIAL_PRELOAD_ACTIVE__;
             logger.log('[InitialAssetPreloader] ✓ LRU cleanup re-enabled');
         }
     }
 
-    private async loadAssetsByPriority(
-        maxConcurrentLoads: number,
-        retryAttempts: number,
-        onProgress?: (progress: PreloadProgress) => void
+    private async loadActiveAssets(
+        maxConcurrent: number,
+        retries: number,
+        onProgress?: (p: PreloadProgress) => void
     ): Promise<void> {
-        const priorities = getPriorityOrder();
-
-        for (const priority of priorities) {
+         
+        for (const priority of getPriorityOrder()) {
             this.progress.currentPriority = priority;
-            this.progress.phase = `Loading ${priority} priority assets`;
-
+            this.progress.phase = `Loading ${priority} assets`;
             onProgress?.(this.progress);
 
             const assets = getAssetsByPriority(priority);
-            if (assets.length === 0) continue;
+            if (!assets.length) continue;
 
-            logger.log(`[InitialAssetPreloader] Loading ${assets.length} ${priority} priority assets`);
-
-            // Load assets in batches to control concurrency
-            for (let i = 0; i < assets.length; i += maxConcurrentLoads) {
-                const batch = assets.slice(i, i + maxConcurrentLoads);
-                await this.loadAssetBatch(batch, retryAttempts, onProgress);
+            logger.log(`[Preload] Loading ${assets.length} ${priority} assets`);
+            
+            // Batch processing
+             
+            for (let i = 0; i < assets.length; i += maxConcurrent) {
+                const batch = assets.slice(i, i + maxConcurrent);
+                // eslint-disable-next-line no-await-in-loop
+                await Promise.all(batch.map(a => this.loadSingleAsset(a, retries, onProgress)));
+                logger.log(`[Preload] ${priority}: ${Math.min(assets.length, i + maxConcurrent)}/${assets.length}`);
             }
         }
-
-        this.progress.phase = 'Verifying preload completion';
+        this.progress.phase = 'Verifying';
         onProgress?.(this.progress);
-
-        // Final verification
-        await this.verifyPreloadCompletion();
-    }
-
-    private async loadAssetBatch(
-        assets: AssetInfo[],
-        retryAttempts: number,
-        onProgress?: (progress: PreloadProgress) => void
-    ): Promise<void> {
-        const loadPromises = assets.map(asset =>
-            this.loadSingleAsset(asset, retryAttempts, onProgress)
-        );
-
-        const results = await Promise.allSettled(loadPromises);
-
-        // Count successful loads for statistics
-        const successful = results.filter(r => r.status === 'fulfilled').length;
-        logger.log(`[InitialAssetPreloader] Batch complete: ${successful}/${assets.length} assets loaded`);
+        this.verifyCompletion();
     }
 
     private async loadSingleAsset(
         asset: AssetInfo,
-        retryAttempts: number,
-        onProgress?: (progress: PreloadProgress) => void
+        retries: number,
+        onProgress?: (p: PreloadProgress) => void
     ): Promise<void> {
-        if (this.abortController?.signal.aborted) {
-            throw new Error('Preload aborted');
-        }
+        if (this.abortController?.signal.aborted) throw new Error('Aborted');
+        let lastErr: Error | null = null;
 
-        let lastError: Error | null = null;
-
-        for (let attempt = 1; attempt <= retryAttempts; attempt++) {
+         
+        for (let i = 1; i <= retries; i++) {
             try {
-                this.progress.currentAsset = asset.path;
-                onProgress?.(this.progress);
-
-                logger.log(`[InitialAssetPreloader] Loading ${asset.path} (attempt ${attempt}/${retryAttempts})`);
-
-                const data = await this.fetchAssetData(asset);
-
-                // ✨ Verify asset integrity if hash is available
-                const assetInfo = asset as AssetInfo & { sha256?: string; actualSizeMB?: number };
-                let calculatedHash: string | undefined = undefined;
-
-                if (assetInfo.sha256 || assetInfo.actualSizeMB) {
-                    const integrityCheck = await verifyAssetIntegrity(
-                        asset.path,
-                        data,
-                        assetInfo.sha256,
-                        assetInfo.actualSizeMB ? Math.round(assetInfo.actualSizeMB * 1024 * 1024) : undefined
-                    );
-
-                    this.progress.integrityChecks.push(integrityCheck);
-
-                    if (integrityCheck.isValid) {
-                        this.progress.verifiedAssets++;
-                        calculatedHash = integrityCheck.actualSHA256; // Reuse the calculated hash
-                    } else {
-                        this.progress.corruptedAssets++;
-                        logger.warn(`[InitialAssetPreloader] ⚠️ Integrity check failed: ${integrityCheck.error}`);
-
-                        if (asset.priority === 'critical') {
-                            throw new Error(`Critical asset corrupted: ${integrityCheck.error}`);
-                        }
-                    }
-                }
-
-                await this.storeAssetInIndexedDB(asset, data, calculatedHash);
-
-                // Update progress
-                this.progress.loadedAssets++;
-                this.totalBytesLoaded += data.byteLength;
-
-                // Calculate download speed
-                const elapsedSeconds = (Date.now() - this.downloadStartTime) / 1000;
-                if (elapsedSeconds > 0) {
-                    this.progress.downloadSpeed = (this.totalBytesLoaded / (1024 * 1024)) / elapsedSeconds;
-                }
-
-                const actualSizeMB = data.byteLength / (1024 * 1024);
-                const estimateDiff = actualSizeMB - asset.estimatedSizeMB;
-                const percentDiff = ((estimateDiff / asset.estimatedSizeMB) * 100).toFixed(1);
-
-                logger.log(
-                    `[InitialAssetPreloader] ✓ Loaded ${asset.path} ` +
-                    `(${actualSizeMB.toFixed(2)}MB actual vs ${asset.estimatedSizeMB}MB estimated, ` +
-                    `${percentDiff}% diff, ${this.progress.downloadSpeed.toFixed(2)}MB/s)`
-                );
-
-                // Update progress after successful load
-                onProgress?.(this.progress);
+                // eslint-disable-next-line no-await-in-loop
+                await this.attemptLoad(asset, i, retries, onProgress);
                 return;
-
-            } catch (error) {
-                lastError = error as Error;
-                logger.warn(`[InitialAssetPreloader] Attempt ${attempt} failed for ${asset.path}:`, error);
-
-                if (attempt < retryAttempts) {
-                    // Exponential backoff
-                    const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
-                    await new Promise(resolve => setTimeout(resolve, delay));
-                }
+            } catch (err) {
+                lastErr = err as Error;
+                // eslint-disable-next-line no-await-in-loop
+                if (i < retries) await retryDelay(i, asset.path, lastErr);
             }
         }
-
-        // All attempts failed
-        const errorMsg = `Failed to load ${asset.path} after ${retryAttempts} attempts: ${lastError?.message}`;
-        logger.error(`[InitialAssetPreloader] ✗ ${errorMsg}`);
-        this.progress.errors.push(errorMsg);
-        throw lastError;
+        this.failLoad(asset, retries, lastErr);
     }
 
-    private async fetchAssetData(asset: AssetInfo): Promise<ArrayBuffer> {
-        // Skip ServiceWorker for large files to avoid interception issues
-        const shouldSkipSW = asset.estimatedSizeMB > 10 || asset.type === 'hdr';
+    private async attemptLoad(
+        asset: AssetInfo,
+        attempt: number,
+        total: number,
+        onProgress?: (p: PreloadProgress) => void
+    ): Promise<void> {
+        this.progress.currentAsset = asset.path;
+        onProgress?.(this.progress);
+        logger.log(`[Preload] ${asset.path} (${attempt}/${total})`);
 
-        const response = await fetch(asset.path, {
-            signal: this.abortController?.signal,
-            // Add cache busting for development and skip SW for large files
-            headers: {
-                ...(process.env.NODE_ENV === 'development' ? {
-                    'Cache-Control': 'no-cache',
-                    'Pragma': 'no-cache'
-                } : {}),
-                ...(shouldSkipSW ? {
-                    'Service-Worker': 'script' // This might help skip SW interception
-                } : {})
-            },
-            // Try to bypass service worker cache for large files
-            cache: shouldSkipSW ? 'no-cache' : 'default'
-        });
+        const data = await fetchAsset(asset.path, asset.estimatedSizeMB, asset.type, this.abortController?.signal ?? null);
+        const hash = await this.checkIntegrity(asset, data);
+        await this.storeAsset(asset, data, hash);
+        this.updateStats(asset, data);
+        onProgress?.(this.progress);
+    }
 
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    private async checkIntegrity(asset: AssetInfo, data: ArrayBuffer): Promise<string | undefined> {
+        const info = asset as AssetInfo & { sha256?: string; actualSizeMB?: number };
+        if (!info.sha256 && !info.actualSizeMB) return undefined;
+
+        const check = await verifyAssetIntegrity(
+            asset.path, data, info.sha256,
+            info.actualSizeMB ? Math.round(info.actualSizeMB * 1024 * 1024) : undefined
+        );
+        this.progress.integrityChecks.push(check);
+
+        if (check.isValid) {
+            this.progress.verifiedAssets++;
+            return check.actualSHA256;
         }
-
-        return await response.arrayBuffer();
+        this.progress.corruptedAssets++;
+        logger.warn(`[Preload] Integrity failed: ${check.error}`);
+        if (asset.priority === 'critical') throw new Error(`Critical corruption: ${check.error}`);
+        return undefined;
     }
 
-    private async storeAssetInIndexedDB(asset: AssetInfo, data: ArrayBuffer, verifiedHash?: string): Promise<void> {
-        const actualSizeMB = data.byteLength / (1024 * 1024);
+    private updateStats(asset: AssetInfo, data: ArrayBuffer): void {
+        this.progress.loadedAssets++;
+        this.totalBytesLoaded += data.byteLength;
+        const elapsed = (Date.now() - this.downloadStartTime) / 1000;
+        if (elapsed > 0) this.progress.downloadSpeed = (this.totalBytesLoaded / 1048576) / elapsed;
 
-        // Update actual total size
-        this.actualTotalSizeMB += actualSizeMB;
+        const sizeMB = data.byteLength / 1048576;
+        logger.log(`[Preload] ✓ ${asset.path} (${sizeMB.toFixed(2)}MB, ` +
+            `${this.progress.downloadSpeed.toFixed(2)}MB/s)`);
+    }
+
+    private failLoad(asset: AssetInfo, attempts: number, err: Error | null): never {
+        const msg = `Failed ${asset.path} after ${attempts}: ${err?.message}`;
+        logger.error(`[Preload] ✗ ${msg}`);
+        this.progress.errors.push(msg);
+        throw err || new Error(msg);
+    }
+
+    private async storeAsset(asset: AssetInfo, data: ArrayBuffer, hash?: string): Promise<void> {
+        const sizeMB = data.byteLength / 1048576;
+        this.actualTotalSizeMB += sizeMB;
         this.progress.totalSizeMB = Math.round(this.actualTotalSizeMB * 100) / 100;
 
-        const assetMetadata: AssetMetadata & { data: any } = {
+        // Cast to 'any' to satisfy strict AssetMetadata & { data: any } requirement
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const meta: any = {
             id: asset.path,
             name: asset.description,
-            type: this.mapAssetTypeToDataType(asset.type),
-            mimeType: this.getMimeType(asset.path),
+            type: getAssetDataType(asset.type),
+            mimeType: getMimeType(asset.path),
             size: data.byteLength,
             createdAt: Date.now(),
             accessedAt: Date.now(),
-            priority: this.mapPriorityToNumber(asset.priority),
-            checksum: verifiedHash, // Pass verified hash to avoid re-calculation
-            data: data
+            priority: getPriorityNum(asset.priority),
+            checksum: hash,
+            data
         };
-
-        await putAsset(assetMetadata);
-
-        // Update loaded size with actual data
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await putAsset(meta as (AssetMetadata & { data: any }));
+        // Update loadedSizeMB after successful storage
         this.progress.loadedSizeMB = Math.round(this.actualTotalSizeMB * 100) / 100;
     }
 
-    private mapAssetTypeToDataType(type: 'model' | 'texture' | 'audio' | 'hdr'): DataType {
-        switch (type) {
-            case 'model':
-            case 'hdr':
-                return 'arraybuffer';
-            case 'texture':
-                return 'blob';
-            case 'audio':
-                return 'arraybuffer';
-            default:
-                return 'arraybuffer';
-        }
-    }
-
-    private getMimeType(path: string): string | undefined {
-        const extension = path.split('.').pop()?.toLowerCase();
-        switch (extension) {
-            case 'glb':
-                return 'model/gltf-binary';
-            case 'jpg':
-            case 'jpeg':
-                return 'image/jpeg';
-            case 'png':
-                return 'image/png';
-            case 'hdr':
-                return 'application/octet-stream';
-            case 'mp3':
-                return 'audio/mpeg';
-            default:
-                return undefined;
-        }
-    }
-
-    private mapPriorityToNumber(priority: 'critical' | 'high' | 'medium' | 'low'): number {
-        switch (priority) {
-            case 'critical': return 10;
-            case 'high': return 7;
-            case 'medium': return 5;
-            case 'low': return 3;
-            default: return 5;
-        }
-    }
-
-    private async verifyPreloadCompletion(): Promise<void> {
-        // This is a simple verification - in production you might want more thorough checks
-        const expectedAssets = MANIFEST_STATS.totalAssets;
-        const loadedAssets = this.progress.loadedAssets;
-
-        if (loadedAssets < expectedAssets) {
-            logger.warn(`[InitialAssetPreloader] Only ${loadedAssets}/${expectedAssets} assets loaded successfully`);
+    private verifyCompletion(): void {
+        const { loadedAssets: loaded } = this.progress;
+        const total = MANIFEST_STATS.totalAssets;
+        if (loaded < total) {
+            logger.warn(`[Preload] Incomplete: ${loaded}/${total}`);
         } else {
-            logger.log(`[InitialAssetPreloader] ✓ All ${loadedAssets} assets preloaded successfully`);
+            logger.log(`[Preload] ✓ Complete: ${loaded}`);
         }
     }
 
-    /**
-     * Cancel ongoing preload
-     */
     cancelPreload(): void {
-        if (this.abortController) {
-            this.abortController.abort();
-        }
+        this.abortController?.abort();
         this.isPreloading = false;
         this.preloadPromise = null;
     }
 
-    /**
-     * Get current preload status
-     */
-    getPreloadStatus(): PreloadProgress {
-        return { ...this.progress };
-    }
+    getPreloadStatus(): PreloadProgress { return { ...this.progress }; }
+    isCurrentlyPreloading(): boolean { return this.isPreloading; }
 
-    /**
-     * Check if preload is currently running
-     */
-    isCurrentlyPreloading(): boolean {
-        return this.isPreloading;
-    }
-
-    /**
-     * Get preload statistics
-     */
     getPreloadStats() {
-        const completionRate = this.progress.totalAssets > 0 ?
-            (this.progress.loadedAssets / this.progress.totalAssets) * 100 : 0;
-
-        const successRate = this.progress.loadedAssets > 0 ?
-            ((this.progress.loadedAssets - this.progress.errors.length) / this.progress.loadedAssets) * 100 : 0;
-
+        const p = this.progress;
         return {
-            completionRate: Math.round(completionRate * 100) / 100,
-            successRate: Math.round(successRate * 100) / 100,
-            loadedSizeMB: Math.round(this.progress.loadedSizeMB * 100) / 100,
-            totalSizeMB: this.progress.totalSizeMB,
-            errors: this.progress.errors.length,
-            isComplete: this.progress.isComplete
+            completionRate: p.totalAssets > 0 ? (p.loadedAssets / p.totalAssets) * 100 : 0,
+            successRate: p.loadedAssets > 0 ? ((p.loadedAssets - p.errors.length) / p.loadedAssets) * 100 : 0,
+            loadedSizeMB: Math.round(p.loadedSizeMB * 100) / 100,
+            totalSizeMB: p.totalSizeMB,
+            errors: p.errors.length,
+            isComplete: p.isComplete
         };
     }
 }
 
-// Singleton instance
 export const initialAssetPreloader = new InitialAssetPreloader();
-
-// Utility functions
-export function formatBytes(bytes: number): string {
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let size = bytes;
-    let unitIndex = 0;
-
-    while (size >= 1024 && unitIndex < units.length - 1) {
-        size /= 1024;
-        unitIndex++;
-    }
-
-    return `${size.toFixed(1)}${units[unitIndex]}`;
-}
-
-export function formatTime(ms: number): string {
-    const seconds = Math.floor(ms / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const remainingSeconds = seconds % 60;
-
-    if (minutes > 0) {
-        return `${minutes}m ${remainingSeconds}s`;
-    }
-    return `${remainingSeconds}s`;
-}

@@ -4,52 +4,40 @@
  */
 
 // Core exports
-export { LoggerCore, ContextualLogger } from './core/LoggerCore';
-export { LogLevel, toPinoLevel, fromPinoLevel, getLogLevelFromEnv } from './core/LogLevel';
-export { contextManager, withContext, getCorrelationId, type LogContext } from './core/LogContext';
-export { LogFormatter, productionFormatter, developmentFormatter, getFormatter } from './core/LogFormatter';
+export { ContextualLogger } from './core/ContextualLogger';
+export { contextManager, getCorrelationId, withContext, type LogContext } from './core/LogContext';
+export { developmentFormatter, getFormatter, LogFormatter, productionFormatter } from './core/LogFormatter';
+export { LoggerCore } from './core/LoggerCore';
+export type { ILoggerCore, LoggerCoreConfig } from './core/LoggerTypes';
+export { fromPinoLevel, getLogLevelFromEnv, LogLevel, toPinoLevel } from './core/LogLevel';
 
-import type { LogContext } from './core/LogContext';
 
 // Security exports - Phase 1
-export { PIIRedactor, defaultPIIRedactor, redactPII, type PIIRedactionConfig } from './security/PIIRedactor';
-export { LogSanitizer, defaultSanitizer, sanitizeLog, type SanitizerConfig } from './security/LogSanitizer';
+export { defaultSanitizer, LogSanitizer, sanitizeLog, type SanitizerConfig } from './security/LogSanitizer';
+export { defaultPIIRedactor, PIIRedactor, redactPII, type PIIRedactionConfig } from './security/PIIRedactor';
 
 // Security exports - Phase 2
+export type { EncryptedData, EncryptionConfig } from './security/EncryptionTypes';
 export {
-    LogEncryption,
-    defaultEncryption,
-    encryptLog,
-    decryptLog,
-    type EncryptionConfig,
-    type EncryptedData
+    decryptLog, defaultEncryption,
+    encryptLog, LogEncryption
 } from './security/LogEncryption';
 
 export {
-    TamperDetection,
     defaultTamperDetection,
-    signLog,
-    verifyLog,
-    type TamperDetectionConfig,
-    type SignedLogEntry,
-    type VerificationResult
+    signLog, TamperDetection, verifyLog, type SignedLogEntry, type TamperDetectionConfig, type VerificationResult
 } from './security/TamperDetection';
 
 // Middleware exports - Phase 1
 export {
     CorrelationMiddleware,
-    correlationMiddleware,
-    withCorrelation,
-    getCurrentCorrelationId,
-    type CorrelationConfig
+    correlationMiddleware, getCurrentCorrelationId, withCorrelation, type CorrelationConfig
 } from './middleware/CorrelationMiddleware';
 
 // Middleware exports - Phase 2
 export {
-    RateLimitMiddleware,
-    rateLimitMiddleware,
-    checkLogRateLimit,
-    type RateLimitConfig,
+    checkLogRateLimit, RateLimitMiddleware,
+    rateLimitMiddleware, type RateLimitConfig,
     type RateLimitResult
 } from './middleware/RateLimitMiddleware';
 
@@ -57,21 +45,18 @@ export {
 export {
     BufferingMiddleware,
     bufferingMiddleware,
-    createBuffering,
-    type BufferingConfig,
-    type BufferedLogEntry
+    createBuffering, type BufferedLogEntry, type BufferingConfig
 } from './middleware/BufferingMiddleware';
 
 export {
-    SamplingMiddleware,
+    createSamplingWithRules, SamplingMiddleware,
     samplingMiddleware,
-    shouldSampleLog,
-    createSamplingWithRules,
-    commonPriorityRules,
-    type SamplingConfig,
-    type SampledLogEntry,
-    type SamplingStats
+    shouldSampleLog
 } from './middleware/SamplingMiddleware';
+
+export { commonPriorityRules } from './middleware/SamplingRules';
+
+export type { SampledLogEntry, SamplingConfig, SamplingStats } from './types/SamplingTypes';
 
 // Transport exports - Phase 3
 export {
@@ -84,18 +69,16 @@ export {
 // Specialized Loggers - Phase 4
 export {
     PerformanceLogger,
-    performanceLogger,
-    type PerformanceMetric,
-    type PerformanceThresholds,
-    type PerformanceLoggerConfig
+    performanceLogger, type PerformanceLoggerConfig, type PerformanceMetric,
+    type PerformanceThresholds
 } from './specialized/PerformanceLogger';
 
 export {
     BusinessLogger,
-    businessLogger,
-    type BusinessEventType,
-    type BusinessEvent
+    businessLogger
 } from './specialized/BusinessLogger';
+
+export type { BusinessEvent, BusinessEventType } from './types/BusinessTypes';
 
 // Services - Phase 4
 export {
@@ -117,64 +100,22 @@ export {
 // Specialized loggers
 export {
     EnhancedAuditLogger,
-    enhancedAuditLogger,
-    type AuditEventType,
-    type AuditSeverity,
-    type AuditEventMetadata,
-    type EnhancedAuditLogEntry,
-    type AuditLoggerConfig
+    enhancedAuditLogger
 } from './specialized/EnhancedAuditLogger';
 
+export type {
+    AuditEventMetadata,
+    AuditEventType,
+    AuditLoggerConfig,
+    AuditSeverity,
+    EnhancedAuditLogEntry
+} from './types/AuditTypes';
+
 // Create default logger instance
-import { LoggerCore } from './core/LoggerCore';
-
-/**
- * Default logger instance - backward compatible with existing logger
- */
-export const professionalLogger = new LoggerCore({
-    name: 'BobyWorld',
-    version: process.env.npm_package_version || '1.0.0',
-    piiProtection: process.env.NODE_ENV === 'production',
-    sanitization: true,
-    includeContext: true
-});
-
-/**
- * Convenience exports for common operations
- */
-export const logger = {
-    // Basic logging
-    trace: (message: string, metadata?: Record<string, any>) =>
-        professionalLogger.trace(message, metadata),
-
-    debug: (message: string, metadata?: Record<string, any>) =>
-        professionalLogger.debug(message, metadata),
-
-    info: (message: string, metadata?: Record<string, any>) =>
-        professionalLogger.info(message, metadata),
-
-    warn: (message: string, metadata?: Record<string, any>) =>
-        professionalLogger.warn(message, metadata),
-
-    error: (message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, any>) =>
-        professionalLogger.error(message, errorOrMetadata, metadata),
-
-    fatal: (message: string, errorOrMetadata?: Error | string | unknown, metadata?: Record<string, any>) =>
-        professionalLogger.fatal(message, errorOrMetadata, metadata),
-
-    // Contextual logging
-    withContext: (context: Partial<LogContext>) =>
-        professionalLogger.withContext(context),
-
-    // Child logger
-    child: (bindings: Record<string, any>) =>
-        professionalLogger.child(bindings),
-
-    // Utility
-    flush: () => professionalLogger.flush()
-};
+export { logger, professionalLogger } from './logger-instance';
 
 /**
  * Default export for convenience
  */
+import { logger } from './logger-instance';
 export default logger;

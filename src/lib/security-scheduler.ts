@@ -3,12 +3,12 @@
  * Manages automated periodic execution of security tests
  */
 
-import type { TestResult } from './securityTest';
-import { securityTestSuite } from './securityTest';
-import { getFirestore, Timestamp } from 'firebase-admin/firestore';
-import { auditLogger } from './audit-logger';
-import { initializeAdminApp } from './firebase-admin';
 import { logger } from '@/utils/logger';
+import { getFirestore, Timestamp, type Firestore } from 'firebase-admin/firestore';
+import type { TestResult } from '../tests/utils/securityTest';
+import { securityTestSuite } from '../tests/utils/securityTest';
+import { auditLogger, type AuditEventType } from './audit-logger';
+import { initializeAdminApp } from './firebase-admin';
 
 export interface ScheduledTestSummary {
     id: string;
@@ -35,34 +35,20 @@ export class SecurityScheduler {
             await initializeAdminApp();
             const db = getFirestore();
 
-            // Check last run time if not forced
-            if (!force) {
-                const lastRunQuery = await db.collection(this.COLLECTION_NAME)
-                    .orderBy('timestamp', 'desc')
-                    .limit(1)
-                    .get();
-
-                if (!lastRunQuery.empty) {
-                    const lastRun = lastRunQuery.docs[0].data();
-                    const lastRunTime = lastRun.timestamp.toDate().getTime();
-                    const now = Date.now();
-
-                    if (now - lastRunTime < this.MIN_INTERVAL_MS) {
-                        logger.log('[SecurityScheduler] Skipping test run: Minimum interval not elapsed.');
-                        return {
-                            skipped: true,
-                            reason: `Minimum interval of ${this.MIN_INTERVAL_MS / 1000}s not elapsed since last run.`
-                        };
-                    }
-                }
+            if (!await this.shouldRunTests(db, force)) {
+                logger.log('[SecurityScheduler] Skipping test run: Minimum interval not elapsed.');
+                return {
+                    skipped: true,
+                    reason: `Minimum interval of ${this.MIN_INTERVAL_MS / 1000}s not elapsed since last run.`
+                };
             }
 
             // Run tests
             const results = await securityTestSuite.runAllTests();
-            const summary = securityTestSuite.getReport().summary;
+            const { summary } = securityTestSuite.getReport();
 
-            const passed = Object.values(results).filter(r => r.success).length;
-            const failed = Object.values(results).filter(r => !r.success).length;
+            const passed = results.filter(r => r.success).length;
+            const failed = results.filter(r => !r.success).length;
             const status = failed === 0 ? 'success' : 'failure';
 
             const testRun: ScheduledTestSummary = {
@@ -76,52 +62,78 @@ export class SecurityScheduler {
                 status
             };
 
-            // Store results in Firestore
-            await db.collection(this.COLLECTION_NAME).add({
-                ...testRun,
-                timestamp: Timestamp.fromDate(testRun.timestamp)
-            });
-
-            // Log outcome
-            if (status === 'failure') {
-                await auditLogger.logEvent(
-                    'admin_action' as any, // Temporary cast until type is updated globally or if mismatch
-                    `Scheduled security tests FAILED. ${failed} tests failed.`,
-                    {
-                        failedCount: failed,
-                        totalCount: results.length,
-                        runId: testRun.id
-                    },
-                    'critical'
-                );
-            } else {
-                await auditLogger.logEvent(
-                    'admin_action' as any,
-                    `Scheduled security tests completed successfully.`,
-                    {
-                        passedCount: passed,
-                        totalCount: results.length,
-                        runId: testRun.id
-                    },
-                    'info'
-                );
-            }
+            await this.saveTestRun(db, testRun);
+            await this.logAuditOutcome(status, { passed, failed, total: results.length }, testRun.id);
 
             return testRun;
 
         } catch (error) {
-            logger.error('[SecurityScheduler] Error running scheduled tests:', error);
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-
-            await auditLogger.logEvent(
-                'admin_action' as any,
-                'Error executing scheduled security tests',
-                { error: errorMessage },
-                'error'
-            );
-
+            await this.handleError(error);
             throw error;
         }
+    }
+
+    private static async shouldRunTests(db: Firestore, force: boolean): Promise<boolean> {
+        if (force) return true;
+
+        const lastRunQuery = await db.collection(this.COLLECTION_NAME)
+            .orderBy('timestamp', 'desc')
+            .limit(1)
+            .get();
+
+        if (lastRunQuery.empty) return true;
+        
+        const [lastDoc] = lastRunQuery.docs;
+        if (!lastDoc) return true; // Safety check for TS
+
+        const lastRun = lastDoc.data();
+        const lastTimestamp = lastRun['timestamp'] as Timestamp | undefined;
+        
+        if (!lastTimestamp) return true;
+
+        const lastRunTime = lastTimestamp.toDate().getTime();
+        return (Date.now() - lastRunTime) >= this.MIN_INTERVAL_MS;
+    }
+
+    private static async saveTestRun(db: Firestore, run: ScheduledTestSummary): Promise<void> {
+        await db.collection(this.COLLECTION_NAME).add({
+            ...run,
+            timestamp: Timestamp.fromDate(run.timestamp)
+        });
+    }
+
+    private static async logAuditOutcome(
+        status: 'success' | 'failure',
+        stats: { passed: number; failed: number; total: number },
+        runId: string
+    ): Promise<void> {
+        if (status === 'failure') {
+            await auditLogger.logEvent(
+                'ADMIN_ACTION' as AuditEventType,
+                `Scheduled security tests FAILED. ${stats.failed} tests failed.`,
+                { failedCount: stats.failed, totalCount: stats.total, runId },
+                'critical'
+            );
+        } else {
+            await auditLogger.logEvent(
+                'ADMIN_ACTION' as AuditEventType,
+                `Scheduled security tests completed successfully.`,
+                { passedCount: stats.passed, totalCount: stats.total, runId },
+                'info'
+            );
+        }
+    }
+
+    private static async handleError(error: unknown): Promise<void> {
+        logger.error('[SecurityScheduler] Error running scheduled tests:', error);
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+
+        await auditLogger.logEvent(
+            'ADMIN_ACTION' as AuditEventType,
+            'Error executing scheduled security tests',
+            { error: errorMessage },
+            'error'
+        );
     }
 
     /**
@@ -138,9 +150,10 @@ export class SecurityScheduler {
 
         return snapshot.docs.map(doc => {
             const data = doc.data();
+            const timestamp = data['timestamp'] as Timestamp;
             return {
                 ...data,
-                timestamp: data.timestamp.toDate()
+                timestamp: timestamp ? timestamp.toDate() : new Date()
             } as ScheduledTestSummary;
         });
     }

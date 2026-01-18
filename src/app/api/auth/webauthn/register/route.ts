@@ -1,37 +1,37 @@
 /**
- * WebAuthn Registration Route
+ * WebAuthn Registration Initiation Route
  * POST /api/auth/webauthn/register
  */
 
-import { NextResponse } from 'next/server';
-import { WebAuthnUtils } from '@/lib/webauthn-utils';
-import redis from '@/lib/redis';
 import type { AuthenticatedRequest } from '@/lib/auth-middleware';
 import { withAuth } from '@/lib/auth-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
+import { securityIntegration } from '@/lib/securityIntegration';
+import { validateRequestBody, WebAuthnRegisterSchema } from '@/lib/validation-schemas';
+import { WebAuthnService } from '@/lib/webauthn-service';
+import { WebAuthnUtils } from '@/lib/webauthn-utils';
 import { logger } from '@/utils/logger';
+import { NextResponse } from 'next/server';
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
     try {
-        const body = await request.json();
-        const { userId, userName } = body;
-
-        if (!userId) {
-            return NextResponse.json({ error: 'UserID required' }, { status: 400 });
-        }
-
-        // Extract hostname from request (dynamic RP_ID support with subdomain scoping)
+        const { userId, userName } = await validateRequestBody(request, WebAuthnRegisterSchema);
+        
         const host = request.headers.get('host') || 'localhost';
         const rpId = WebAuthnUtils.getRPID(host);
 
-        const options = WebAuthnUtils.generateRegistrationChallenge(userId, userName || userId, rpId);
-
-        // Store the challenge in Redis for later verification (validity of two minutes)
-        await redis.setex(`webauthn_challenge:${userId}`, 120, options.challenge);
+        const options = await WebAuthnService.initiateRegistration(
+            userId, 
+            userName, 
+            rpId, 
+            securityIntegration.extractDeviceInfo(request) as unknown as Record<string, unknown>
+        );
 
         return NextResponse.json(options);
     } catch (error) {
-        logger.error('[WebAuthn Register] Error:', error as Error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        logger.error('[WebAuthn Register] Error:', error instanceof Error ? error.message : String(error));
+        return NextResponse.json({ 
+            error: error instanceof Error ? error.message : 'Internal Server Error' 
+        }, { status: error instanceof Error && error.message.includes('Validation') ? 400 : 500 });
     }
 }));

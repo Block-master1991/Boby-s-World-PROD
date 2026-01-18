@@ -1,8 +1,3 @@
-/**
- * Log Sanitizer - Security Input Sanitization
- * Prevents XSS, SQL Injection, and other injection attacks in logs
- */
-
 export interface SanitizerConfig {
     enabled: boolean;
     removeHTML?: boolean;
@@ -21,9 +16,6 @@ const DEFAULT_CONFIG: SanitizerConfig = {
     allowedTags: []
 };
 
-/**
- * Dangerous patterns to remove/escape
- */
 const DANGEROUS_PATTERNS = {
     // Script tags and event handlers
     scripts: [
@@ -84,8 +76,39 @@ export class LogSanitizer {
      * Recursively sanitize values
      */
     private sanitizeValue(value: unknown): unknown {
+        // Handle primitive types and null/undefined
+        const primitiveResult = this.sanitizePrimitive(value);
+        if (primitiveResult !== undefined) {
+            return primitiveResult;
+        }
+
+        // Handle complex types
+        if (Array.isArray(value)) {
+            return value.map(item => this.sanitizeValue(item));
+        }
+
+        if (value instanceof Error) {
+            return this.sanitizeErrorObject(value);
+        }
+
+        if (typeof value === 'object' && value !== null) {
+            return this.sanitizeObject(value as Record<string, unknown>);
+        }
+
+        // Other types - convert to string and sanitize
+        try {
+            return this.sanitizeString(String(value));
+        } catch {
+            return '[UNSERIALIZABLE]';
+        }
+    }
+
+    /**
+     * Sanitize primitive values and return undefined if not primitive
+     */
+    private sanitizePrimitive(value: unknown): unknown | undefined {
         // Null or undefined
-        if (value == null) {
+        if (value === null || value === undefined) {
             return value;
         }
 
@@ -108,46 +131,38 @@ export class LogSanitizer {
             return value;
         }
 
-        // Array - sanitize each element
-        if (Array.isArray(value)) {
-            return value.map(item => this.sanitizeValue(item));
-        }
+        return undefined; // Not a primitive type
+    }
 
-        // Error objects - safely serialize
-        if (value instanceof Error) {
-            return {
-                name: this.sanitizeString(value.name),
-                message: this.sanitizeString(value.message),
-                stack: value.stack ? this.sanitizeString(value.stack) : undefined
-            };
-        }
+    /**
+     * Sanitize Error objects
+     */
+    private sanitizeErrorObject(error: Error): Record<string, unknown> {
+        return {
+            name: this.sanitizeString(error.name),
+            message: this.sanitizeString(error.message),
+            stack: error.stack ? this.sanitizeString(error.stack) : undefined
+        };
+    }
 
-        // Object - sanitize each property
-        if (typeof value === 'object') {
-            const sanitized: Record<string, unknown> = {};
+    /**
+     * Sanitize plain objects
+     */
+    private sanitizeObject(obj: Record<string, unknown>): Record<string, unknown> {
+        const sanitized: Record<string, unknown> = {};
 
-            for (const [key, val] of Object.entries(value)) {
-                // Skip functions and symbols
-                if (typeof val === 'function' || typeof val === 'symbol') {
-                    continue;
-                }
-
-                // Sanitize key name
-                const sanitizedKey = this.sanitizeString(key);
-
-                // Recursively sanitize value
-                sanitized[sanitizedKey] = this.sanitizeValue(val);
+        for (const [key, val] of Object.entries(obj)) {
+            // Skip functions and symbols
+            if (typeof val === 'function' || typeof val === 'symbol') {
+                continue;
             }
 
-            return sanitized;
+            // Sanitize key name and value
+            const sanitizedKey = this.sanitizeString(key);
+            sanitized[sanitizedKey] = this.sanitizeValue(val);
         }
 
-        // Other types - convert to string and sanitize
-        try {
-            return this.sanitizeString(String(value));
-        } catch {
-            return '[UNSERIALIZABLE]';
-        }
+        return sanitized;
     }
 
     /**
@@ -158,7 +173,7 @@ export class LogSanitizer {
 
         // Truncate if too long
         if (this.config.maxLength && result.length > this.config.maxLength) {
-            result = result.substring(0, this.config.maxLength) + '...[TRUNCATED]';
+            result = `${result.substring(0, this.config.maxLength)}...[TRUNCATED]`;
         }
 
         // Remove null bytes
@@ -207,87 +222,38 @@ export class LogSanitizer {
         return str.replace(regex, '');
     }
 
-    /**
-     * Remove script tags and event handlers
-     */
     private removeScripts(str: string): string {
-        let result = str;
-
-        for (const pattern of DANGEROUS_PATTERNS.scripts) {
-            result = result.replace(pattern, '[SCRIPT_REMOVED]');
-        }
-
-        return result;
+        return DANGEROUS_PATTERNS.scripts.reduce(
+            (result, pattern) => result.replace(pattern, '[SCRIPT_REMOVED]'),
+            str
+        );
     }
 
-    /**
-     * Remove SQL injection patterns
-     */
     private removeSQLPatterns(str: string): string {
-        let result = str;
-
-        // Only remove if it looks like SQL injection attempt
-        // (to avoid false positives in legitimate logs)
-        const hasSuspiciousSQL = DANGEROUS_PATTERNS.sql.some(pattern =>
-            pattern.test(str)
-        );
-
-        if (hasSuspiciousSQL) {
-            for (const pattern of DANGEROUS_PATTERNS.sql) {
-                result = result.replace(pattern, '[SQL_REMOVED]');
-            }
+        if (DANGEROUS_PATTERNS.sql.some(pattern => pattern.test(str))) {
+            return DANGEROUS_PATTERNS.sql.reduce(
+                (result, pattern) => result.replace(pattern, '[SQL_REMOVED]'),
+                str
+            );
         }
-
-        return result;
+        return str;
     }
 
-    /**
-     * Remove command injection attempts
-     */
     private removeCommandInjection(str: string): string {
-        let result = str;
-
-        // Check for command injection patterns
-        const hasCommandInjection = DANGEROUS_PATTERNS.commands.some(pattern =>
-            pattern.test(str)
-        );
-
-        if (hasCommandInjection) {
-            for (const pattern of DANGEROUS_PATTERNS.commands) {
-                result = result.replace(pattern, '[CMD_REMOVED]');
-            }
+        if (DANGEROUS_PATTERNS.commands.some(pattern => pattern.test(str))) {
+            return DANGEROUS_PATTERNS.commands.reduce(
+                (result, pattern) => result.replace(pattern, '[CMD_REMOVED]'),
+                str
+            );
         }
-
-        return result;
+        return str;
     }
 
-    /**
-     * Remove path traversal attempts
-     */
     private removePathTraversal(str: string): string {
-        let result = str;
-
-        for (const pattern of DANGEROUS_PATTERNS.pathTraversal) {
-            result = result.replace(pattern, '[PATH_REMOVED]');
-        }
-
-        return result;
-    }
-
-    /**
-     * Escape HTML entities
-     */
-    private escapeHTML(str: string): string {
-        const map: Record<string, string> = {
-            '&': '&amp;',
-            '<': '&lt;',
-            '>': '&gt;',
-            '"': '&quot;',
-            "'": '&#x27;',
-            '/': '&#x2F;'
-        };
-
-        return str.replace(/[&<>"'/]/g, char => map[char]);
+        return DANGEROUS_PATTERNS.pathTraversal.reduce(
+            (result, pattern) => result.replace(pattern, '[PATH_REMOVED]'),
+            str
+        );
     }
 
     /**

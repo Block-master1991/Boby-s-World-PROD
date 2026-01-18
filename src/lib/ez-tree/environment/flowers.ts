@@ -1,12 +1,12 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { CHUNK_SIZE } from '../../chunkUtils';
-import { simplex2d } from './noise';
-import { appendWindShader } from '../shaders/windShaderUtils';
-import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
-import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { logger } from 'utils/logger';
+import { CHUNK_SIZE } from '../../chunkUtils';
+import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
+import { appendWindShader } from '../shaders/windShaderUtils';
+import { simplex2d } from './noise';
 
 let loaded = false;
 let _flowerBlueMesh: THREE.Mesh | null = null;
@@ -51,82 +51,78 @@ export class Flowers extends THREE.Group {
   public static async fetchAssets(): Promise<void> {
     if (loaded) return;
 
-    const gltfLoader = new GLTFLoader();
-
-    const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('/libs/draco/');
-    gltfLoader.setDRACOLoader(dracoLoader);
-
-    // Helper function to find the first mesh in a GLTF scene
-    const findMesh = (scene: THREE.Group): THREE.Mesh | null => {
-      let mesh: THREE.Mesh | null = null;
-      scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          mesh = child;
-        }
-      });
-      return mesh;
-    };
-
-    const loadModel = async (modelPath: string, modelName: string): Promise<THREE.Group> => {
-      try {
-        // Try to load from IndexedDB first
-        const cachedData = await getModel(modelName);
-        if (cachedData) {
-          logger.log(`[Flowers] Loading ${modelName} from IndexedDB`);
-          const gltf = await gltfLoader.parseAsync(cachedData, '');
-          return gltf.scene;
-        } else {
-          logger.log(`[Flowers] Fetching ${modelName} from network: ${modelPath}`);
-          const response = await fetch(modelPath);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const arrayBuffer = await response.arrayBuffer();
-          await putModel(modelName, arrayBuffer); // Store in IndexedDB
-          const gltf = await gltfLoader.parseAsync(arrayBuffer, '');
-          return gltf.scene;
-        }
-      } catch (error) {
-        logger.error(`[Flowers] Error loading or caching model ${modelName}:`, error);
-        // Fallback to direct network load if IndexedDB fails
-        logger.log(`[Flowers] Falling back to direct network load for: ${modelPath}`);
-        const gltf = await gltfLoader.loadAsync(modelPath);
-        return gltf.scene;
-      }
-    };
-
     try {
       logger.log('[Flowers] Loading flower models...');
+      const gltfLoader = new GLTFLoader();
+      const dracoLoader = new DRACOLoader();
+      dracoLoader.setDecoderPath('/libs/draco/');
+      gltfLoader.setDRACOLoader(dracoLoader);
 
-      // Load flower models as in grass.js with IndexedDB caching
-      _flowerBlueMesh = (await loadModel('/models/flower_blue.glb', 'flower_blue_model')).children[0] as THREE.Mesh;
-      _flowerWhiteMesh = (await loadModel('/models/flower_white.glb', 'flower_white_model')).children[0] as THREE.Mesh;
-      _flowerYellowMesh = (await loadModel('/models/flower_yellow.glb', 'flower_yellow_model')).children[0] as THREE.Mesh;
+      const loadModelBound = this.loadModel.bind(this, gltfLoader);
 
-      // Apply same material processing as in grass.js
-      [_flowerWhiteMesh, _flowerBlueMesh, _flowerYellowMesh].forEach((mesh) => {
-        if (mesh) {
-          mesh.traverse((o) => {
-            if (o instanceof THREE.Mesh && o.material) {
-              if (o.material.map) {
-                o.material = new THREE.MeshPhongMaterial({ map: o.material.map });
-              }
-              // Apply wind shading to flowers
-              appendWindShader(o.material, new FlowerOptions(), false);
-            }
-          });
-        }
-      });
+      _flowerBlueMesh = await loadModelBound('/models/flower_blue.glb', 'flower_blue_model');
+      _flowerWhiteMesh = await loadModelBound('/models/flower_white.glb', 'flower_white_model');
+      _flowerYellowMesh = await loadModelBound('/models/flower_yellow.glb', 'flower_yellow_model');
+
+      this.processFlowerMaterials([_flowerWhiteMesh, _flowerBlueMesh, _flowerYellowMesh]);
 
       logger.log('[Flowers] All flower models loaded successfully');
     } catch (error) {
       logger.error('[Flowers] Error loading flower models:', error);
-      // Create fallback models in case of loading failure
-      _flowerBlueMesh = this.createFallbackFlower(0x3498db); // Blue
-      _flowerWhiteMesh = this.createFallbackFlower(0xffffff); // White
-      _flowerYellowMesh = this.createFallbackFlower(0xf1c40f); // Yellow
+      this.createFallbackMeshes();
     }
 
     loaded = true;
+  }
+
+  private static async loadModel(loader: GLTFLoader, modelPath: string, modelName: string): Promise<THREE.Mesh> {
+    const scene = await this.fetchModelScene(loader, modelPath, modelName);
+    const mesh = scene.children[0] as THREE.Mesh;
+    if (!mesh) throw new Error(`Model ${modelName} has no mesh`);
+    return mesh;
+  }
+
+  private static async fetchModelScene(loader: GLTFLoader, modelPath: string, modelName: string): Promise<THREE.Group> {
+    try {
+      const cachedData = await getModel(modelName);
+      if (cachedData) {
+        logger.log(`[Flowers] Loading ${modelName} from IndexedDB`);
+        const gltf = await loader.parseAsync(cachedData, '');
+        return gltf.scene;
+      }
+      
+      logger.log(`[Flowers] Fetching ${modelName} from network: ${modelPath}`);
+      const response = await fetch(modelPath);
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+      const arrayBuffer = await response.arrayBuffer();
+      await putModel(modelName, arrayBuffer);
+      const gltf = await loader.parseAsync(arrayBuffer, '');
+      return gltf.scene;
+    } catch (error) {
+      logger.warn(`[Flowers] Error loading from IndexedDB/Network, falling back directly:`, error);
+      const gltf = await loader.loadAsync(modelPath);
+      return gltf.scene;
+    }
+  }
+
+  private static processFlowerMaterials(meshes: (THREE.Mesh | null)[]): void {
+    meshes.forEach((mesh) => {
+      if (!mesh) return;
+      mesh.traverse((o) => {
+        if (o instanceof THREE.Mesh && o.material) {
+          if ((o.material as THREE.MeshStandardMaterial).map) {
+            o.material = new THREE.MeshPhongMaterial({ map: (o.material as THREE.MeshStandardMaterial).map });
+          }
+          appendWindShader(o.material, { ...new FlowerOptions(), instanced: false });
+        }
+      });
+    });
+  }
+
+  private static createFallbackMeshes(): void {
+    _flowerBlueMesh = this.createFallbackFlower(0x3498db);
+    _flowerWhiteMesh = this.createFallbackFlower(0xffffff);
+    _flowerYellowMesh = this.createFallbackFlower(0xf1c40f);
   }
 
   public generateFlowersForChunk(chunkX: number, chunkZ: number, getHeightAt?: (x: number, z: number) => number): THREE.Group | null {
@@ -143,189 +139,120 @@ export class Flowers extends THREE.Group {
     const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
 
     for (let i = 0; i < this.options.flowersCountPerChunk; i++) {
-      // Use same positioning method as in grass.js
-      const r = 10 + Math.random() * 200;
-      const theta = Math.random() * 2.0 * Math.PI;
-
-      // Set position randomly
-      const worldX = chunkWorldStartX + r * Math.cos(theta);
-      const worldZ = chunkWorldStartZ + r * Math.sin(theta);
-
-      // Use same noise calculation method as in grass.js
-      const n = 0.5 + 0.5 * simplex2d(new THREE.Vector2(
-        worldX / this.options.scale,
-        worldZ / this.options.scale
-      ));
-
-      if (n > this.options.patchiness && Math.random() + 0.8 > this.options.patchiness) { continue; }
-
-      // Get terrain height at this point
-      const height = getHeightAt ? getHeightAt(worldX, worldZ) : 0;
-      const p = new THREE.Vector3(worldX, height, worldZ);
+      const pos = this.getRandomFlowerPosition(chunkWorldStartX, chunkWorldStartZ, getHeightAt);
+      if (!pos) continue;
 
       const flowerMesh = flowerMeshes[Math.floor(Math.random() * flowerMeshes.length)];
-      // Clone the model as in grass.js
-      const flower = flowerMesh.clone();
-      flower.position.copy(p);
-      flower.rotation.set(0, 2 * Math.PI * Math.random(), 0);
-
-      // Set scaled size to three times smaller
-      const scale = (0.02 + 0.03 * Math.random()) / 7;
-      flower.scale.set(scale, scale, scale);
-
-      flower.castShadow = true;
-      flower.receiveShadow = true;
-      flower.frustumCulled = true;
-
-      // Apply wind effect to the flower
-      if (flower.material) {
-        appendWindShader(flower.material, this.options, false);
+      if (flowerMesh) {
+        this.addFlowerToGroup(flowersGroup, flowerMesh, pos);
       }
-
-      flowersGroup.add(flower);
     }
     return flowersGroup;
   }
 
-  public generateFlowersFromData(data: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] }, getHeightAt?: (x: number, z: number) => number): THREE.Group | null {
+  private getRandomFlowerPosition(startX: number, startZ: number, getHeightAt?: (x: number, z: number) => number): THREE.Vector3 | null {
+    const r = 10 + Math.random() * 200;
+    const theta = Math.random() * 2.0 * Math.PI;
+    const worldX = startX + r * Math.cos(theta);
+    const worldZ = startZ + r * Math.sin(theta);
+
+    const n = 0.5 + 0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
+    if (n > this.options.patchiness && Math.random() + 0.8 > this.options.patchiness) return null;
+
+    const height = getHeightAt ? getHeightAt(worldX, worldZ) : 0;
+    return new THREE.Vector3(worldX, height, worldZ);
+  }
+
+  private addFlowerToGroup(group: THREE.Group, flowerMesh: THREE.Mesh, pos: THREE.Vector3): void {
+    const flower = flowerMesh.clone();
+    flower.position.copy(pos);
+    flower.rotation.set(0, 2 * Math.PI * Math.random(), 0);
+
+    const scale = (0.02 + 0.03 * Math.random()) / 7;
+    flower.scale.set(scale, scale, scale);
+
+    flower.castShadow = true;
+    flower.receiveShadow = true;
+    flower.frustumCulled = true;
+
+    appendWindShader(flower.material, { ...this.options, instanced: false });
+    group.add(flower);
+  }
+
+  public generateFlowersFromData(data: { positions: number[] }, getHeightAt?: (x: number, z: number) => number): THREE.Group | null {
     if (!_flowerBlueMesh || !_flowerWhiteMesh || !_flowerYellowMesh || !data) return null;
 
     const flowersGroup = new THREE.Group();
     const flowerMeshes = [_flowerBlueMesh, _flowerWhiteMesh, _flowerYellowMesh];
-    const { positions, scales, quaternions } = data;
+    const { positions } = data;
     const count = positions.length / 3;
 
-    logger.log(`[Flowers] Generating ${count} flowers`);
+    logger.log(`[Flowers] Generating ${count} flowers from data`);
 
     for (let i = 0; i < count; i++) {
+      const idx = i * 3;
+      const x = positions[idx] as number;
+      const y = positions[idx + 1] as number;
+      const z = positions[idx + 2] as number;
+      
+      const height = getHeightAt ? getHeightAt(x, z) : y;
       const flowerMesh = flowerMeshes[Math.floor(Math.random() * flowerMeshes.length)];
-
-      // Clone the model as in grass.js
-      const flower = flowerMesh.clone();
-
-      // Extract current position
-      const x = positions[i * 3];
-      const z = positions[i * 3 + 2];
-
-      // Determine correct terrain height
-      const height = getHeightAt ? getHeightAt(x, z) : positions[i * 3 + 1];
-
-      // Set correct position with determined height
-      flower.position.set(x, height, z);
-      flower.rotation.set(0, 2 * Math.PI * Math.random(), 0);
-
-      // Set scaled size to three times smaller
-      const scale = (0.02 + 0.03 * Math.random()) / 7;
-      flower.scale.set(scale, scale, scale);
-
-      // Ensure flower casts and receives shadows
-      flower.castShadow = true;
-      flower.receiveShadow = true;
-      flower.frustumCulled = true;
-
-      // Apply wind effect to the flower
-      if (flower.material) {
-        appendWindShader(flower.material, this.options, false);
+      if (flowerMesh) {
+        this.addFlowerToGroup(flowersGroup, flowerMesh, new THREE.Vector3(x, height, z));
       }
-
-      flowersGroup.add(flower);
     }
     return flowersGroup;
   }
 
-  // Advanced function for proper model cloning
-  private cloneMeshAdvanced(original: THREE.Mesh): THREE.Mesh {
-    // Clone geometry
-    const geometry = original.geometry.clone();
-
-    // Clone materials
-    let materials: THREE.Material | THREE.Material[];
-
-    if (Array.isArray(original.material)) {
-      // Clone array of materials
-      materials = original.material.map(mat => {
-        if (mat instanceof THREE.Material) {
-          return mat.clone();
-        }
-        return mat;
-      });
-    } else if (original.material) {
-      // Clone single material
-      materials = original.material.clone();
-    } else {
-      // Create default material if none exists
-      materials = new THREE.MeshBasicMaterial({ color: 0xffffff });
-    }
-
-    // Create new clone
-    const clone = new THREE.Mesh(geometry, materials);
-
-    // Copy other properties
-    clone.position.copy(original.position);
-    clone.rotation.copy(original.rotation);
-    clone.scale.copy(original.scale);
-
-    // Copy shadow properties
-    clone.castShadow = original.castShadow;
-    clone.receiveShadow = original.receiveShadow;
-    clone.frustumCulled = original.frustumCulled;
-
-    return clone;
-  }
-
   // Function to create fallback flower model in case of original model loading failure
   private static createFallbackFlower(color: number): THREE.Mesh {
-    // Create simple flower from basic geometric shapes
-    const flowerGroup = new THREE.Group();
-
-    // Flower stem
-    const stemGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8);
-    const stemMaterial = new THREE.MeshBasicMaterial({ color: 0x2ecc71 }); // Green
-    const stem = new THREE.Mesh(stemGeometry, stemMaterial);
-    stem.position.y = 0.15;
-    flowerGroup.add(stem);
-
-    // Flower head
-    const headGeometry = new THREE.SphereGeometry(0.1, 8, 6);
+    const stemMaterial = new THREE.MeshBasicMaterial({ color: 0x2ecc71 });
     const headMaterial = new THREE.MeshBasicMaterial({ color });
-    const head = new THREE.Mesh(headGeometry, headMaterial);
-    head.position.y = 0.3;
-    flowerGroup.add(head);
 
-    // Convert group to single mesh
+    const stemGeometry = new THREE.CylinderGeometry(0.02, 0.02, 0.3, 8);
+    stemGeometry.translate(0, 0.15, 0);
+
+    const headGeometry = new THREE.SphereGeometry(0.1, 8, 6);
+    headGeometry.translate(0, 0.3, 0);
+
+    const mergedGeometry = this.mergeGeometries([stemGeometry, headGeometry]);
+    return new THREE.Mesh(mergedGeometry, [stemMaterial, headMaterial]);
+  }
+
+  private static mergeGeometries(geometries: THREE.BufferGeometry[]): THREE.BufferGeometry {
     const mergedGeometry = new THREE.BufferGeometry();
-    const geometries = [stem.geometry, head.geometry];
+    let totalVertexCount = 0;
+    const positions: number[] = [];
+    const indices: number[] = [];
 
-    // Merge geometries
-    let vertexCount = 0;
-    geometries.forEach(geometry => {
-      const positionAttribute = geometry.getAttribute('position');
-      mergedGeometry.setAttribute('position', new THREE.BufferAttribute(
-        new Float32Array([...mergedGeometry.attributes.position?.array || [], ...positionAttribute.array]),
-        3
-      ));
-
-      if (geometry.index) {
-        const indexArray = geometry.index.array;
-        const newIndexArray = new Uint32Array(indexArray.length);
-        for (let i = 0; i < indexArray.length; i++) {
-          newIndexArray[i] = indexArray[i] + vertexCount;
+    for (const geometry of geometries) {
+      const posAttr = geometry.getAttribute('position');
+      if (!posAttr) continue;
+      
+      const posArray = posAttr.array;
+      for (let i = 0; i < posArray.length; i++) {
+        const val = posArray[i];
+        if (typeof val === 'number') {
+          positions.push(val);
         }
-        // Convert Uint32Array to Array<number>
-        const indexArrayForSet = Array.from(newIndexArray);
-        mergedGeometry.setIndex(indexArrayForSet);
       }
 
-      vertexCount += positionAttribute.count;
-    });
+      const indexAttr = geometry.index;
+      if (indexAttr) {
+        const indexArray = indexAttr.array;
+        for (let i = 0; i < indexArray.length; i++) {
+          const val = indexArray[i];
+          if (typeof val === 'number') {
+            indices.push(val + totalVertexCount);
+          }
+        }
+      }
+      totalVertexCount += posAttr.count;
+    }
 
-    // Create merged mesh
-    const mergedMesh = new THREE.Mesh(mergedGeometry, [stemMaterial, headMaterial]);
-    mergedMesh.position.copy(flowerGroup.position);
-    mergedMesh.rotation.copy(flowerGroup.rotation);
-    mergedMesh.scale.copy(flowerGroup.scale);
-
-    return mergedMesh;
+    mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    mergedGeometry.setIndex(indices);
+    return mergedGeometry;
   }
 
   public disposeChunk(chunkGroup: THREE.Group): void {

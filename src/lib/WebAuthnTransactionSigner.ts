@@ -3,9 +3,9 @@
  * Provides additional security layer (Step-up Auth) for sensitive operations
  */
 
-import { uint8ArrayToBase64url, base64urlToUint8Array } from '@/utils/base64';
-import { WebAuthnUtils } from './webauthn-utils';
+import { base64urlToUint8Array, uint8ArrayToBase64url } from '@/utils/base64';
 import { logger } from 'utils/logger';
+import { WebAuthnUtils } from './webauthn-utils';
 
 export interface TransactionPayload {
     action: string;
@@ -42,16 +42,21 @@ export class WebAuthnTransactionSigner {
         const rpId = window.location.hostname === 'localhost' ? 'localhost' : WebAuthnUtils.getRPID(window.location.hostname);
 
         try {
+            const publicKeyOptions: PublicKeyCredentialRequestOptions = {
+                challenge: base64urlToUint8Array(challenge) as BufferSource,
+                rpId: rpId,
+                userVerification: 'required',
+            };
+
+            if (credentialIds && credentialIds.length > 0) {
+                publicKeyOptions.allowCredentials = credentialIds.map(id => ({
+                    id: base64urlToUint8Array(id) as BufferSource,
+                    type: 'public-key'
+                }));
+            }
+
             const credential = await navigator.credentials.get({
-                publicKey: {
-                    challenge: base64urlToUint8Array(challenge) as any,
-                    rpId: rpId,
-                    allowCredentials: credentialIds?.map(id => ({
-                        id: base64urlToUint8Array(id) as any,
-                        type: 'public-key'
-                    })),
-                    userVerification: 'required',
-                }
+                publicKey: publicKeyOptions
             }) as PublicKeyCredential;
 
             return credential;

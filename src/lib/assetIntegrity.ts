@@ -1,41 +1,9 @@
 // Asset Integrity Verification System
 import { logger } from 'utils/logger';
-// Ensures files are not corrupted and match expected checksums
+import type { IntegrityCheck, IntegrityReport } from './asset/types';
+import { batchPromises, calculateSHA256 } from './asset/utils';
 
-export interface IntegrityCheck {
-    path: string;
-    expectedSHA256?: string;
-    expectedSize?: number;
-    actualSHA256?: string;
-    actualSize?: number;
-    isValid: boolean;
-    lastChecked: number;
-    error?: string;
-}
-
-export interface IntegrityReport {
-    totalChecked: number;
-    passed: number;
-    failed: number;
-    checks: IntegrityCheck[];
-    timestamp: number;
-}
-
-/**
- * Calculate SHA-256 hash for ArrayBuffer
- */
-export async function calculateSHA256(data: ArrayBuffer): Promise<string> {
-    try {
-        // Use Web Crypto API
-        const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-        const hashArray = Array.from(new Uint8Array(hashBuffer));
-        const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-        return hashHex;
-    } catch (error) {
-        logger.error('[AssetIntegrity] Failed to calculate SHA-256:', error);
-        throw error;
-    }
-}
+export type { IntegrityCheck, IntegrityReport };
 
 /**
  * Verify a single asset's integrity
@@ -48,41 +16,23 @@ export async function verifyAssetIntegrity(
 ): Promise<IntegrityCheck> {
     const check: IntegrityCheck = {
         path,
-        expectedSHA256,
-        expectedSize,
+        expectedSHA256: expectedSHA256 || undefined,
+        expectedSize: expectedSize || undefined,
+        actualSHA256: undefined,
         actualSize: data.byteLength,
         isValid: true,
-        lastChecked: Date.now()
+        lastChecked: Date.now(),
+        error: undefined
     };
 
     try {
-        // Check size first (faster)
-        if (expectedSize && data.byteLength !== expectedSize) {
-            const sizeDiffMB = Math.abs(data.byteLength - expectedSize) / (1024 * 1024);
-
-            // Allow small variance (< 1KB) for compression differences
-            if (sizeDiffMB > 0.001) {
-                check.isValid = false;
-                check.error = `Size mismatch: expected ${expectedSize} bytes, got ${data.byteLength} bytes (diff: ${sizeDiffMB.toFixed(3)}MB)`;
-                logger.warn(`[AssetIntegrity] ${check.error}`, path);
-            }
+        validateSize(check, data.byteLength);
+        if (check.isValid && expectedSHA256) {
+            await validateHash(check, data, expectedSHA256);
         }
-
-        // Calculate and verify SHA-256 if expected hash is provided
-        if (expectedSHA256 && check.isValid) {
-            check.actualSHA256 = await calculateSHA256(data);
-
-            if (check.actualSHA256 !== expectedSHA256) {
-                check.isValid = false;
-                check.error = `SHA-256 mismatch: expected ${expectedSHA256.substring(0, 16)}..., got ${check.actualSHA256.substring(0, 16)}...`;
-                logger.error(`[AssetIntegrity] ${check.error}`, path);
-            }
-        }
-
         if (check.isValid) {
             logger.log(`[AssetIntegrity] ✓ Verified: ${path} (${(data.byteLength / (1024 * 1024)).toFixed(2)}MB)`);
         }
-
     } catch (error) {
         check.isValid = false;
         check.error = error instanceof Error ? error.message : 'Unknown verification error';
@@ -90,6 +40,25 @@ export async function verifyAssetIntegrity(
     }
 
     return check;
+}
+
+function validateSize(check: IntegrityCheck, actualSize: number): void {
+    if (!check.expectedSize) return;
+    const diffMB = Math.abs(actualSize - check.expectedSize) / (1024 * 1024);
+    if (diffMB > 0.001) {
+        check.isValid = false;
+        check.error = `Size mismatch: expected ${check.expectedSize} bytes, got ${actualSize} bytes (diff: ${diffMB.toFixed(3)}MB)`;
+        logger.warn(`[AssetIntegrity] ${check.error}`, check.path);
+    }
+}
+
+async function validateHash(check: IntegrityCheck, data: ArrayBuffer, expected: string): Promise<void> {
+    check.actualSHA256 = await calculateSHA256(data);
+    if (check.actualSHA256 !== expected) {
+        check.isValid = false;
+        check.error = `SHA-256 mismatch: expected ${expected.substring(0, 16)}..., got ${check.actualSHA256.substring(0, 16)}...`;
+        logger.error(`[AssetIntegrity] ${check.error}`, check.path);
+    }
 }
 
 /**
@@ -104,36 +73,26 @@ export async function verifyMultipleAssets(
     }>
 ): Promise<IntegrityReport> {
     logger.log(`[AssetIntegrity] Starting verification of ${assets.length} assets...`);
-
     const startTime = Date.now();
-    const checks: IntegrityCheck[] = [];
 
-    for (const asset of assets) {
-        const check = await verifyAssetIntegrity(
-            asset.path,
-            asset.data,
-            asset.expectedSHA256,
-            asset.expectedSize
-        );
-        checks.push(check);
-    }
-
-    const passed = checks.filter(c => c.isValid).length;
-    const failed = checks.filter(c => !c.isValid).length;
+    // Use batch processing to avoid overloading the system while avoiding no-await-in-loop
+    const checks = await batchPromises(assets, (asset) => 
+        verifyAssetIntegrity(asset.path, asset.data, asset.expectedSHA256, asset.expectedSize)
+    );
 
     const report: IntegrityReport = {
         totalChecked: assets.length,
-        passed,
-        failed,
+        passed: checks.filter(c => c.isValid).length,
+        failed: checks.filter(c => !c.isValid).length,
         checks,
         timestamp: Date.now()
     };
 
     const duration = (Date.now() - startTime) / 1000;
-    logger.log(`[AssetIntegrity] Verification complete in ${duration.toFixed(2)}s: ${passed} passed, ${failed} failed`);
+    logger.log(`[AssetIntegrity] Verification complete in ${duration.toFixed(2)}s: ${report.passed} passed, ${report.failed} failed`);
 
-    if (failed > 0) {
-        logger.warn(`[AssetIntegrity] ⚠️ ${failed} assets failed integrity check`);
+    if (report.failed > 0) {
+        logger.warn(`[AssetIntegrity] ⚠️ ${report.failed} assets failed integrity check`);
         checks.filter(c => !c.isValid).forEach(check => {
             logger.warn(`  - ${check.path}: ${check.error}`);
         });
@@ -143,21 +102,18 @@ export async function verifyMultipleAssets(
 }
 
 /**
- * Quick size-only verification (faster, less secure)
+ * Quick size-only verification
  */
-export function verifySizeOnly(
-    path: string,
-    data: ArrayBuffer,
-    expectedSize: number,
-    toleranceMB: number = 0.1
-): IntegrityCheck {
+export function verifySizeOnly(path: string, data: ArrayBuffer, expectedSize: number, toleranceMB: number = 0.1): IntegrityCheck {
     const actualSize = data.byteLength;
     const diffMB = Math.abs(actualSize - expectedSize) / (1024 * 1024);
     const isValid = diffMB <= toleranceMB;
 
     return {
         path,
+        expectedSHA256: undefined,
         expectedSize,
+        actualSHA256: undefined,
         actualSize,
         isValid,
         lastChecked: Date.now(),
@@ -166,142 +122,51 @@ export function verifySizeOnly(
 }
 
 /**
- * Store integrity check results in localStorage for performance
+ * Cache and Retrieve logic
  */
 export function cacheIntegrityCheck(check: IntegrityCheck): void {
     if (typeof window === 'undefined') return;
     try {
         const cacheKey = `integrity_${check.path}`;
-        const cacheData = {
-            sha256: check.actualSHA256,
-            size: check.actualSize,
-            valid: check.isValid,
-            timestamp: check.lastChecked
-        };
+        const cacheData = { sha256: check.actualSHA256, size: check.actualSize, valid: check.isValid, timestamp: check.lastChecked };
         localStorage.setItem(cacheKey, JSON.stringify(cacheData));
-    } catch (error) {
-        logger.warn('[AssetIntegrity] Failed to cache integrity check:', error);
+    } catch (e) {
+        logger.warn('[AssetIntegrity] Failed to cache check:', e);
     }
 }
 
-/**
- * Retrieve cached integrity check
- */
 export function getCachedIntegrityCheck(path: string, maxAgeMs: number = 24 * 60 * 60 * 1000): IntegrityCheck | null {
     if (typeof window === 'undefined') return null;
     try {
-        const cacheKey = `integrity_${path}`;
-        const cached = localStorage.getItem(cacheKey);
-
+        const cached = localStorage.getItem(`integrity_${path}`);
         if (!cached) return null;
-
         const data = JSON.parse(cached);
-        const age = Date.now() - data.timestamp;
-
-        if (age > maxAgeMs) {
-            // Cache expired
-            localStorage.removeItem(cacheKey);
-            return null;
-        }
+        if (Date.now() - data.timestamp > maxAgeMs) return null;
 
         return {
-            path,
-            actualSHA256: data.sha256,
-            actualSize: data.size,
-            isValid: data.valid,
-            lastChecked: data.timestamp
+            path, expectedSHA256: undefined, expectedSize: undefined,
+            actualSHA256: data.sha256, actualSize: data.size,
+            isValid: data.valid, lastChecked: data.timestamp, error: undefined
         };
-    } catch (error) {
-        logger.warn('[AssetIntegrity] Failed to retrieve cached check:', error);
+    } catch (e) {
+        logger.warn('[AssetIntegrity] Cache Retrieve Error:', e);
         return null;
     }
 }
 
-/**
- * Clear all cached integrity checks
- */
 export function clearIntegrityCache(): void {
     if (typeof window === 'undefined') return;
-    try {
-        const keys = Object.keys(localStorage);
-        keys.forEach(key => {
-            if (key.startsWith('integrity_')) {
-                localStorage.removeItem(key);
-            }
-        });
-        logger.log('[AssetIntegrity] Cache cleared');
-    } catch (error) {
-        logger.warn('[AssetIntegrity] Failed to clear cache:', error);
-    }
+    Object.keys(localStorage).forEach(k => { if (k.startsWith('integrity_')) localStorage.removeItem(k); });
+    logger.log('[AssetIntegrity] Cache cleared');
 }
 
-/**
- * Get integrity statistics
- */
-export function getIntegrityStats(): {
-    cachedChecks: number;
-    oldestCheck: number | null;
-    newestCheck: number | null;
-} {
-    if (typeof window === 'undefined') {
-        return {
-            cachedChecks: 0,
-            oldestCheck: null,
-            newestCheck: null
-        };
-    }
-    try {
-        const keys = Object.keys(localStorage).filter(k => k.startsWith('integrity_'));
-        const timestamps: number[] = [];
-
-        keys.forEach(key => {
-            try {
-                const data = JSON.parse(localStorage.getItem(key) || '{}');
-                if (data.timestamp) timestamps.push(data.timestamp);
-            } catch {
-                // Skip invalid entries
-            }
-        });
-
-        return {
-            cachedChecks: keys.length,
-            oldestCheck: timestamps.length > 0 ? Math.min(...timestamps) : null,
-            newestCheck: timestamps.length > 0 ? Math.max(...timestamps) : null
-        };
-    } catch (error) {
-        logger.warn('[AssetIntegrity] Failed to get stats:', error);
-        return {
-            cachedChecks: 0,
-            oldestCheck: null,
-            newestCheck: null
-        };
-    }
-}
-
-/**
- * Format integrity report for display
- */
-export function formatIntegrityReport(report: IntegrityReport): string {
-    const passRate = report.totalChecked > 0
-        ? ((report.passed / report.totalChecked) * 100).toFixed(1)
-        : '0.0';
-
-    let output = `
-=== Asset Integrity Report ===
-Timestamp: ${new Date(report.timestamp).toLocaleString()}
-Total Checked: ${report.totalChecked}
-Passed: ${report.passed} (${passRate}%)
-Failed: ${report.failed}
-`;
-
-    if (report.failed > 0) {
-        output += '\n--- Failed Assets ---\n';
-        report.checks
-            .filter(c => !c.isValid)
-            .forEach(check => {
-                output += `- ${check.path}: ${check.error}\n`;
-            });
-    }
-
-    return output;
+export function getIntegrityStats() {
+    if (typeof window === 'undefined') return { cachedChecks: 0, oldestCheck: null, newestCheck: null };
+    const keys = Object.keys(localStorage).filter(k => k.startsWith('integrity_'));
+    const times = keys.map(k => JSON.parse(localStorage.getItem(k) || '{}').timestamp).filter(Boolean);
+    return {
+        cachedChecks: keys.length,
+        oldestCheck: times.length > 0 ? Math.min(...times) : null,
+        newestCheck: times.length > 0 ? Math.max(...times) : null
+    };
 }

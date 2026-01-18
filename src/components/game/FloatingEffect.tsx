@@ -4,14 +4,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 interface FloatingEffectOptions {
   position: THREE.Vector3;
   effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score';
-  value: number; // e.g., 1 for +1, -1 for -1
-  camera: THREE.Camera; // Pass camera for lookAt
-  onComplete: (id: string) => void; // Callback to notify parent when animation is complete
-  id: string; // Unique ID for the effect
+  value: number;
+  camera: THREE.Camera;
+  onComplete: (id: string) => void;
+  id: string;
   animationType: 'floatUp' | 'attractToTarget' | 'followTarget';
-  targetMesh?: THREE.Object3D; // For 'followTarget'
-  targetPosition?: THREE.Vector3; // For 'attractToTarget'
-  is3DModel?: boolean; // To load a 3D model instead of a 2D texture
+  targetMesh?: THREE.Object3D | undefined;
+  targetPosition?: THREE.Vector3 | undefined;
+  is3DModel?: boolean | undefined;
 }
 
 class FloatingEffect {
@@ -113,7 +113,7 @@ class FloatingEffect {
         // Make the coin model self-illuminated
         this.iconMesh.traverse((object) => {
           if (object instanceof THREE.Mesh) {
-            const material = object.material;
+            const { material } = object;
             if (material instanceof THREE.MeshStandardMaterial || material instanceof THREE.MeshPhysicalMaterial) {
               // Copy the material's base color to its emissive property
               material.emissive.copy(material.color);
@@ -149,55 +149,50 @@ class FloatingEffect {
     }
   }
 
+  private updateAnimationState(progress: number) {
+    this.opacity = 1 - progress;
+    if (this.animationType === 'floatUp') {
+      this.yOffset = 0.5 * progress;
+      this.mesh.position.y += this.yOffset;
+    } else if (this.animationType === 'attractToTarget' && this.targetPosition) {
+      this.mesh.position.lerp(this.targetPosition, 0.05);
+    } else if (this.animationType === 'followTarget' && this.targetMesh) {
+      const Y_OFFSET = 1.5;
+      this.mesh.position.copy(this.targetMesh.position).add(new THREE.Vector3(0, Y_OFFSET, 0));
+    }
+  }
+
+  private updateMaterialOpacity() {
+    if (this.iconMesh) {
+      this.iconMesh.traverse((object: THREE.Object3D) => {
+        if (object instanceof THREE.Mesh) {
+          const { material } = object;
+          if (material instanceof THREE.MeshBasicMaterial) {
+            material.opacity = this.opacity;
+          } else if (Array.isArray(material)) {
+            material.forEach(m => {
+              if (m instanceof THREE.MeshBasicMaterial) m.opacity = this.opacity;
+            });
+          }
+        }
+      });
+    }
+    if (this.textMesh && this.textMesh.material instanceof THREE.MeshBasicMaterial) {
+      this.textMesh.material.opacity = this.opacity;
+    }
+  }
+
   public update() {
     const elapsed = performance.now() - this.startTime;
-    const duration = 1500; // milliseconds for animation
+    const duration = 1500;
 
     if (elapsed < duration) {
-      const progress = elapsed / duration;
-      this.opacity = 1 - progress; // Fade out
-
-      if (this.animationType === 'floatUp') {
-        this.yOffset = 0.5 * progress; // Float up by 0.5 units
-        this.mesh.position.y = this.mesh.position.y + this.yOffset;
-      } else if (this.animationType === 'attractToTarget' && this.targetPosition) {
-        this.mesh.position.lerp(this.targetPosition, 0.05); // Smoothly move towards target
-      } else if (this.animationType === 'followTarget' && this.targetMesh) {
-        // Position the coin effect above the dog's head
-        const Y_OFFSET = 1.5; // Adjust as needed
-        this.mesh.position.copy(this.targetMesh.position).add(new THREE.Vector3(0, Y_OFFSET, 0));
-
-        // Position the light behind the dog, pointing towards the coin
-        const dogForward = new THREE.Vector3();
-        this.targetMesh.getWorldDirection(dogForward); // Get the dog's forward direction
-        dogForward.negate(); // Reverse to get the direction behind the dog
-        dogForward.multiplyScalar(1.0); // Distance behind the dog
-
-        // Removed debugLight positioning as it's no longer needed
-      }
-
-      if (this.iconMesh) {
-        this.iconMesh.traverse((object: THREE.Object3D) => {
-          if (object instanceof THREE.Mesh) {
-            const material = object.material;
-            if (material instanceof THREE.MeshBasicMaterial) {
-              material.opacity = this.opacity;
-            } else if (Array.isArray(material)) {
-              material.forEach(m => {
-                if (m instanceof THREE.MeshBasicMaterial) m.opacity = this.opacity;
-              });
-            }
-          }
-        });
-      }
-      if (this.textMesh && this.textMesh.material instanceof THREE.MeshBasicMaterial) {
-        this.textMesh.material.opacity = this.opacity;
-      }
+      this.updateAnimationState(elapsed / duration);
+      this.updateMaterialOpacity();
     } else {
-      this.onComplete(this.id); // Animation complete, trigger cleanup
+      this.onComplete(this.id);
     }
 
-    // Make the effect always face the camera
     this.mesh.lookAt(this.camera.position);
   }
 

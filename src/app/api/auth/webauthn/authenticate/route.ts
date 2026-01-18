@@ -1,57 +1,33 @@
 /**
- * WebAuthn Authenticate Route
+ * WebAuthn Authentication (Login) Initiation Route
  * POST /api/auth/webauthn/authenticate
  */
 
-import type { NextRequest} from 'next/server';
-import { NextResponse } from 'next/server';
-import { randomBytes } from 'crypto';
+import { validateRequestBody, WebAuthnAuthenticateSchema } from '@/lib/validation-schemas';
+import { WebAuthnService } from '@/lib/webauthn-service';
 import { WebAuthnUtils } from '@/lib/webauthn-utils';
-import redis from '@/lib/redis';
-import { db } from '@/lib/firebase-admin';
 import { logger } from '@/utils/logger';
+import type { NextRequest } from 'next/server';
+import { NextResponse } from 'next/server';
 
-export async function GET(request: NextRequest) {
+/**
+ * Initiates WebAuthn authentication. 
+ * Support both Discovery Mode (anonymous) and Specific User Mode.
+ */
+export async function POST(request: NextRequest) {
     try {
-        const { searchParams } = new URL(request.url);
-        const userId = searchParams.get('userId');
+        const { userId } = await validateRequestBody(request, WebAuthnAuthenticateSchema);
+        
         const host = request.headers.get('host') || 'localhost';
         const rpId = WebAuthnUtils.getRPID(host);
 
-        // 1. If Conditional UI request (without user identifier)
-        if (!userId) {
-            const options = WebAuthnUtils.generateAuthenticationChallenge(rpId);
+        const options = await WebAuthnService.initiateAuthentication(rpId, userId);
 
-            // Store anonymous challenge in Redis
-            const discoveryChallengeId = randomBytes(16).toString('hex');
-            await redis.setex(`webauthn_discovery_challenge:${discoveryChallengeId}`, 120, options.challenge);
-
-            return NextResponse.json({
-                ...options,
-                discoveryId: discoveryChallengeId,
-                allowCredentials: [] // Empty list allows Discoverable Credentials
-            });
-        }
-
-        // 2. Specific login request for user
-        const credentialsSnapshot = await db.collection('players').doc(userId).collection('passkeys').get();
-
-        const options = WebAuthnUtils.generateAuthenticationChallenge(rpId);
-        const allowCredentials = credentialsSnapshot.docs.map(doc => ({
-            id: doc.id,
-            type: 'public-key'
-        }));
-
-        // Store challenge in Redis
-        await redis.setex(`webauthn_auth_challenge:${userId}`, 120, options.challenge);
-
-        return NextResponse.json({
-            ...options,
-            userId,
-            allowCredentials
-        });
+        return NextResponse.json(options);
     } catch (error) {
-        logger.error('[WebAuthn Authenticate] Error:', error as Error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        logger.error('[WebAuthn Authenticate] Error:', error instanceof Error ? error.message : String(error));
+        return NextResponse.json({ 
+            error: error instanceof Error ? error.message : 'Internal Server Error' 
+        }, { status: error instanceof Error && error.message.includes('Validation') ? 400 : 500 });
     }
 }

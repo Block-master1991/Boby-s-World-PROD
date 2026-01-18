@@ -1,18 +1,18 @@
 
-import { logger } from './logger';
 import CryptoJS from 'crypto-js';
+import { logger } from './logger';
 
 // Secret key for client-side encryption.
-const SECRET_PASSPHRASE = process.env.NEXT_PUBLIC_GAME_ENCRYPTION_KEY || 'default-secure-key-boby-world-2025';
+const SECRET_PASSPHRASE = process.env['NEXT_PUBLIC_GAME_ENCRYPTION_KEY'] || 'default-secure-key-boby-world-2025';
 
 // 1. Derive a 256-bit key from the passphrase using SHA-256
 // This ensures we are using AES-256
 const ENCRYPTION_KEY = CryptoJS.SHA256(SECRET_PASSPHRASE);
 
 // 2. Derive a separate key for HMAC integrity check
-const HMAC_KEY = CryptoJS.SHA256(SECRET_PASSPHRASE + 'integrity');
+const HMAC_KEY = CryptoJS.SHA256(`${SECRET_PASSPHRASE  }integrity`);
 
-export const encryptData = (data: any): string => {
+export const encryptData = (data: unknown): string => {
     try {
         const jsonString = JSON.stringify(data);
 
@@ -43,7 +43,7 @@ export const encryptData = (data: any): string => {
     }
 };
 
-export const decryptData = (encryptedString: string): any => {
+export const decryptData = (encryptedString: string): unknown => {
     try {
         // Expected format: IV:Ciphertext:Signature
         const parts = encryptedString.split(':');
@@ -60,6 +60,8 @@ export const decryptData = (encryptedString: string): any => {
         }
 
         // 2. Decrypt
+        if (!ivString || !ciphertext) return null;
+        
         const iv = CryptoJS.enc.Base64.parse(ivString);
         const decryptedBytes = CryptoJS.AES.decrypt(
             { ciphertext: CryptoJS.enc.Base64.parse(ciphertext) } as CryptoJS.lib.CipherParams,

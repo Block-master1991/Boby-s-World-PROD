@@ -72,11 +72,17 @@ export class CorrelationMiddleware {
         const extractedContext = contextManager.extractFromHeaders(headers);
         const correlationId = this.extractCorrelationId(headers);
 
-        return contextManager.createContext({
+        const contextData: Partial<LogContext> = {
             ...extractedContext,
-            correlationId: correlationId || extractedContext.correlationId,
             ...additionalContext
-        });
+        };
+
+        // Only set correlationId if we have one (let createContext generate if needed)
+        if (correlationId) {
+            contextData.correlationId = correlationId;
+        }
+
+        return contextManager.createContext(contextData);
     }
 
     /**
@@ -89,8 +95,8 @@ export class CorrelationMiddleware {
     ): Promise<{ result: T; context: LogContext }> {
         const context = this.createContextFromRequest(request.headers, additionalContext);
 
-        const result = await contextManager.runWithContext(context, async () => {
-            return await handler(context);
+        const result = await contextManager.runWithContext(context, () => {
+            return handler(context);
         });
 
         return { result, context };
@@ -150,13 +156,13 @@ export const correlationMiddleware = new CorrelationMiddleware();
 /**
  * Helper: Wrap Next.js API route with correlation
  */
-export function withCorrelation<T = any>(
+export function withCorrelation<T = unknown>(
     handler: (request: Request, context: LogContext) => Promise<T>
 ) {
     return async (request: Request): Promise<Response> => {
         const { result, context } = await correlationMiddleware.handleRequest(
             request,
-            async (ctx) => await handler(request, ctx)
+            (ctx) => handler(request, ctx)
         );
 
         // If result is already a Response, add headers

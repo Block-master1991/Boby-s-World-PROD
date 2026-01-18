@@ -1,14 +1,14 @@
-import { logger } from 'utils/logger';
+import { Droplet, Magnet, Shield, Zap } from 'lucide-react';
 import type { ElementType } from 'react';
-import { Zap, Shield, Droplet, Magnet } from 'lucide-react';
+import { logger } from 'utils/logger';
 
 // Re-export functions and interfaces from client-items (safe for client)
-export { getStoreItems, getStoreItemsActive, getStoreItem } from './client-items';
+export { getStoreItem, getStoreItems, getStoreItemsActive } from './client-items';
 export type { StoreItemDefinition } from './client-items';
 
 // Import functions and type for local use
-import { getStoreItems, getStoreItemsActive, getStoreItem } from './client-items';
 import type { StoreItemDefinition } from './client-items';
+import { getStoreItem, getStoreItems, getStoreItemsActive } from './client-items';
 
 // Icon mapping for items
 const itemIcons: { [key: string]: ElementType } = {
@@ -24,11 +24,11 @@ const itemIcons: { [key: string]: ElementType } = {
 export async function getStoreItemsWithIcons(): Promise<StoreItemDefinition[]> {
     try {
         const items = await getStoreItems();
-        // Add icons to items
-        return items.map(item => ({
-            ...item,
-            icon: itemIcons[item.id]
-        }));
+        // Add icons to items (only if icon exists)
+        return items.map(item => {
+            const icon = itemIcons[item.id];
+            return icon ? { ...item, icon } : item;
+        });
     } catch (error) {
         logger.error('Error fetching store items with icons:', error);
         return [];
@@ -39,11 +39,11 @@ export async function getStoreItemsWithIcons(): Promise<StoreItemDefinition[]> {
 export async function getStoreItemsActiveWithIcons(): Promise<StoreItemDefinition[]> {
     try {
         const items = await getStoreItemsActive();
-        // Add icons to items
-        return items.map(item => ({
-            ...item,
-            icon: itemIcons[item.id]
-        }));
+        // Add icons to items (only if icon exists)
+        return items.map(item => {
+            const icon = itemIcons[item.id];
+            return icon ? { ...item, icon } : item;
+        });
     } catch (error) {
         logger.error('Error fetching active store items with icons:', error);
         return [];
@@ -55,10 +55,8 @@ export async function getStoreItemWithIcon(id: string): Promise<StoreItemDefinit
     try {
         const item = await getStoreItem(id);
         if (item) {
-            return {
-                ...item,
-                icon: itemIcons[item.id]
-            };
+            const icon = itemIcons[item.id];
+            return icon ? { ...item, icon } : item;
         }
         return null;
     } catch (error) {

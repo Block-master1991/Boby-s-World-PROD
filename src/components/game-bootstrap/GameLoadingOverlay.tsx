@@ -1,5 +1,5 @@
-import React from 'react';
 import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
+import React from 'react';
 
 interface GameLoadingOverlayProps {
     isLoading: boolean;

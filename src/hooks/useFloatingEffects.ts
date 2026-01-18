@@ -1,9 +1,9 @@
-import type { MutableRefObject } from 'react';
-import { useRef, useState, useCallback } from 'react';
-import type * as THREE from 'three';
-import { v4 as uuidv4 } from 'uuid';
 import FloatingEffect from '@/components/game/FloatingEffect'; // Import the FloatingEffect class
 import { logger } from '@/utils/logger';
+import type { MutableRefObject } from 'react';
+import { useCallback, useRef, useState } from 'react';
+import type * as THREE from 'three';
+import { v4 as uuidv4 } from 'uuid';
 
 export interface FloatingEffectData {
   id: string;
@@ -12,116 +12,70 @@ export interface FloatingEffectData {
   value: number;
   animationType: 'floatUp' | 'attractToTarget' | 'followTarget';
   is3DModel?: boolean;
-  targetPosition?: THREE.Vector3;
+  targetPosition?: THREE.Vector3 | undefined;
+  targetMesh?: THREE.Object3D | undefined;
 }
 
 interface UseFloatingEffectsProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
-  dogMeshRef?: MutableRefObject<THREE.Object3D | null>; // Added for followTarget
 }
 
-export const useFloatingEffects = ({ sceneRef, cameraRef }: UseFloatingEffectsProps) => {
-  const activeEffects = useRef<Map<string, FloatingEffect>>(new Map());
+interface AddEffectOptions {
+  position: THREE.Vector3;
+  effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score';
+  value: number;
+  animationType?: 'floatUp' | 'attractToTarget' | 'followTarget';
+  is3DModel?: boolean;
+  targetPosition?: THREE.Vector3 | undefined;
+  targetMesh?: THREE.Object3D | undefined;
+}
+
+const useContinuousEffects = () => {
   const [isSpeedBeamActive, setIsSpeedBeamActive] = useState(false);
   const [isShieldEffectActive, setIsShieldEffectActive] = useState(false);
 
-  const addFloatingEffect = useCallback((
-    position: THREE.Vector3,
-    effectType: 'coin' | 'Bottle' | 'item' | 'penalty' | 'score',
-    value: number,
-    animationType: 'floatUp' | 'attractToTarget' | 'followTarget' = 'floatUp',
-    is3DModel: boolean = false,
-    targetPosition?: THREE.Vector3,
-    targetMesh?: THREE.Object3D, // Add targetMesh parameter
-  ) => {
-    if (!sceneRef.current || !cameraRef.current) return;
+  const activateMagnetEffect = useCallback(() => {
+    logger.log('Magnet mode activated');
+  }, []);
 
+  const deactivateMagnetEffect = useCallback(() => logger.log('Magnet deactivated'), []);
+  const activateSpeedBeam = useCallback(() => { setIsSpeedBeamActive(true); logger.log('Speed beam activated'); }, []);
+  const deactivateSpeedBeam = useCallback(() => { setIsSpeedBeamActive(false); logger.log('Speed beam deactivated'); }, []);
+  const activateShieldEffect = useCallback(() => { setIsShieldEffectActive(true); logger.log('Shield activated'); }, []);
+  const deactivateShieldEffect = useCallback(() => { setIsShieldEffectActive(false); logger.log('Shield deactivated'); }, []);
+
+  return {
+    isSpeedBeamActive, isShieldEffectActive, activateMagnetEffect, deactivateMagnetEffect,
+    activateSpeedBeam, deactivateSpeedBeam, activateShieldEffect, deactivateShieldEffect
+  };
+};
+
+export const useFloatingEffects = ({ sceneRef, cameraRef }: UseFloatingEffectsProps) => {
+  const activeEffects = useRef<Map<string, FloatingEffect>>(new Map());
+  const continuousEffects = useContinuousEffects();
+
+  const addFloatingEffect = useCallback((options: AddEffectOptions) => {
+    if (!sceneRef.current || !cameraRef.current) return;
     const id = uuidv4();
     const effect = new FloatingEffect({
-      id,
-      position: position.clone(), // Clone position to avoid mutation
-      effectType,
-      value,
-      camera: cameraRef.current,
-      onComplete: (completedId) => {
-        const completedEffect = activeEffects.current.get(completedId);
-        if (completedEffect) {
-          sceneRef.current?.remove(completedEffect.mesh);
-          completedEffect.dispose();
-          activeEffects.current.delete(completedId);
-        }
-      },
-      animationType,
-      is3DModel,
-      targetMesh, // Pass targetMesh directly
-      targetPosition,
+      ...options, id, camera: cameraRef.current,
+      animationType: options.animationType ?? 'floatUp',
+      onComplete: (doneId) => {
+        const item = activeEffects.current.get(doneId);
+        if (item) { sceneRef.current?.remove(item.mesh); item.dispose(); activeEffects.current.delete(doneId); }
+      }
     });
-
     activeEffects.current.set(id, effect);
     sceneRef.current.add(effect.mesh);
   }, [sceneRef, cameraRef]);
 
-  const updateFloatingEffects = useCallback(() => {
-    activeEffects.current.forEach(effect => {
-      effect.update();
-    });
-  }, []);
+  const updateFloatingEffects = useCallback(() => { activeEffects.current.forEach(e => e.update()); }, []);
 
-  // New functions for continuous effects
-  const activateMagnetEffect = useCallback((coinPosition: THREE.Vector3, dogPosition: THREE.Vector3) => {
-    // This function will likely trigger addFloatingEffect for each coin
-    // that needs to be attracted. The actual attraction logic is in FloatingEffect.
-    // This function might be more about signaling the game logic to call addFloatingEffect
-    // for nearby coins with the 'attractToTarget' animationType.
-    // For now, it's a placeholder to align with the plan.
-    logger.log(`Magnet effect activated for coin at ${coinPosition.x}, dog at ${dogPosition.x}`);
-  }, []);
-
-  const deactivateMagnetEffect = useCallback(() => {
-    logger.log('Magnet effect deactivated');
-  }, []);
-
-  const activateSpeedBeam = useCallback(() => {
-    setIsSpeedBeamActive(true);
-    logger.log('Speed beam activated');
-  }, []);
-
-  const deactivateSpeedBeam = useCallback(() => {
-    setIsSpeedBeamActive(false);
-    logger.log('Speed beam deactivated');
-  }, []);
-
-  const activateShieldEffect = useCallback(() => {
-    setIsShieldEffectActive(true);
-    logger.log('Shield effect activated');
-  }, []);
-
-  const deactivateShieldEffect = useCallback(() => {
-    setIsShieldEffectActive(false);
-    logger.log('Shield effect deactivated');
-  }, []);
-
-  // Cleanup on unmount
   const cleanupFloatingEffects = useCallback(() => {
-    activeEffects.current.forEach(effect => {
-      sceneRef.current?.remove(effect.mesh);
-      effect.dispose();
-    });
+    activeEffects.current.forEach(e => { sceneRef.current?.remove(e.mesh); e.dispose(); });
     activeEffects.current.clear();
   }, [sceneRef]);
 
-  return {
-    addFloatingEffect,
-    updateFloatingEffects,
-    cleanupFloatingEffects,
-    activateMagnetEffect,
-    deactivateMagnetEffect,
-    activateSpeedBeam,
-    deactivateSpeedBeam,
-    activateShieldEffect,
-    deactivateShieldEffect,
-    isSpeedBeamActive, // Expose state for components to read
-    isShieldEffectActive, // Expose state for components to read
-  };
+  return { addFloatingEffect, updateFloatingEffects, cleanupFloatingEffects, ...continuousEffects };
 };

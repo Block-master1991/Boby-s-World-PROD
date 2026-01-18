@@ -4,7 +4,7 @@
  */
 
 import 'dotenv/config';
-import { initializeAdminApp, db } from '../src/lib/firebase-admin';
+import { db, initializeAdminApp } from '../src/lib/firebase-admin';
 import redis from '../src/lib/redis';
 
 async function runDiagnostics() {
@@ -22,8 +22,9 @@ async function runDiagnostics() {
         } else {
             console.log('❌ Firebase initialization skipped (Missing or invalid environment variables).');
         }
-    } catch (error: any) {
-        console.error('❌ Firebase Error:', error.message);
+    } catch (error: unknown) {
+        const err = error as Error;
+        console.error('❌ Firebase Error:', err.message);
     }
 
     // 2. Redis Check
@@ -36,15 +37,16 @@ async function runDiagnostics() {
         } else {
             console.log('❌ Redis returned unexpected response:', ping);
         }
-    } catch (error: any) {
-        console.error('❌ Redis Error:', error.message);
+    } catch (error: unknown) {
+        const err = error as Error;
+        console.error('❌ Redis Error:', err.message);
         console.log('💡 Note: Ensure your REDIS_URL starts with rediss:// if using TLS (like Upstash).');
     }
 
     console.log('\n--- [Environment] ---');
-    console.log('NODE_ENV:', process.env.NODE_ENV);
-    console.log('RESEND_API_KEY:', process.env.RESEND_API_KEY ? 'Set' : 'Missing');
-    console.log('NEXT_PUBLIC_ADMIN_WALLET_ADDRESS:', process.env.NEXT_PUBLIC_ADMIN_WALLET_ADDRESS ? 'Set' : 'Missing');
+    console.log('NODE_ENV:', process.env['NODE_ENV']);
+    console.log('RESEND_API_KEY:', process.env['RESEND_API_KEY'] ? 'Set' : 'Missing');
+    console.log('NEXT_PUBLIC_ADMIN_WALLET_ADDRESS:', process.env['NEXT_PUBLIC_ADMIN_WALLET_ADDRESS'] ? 'Set' : 'Missing');
 
     console.log('\n🏁 Diagnostics Complete.');
     process.exit(0);

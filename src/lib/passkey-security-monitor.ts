@@ -14,6 +14,14 @@ export interface PasskeySecurityMetrics {
     suspiciousActivities: number;
 }
 
+export interface PasskeyDeviceInfo {
+    browser?: string;
+    os?: string;
+    device?: string;
+    userAgent?: string;
+    [key: string]: unknown;
+}
+
 export class PasskeySecurityMonitor {
     private static instance: PasskeySecurityMonitor;
     private metrics: PasskeySecurityMetrics = {
@@ -57,7 +65,7 @@ export class PasskeySecurityMonitor {
     /**
      * Log passkey registration
      */
-    public async logPasskeyRegistration(userId: string, deviceInfo?: any): Promise<void> {
+    public async logPasskeyRegistration(userId: string, deviceInfo?: PasskeyDeviceInfo): Promise<void> {
         this.metrics.totalPasskeys++;
         this.metrics.activePasskeys++;
 
@@ -98,7 +106,7 @@ export class PasskeySecurityMonitor {
     /**
      * Log passkey login success
      */
-    public async logPasskeyLoginSuccess(userId: string, deviceInfo?: any): Promise<void> {
+    public async logPasskeyLoginSuccess(userId: string, deviceInfo?: PasskeyDeviceInfo): Promise<void> {
         await auditLogger.logEvent(
             'PASSKEY_LOGIN_SUCCESS',
             `User ${userId} logged in with passkey`,
@@ -110,7 +118,7 @@ export class PasskeySecurityMonitor {
     /**
      * Log passkey login failure and check for security threats
      */
-    public async logPasskeyLoginFailure(userId: string, reason: string, deviceInfo?: any): Promise<void> {
+    public async logPasskeyLoginFailure(userId: string, reason: string, deviceInfo?: PasskeyDeviceInfo): Promise<void> {
         this.metrics.failedLoginAttempts++;
 
         await auditLogger.logEvent(
@@ -162,7 +170,7 @@ export class PasskeySecurityMonitor {
     /**
      * Log suspicious activity
      */
-    public async logSuspiciousActivity(userId: string, activity: string, metadata?: any): Promise<void> {
+    public async logSuspiciousActivity(userId: string, activity: string, metadata?: Record<string, unknown>): Promise<void> {
         this.metrics.suspiciousActivities++;
 
         await auditLogger.logEvent(
@@ -200,7 +208,7 @@ export class PasskeySecurityMonitor {
     /**
      * Generate security report
      */
-    public async generateSecurityReport(): Promise<string> {
+    public generateSecurityReport(): string {
         const report = `
 Passkey Security Report
 =======================

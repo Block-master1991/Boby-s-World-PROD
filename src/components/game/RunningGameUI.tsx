@@ -1,7 +1,7 @@
 'use client';
 
-import React from 'react';
 import { useAuth } from '@/hooks/useAuth'; // Import useAuth
+import React from 'react';
 
 interface RunningGameUIProps {
     onLoadComplete?: (success: boolean) => void;
@@ -12,13 +12,14 @@ const RunningGameUI: React.FC<RunningGameUIProps> = ({ onLoadComplete }) => {
 
     // Simulate loading completion for smooth transition
     React.useEffect(() => {
-        if (onLoadComplete) {
-            // Small delay to allow fade-in transition of the overlay
-            const timer = setTimeout(() => {
-                onLoadComplete(true);
-            }, 500);
-            return () => clearTimeout(timer);
-        }
+        if (!onLoadComplete) return;
+        
+        // Small delay to allow fade-in transition of the overlay
+        const timer = setTimeout(() => {
+            onLoadComplete(true);
+        }, 500);
+        
+        return () => clearTimeout(timer);
     }, [onLoadComplete]);
 
     return (

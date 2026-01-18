@@ -1,14 +1,14 @@
 import * as THREE from 'three';
-import { Skybox } from './skybox';
-import { Ground } from './ground';
-import { Grass, GrassOptions } from './grass';
-import { Rocks, RockOptions } from './rocks';
-import { Trees, TreesOptions } from './trees'; // Import Trees
-import { Flowers, FlowerOptions } from './flowers'; // Import Flowers
-import { ChunkManager } from '../../chunk/ChunkManager';
-import { RENDER_DISTANCE_CHUNKS, CHUNK_SIZE } from '../../chunkUtils';
-import { getDevicePerformanceConfig } from '../../utils';
 import { logger } from 'utils/logger';
+import { ChunkManager } from '../../chunk/ChunkManager';
+import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS } from '../../chunkUtils';
+import { getDevicePerformanceConfig } from '../../utils';
+import { FlowerOptions, Flowers } from './flowers';
+import { Grass, GrassOptions } from './grass';
+import { Ground } from './ground';
+import { RockOptions, Rocks } from './rocks';
+import { Skybox } from './skybox';
+import { Trees, TreesOptions } from './trees';
 
 export class Environment extends THREE.Object3D {
   public ground: Ground;
@@ -16,162 +16,141 @@ export class Environment extends THREE.Object3D {
   public chunkManager: ChunkManager;
   private grassInstance: Grass;
   private rocksInstance: Rocks;
-  private treesInstance: Trees; // Add treesInstance
-  private flowersInstance: Flowers; // Add flowersInstance
+  private treesInstance: Trees;
+  private flowersInstance: Flowers;
 
   constructor(renderer?: THREE.WebGLRenderer) {
     super();
 
-    // Calculate dynamic ground size based on render distance
-    const groundSize = Math.ceil((RENDER_DISTANCE_CHUNKS * 2 + 1) * CHUNK_SIZE * 1.2); // 20% margin
-    logger.log(`[Environment] Creating ground with dynamic size: ${groundSize}x${groundSize} (based on ${RENDER_DISTANCE_CHUNKS} chunk render distance)`);
-
-    this.ground = new Ground(new GrassOptions(), groundSize, groundSize);
+    // 1. Initialize core visual components and assign to properties
+    const { ground, skybox } = this.createCoreComponents(renderer);
+    this.ground = ground;
+    this.skybox = skybox;
     this.add(this.ground);
-
-    this.skybox = new Skybox(renderer);
     this.add(this.skybox);
 
-    // Get performance config for density adjustment
-    const perfConfig = getDevicePerformanceConfig();
+    // 2. Initialize world object generators and assign to properties
+    const { grass, rocks, trees, flowers } = this.createGenerators();
+    this.grassInstance = grass;
+    this.rocksInstance = rocks;
+    this.treesInstance = trees;
+    this.flowersInstance = flowers;
 
-    // Initialize草 Grass, Rocks, Trees, and Flowers instances with adjusted options for performance
-    const grassOptions = new GrassOptions();
-    grassOptions.instanceCountPerChunk = Math.floor(grassOptions.instanceCountPerChunk * perfConfig.environmentDensity.grassMultiplier);
-
-    const rockOptions = new RockOptions();
-    rockOptions.rockCountPerChunk = Math.floor(rockOptions.rockCountPerChunk * perfConfig.environmentDensity.rocksMultiplier);
-
-    const treeOptions = new TreesOptions();
-    treeOptions.treeCountPerChunk = Math.floor(treeOptions.treeCountPerChunk * perfConfig.environmentDensity.treeMultiplier);
-
-    const flowerOptions = new FlowerOptions();
-    flowerOptions.flowersCountPerChunk = Math.floor(flowerOptions.flowersCountPerChunk * perfConfig.environmentDensity.flowersMultiplier);
-
-    this.grassInstance = new Grass(grassOptions);
-    this.rocksInstance = new Rocks(rockOptions);
-    this.treesInstance = new Trees(treeOptions);
-    this.flowersInstance = new Flowers(flowerOptions);
-
-    logger.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? 'mobile' : 'desktop'}:`, {
-      grass: grassOptions.instanceCountPerChunk,
-      rocks: rockOptions.rockCountPerChunk,
-      trees: treeOptions.treeCountPerChunk,
-      flowers: flowerOptions.flowersCountPerChunk
-    });
-
-    // Create ChunkManager and pass the object generators
-    this.chunkManager = new ChunkManager(this.grassInstance, this.rocksInstance, this.treesInstance, this.flowersInstance);
+    // 3. Setup Chunk Management using definitely assigned properties
+    this.chunkManager = new ChunkManager(
+      this.grassInstance,
+      this.rocksInstance,
+      this.treesInstance,
+      this.flowersInstance
+    );
     this.add(this.chunkManager);
 
-    // Note: Assets are preloaded in useGameAssetLoader, so fetchAssets will use cached data
-    // If not preloaded, they will be loaded on-demand (though not recommended)
-    logger.log("Environment: Fetching/caching assets for world objects...");
+    // 4. Load assets with sequential retry fallback
+    this.loadAssetsWithRetry();
+  }
 
-    // FORCE SUCCESS - Retry until all assets are loaded
-    const loadAssetsWithRetry = async (maxAttempts: number = 20) => {
-      for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-        try {
-          logger.log(`[Environment] Asset loading attempt ${attempt}/${maxAttempts}`);
+  private createCoreComponents(renderer?: THREE.WebGLRenderer) {
+    const groundSize = Math.ceil((RENDER_DISTANCE_CHUNKS * 2 + 1) * CHUNK_SIZE * 1.2);
+    logger.log(`[Environment] Creating ground with dynamic size: ${groundSize}x${groundSize}`);
 
-          await Promise.all([
-            Grass.fetchAssets(),
-            Rocks.fetchAssets(),
-            this.treesInstance.fetchAssets(),
-            Flowers.fetchAssets()
-          ]);
+    const ground = new Ground(new GrassOptions(), groundSize, groundSize);
+    const skybox = new Skybox(renderer);
 
-          logger.log("Environment: All assets loaded successfully on attempt", attempt);
+    return { ground, skybox };
+  }
+
+  private createGenerators() {
+    const perfConfig = getDevicePerformanceConfig();
+    
+    const grassOpts = new GrassOptions();
+    grassOpts.instanceCountPerChunk = Math.floor(grassOpts.instanceCountPerChunk * perfConfig.environmentDensity.grassMultiplier);
+    
+    const rockOpts = new RockOptions();
+    rockOpts.rockCountPerChunk = Math.floor(rockOpts.rockCountPerChunk * perfConfig.environmentDensity.rocksMultiplier);
+    
+    const treeOpts = new TreesOptions();
+    treeOpts.treeCountPerChunk = Math.floor(treeOpts.treeCountPerChunk * perfConfig.environmentDensity.treeMultiplier);
+    
+    const flowerOpts = new FlowerOptions();
+    flowerOpts.flowersCountPerChunk = Math.floor(flowerOpts.flowersCountPerChunk * perfConfig.environmentDensity.flowersMultiplier);
+
+    const grass = new Grass(grassOpts);
+    const rocks = new Rocks(rockOpts);
+    const trees = new Trees(treeOpts);
+    const flowers = new Flowers(flowerOpts);
+
+    logger.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? 'mobile' : 'desktop'}`);
+
+    return { grass, rocks, trees, flowers };
+  }
+
+  private async loadAssetsWithRetry(maxAttempts: number = 20): Promise<void> {
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        /* eslint-disable no-await-in-loop */
+        await Promise.all([
+          Grass.fetchAssets(),
+          Rocks.fetchAssets(),
+          this.treesInstance.fetchAssets(),
+          Flowers.fetchAssets()
+        ]);
+        /* eslint-enable no-await-in-loop */
+
+        logger.log(`[Environment] All assets loaded successfully on attempt ${attempt}`);
+        this.chunkManager.setGeneratorsReady();
+        return;
+      } catch (error) {
+        logger.warn(`[Environment] Asset loading failed (attempt ${attempt}):`, error);
+
+        if (attempt < maxAttempts) {
+          const delay = Math.min(2000 * Math.pow(1.2, attempt - 1), 15000);
+          /* eslint-disable no-await-in-loop */
+          await new Promise(resolve => setTimeout(resolve, delay));
+          /* eslint-enable no-await-in-loop */
+        } else {
+          logger.error("[Environment] Forcing success with fallbacks after exhaustion");
           this.chunkManager.setGeneratorsReady();
-          return; // Success - exit loop
-
-        } catch (error) {
-          logger.warn(`[Environment] Asset loading failed on attempt ${attempt}:`, error);
-
-          if (attempt < maxAttempts) {
-            // Wait before retry with exponential backoff
-            const delay = Math.min(2000 * Math.pow(1.2, attempt - 1), 15000);
-            logger.log(`[Environment] Retrying in ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-          } else {
-            // Final attempt - force success with fallbacks
-            logger.error("[Environment] All attempts failed, forcing success with fallbacks");
-
-            // Force set generators ready even if some assets failed
-            // The generators will handle missing assets gracefully
-            this.chunkManager.setGeneratorsReady();
-            return;
-          }
         }
       }
-    };
-
-    // Start loading with forced success
-    loadAssetsWithRetry();
+    }
   }
 
   public update(elapsedTime: number, cameraPosition: THREE.Vector3): void {
     if (cameraPosition) {
-      this.skybox.position.copy(cameraPosition); // Make skybox follow camera
-      this.ground.position.set(cameraPosition.x, 0, cameraPosition.z); // Make ground follow camera
+      this.skybox.position.copy(cameraPosition);
+      this.ground.position.set(cameraPosition.x, 0, cameraPosition.z);
     }
-    this.skybox.update(elapsedTime, cameraPosition); // Update sky rotation and shadow following
-    this.chunkManager.updateModern(elapsedTime); // Pass elapsedTime to chunkManager
+    this.skybox.update(elapsedTime);
+    this.chunkManager.updateModern(elapsedTime);
   }
 
-  /**
-   * Preload initial scene chunks around a center position for instant rendering on game start
-   * Generates all visible chunks asynchronously without blocking the main thread
-   * Forces completion even if some chunks fail to ensure game starts
-   */
   public async preloadInitialScene(centerPosition: THREE.Vector3): Promise<void> {
-    logger.log(`[Environment] Preloading initial scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}...`);
+    logger.log(`[Environment] Preloading scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}`);
 
     const chunks = this.generateChunkCoordsAround(centerPosition);
-    const generationPromises: Promise<void>[] = [];
-
-    // Generate chunks asynchronously with yield to avoid blocking
-    for (const chunk of chunks) {
-      generationPromises.push(this.chunkManager.generateChunkAsync(chunk.x, chunk.z));
-    }
-
-    // Use allSettled to ensure we don't hang on failures, but still wait for success
-    logger.log(`[Environment] Waiting for ${chunks.length} chunks to generate...`);
+    const generationPromises = chunks.map(c => this.chunkManager.generateChunkAsync(c.x, c.z));
 
     try {
-      // Wait for all chunks to settle (succeed or fail)
       const results = await Promise.allSettled(generationPromises);
       const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      const failed = results.filter(r => r.status === 'rejected').length;
-
-      logger.log(`[Environment] Chunk preloading complete: ${succeeded} succeeded, ${failed} failed`);
-      logger.log(`[Environment] World ready for gameplay!`);
+      logger.log(`[Environment] Preloading complete: ${succeeded}/${chunks.length} succeeded`);
     } catch (error) {
       logger.error('[Environment] Unexpected error in preload:', error);
     }
-
-    // Explicit return to ensure promise resolves
-    return;
   }
 
-  /**
-   * Generate chunk coordinates around a center position matching RENDER_DISTANCE_CHUNKS
-   */
   private generateChunkCoordsAround(pos: THREE.Vector3): { x: number; z: number }[] {
     const chunks: { x: number; z: number }[] = [];
-    const CHUNK_SIZE = 50;
+    const size = 50;
 
-    // Use RENDER_DISTANCE_CHUNKS for initial view area (currently 3 = ±3 = 7x7 grid)
     for (let dx = -RENDER_DISTANCE_CHUNKS; dx <= RENDER_DISTANCE_CHUNKS; dx++) {
       for (let dz = -RENDER_DISTANCE_CHUNKS; dz <= RENDER_DISTANCE_CHUNKS; dz++) {
-        const worldX = pos.x + dx * CHUNK_SIZE;
-        const worldZ = pos.z + dz * CHUNK_SIZE;
-        const chunkX = Math.floor(worldX / CHUNK_SIZE);
-        const chunkZ = Math.floor(worldZ / CHUNK_SIZE);
-        chunks.push({ x: chunkX, z: chunkZ });
+        chunks.push({ 
+          x: Math.floor((pos.x + dx * size) / size), 
+          z: Math.floor((pos.z + dz * size) / size) 
+        });
       }
     }
-
     return chunks;
   }
 }

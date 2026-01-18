@@ -1,11 +1,11 @@
 
+/**
+ * @jest-environment node
+ */
 import { LogEncryption } from '../../security/LogEncryption';
 
 describe('LogEncryption', () => {
     const encryption = new LogEncryption({
-        // 'encryptionKey' was invalid, removed it.
-        // If we need to inject a key, we might need to set process.env or use a different config if supported.
-        // Looking at source, it checks process.env.LOG_ENCRYPTION_KEY or generates random.
         enabled: true
     });
 

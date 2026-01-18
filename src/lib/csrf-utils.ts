@@ -98,11 +98,11 @@ export class CSRFManager {
       if (storedData.expiry > Date.now()) {
         logger.log(`[CSRFManager] Reusing existing valid CSRF token for session ${sessionId}. Token: ${storedData.token.substring(0, 5)}...`);
         return storedData.token;
-      } else {
+      } 
         logger.log(`[CSRFManager] Existing CSRF token for session ${sessionId} expired. Generating new one.`);
         // Delete expired token before generating a new one to clean up
         await docRef.delete();
-      }
+      
     }
 
     // No valid token found, generate a new one

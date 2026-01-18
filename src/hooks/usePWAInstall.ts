@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
 import { logger } from '@/utils/logger';
+import { useCallback, useEffect, useState } from 'react';
 
 interface BeforeInstallPromptEvent extends Event {
     readonly platforms: string[];
@@ -12,6 +12,10 @@ interface BeforeInstallPromptEvent extends Event {
     prompt(): Promise<void>;
 }
 
+interface NavigatorWithStandalone extends Navigator {
+    standalone?: boolean;
+}
+
 interface PWAInstallHook {
     isInstallable: boolean;
     isInstalled: boolean;
@@ -19,58 +23,68 @@ interface PWAInstallHook {
     dismissPrompt: () => void;
 }
 
-export const usePWAInstall = (): PWAInstallHook => {
+/**
+ * Checks if the app is currently running in standalone mode (PWA).
+ */
+const checkStandalone = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
+    const isInWebAppiOS = (window.navigator as NavigatorWithStandalone).standalone === true;
+    return isStandalone || isInWebAppiOS;
+};
+
+/**
+ * Handles PWA state management and event listeners.
+ */
+const usePWAState = () => {
     const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
     const [isInstallable, setIsInstallable] = useState(false);
     const [isInstalled, setIsInstalled] = useState(false);
 
     useEffect(() => {
-        // Check if already installed
-        const checkInstalled = () => {
-            if (typeof window !== 'undefined') {
-                // Check if running as PWA (standalone mode)
-                const isStandalone = window.matchMedia('(display-mode: standalone)').matches;
-                // Check if running as PWA from home screen
-                const isInWebAppiOS = (window.navigator as any).standalone === true;
-
-                setIsInstalled(isStandalone || isInWebAppiOS);
-            }
-        };
-
-        checkInstalled();
-
-        // Listen for the beforeinstallprompt event
-        const handleBeforeInstallPrompt = (e: Event) => {
+        const check = () => setIsInstalled(checkStandalone());
+        const handlePrompt = (e: Event) => {
             e.preventDefault();
             setDeferredPrompt(e as BeforeInstallPromptEvent);
             setIsInstallable(true);
         };
-
-        // Listen for successful installation
         const handleAppInstalled = () => {
             setDeferredPrompt(null);
             setIsInstallable(false);
             setIsInstalled(true);
         };
 
+        check();
         if (typeof window !== 'undefined') {
-            window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+            window.addEventListener('beforeinstallprompt', handlePrompt);
             window.addEventListener('appinstalled', handleAppInstalled);
-
-            // Also check for display mode changes
-            const mediaQuery = window.matchMedia('(display-mode: standalone)');
-            mediaQuery.addEventListener('change', checkInstalled);
+            window.matchMedia('(display-mode: standalone)').addEventListener('change', check);
         }
-
         return () => {
-            if (typeof window !== 'undefined') {
-                window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
-                window.removeEventListener('appinstalled', handleAppInstalled);
-            }
+            window.removeEventListener('beforeinstallprompt', handlePrompt);
+            window.removeEventListener('appinstalled', handleAppInstalled);
         };
     }, []);
 
-    const promptInstall = async (): Promise<void> => {
+    return {
+        deferredPrompt,
+        setDeferredPrompt,
+        isInstallable,
+        setIsInstallable,
+        isInstalled
+    };
+};
+
+export const usePWAInstall = (): PWAInstallHook => {
+    const {
+        deferredPrompt,
+        setDeferredPrompt,
+        isInstallable,
+        setIsInstallable,
+        isInstalled
+    } = usePWAState();
+
+    const promptInstall = useCallback(async (): Promise<void> => {
         if (!deferredPrompt) {
             throw new Error('Install prompt not available');
         }
@@ -91,12 +105,12 @@ export const usePWAInstall = (): PWAInstallHook => {
             logger.error('Error prompting install:', error);
             throw error;
         }
-    };
+    }, [deferredPrompt, setDeferredPrompt, setIsInstallable]);
 
-    const dismissPrompt = () => {
+    const dismissPrompt = useCallback(() => {
         setDeferredPrompt(null);
         setIsInstallable(false);
-    };
+    }, [setDeferredPrompt, setIsInstallable]);
 
     return {
         isInstallable,

@@ -1,9 +1,9 @@
-
-const Redis = require('ioredis');
-const admin = require('firebase-admin');
-const dotenv = require('dotenv');
-const fs = require('fs');
-const path = require('path');
+import * as dotenv from 'dotenv';
+import admin from 'firebase-admin';
+import * as fs from 'fs';
+import type { RedisOptions } from 'ioredis';
+import Redis from 'ioredis';
+import * as path from 'path';
 
 // Load .env.local
 const envPath = path.resolve(process.cwd(), '.env.local');
@@ -15,12 +15,14 @@ if (fs.existsSync(envPath)) {
     dotenv.config();
 }
 
-const REDIS_URL = process.env.REDIS_URL;
-const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID;
-const FIREBASE_CLIENT_EMAIL = process.env.FIREBASE_CLIENT_EMAIL;
-const FIREBASE_PRIVATE_KEY = process.env.FIREBASE_PRIVATE_KEY;
+const { 
+    REDIS_URL, 
+    FIREBASE_PROJECT_ID, 
+    FIREBASE_CLIENT_EMAIL, 
+    FIREBASE_PRIVATE_KEY 
+} = process.env;
 
-async function checkRedis() {
+async function checkRedis(): Promise<boolean> {
     console.log('\n--- 🔴 Checking Redis Connection ---');
     if (!REDIS_URL) {
         console.error('❌ REDIS_URL is missing in environment variables.');
@@ -35,11 +37,16 @@ async function checkRedis() {
             console.log('🔄 Auto-converted Upstash URL to rediss:// (TLS)');
         }
 
-        const redis = new Redis(connectionUrl, {
+        const redisOptions: RedisOptions = {
             maxRetriesPerRequest: 1,
             connectTimeout: 5000,
-            tls: connectionUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
-        });
+        };
+
+        if (connectionUrl.startsWith('rediss://')) {
+            redisOptions.tls = { rejectUnauthorized: false };
+        }
+
+        const redis = new Redis(connectionUrl, redisOptions);
 
         await new Promise((resolve, reject) => {
             redis.on('connect', resolve);
@@ -49,22 +56,23 @@ async function checkRedis() {
         await redis.set('verify_connection_test', 'success', 'EX', 10);
         const val = await redis.get('verify_connection_test');
 
+        await redis.quit();
+
         if (val === 'success') {
             console.log('✅ Redis Connected & Write/Read Successful!');
-            await redis.quit();
             return true;
-        } else {
-            console.error('❌ Redis Write/Read Verification Failed.');
-            await redis.quit();
-            return false;
         }
-    } catch (error: any) {
-        console.error('❌ Redis Connection Failed:', error.message);
+
+        console.error('❌ Redis Write/Read Verification Failed.');
+        return false;
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ Redis Connection Failed:', errorMessage);
         return false;
     }
 }
 
-async function checkFirebase() {
+async function checkFirebase(): Promise<boolean> {
     console.log('\n--- 🔥 Checking Firebase Admin SDK ---');
 
     if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
@@ -89,19 +97,19 @@ async function checkFirebase() {
 
         const db = admin.firestore();
         // Try to list collections (requires read permission) or just a simple read
-        // A simple way to check auth is to get a non-existent doc, if it throws permission denied -> auth is valid but permissions might be issue
-        // If it returns empty/null -> auth is valid and connected
         try {
             await db.collection('test_connection').doc('ping').get();
             console.log('✅ Firebase Admin Authenticated & Firestore Accessible!');
             return true;
-        } catch (readError: any) {
-            console.error('❌ Firebase Auth Success, but Firestore Read Failed:', readError.message);
+        } catch (readError: unknown) {
+            const errorMessage = readError instanceof Error ? readError.message : 'Unknown error';
+            console.error('❌ Firebase Auth Success, but Firestore Read Failed:', errorMessage);
             return false;
         }
 
-    } catch (error: any) {
-        console.error('❌ Firebase Initialization Failed:', error.message);
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        console.error('❌ Firebase Initialization Failed:', errorMessage);
         return false;
     }
 }
@@ -122,4 +130,7 @@ async function verifyAll() {
     }
 }
 
-verifyAll();
+verifyAll().catch(err => {
+    console.error('Verification script failed:', err);
+    process.exit(1);
+});

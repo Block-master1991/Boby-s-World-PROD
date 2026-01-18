@@ -1,9 +1,9 @@
 // Enhanced IndexedDB operations with compression support
 // Extends base indexedDB functionality with data compression for large assets
 
-import type { AssetMetadata} from './indexedDB';
-import { putAsset, getAsset, DataType } from './indexedDB';
 import { logger } from '@/utils/logger';
+import type { AssetMetadata } from './indexedDB';
+import { getAsset, putAsset } from './indexedDB';
 
 /**
  * Check if CompressionStream API is available
@@ -33,13 +33,13 @@ export async function compressData(data: ArrayBuffer): Promise<ArrayBuffer> {
         const compressedStream = stream.pipeThrough(new CompressionStream('gzip'));
         const chunks: Uint8Array[] = [];
         const reader = compressedStream.getReader();
-
+          
         while (true) {
+            // eslint-disable-next-line no-await-in-loop
             const { done, value } = await reader.read();
             if (done) break;
             chunks.push(value);
         }
-
         // Combine chunks
         const totalLength = chunks.reduce((acc, chunk) => acc + chunk.length, 0);
         const compressed = new Uint8Array(totalLength);
@@ -88,7 +88,9 @@ export async function decompressData(compressedData: ArrayBuffer): Promise<Array
         const chunks: Uint8Array[] = [];
         const reader = decompressedStream.getReader();
 
+         
         while (true) {
+            // eslint-disable-next-line no-await-in-loop
             const { done, value } = await reader.read();
             if (done) break;
             chunks.push(value);
@@ -117,7 +119,7 @@ export async function decompressData(compressedData: ArrayBuffer): Promise<Array
  * Store asset with automatic compression for large files
  */
 export async function putAssetCompressed(
-    asset: AssetMetadata & { data: any },
+    asset: AssetMetadata & { data: ArrayBuffer },
     compressionThresholdMB: number = 5 // Compress files larger than 5MB
 ): Promise<void> {
     const sizeMB = asset.size / (1024 * 1024);
@@ -143,7 +145,7 @@ export async function putAssetCompressed(
 /**
  * Retrieve asset with automatic decompression
  */
-export async function getAssetDecompressed(id: string): Promise<(AssetMetadata & { data: any }) | null> {
+export async function getAssetDecompressed(id: string): Promise<(AssetMetadata & { data: ArrayBuffer }) | null> {
     const asset = await getAsset(id);
 
     if (!asset) return null;
@@ -155,7 +157,7 @@ export async function getAssetDecompressed(id: string): Promise<(AssetMetadata &
         return {
             ...asset,
             data: decompressedData,
-            size: (asset as any).originalSize || decompressedData.byteLength
+            size: (asset as AssetMetadata & { originalSize?: number }).originalSize || decompressedData.byteLength
         };
     }
 
@@ -216,41 +218,27 @@ export async function analyzeCompressionForAssets(
 }> {
     logger.log('[Compression] Analyzing compression benefits for assets...');
 
-    let totalOriginal = 0;
-    let totalCompressed = 0;
-    const assetDetails = [];
+    const benefits = await Promise.all(assets.map(asset => calculateCompressionBenefit(asset.data)));
 
-    for (const asset of assets) {
-        const benefit = await calculateCompressionBenefit(asset.data);
-
+    let totalOriginal = 0, totalCompressed = 0;
+    const assetDetails = benefits.map((benefit, index) => {
         totalOriginal += benefit.originalSizeMB;
         totalCompressed += benefit.compressedSizeMB;
-
-        assetDetails.push({
-            path: asset.path,
+        return {
+            path: assets[index]!.path,
             originalMB: benefit.originalSizeMB,
             compressedMB: benefit.compressedSizeMB,
             savingsMB: benefit.originalSizeMB - benefit.compressedSizeMB,
             worthCompressing: benefit.worthCompressing
-        });
-    }
+        };
+    });
 
     const totalSavingsMB = totalOriginal - totalCompressed;
     const savingsPercent = totalOriginal > 0 ? (totalSavingsMB / totalOriginal) * 100 : 0;
 
-    logger.log(
-        `[Compression] Analysis complete: ` +
-        `${totalOriginal.toFixed(2)}MB → ${totalCompressed.toFixed(2)}MB ` +
-        `(${savingsPercent.toFixed(1)}% savings)`
-    );
+    logger.log(`[Compression] Analysis complete: ${totalOriginal.toFixed(2)}MB → ${totalCompressed.toFixed(2)}MB (${savingsPercent.toFixed(1)}% savings)`);
 
-    return {
-        totalOriginalMB: totalOriginal,
-        totalCompressedMB: totalCompressed,
-        totalSavingsMB,
-        savingsPercent,
-        assetDetails
-    };
+    return { totalOriginalMB: totalOriginal, totalCompressedMB: totalCompressed, totalSavingsMB, savingsPercent, assetDetails };
 }
 
 /**

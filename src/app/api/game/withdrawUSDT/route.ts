@@ -1,11 +1,12 @@
-import { NextResponse } from 'next/server';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
 import type { AuthenticatedRequest } from '@/lib/auth-middleware';
 import { withAuth } from '@/lib/auth-middleware';
-import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
+import { withCsrfProtection } from '@/lib/csrf-middleware';
 import { initializeAdminApp } from '@/lib/firebase-admin';
+import type { PlayerDocument } from '@/types/database';
 import { logger } from '@/utils/logger';
+import { FieldValue, getFirestore } from 'firebase-admin/firestore';
+import { NextResponse } from 'next/server';
 
 export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
   logger.log("[API] /api/game/withdrawUSDT called");
@@ -32,7 +33,8 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
         throw new Error('Player data not found.');
       }
 
-      const currentBalance = docSnap.data()?.gameUSDTBalance || 0;
+      const data = docSnap.data() as PlayerDocument;
+      const currentBalance = data['gameUSDTBalance'] as number || 0;
 
       if (currentBalance < amount) {
         throw new Error('Insufficient balance for withdrawal.');
@@ -48,27 +50,27 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
 
     const response = NextResponse.json({ success: true, newBalance });
 
-    // Use unified helper to update CSRF
     const requestHost = request.headers.get('host') || undefined;
     return await setCsrfTokenResponse(response, userPublicKey, requestHost);
-  } catch (error: unknown) {
-    logger.error('[withdrawUSDT] Error:', error as Error);
-    let errorMessage = (error instanceof Error) ? error.message : 'Failed to withdraw USDT.';
-    let statusCode = 500;
-
-    if (errorMessage.includes("Firebase Admin SDK environment variables are not set correctly")) {
-      errorMessage = "Server configuration error: Firebase Admin SDK not properly set up.";
-      statusCode = 500;
-    } else if (errorMessage.includes("Authentication required")) {
-      statusCode = 401;
-    } else if (errorMessage.includes('Insufficient balance')) {
-      statusCode = 400; // Bad Request
-    } else if (errorMessage.includes('Player data not found')) {
-      statusCode = 404; // Not Found
-    } else if (errorMessage.includes('Invalid withdrawal amount provided')) {
-      statusCode = 400;
-    }
-
-    return NextResponse.json({ error: errorMessage }, { status: statusCode });
+  } catch (error) {
+    return formatGameError(error, 'withdrawUSDT');
   }
 }));
+
+function formatGameError(error: unknown, context: string) {
+  logger.error(`[${context}] Error:`, error as Error);
+  let errorMessage = error instanceof Error ? error.message : `Failed to ${context}`;
+  let statusCode = 500;
+
+  if (errorMessage.includes("Firebase Admin SDK")) {
+    errorMessage = "Server configuration error: Firebase Admin SDK not properly set up.";
+  } else if (errorMessage.includes("Authentication required")) {
+    statusCode = 401;
+  } else if (errorMessage.includes('Insufficient balance')) {
+    statusCode = 400;
+  } else if (errorMessage.includes('Player data not found')) {
+    statusCode = 404;
+  }
+
+  return NextResponse.json({ error: errorMessage }, { status: statusCode });
+}

@@ -10,17 +10,17 @@ import pinoHttp from 'pino-http';
 const isProduction = process.env.NODE_ENV === 'production';
 
 // Server logger configuration
-const serverLogger = pino({
+const loggerConfig: Record<string, unknown> = {
     level: isProduction ? 'info' : 'debug',
     formatters: {
         level: (label: string) => {
             return { level: label };
         },
-        log: (obj: any) => {
-            if (obj.err) {
+        log: (obj: Record<string, unknown>) => {
+            if (obj['err']) {
                 return {
                     ...obj,
-                    err: pino.stdSerializers.err(obj.err)
+                    err: pino.stdSerializers.err(obj['err'] as Error)
                 };
             }
             return obj;
@@ -31,33 +31,39 @@ const serverLogger = pino({
         error: pino.stdSerializers.err,
         req: pino.stdSerializers.req,
         res: pino.stdSerializers.res
-    },
-    transport: !isProduction ? {
+    }
+};
+
+// Add transport only in development
+if (!isProduction) {
+    loggerConfig['transport'] = {
         target: 'pino-pretty',
         options: {
             colorize: true,
             translateTime: 'SYS:standard',
             ignore: 'pid,hostname'
         }
-    } : undefined
-});
+    };
+}
+
+const serverLogger = pino(loggerConfig);
 
 // Create HTTP middleware for request logging
 export const httpLogger = pinoHttp({
     logger: serverLogger.child({ component: 'HTTP' }),
     // Customize request logging
-    customLogLevel: (req, res, err) => {
+    customLogLevel: (_req, _res, err) => {
         if (err) return 'error';
-        if (res.statusCode >= 400 && res.statusCode < 500) return 'warn';
-        if (res.statusCode >= 500) return 'error';
+        if (_res.statusCode >= 400 && _res.statusCode < 500) return 'warn';
+        if (_res.statusCode >= 500) return 'error';
         return 'info';
     },
     // Customize what gets logged
-    customSuccessMessage: (req, res) => {
-        return `${req.method} ${req.url} completed`;
+    customSuccessMessage: (_req, _res) => {
+        return `${_req.method} ${_req.url} completed with status ${_res.statusCode}`;
     },
-    customErrorMessage: (req, res, err) => {
-        return `${req.method} ${req.url} failed with ${err?.message || 'unknown error'}`;
+    customErrorMessage: (_req, _res, err) => {
+        return `${_req.method} ${_req.url} failed with status ${_res.statusCode}: ${err?.message || 'unknown error'}`;
     },
     // Don't log certain paths in production for performance
     autoLogging: !isProduction,
@@ -73,7 +79,7 @@ export const httpLogger = pinoHttp({
                 'x-api-key': req.headers['x-api-key'] ? '[REDACTED]' : undefined
             }
         }),
-        res: pino.stdSerializers.res
+        res: (_res) => pino.stdSerializers.res(_res)
     }
 });
 
@@ -83,37 +89,39 @@ export { serverLogger };
 /**
  * Higher-order function to wrap API route handlers with logging
  */
-export function withLogging(handler: any, context?: string) {
+export function withLogging(handler: unknown, context?: string) {
     const routeLogger = serverLogger.child({
         component: context || 'API',
         route: 'unknown'
     });
 
-    return async (req: any, res: any) => {
+    return async (req: unknown, res: unknown) => {
         const start = Date.now();
+        const request = req as { method?: string; url?: string; headers?: Record<string, unknown> };
+        const response = res as { statusCode?: number };
 
         try {
             routeLogger.info({
-                method: req.method,
-                url: req.url,
-                userAgent: req.headers['user-agent']
+                method: request.method,
+                url: request.url,
+                userAgent: request.headers?.['user-agent']
             }, 'Request started');
 
-            const result = await handler(req, res);
+            const result = await (handler as (req: unknown, res: unknown) => unknown)(req, res);
 
             routeLogger.info({
-                method: req.method,
-                url: req.url,
+                method: request.method,
+                url: request.url,
                 duration: Date.now() - start,
-                statusCode: res.statusCode
+                statusCode: response.statusCode
             }, 'Request completed');
 
             return result;
         } catch (error) {
             routeLogger.error({
                 err: error,
-                method: req.method,
-                url: req.url,
+                method: request.method,
+                url: request.url,
                 duration: Date.now() - start
             }, 'Request failed');
 

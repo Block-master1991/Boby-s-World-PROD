@@ -1,5 +1,5 @@
-import { randomBytes, createHash } from 'crypto';
 import { logger } from '@/utils/logger';
+import { createHash, randomBytes } from 'crypto';
 
 // Authenticator Metadata Mapping (MDS) - List of some popular device definitions
 const AUTHENTICATOR_METADATA: Record<string, string> = {
@@ -17,6 +17,13 @@ export interface WebAuthnCredential {
     counter: number;
     transports?: string[];
     userId: string;
+}
+
+export interface AuthenticatorAssertionResponse {
+    authenticatorData: string;
+    clientDataJSON: string;
+    signature: string;
+    userHandle?: string;
 }
 
 export class WebAuthnUtils {
@@ -71,7 +78,7 @@ export class WebAuthnUtils {
 
             // Convert HEX to UUID format: 8-4-4-4-12
             return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
-        } catch (e) {
+        } catch {
             return "00000000-0000-0000-0000-000000000000";
         }
     }
@@ -81,7 +88,9 @@ export class WebAuthnUtils {
      */
     public static getRPID(host: string): string {
         // Strip port if present
-        const domain = host.split(':')[0];
+        const [domain] = host.split(':');
+        
+        if (!domain) return 'localhost';
 
         if (domain.includes('localhost')) return 'localhost';
 
@@ -114,7 +123,7 @@ export class WebAuthnUtils {
      */
     public static async verifyAuthenticationResponse(
         credential: WebAuthnCredential,
-        response: any,
+        response: AuthenticatorAssertionResponse,
         expectedChallenge: string,
         expectedOrigin: string
     ): Promise<boolean> {
@@ -122,53 +131,55 @@ export class WebAuthnUtils {
             logger.log(`[WebAuthn] Verifying device response for user: ${credential.userId}`);
 
             const { authenticatorData, clientDataJSON, signature } = response;
-
             if (!signature || !authenticatorData || !clientDataJSON) {
                 logger.error('[WebAuthn] Response fields missing');
                 return false;
             }
 
-            // 1. Verify WebAuthn Client Data (Challenge & Origin)
+            // 1. Verify Client Data
+            const clientDataValid = this.verifyClientData(clientDataJSON, expectedChallenge, expectedOrigin);
+            if (!clientDataValid) return false;
+
+            // 2. Prepare verification data
             const clientDataHash = this.hashClientDataJSON(clientDataJSON);
-            const rawClientData = JSON.parse(Buffer.from(clientDataJSON, 'base64url').toString());
-
-            if (rawClientData.challenge !== expectedChallenge) {
-                logger.error('[WebAuthn] Challenge does not match');
-                return false;
-            }
-
-            if (expectedOrigin && !expectedOrigin.includes(rawClientData.origin)) {
-                logger.warn(`[WebAuthn] Warning: Request origin ${rawClientData.origin} does not match expected ${expectedOrigin}`);
-                // In production should be exact match, here we allow for localhost flexibility
-            }
-
-            // 2. Prepare data for signature verification (AuthData + ClientDataHash)
             const authDataBuffer = Buffer.from(authenticatorData, 'base64url');
             const verifyData = Buffer.concat([authDataBuffer, clientDataHash]);
 
             // 3. Verify digital signature
-            // Note: We assume public key is stored in PEM or DER format usable by Node crypto
-            // In WebAuthn, key is usually stored in COSE format, conversion requires specialized libraries
-            // Here we work with the format stored in database
-            const sigBuffer = Buffer.from(signature, 'base64url');
-
-            // This part requires knowledge of stored key format. If COSE, verification will fail without conversion.
-            // For simplification in this context, we keep structure ready for cryptographic verification.
-
-            const crypto = await import('crypto');
-            const isVerified = crypto.verify(
-                'sha256',
-                verifyData,
-                credential.publicKey, // Should be in PEM/DER format
-                sigBuffer
-            );
-
-            logger.log(`[WebAuthn] Cryptographic verification result: ${isVerified}`);
-            return isVerified;
+            return await this.verifySignature(verifyData, signature, credential.publicKey);
         } catch (error) {
             logger.error('[WebAuthn] Cryptographic verification error:', error);
             return false;
         }
+    }
+
+    private static verifyClientData(clientDataJSON: string, expectedChallenge: string, expectedOrigin: string): boolean {
+        const rawClientData = JSON.parse(Buffer.from(clientDataJSON, 'base64url').toString());
+
+        if (rawClientData.challenge !== expectedChallenge) {
+            logger.error('[WebAuthn] Challenge does not match');
+            return false;
+        }
+
+        if (expectedOrigin && !expectedOrigin.includes(rawClientData.origin)) {
+            logger.warn(`[WebAuthn] Warning: Request origin ${rawClientData.origin} does not match expected ${expectedOrigin}`);
+        }
+        return true;
+    }
+
+    private static async verifySignature(verifyData: Buffer, signature: string, publicKey: string): Promise<boolean> {
+        const sigBuffer = Buffer.from(signature, 'base64url');
+        const crypto = await import('crypto');
+        
+        const isVerified = crypto.verify(
+            'sha256',
+            verifyData,
+            publicKey,
+            sigBuffer
+        );
+
+        logger.log(`[WebAuthn] Cryptographic verification result: ${isVerified}`);
+        return isVerified;
     }
 
     /**

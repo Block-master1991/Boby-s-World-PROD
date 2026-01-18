@@ -8,7 +8,7 @@ import 'dotenv/config';
 import Redis from 'ioredis';
 import { professionalLogger } from '../src/lib/logging';
 
-const REDIS_URL = process.env.REDIS_URL;
+const { REDIS_URL } = process.env;
 
 async function testRedis() {
     const correlationId = `redis-test-${Date.now()}`;
@@ -29,7 +29,7 @@ async function testRedis() {
         professionalLogger.info('✅ Connected to Redis successfully!', { correlationId });
     });
 
-    redis.on('error', (err: any) => {
+    redis.on('error', (err: Error) => {
         professionalLogger.error('❌ Redis Connection Error', { 
             correlationId, 
             error: err.message 
@@ -48,13 +48,17 @@ async function testRedis() {
         } else {
             throw new Error(`Data mismatch: expected ${testValue}, got ${val}`);
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         professionalLogger.fatal('❌ Redis Test Operation Failed', { 
             correlationId, 
-            error: error.message 
+            error: errorMessage 
         });
         process.exit(1);
     }
 }
 
-testRedis();
+testRedis().catch(err => {
+    console.error('Test failed:', err);
+    process.exit(1);
+});

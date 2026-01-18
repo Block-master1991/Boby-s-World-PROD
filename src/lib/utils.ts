@@ -1,6 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
-import { logger } from 'utils/logger';
 import { twMerge } from "tailwind-merge";
+import { logger } from 'utils/logger';
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -28,7 +28,7 @@ export function getCookie(name: string): string | null {
  * @param init The RequestInit options.
  * @returns A Promise that resolves to the Response to the request.
  */
-export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
+export function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const method = init?.method?.toUpperCase() || 'GET';
 
   // Only add CSRF token for methods that modify state
@@ -42,11 +42,23 @@ export async function fetchWithCsrf(input: RequestInfo | URL, init?: RequestInit
       const headers = new Headers(init?.headers);
       headers.set('X-CSRF-Token', csrfToken);
 
-      return fetch(input, {
+      // Create a clean options object to avoid passing undefined values to optional properties
+      // when exactOptionalPropertyTypes is enabled.
+      const fetchOptions: RequestInit = {
         ...init,
         headers,
-        signal: init?.signal,
-      });
+      };
+
+      // Ensure signal is only set if it's not undefined
+      if (init?.signal === null) {
+        fetchOptions.signal = null;
+      } else if (init?.signal) {
+        fetchOptions.signal = init.signal;
+      } else {
+        delete fetchOptions.signal;
+      }
+
+      return fetch(input, fetchOptions);
     }
   }
 
@@ -74,7 +86,8 @@ export function getMobilePerformanceLevel(): 'low' | 'medium' | 'high' {
   if (typeof navigator === 'undefined') return 'high';
 
   // Simple heuristic based on device memory and hardware concurrency
-  const deviceMemory = (navigator as any).deviceMemory || 4;
+  // deviceMemory is an experimental feature in some browsers
+  const deviceMemory = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 4;
   const hardwareConcurrency = navigator.hardwareConcurrency || 4;
 
   const score = deviceMemory * hardwareConcurrency;
@@ -111,4 +124,29 @@ export function getDevicePerformanceConfig() {
       animationUpdates: !isMobile, // Skip animation updates on mobile unless high-end
     }
   };
+}
+// Format bytes to human readable string
+export function formatBytes(bytes: number): string {
+    const units = ['B', 'KB', 'MB', 'GB'];
+    let size = bytes;
+    let unitIndex = 0;
+
+    while (size >= 1024 && unitIndex < units.length - 1) {
+        size /= 1024;
+        unitIndex++;
+    }
+
+    return `${size.toFixed(1)}${units[unitIndex]}`;
+}
+
+// Format time milliseconds to readable string
+export function formatTime(ms: number): string {
+    const seconds = Math.floor(ms / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const remainingSeconds = seconds % 60;
+
+    if (minutes > 0) {
+        return `${minutes}m ${remainingSeconds}s`;
+    }
+    return `${remainingSeconds}s`;
 }

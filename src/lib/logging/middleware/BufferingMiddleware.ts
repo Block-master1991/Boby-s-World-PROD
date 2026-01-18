@@ -27,7 +27,7 @@ const DEFAULT_CONFIG: BufferingConfig = {
 export interface BufferedLogEntry {
     level: string;
     message: string;
-    metadata?: Record<string, any>;
+    metadata?: Record<string, unknown>;
     timestamp: number;
     correlationId?: string;
 }
@@ -43,7 +43,7 @@ export type FlushCallback = (logs: BufferedLogEntry[]) => Promise<void> | void;
 export class BufferingMiddleware {
     private config: BufferingConfig;
     private buffer: BufferedLogEntry[] = [];
-    private flushTimer: NodeJS.Timeout | null = null;
+    private flushTimer: ReturnType<typeof setInterval> | number | null = null;
     private flushCallbacks: FlushCallback[] = [];
     private currentMemoryUsage: number = 0;
     private isFlushing: boolean = false;
@@ -139,7 +139,7 @@ export class BufferingMiddleware {
         }, this.config.flushInterval!);
 
         // Don't keep process alive
-        if (this.flushTimer.unref) {
+        if (this.flushTimer && typeof this.flushTimer.unref === 'function') {
             this.flushTimer.unref();
         }
     }
@@ -239,21 +239,14 @@ export class BufferingMiddleware {
      * Wait for all pending flushes to complete
      */
     async waitForFlush(): Promise<void> {
-        // Wait for current flush to complete
         while (this.isFlushing) {
+            // eslint-disable-next-line no-await-in-loop
             await new Promise(resolve => setTimeout(resolve, 10));
         }
-
-        // Flush any remaining logs
-        if (this.buffer.length > 0) {
-            await this.flush();
-        }
+        if (this.buffer.length > 0) await this.flush();
     }
 }
 
-/**
- * Default instance
- */
 export const bufferingMiddleware = new BufferingMiddleware({
     enabled: process.env.NODE_ENV === 'production',
     maxSize: 100,
@@ -262,26 +255,20 @@ export const bufferingMiddleware = new BufferingMiddleware({
     maxMemory: 10 * 1024 * 1024
 });
 
-/**
- * Helper to create custom buffering instance
- */
 export function createBuffering(config?: Partial<BufferingConfig>): BufferingMiddleware {
     return new BufferingMiddleware(config);
 }
 
-// Cleanup on process exit
-if (typeof process !== 'undefined') {
-    process.on('beforeExit', async () => {
-        await bufferingMiddleware.destroy();
-    });
-
-    process.on('SIGTERM', async () => {
-        await bufferingMiddleware.destroy();
-        process.exit(0);
-    });
-
-    process.on('SIGINT', async () => {
-        await bufferingMiddleware.destroy();
-        process.exit(0);
-    });
-}
+// Cleanup on process exit - Only runs in Node.js environment
+try {
+    const isNode = typeof process !== 'undefined' && !!process.versions?.node;
+    if (isNode) {
+        const nodeProcess = globalThis.process;
+        if (nodeProcess && typeof nodeProcess.on === 'function') {
+            const cleanup = async () => { await bufferingMiddleware.destroy(); };
+            nodeProcess.on('beforeExit', cleanup);
+            nodeProcess.on('SIGTERM', async () => { await cleanup(); nodeProcess.exit(0); });
+            nodeProcess.on('SIGINT', async () => { await cleanup(); nodeProcess.exit(0); });
+        }
+    }
+} catch { /* Silently fail in non-Node environments */ }

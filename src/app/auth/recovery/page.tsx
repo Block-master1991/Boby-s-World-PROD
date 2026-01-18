@@ -1,5 +1,5 @@
-import React from 'react';
 import { AccountRecovery } from '@/components/auth/AccountRecovery';
+import Link from 'next/link';
 
 export const metadata = {
     title: 'Account Recovery | Boby\'s World',
@@ -12,6 +12,11 @@ export default function RecoveryPage() {
             <div className="lg:p-8">
                 <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
                     <AccountRecovery />
+                    <div className="text-center mt-4">
+                        <Link href="/" className="text-xs text-muted-foreground hover:text-primary underline">
+                            ← Back to Login
+                        </Link>
+                    </div>
                 </div>
             </div>
         </div>

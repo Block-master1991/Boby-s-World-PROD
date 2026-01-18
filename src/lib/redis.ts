@@ -1,57 +1,90 @@
-
-import { logger } from 'utils/logger';
-import type { Cluster } from 'ioredis';
+import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis';
 import Redis from 'ioredis';
+import { logger } from 'utils/logger';
 
 let redisInstance: Redis | Cluster | null = null;
 
-const getRedis = () => {
+// Define a recursive dummy interface to satisfy typing
+interface DummyRedis {
+    then: (resolve: (value: null) => void) => void;
+    catch: () => DummyRedis;
+    [key: string]: unknown;
+}
+
+const createDummyRedisHandler = (): unknown => {
+    // Return a chainable proxy for dummy calls (supports multi().setex().exec())
+    const dummy = (() => dummy) as unknown as DummyRedis;
+    
+    // Add then/catch methods to make it awaitable and chainable
+    dummy.then = (resolve) => resolve(null);
+    dummy.catch = () => dummy;
+    
+    // Allow property access to return the dummy function itself
+    return new Proxy(dummy, {
+        get: (_target, prop) => {
+             // Treat then/catch specially for Promise compatibility
+            if (prop === 'then') return (resolve: (value: null) => void) => resolve(null);
+            if (prop === 'catch') return () => dummy;
+            return dummy;
+        }
+    });
+};
+
+const sanitizeRedisUrl = (url: string): string => {
+    let sanitized = url
+        .replace(/^redis-cli\s+/, '')
+        .replace(/--tls\s+/, '')
+        .replace(/-u\s+/, '')
+        .trim();
+
+    // Auto-fix Protocol for Upstash (requires TLS 'rediss://')
+    if (sanitized.includes('upstash') && sanitized.startsWith('redis://')) {
+        sanitized = sanitized.replace('redis://', 'rediss://');
+        if (process.env.NODE_ENV === 'development') {
+            logger.log('[Redis] Auto-converted Upstash URL to rediss:// (TLS)');
+        }
+    }
+    return sanitized;
+};
+
+const getClusterOptions = (tlsOptions: object): ClusterOptions => ({
+    redisOptions: {
+        ...tlsOptions,
+        maxRetriesPerRequest: 1,
+        connectTimeout: 5000,
+    },
+    scaleReads: 'slave'
+});
+
+const getStandardOptions = (tlsOptions: object): RedisOptions => ({
+    maxRetriesPerRequest: 3,
+    connectTimeout: 5000,
+    // Explicitly enable TLS options if protocol is rediss://
+    ...tlsOptions,
+    retryStrategy: (times: number) => {
+        if (times > 5) return null; // Stop after 5 retries
+        return Math.min(times * 100, 2000); // Backoff
+    }
+});
+
+const getRedis = (): Redis | Cluster => {
     if (!redisInstance && process.env.REDIS_URL) {
         try {
-            // 1. Sanitize the URL (Fix common user copy-paste errors)
-            // Removes 'redis-cli', '--tls', '-u' and whitespace
-            let connectionUrl = process.env.REDIS_URL
-                .replace(/^redis-cli\s+/, '')
-                .replace(/--tls\s+/, '')
-                .replace(/-u\s+/, '')
-                .trim();
-
-            // 2. Auto-fix Protocol for Upstash (requires TLS 'rediss://')
-            if (connectionUrl.includes('upstash') && connectionUrl.startsWith('redis://')) {
-                connectionUrl = connectionUrl.replace('redis://', 'rediss://');
-                if (process.env.NODE_ENV === 'development') {
-                    logger.log('[Redis] Auto-converted Upstash URL to rediss:// (TLS)');
-                }
-            }
-
+            const connectionUrl = sanitizeRedisUrl(process.env.REDIS_URL);
             const isCluster = process.env.REDIS_CLUSTER_MODE === 'true';
+            const isTls = connectionUrl.startsWith('rediss://');
+
+            // Common TLS options
+            const tlsOptions = isTls ? { tls: { rejectUnauthorized: false } } : {};
 
             if (isCluster) {
                 // Initialize Cluster
-                // ioredis cluster accepts array of startup nodes or a single string
                 const nodes = connectionUrl.split(',').map(url => url.trim());
                 logger.log('[Redis] Initializing in CLUSTER mode');
-
-                redisInstance = new Redis.Cluster(nodes, {
-                    redisOptions: {
-                        tls: connectionUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
-                        maxRetriesPerRequest: 1,
-                        connectTimeout: 5000,
-                    },
-                    scaleReads: 'slave'
-                });
+                redisInstance = new Redis.Cluster(nodes, getClusterOptions(tlsOptions));
             } else {
                 // Initialize Standard Client
-                redisInstance = new Redis(connectionUrl, {
-                    maxRetriesPerRequest: 3,
-                    connectTimeout: 5000,
-                    // Explicitly enable TLS options if protocol is rediss://
-                    tls: connectionUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined,
-                    retryStrategy: (times) => {
-                        if (times > 5) return null; // Stop after 5 retries
-                        return Math.min(times * 100, 2000); // Backoff
-                    }
-                });
+                redisInstance = new Redis(connectionUrl, getStandardOptions(tlsOptions));
             }
 
             if (redisInstance) {
@@ -61,13 +94,13 @@ const getRedis = () => {
                     }
                 });
 
-                redisInstance.on('error', (err) => {
+                redisInstance.on('error', (err: Error & { code?: string }) => {
                     // Suppress noise during build, but log real runtime errors
                     // Silent error during build or if it's a known connection issue
-                    if (process.env.NEXT_PHASE === 'phase-production-build' || (err as any).code === 'ENOTFOUND' || (err as any).code === 'ETIMEDOUT') {
+                    if (process.env['NEXT_PHASE'] === 'phase-production-build' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
                         // Log as warning only in dev
                         if (process.env.NODE_ENV === 'development') {
-                            logger.warn('[Redis] Connection failed (silent fallback enabled):', (err as any).message);
+                            logger.warn('[Redis] Connection failed (silent fallback enabled):', err.message);
                         }
                     } else {
                         logger.error('[Redis] Connection Error:', err.message);
@@ -79,30 +112,23 @@ const getRedis = () => {
             redisInstance = null;
         }
     }
+    // We cast to Redis because the proxy interface expects it, 
+    // even though it might be a Cluster or null (which returns types from proxy).
     return redisInstance as Redis;
 };
 
 // Export a proxy to maintain backward compatibility with 'import redis from ...'
 const redisProxy = new Proxy({} as Redis, {
-    get: (target, prop) => {
+    get: (_target, prop) => {
         const instance = getRedis();
 
         // If no instance, return dummy functions to prevent crashes
         if (!instance) {
-            // Return a chainable proxy for dummy calls (supports multi().setex().exec())
-            const dummy: any = (...args: any[]) => {
-                // If it's a 'then' or 'catch' call, treat it like a Promise
-                if (prop === 'then') return Promise.resolve(null);
-                if (prop === 'catch') return { then: (resolve: any) => resolve(null) };
-                return dummy;
-            };
-            // Add then/catch methods to make it awaitable and chainable
-            dummy.then = (resolve: any) => resolve(null);
-            dummy.catch = (reject: any) => dummy;
-            return dummy;
+            return createDummyRedisHandler();
         }
 
-        const val = (instance as any)[prop];
+        // We use 'unknown' cast first to safely access arbitrary properties
+        const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
         return typeof val === 'function' ? val.bind(instance) : val;
     }
 });

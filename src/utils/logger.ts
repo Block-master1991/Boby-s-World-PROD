@@ -21,11 +21,11 @@ const loggerConfig = {
             return { level: label };
         },
         log: (obj: Record<string, unknown>) => {
-            if (obj.err) {
+            if (obj['err']) {
                 // Handle error objects specially
                 return {
                     ...obj,
-                    err: pino.stdSerializers.err(obj.err as any)
+                    err: pino.stdSerializers.err(obj['err'] as Error)
                 };
             }
             return obj;
@@ -38,12 +38,13 @@ const loggerConfig = {
         res: pino.stdSerializers.res
     },
     // In browser, use console transport
+    // In browser, use console transport
     ...(isBrowser ? {
         browser: {
             asObject: !isProduction, // Pretty print in development
             transmit: {
                 level: 'info',
-                send: (level: string | number, logEvent: any) => {
+                send: (level: string | number, logEvent: unknown) => {
                     // Could send to external logging service here
                     const numericLevel = typeof level === 'string' ? 30 : level; // Default to info if string
                     if (isProduction && numericLevel >= 50) { // Error level and above
@@ -53,18 +54,23 @@ const loggerConfig = {
                 }
             }
         }
-    } : {
-        // Server-side configuration
-        transport: !isProduction ? {
-            target: 'pino-pretty',
-            options: {
-                colorize: true,
-                translateTime: 'SYS:standard',
-                ignore: 'pid,hostname'
-            }
-        } : undefined
-    })
+    } : {})
 };
+
+// Server-side transport configuration
+// Server-side transport configuration
+if (!isBrowser && !isProduction) {
+    // We can safely add transport here as we know we're in node env
+    // and pino types support transport on LoggerOptions
+    (loggerConfig as pino.LoggerOptions).transport = {
+        target: 'pino-pretty',
+        options: {
+            colorize: true,
+            translateTime: 'SYS:standard',
+            ignore: 'pid,hostname'
+        }
+    };
+}
 
 // Create the logger instance (kept for compatibility)
 const pinoLogger = pino(loggerConfig);
@@ -72,7 +78,7 @@ const pinoLogger = pino(loggerConfig);
 // Add custom child logger for BobyWorld context
 const pinoLoggerInstance = pinoLogger.child({
     component: 'BobyWorld',
-    version: process.env.npm_package_version || '1.0.0'
+    version: process.env['npm_package_version'] || '1.0.0'
 });
 
 export { pinoLoggerInstance as pinoLogger };
@@ -81,58 +87,7 @@ export { pinoLoggerInstance as pinoLogger };
 export class Logger {
     private isProd = isProduction;
 
-    /**
-     * Normalize various error types to a standard Error object
-     * @private
-     */
-    private normalizeError(errorOrData: Error | string | unknown): Error | undefined {
-        if (!errorOrData) return undefined;
-
-        // Already an Error object
-        if (errorOrData instanceof Error) return errorOrData;
-
-        // String message - convert to Error
-        if (typeof errorOrData === 'string') {
-            const err = new Error(errorOrData);
-            err.name = 'LoggedError';
-            return err;
-        }
-
-        // Unknown/object types - serialize to Error
-        try {
-            let errorMessage: string;
-
-            if (typeof errorOrData === 'object' && errorOrData !== null) {
-                // Try to extract useful information from the object
-                const obj = errorOrData as any;
-
-                // Check for common error-like properties
-                if (obj.message) {
-                    errorMessage = String(obj.message);
-                } else if (obj.error) {
-                    errorMessage = String(obj.error);
-                } else {
-                    // Serialize the entire object
-                    errorMessage = JSON.stringify(errorOrData);
-                }
-            } else {
-                errorMessage = String(errorOrData);
-            }
-
-            const err = new Error(errorMessage);
-            err.name = 'SerializedError';
-
-            // Preserve stack trace if available
-            if (typeof errorOrData === 'object' && errorOrData !== null && 'stack' in errorOrData) {
-                err.stack = String((errorOrData as any).stack);
-            }
-
-            return err;
-        } catch {
-            // Fallback for unserializable objects
-            return new Error('[Unserializable Error Data]');
-        }
-    }
+    // normalizerError removed as it was unused and dead code
 
     /**
      * Standard log for informative messages.

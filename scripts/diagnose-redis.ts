@@ -1,80 +1,91 @@
-/**
- * Redis Diagnostic Utility - TypeScript Version
- * Validates connection, read/write capabilities, and auto-corrects URLs for Upstash TLS.
- * Integrates with the professional logging system.
- */
+import { Redis, type RedisOptions } from 'ioredis';
+import { professionalLogger } from '../src/lib/logging/index';
 
-import 'dotenv/config';
-import Redis from 'ioredis';
-import { professionalLogger } from '../src/lib/logging';
+const DIAGNOSTIC_TIMEOUT = 5000;
 
 async function diagnoseRedis() {
     const correlationId = `redis-diag-${Date.now()}`;
     professionalLogger.info('🔍 Starting Redis Configuration Diagnostic', { correlationId });
 
-    const url = process.env.REDIS_URL;
+    const url = process.env['REDIS_URL'];
     if (!url) {
         professionalLogger.fatal('REDIS_URL is not defined in environment variables', { correlationId });
         process.exit(1);
     }
 
-    // Sanitize URL (Matches production logic in src/lib/redis.ts)
-    let sanitizedUrl = url
-        .replace(/^redis-cli\s+/, '')
-        .replace(/--tls\s+/, '')
-        .replace(/-u\s+/, '')
-        .trim();
-
-    // Auto-upgrade Upstash to TLS
-    if (sanitizedUrl.includes('upstash') && sanitizedUrl.startsWith('redis://')) {
-        sanitizedUrl = sanitizedUrl.replace('redis://', 'rediss://');
-        professionalLogger.info('✨ Auto-corrected URL to rediss:// (Enforced TLS for Upstash)', { correlationId });
-    }
-
-    const maskedUrl = sanitizedUrl.replace(/:([^:@]+)@/, ':****@');
-    professionalLogger.debug(`Targeting Redis instance: ${maskedUrl}`, { correlationId });
-
-    const redis = new Redis(sanitizedUrl, {
-        connectTimeout: 5000,
-        maxRetriesPerRequest: 1,
-        tls: sanitizedUrl.startsWith('rediss://') ? { rejectUnauthorized: false } : undefined
-    });
-
-    redis.on('error', (err: any) => {
-        professionalLogger.error('Redis Socket Error detected', { 
-            correlationId, 
-            error: err.message,
-            code: err.code 
-        });
-    });
-
     try {
-        professionalLogger.info('⏳ Attempting to establish connection...', { correlationId });
-        await redis.get('ping_test'); 
-        professionalLogger.info('✅ Basic connection established', { correlationId });
-
-        professionalLogger.info('📝 Testing write operations (with 60s TTL)...', { correlationId });
-        await redis.set('boby_diagnostic', 'success', 'EX', 60);
+        const isTls = parseAndLogDetails(url, correlationId);
+        await testConnection(url, isTls, correlationId);
         
-        professionalLogger.info('📖 Testing read operations...', { correlationId });
-        const value = await redis.get('boby_diagnostic');
-        
-        if (value === 'success') {
-            professionalLogger.info('🎉 Redis Diagnostic passed successfully!', { correlationId });
-        } else {
-            throw new Error(`Data integrity check failed. Expected 'success', got '${value}'`);
-        }
-
-        redis.disconnect();
+        professionalLogger.info('✅ Connection SUCCESSFUL: PONG received', { correlationId });
         process.exit(0);
-    } catch (error: any) {
-        professionalLogger.fatal('Redis Diagnostic failed miserably', { 
-            correlationId,
-            error: error.message,
-            stack: error.stack
-        });
-        process.exit(1);
+    } catch (error) {
+        handleError(error, correlationId);
     }
 }
 
-diagnoseRedis();
+function parseAndLogDetails(url: string, correlationId: string): boolean {
+    professionalLogger.info('👉 Validating REDIS_URL format...', { correlationId });
+    const parsed = new URL(url);
+    
+    professionalLogger.info('Connection Details:', {
+        host: parsed.hostname,
+        port: parsed.port,
+        protocol: parsed.protocol,
+        hasAuth: !!parsed.password,
+        correlationId
+    });
+
+    return parsed.protocol.includes('rediss');
+}
+
+async function testConnection(url: string, isTls: boolean, correlationId: string) {
+    const options: RedisOptions = {
+        connectTimeout: DIAGNOSTIC_TIMEOUT,
+        maxRetriesPerRequest: 1,
+    };
+
+    if (isTls) {
+        options.tls = { rejectUnauthorized: false };
+    }
+
+    professionalLogger.info('👉 Attempting connection...', { 
+        tls: isTls,
+        timeout: DIAGNOSTIC_TIMEOUT,
+        correlationId
+    });
+
+    const redis = new Redis(url, options);
+
+    try {
+        const pingPromise = redis.ping();
+        const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error('Connection timed out')), DIAGNOSTIC_TIMEOUT)
+        );
+
+        await Promise.race([pingPromise, timeoutPromise]);
+    } finally {
+        await redis.quit();
+    }
+}
+
+function handleError(error: unknown, correlationId: string) {
+    const err = error as Error;
+    professionalLogger.error('❌ Redis Connection Failed', err, { correlationId });
+    
+    if (err.message.includes('ETIMEDOUT')) {
+        professionalLogger.warn('💡 Tip: Check firewall rules/port 6379/rediss', { correlationId });
+    } else if (err.message.includes('wrongpass')) {
+        professionalLogger.warn('💡 Tip: Verify REDIS_URL password', { correlationId });
+    } else if (err.message.includes('certificate')) {
+        professionalLogger.warn('💡 Tip: Check SSL settings (?family=0)', { correlationId });
+    }
+
+    process.exit(1);
+}
+
+diagnoseRedis().catch((err: unknown) => {
+     
+    console.error('Fatal script error:', err);
+    process.exit(1);
+});

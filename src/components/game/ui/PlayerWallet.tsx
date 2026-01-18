@@ -1,17 +1,17 @@
 'use client';
 
-import React from 'react';
-import type { PublicKey } from '@solana/web3.js';
-import { Button } from '@/components/ui/button';
-import { SheetHeader, SheetTitle, SheetFooter } from '@/components/ui/sheet';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Wallet, Send, PawPrint, Info, AlertCircle } from 'lucide-react';
-import Image from 'next/image';
-import { Separator } from '@/components/ui/separator';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import BobyPriceDisplay from '@/components/game/BobyPriceDisplay';
 import TokenBalance from '@/components/game/TokenBalance';
 import DisconnectButton from '@/components/shared/DisconnectButton';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import type { PublicKey } from '@solana/web3.js';
+import Image from 'next/image';
+import React from 'react';
+import { AuthenticatedWalletInfo } from './AuthenticatedWalletInfo';
+import { MenuBanners } from './MenuBanners';
+import { USDTBalanceCard } from './USDTBalanceCard';
 
 interface PlayerWalletProps {
   isWalletMismatch: boolean;
@@ -27,20 +27,8 @@ interface PlayerWalletProps {
   dbAppOptionsProjectId?: string | null;
 }
 
-const PlayerWallet: React.FC<PlayerWalletProps> = ({
-  isWalletMismatch,
-  isAuthenticated,
-  authUserPublicKey,
-  sessionPublicKey,
-  adapterPublicKey,
-  isFetchingPlayerUSDT,
-  playerGameUSDT,
-  MIN_WITHDRAWAL_USDT,
-  isWithdrawing,
-  onWithdrawUSDT,
-  dbAppOptionsProjectId
-}) => {
-  const firebaseNotConfigured = !dbAppOptionsProjectId || dbAppOptionsProjectId.includes("YOUR_PROJECT_ID");
+const PlayerWallet: React.FC<PlayerWalletProps> = (props) => {
+  const firebaseNotConfigured = !props.dbAppOptionsProjectId || props.dbAppOptionsProjectId.includes("YOUR_PROJECT_ID");
 
   return (
     <>
@@ -49,53 +37,34 @@ const PlayerWallet: React.FC<PlayerWalletProps> = ({
             <Image src="/wallet.png" alt="Wallet Icon" width={28} height={28} className="h-7 w-7" /> Wallet
         </SheetTitle>
         <BobyPriceDisplay />
-        {isWalletMismatch && sessionPublicKey && adapterPublicKey && (
-          <div className="mt-2 p-2 text-xs bg-destructive/10 text-destructive rounded-md border border-destructive/30">
-            <p className="font-semibold flex items-center gap-1"><AlertCircle size={14} /> Wallet Mismatch!</p>
-            <p>Connected wallet ({`${adapterPublicKey.toBase58().substring(0, 4)}...${adapterPublicKey.toBase58().substring(adapterPublicKey.toBase58().length - 4)}`}) </p>
-            <p>differs from authenticated session ({`${sessionPublicKey.toBase58().substring(0, 4)}...${sessionPublicKey.toBase58().substring(sessionPublicKey.toBase58().length - 4)}`}).</p>
-            <p className="mt-1">Please switch wallet in extension or reconnect.</p>
-          </div>
-        )}
-        {!isAuthenticated && (
-          <div className="mt-2 p-2 text-xs bg-yellow-500/10 text-yellow-500 rounded-md border border-yellow-500/30">
-            <p className="font-semibold flex items-center gap-1"><Info size={14} /> Not Authenticated</p>
-            <p>Please connect and authenticate your wallet to access all features.</p>
-          </div>
-        )}
+        <MenuBanners
+          isWalletMismatch={props.isWalletMismatch}
+          isAuthenticated={props.isAuthenticated}
+          sessionPublicKey={props.sessionPublicKey}
+          adapterPublicKey={props.adapterPublicKey}
+        />
       </SheetHeader>
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-3">
           <TokenBalance />
           <Separator className="my-3" />
-          <Card className="bg-secondary/30">
-            <CardHeader className="pb-2 pt-3">
-              <CardTitle className="text-md font-headline flex items-center gap-2">
-                <Image src="/USDT-logo.png" alt="USDT Icon" width={20} height={20} className="h-5 w-5" /> In-Game USDT Balance
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="pb-3 pt-1">
-              {isFetchingPlayerUSDT ? (<PawPrint className="h-6 w-6 animate-pulse text-primary mx-auto" />) : (
-                <p className="text-2xl font-bold text-center text-primary">{playerGameUSDT.toFixed(4)} USDT</p>
-              )}
-              <Button className="w-full mt-3 text-sm py-2" onClick={onWithdrawUSDT}
-                disabled={playerGameUSDT < MIN_WITHDRAWAL_USDT || isWithdrawing || isFetchingPlayerUSDT || isWalletMismatch || firebaseNotConfigured}>
-                {isWithdrawing ? <PawPrint className="mr-2 rtl:ml-2 h-4 w-4 animate-pulse" /> : <Send className="mr-2 rtl:ml-2 h-4 w-4" />}
-                Withdraw {MIN_WITHDRAWAL_USDT} USDT (Min)
-              </Button>
-              <p className="text-xs text-muted-foreground mt-1.5 text-center">Withdrawals are simulated.</p>
-            </CardContent>
-          </Card>
+          <USDTBalanceCard
+            isFetchingPlayerUSDT={props.isFetchingPlayerUSDT}
+            playerGameUSDT={props.playerGameUSDT}
+            MIN_WITHDRAWAL_USDT={props.MIN_WITHDRAWAL_USDT}
+            isWithdrawing={props.isWithdrawing}
+            onWithdrawUSDT={props.onWithdrawUSDT}
+            isWalletMismatch={props.isWalletMismatch}
+            firebaseNotConfigured={firebaseNotConfigured}
+          />
           <Separator className="my-3" />
         </div>
       </ScrollArea>
       <SheetFooter className="p-4 border-t mt-auto flex flex-col sm:flex-col space-y-2 sm:space-y-2 sm:justify-start">
-        {isAuthenticated && authUserPublicKey && (
-          <div className="text-xs text-muted-foreground p-2 border rounded-md bg-background/50 text-center break-all">
-            <p className="font-semibold mb-1 flex items-center justify-center gap-1"><Wallet className="h-4 w-4" />
-            Authenticated Wallet: {`${authUserPublicKey.substring(0, 4)}...${authUserPublicKey.substring(authUserPublicKey.length - 4)}`} </p>
-          </div>
-        )}
+        <AuthenticatedWalletInfo
+          isAuthenticated={props.isAuthenticated}
+          authUserPublicKey={props.authUserPublicKey}
+        />
         <DisconnectButton data-testid="disconnect-button-test" />
       </SheetFooter>
     </>

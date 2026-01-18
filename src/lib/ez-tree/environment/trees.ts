@@ -1,18 +1,18 @@
 import * as THREE from 'three';
-import { Tree } from '../tree';
-import TreeOptions from '../options';
-import { TreePreset, loadPreset } from '../presets';
+import { logger } from 'utils/logger';
 import { CHUNK_SIZE } from '../../chunkUtils';
 import { DOG_SPAWN_PROTECTION_RADIUS } from '../../constants';
-import { logger } from 'utils/logger';
+import TreeOptions from '../options';
+import { TreePreset, loadPreset } from '../presets';
+import { Tree } from '../tree';
 
 export class TreesOptions {
-  public treeCountPerChunk: number = 1; // Number of trees per chunk
+  public treeCountPerChunk: number = 1;
   public scale: number = 100;
   public patchiness: number = 0.7;
-  public windStrength: { x: number; y: number; z: number } = { x: 0.05, y: 0.02, z: 0.05 }; // Much less than grass
-  public windFrequency: number = 0.2; // Much slower frequency for trees
-  public windScale: number = 800.0; // Larger scale for trees
+  public windStrength: { x: number; y: number; z: number } = { x: 0.05, y: 0.02, z: 0.05 };
+  public windFrequency: number = 0.2;
+  public windScale: number = 800.0;
 }
 
 export class Trees extends THREE.Object3D {
@@ -25,9 +25,10 @@ export class Trees extends THREE.Object3D {
     this.name = 'Trees';
   }
 
-  public async fetchAssets(): Promise<void> {
-    // For procedural trees, assets might be presets or textures.
-    // Here, we'll load all available presets once.
+  /**
+   * Synchronously loads all available tree presets.
+   */
+  public fetchAssets(): void {
     const presetNames = Object.keys(TreePreset);
     for (const name of presetNames) {
       const preset = loadPreset(name);
@@ -35,82 +36,75 @@ export class Trees extends THREE.Object3D {
     }
   }
 
+  /**
+   * Helper to create a single tree instance from a preset.
+   */
+  private createTreeInstance(presetName: string, position: THREE.Vector3): Tree | null {
+    const treeOptions = this.loadedPresets.get(presetName);
+    if (!treeOptions) return null;
+
+    const treeInstanceOptions = new TreeOptions();
+    treeInstanceOptions.copy(treeOptions);
+    treeInstanceOptions.seed = Math.random() * 65536;
+
+    const tree = new Tree(treeInstanceOptions);
+    tree.generate();
+    tree.position.copy(position);
+    
+    // Default rotation and scale for new trees
+    tree.rotation.set(0, 2 * Math.PI * Math.random(), 0);
+    const scale = 0.05;
+    tree.scale.set(scale, scale, scale);
+
+    this.applyShadows(tree);
+    return tree;
+  }
+
+  /**
+   * Helper to apply shadows recursively to a tree.
+   */
+  private applyShadows(object: THREE.Object3D): void {
+    object.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        child.castShadow = true;
+        child.receiveShadow = true;
+      }
+    });
+  }
+
   public generateTreesForChunk(chunkX: number, chunkZ: number): THREE.Group | null {
     if (this.loadedPresets.size === 0) {
-      logger.warn("Trees: No presets loaded. Call fetchAssets() first.");
-      logger.log("Trees: Attempting to fetch assets now...");
-      this.fetchAssets().then(() => {
-        logger.log(`Trees: Assets loaded, ${this.loadedPresets.size} presets available`);
-      }).catch(error => {
-        logger.error("Trees: Failed to fetch assets:", error);
-      });
+      this.handleMissingAssets();
       return null;
     }
 
     const treesGroup = new THREE.Group();
     treesGroup.name = 'trees';
     const presetNames = Array.from(this.loadedPresets.keys());
-
-    const chunkWorldStartX = chunkX * CHUNK_SIZE;
-    const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
-
-    logger.log(`[Trees] Generating ${this.options.treeCountPerChunk} trees for chunk ${chunkX},${chunkZ}`);
+    const chunkStart = { x: chunkX * CHUNK_SIZE, z: chunkZ * CHUNK_SIZE };
 
     for (let i = 0; i < this.options.treeCountPerChunk; i++) {
-      const localX = Math.random() * CHUNK_SIZE;
-      const localZ = Math.random() * CHUNK_SIZE;
+      const worldPos = new THREE.Vector3(
+        chunkStart.x + Math.random() * CHUNK_SIZE,
+        0,
+        chunkStart.z + Math.random() * CHUNK_SIZE
+      );
 
-      const worldX = chunkWorldStartX + localX;
-      const worldZ = chunkWorldStartZ + localZ;
+      if (worldPos.length() < DOG_SPAWN_PROTECTION_RADIUS) continue;
+      if (Math.random() > this.options.patchiness) continue;
 
-      const p = new THREE.Vector3(worldX, 0, worldZ);
+      const randomName = presetNames[Math.floor(Math.random() * presetNames.length)];
+      if (!randomName) continue; // Resolve TS2345
 
-      // Skip trees near the spawn point (0,0)
-      if (p.length() < DOG_SPAWN_PROTECTION_RADIUS) {
-        continue;
-      }
-
-      // Simple patchiness check, can be improved with noise
-      if (Math.random() > this.options.patchiness) { continue; }
-
-      const randomPresetName = presetNames[Math.floor(Math.random() * presetNames.length)];
-      const treeOptions = this.loadedPresets.get(randomPresetName);
-
-      if (treeOptions) {
-        // Create a new TreeOptions instance and copy properties, including wind
-        const treeInstanceOptions = new TreeOptions();
-        treeInstanceOptions.copy(treeOptions);
-        treeInstanceOptions.seed = Math.random() * 65536; // Randomize seed for variety
-
-        const tree = new Tree(treeInstanceOptions);
-        tree.generate();
-
-        tree.position.copy(p);
-        tree.rotation.set(0, 2 * Math.PI * Math.random(), 0);
-        const scale = 0.05; // Use actual scale from preset
-        tree.scale.set(scale, scale, scale);
-
-        // Enable shadows for trees
-        tree.traverse((child) => {
-          if (child instanceof THREE.Mesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-
-        treesGroup.add(tree);
-      }
+      const tree = this.createTreeInstance(randomName, worldPos);
+      if (tree) treesGroup.add(tree);
     }
 
-    logger.log(`[Trees] Generated ${treesGroup.children.length} trees for chunk ${chunkX},${chunkZ}`);
     return treesGroup;
   }
 
   public generateTreesFromData(data: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] }): THREE.Group | null {
-    if (this.loadedPresets.size === 0 || !data) {
-      logger.warn("Trees: No presets loaded or no data. Call fetchAssets() first.");
-      return null;
-    }
+    if (this.loadedPresets.size === 0 || !data) return null;
 
     const treesGroup = new THREE.Group();
     const presetNames = Array.from(this.loadedPresets.keys());
@@ -118,71 +112,51 @@ export class Trees extends THREE.Object3D {
     const count = positions.length / 3;
 
     for (let i = 0; i < count; i++) {
-      const position = new THREE.Vector3().fromArray(positions, i * 3);
+      const pos = new THREE.Vector3().fromArray(positions, i * 3);
+      if (pos.length() < DOG_SPAWN_PROTECTION_RADIUS) continue;
 
-      // Skip trees near the spawn point (0,0)
-      if (position.length() < DOG_SPAWN_PROTECTION_RADIUS) {
-        continue;
-      }
+      const randomName = presetNames[Math.floor(Math.random() * presetNames.length)];
+      if (!randomName) continue; // Resolve TS2345
 
-      const randomPresetName = presetNames[Math.floor(Math.random() * presetNames.length)];
-      const treeOptions = this.loadedPresets.get(randomPresetName);
-
-      if (treeOptions) {
-        // Create a new TreeOptions instance and copy properties, including wind
-        const treeInstanceOptions = new TreeOptions();
-        treeInstanceOptions.copy(treeOptions);
-        treeInstanceOptions.seed = Math.random() * 100000; // Randomize seed for variety
-
-        const tree = new Tree(treeInstanceOptions);
-        tree.generate();
-
-        tree.position.fromArray(positions, i * 3);
+      const tree = this.createTreeInstance(randomName, pos);
+      if (tree) {
+        // Override with specific data
         tree.scale.fromArray(scales, i * 3);
         tree.quaternion.fromArray(quaternions, i * 4);
-
-        tree.traverse((child) => {
-          if ((child as THREE.Mesh).isMesh) {
-            child.castShadow = true;
-            child.receiveShadow = true;
-          }
-        });
-
         treesGroup.add(tree);
       }
     }
     return treesGroup;
   }
 
+  private handleMissingAssets(): void {
+    logger.warn("Trees: No presets loaded. Attempting to fetch now...");
+    try {
+      this.fetchAssets();
+      logger.log(`Trees: Assets loaded, ${this.loadedPresets.size} presets ready`);
+    } catch (error) {
+      logger.error("Trees: Failed to fetch assets:", error);
+    }
+  }
+
   public update(elapsedTime: number): void {
     this.traverse((o) => {
-      if (o instanceof Tree) {
-        o.update(elapsedTime);
-      }
+      if (o instanceof Tree) o.update(elapsedTime);
     });
   }
 
   public disposeChunk(chunkGroup: THREE.Group): void {
     chunkGroup.children.forEach(child => {
-      if (child instanceof Tree) {
-        // Dispose of tree's internal geometries and materials
-        // Assuming Tree class has a dispose method or similar cleanup
-        // For now, we'll just remove it from the group
-        child.traverse((obj) => {
-          if ((obj as THREE.Mesh).isMesh) {
-            const mesh = obj as THREE.Mesh;
-            if (mesh.geometry) mesh.geometry.dispose();
-            if (mesh.material) {
-              if (Array.isArray(mesh.material)) {
-                mesh.material.forEach(mat => mat.dispose());
-              } else {
-                mesh.material.dispose();
-              }
-            }
+      child.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) {
+            if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+            else obj.material.dispose();
           }
-        });
-      }
+        }
+      });
     });
-    chunkGroup.clear(); // Remove all children from the group
+    chunkGroup.clear();
   }
 }

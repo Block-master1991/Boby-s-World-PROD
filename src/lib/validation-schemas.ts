@@ -45,26 +45,51 @@ export const LogoutRequestSchema = z.object({
 
 // ===== WebAuthn Schemas =====
 
+/**
+ * Validates initiation of registration
+ */
 export const WebAuthnRegisterSchema = z.object({
-    userId: z.string().min(1, 'User ID required'),
+    userId: z.string().min(32, 'Valid User ID required'),
     userName: z.string().min(1, 'User name required').max(100)
 });
 
+/**
+ * Validates passkey registration confirmation
+ */
 export const WebAuthnConfirmSchema = z.object({
-    userId: z.string().min(1),
     credential: z.object({
         id: z.string().min(1),
-        publicKey: z.string().optional()
-    })
+        publicKey: z.string().min(1, 'Public key is required'),
+        authData: z.string().optional()
+    }),
+    description: z.string().max(100).optional(),
+    transports: z.array(z.string()).optional()
 });
 
+/**
+ * Validates initiation of authentication (Login)
+ */
+export const WebAuthnAuthenticateSchema = z.object({
+    userId: z.string().optional()
+});
+
+/**
+ * Validates passkey signature verification
+ */
 export const WebAuthnVerifySchema = z.object({
     userId: z.string().optional(),
     credentialResponse: z.object({
         id: z.string().min(1),
-        response: z.any(), // WebAuthn response object
+        response: z.record(z.string(), z.unknown()), // WebAuthn response object
         discoveryId: z.string().optional()
     })
+});
+
+/**
+ * Validates passkey deletion and management
+ */
+export const WebAuthnManageDeleteSchema = z.object({
+    credentialId: z.string().min(1)
 });
 
 // ===== Game-related Schemas =====
@@ -97,6 +122,22 @@ export const AdminActionSchema = z.object({
     value: z.number().int().optional() // For grant_coins action
 });
 
+// ===== Account Recovery Schemas =====
+
+export const RecoveryInitiateSchema = z.object({
+    email: z.string().email('Invalid email address').transform(sanitize),
+    publicKey: SolanaPublicKeySchema
+});
+
+export const RecoveryVerifySchema = z.object({
+    recoveryToken: z.string().uuid('Invalid recovery token format'),
+    recoveryCode: z.string().length(6, 'Recovery code must be 6 characters').transform(v => v.toUpperCase())
+});
+
+export const RecoveryCancelSchema = z.object({
+    recoveryToken: z.string().uuid('Invalid recovery token format')
+});
+
 // ===== Helper: Validate and parse request body =====
 
 export async function validateRequestBody<T extends z.ZodTypeAny>(
@@ -122,9 +163,14 @@ export type NonceRequest = z.infer<typeof NonceRequestSchema>;
 export type LogoutRequest = z.infer<typeof LogoutRequestSchema>;
 export type WebAuthnRegisterRequest = z.infer<typeof WebAuthnRegisterSchema>;
 export type WebAuthnConfirmRequest = z.infer<typeof WebAuthnConfirmSchema>;
+export type WebAuthnAuthenticateRequest = z.infer<typeof WebAuthnAuthenticateSchema>;
 export type WebAuthnVerifyRequest = z.infer<typeof WebAuthnVerifySchema>;
+export type WebAuthnManageDeleteRequest = z.infer<typeof WebAuthnManageDeleteSchema>;
 export type ApplyPenaltyRequest = z.infer<typeof ApplyPenaltySchema>;
 export type ConsumeBottleRequest = z.infer<typeof ConsumeBottleSchema>;
 export type PurchaseItemRequest = z.infer<typeof PurchaseItemSchema>;
 export type UseItemRequest = z.infer<typeof UseItemSchema>;
 export type AdminActionRequest = z.infer<typeof AdminActionSchema>;
+export type RecoveryInitiateRequest = z.infer<typeof RecoveryInitiateSchema>;
+export type RecoveryVerifyRequest = z.infer<typeof RecoveryVerifySchema>;
+export type RecoveryCancelRequest = z.infer<typeof RecoveryCancelSchema>;

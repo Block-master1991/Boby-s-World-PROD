@@ -4,22 +4,21 @@
  * Integrates with the professional logging system.
  */
 
-import 'dotenv/config';
+import type { AxiosError } from 'axios';
 import axios from 'axios';
+import 'dotenv/config';
 import { professionalLogger } from '../src/lib/logging';
 
-async function testSlack() {
-    const correlationId = `slack-test-${Date.now()}`;
-    const url = process.env.SLACK_WEBHOOK_URL;
+interface SlackPayload {
+    blocks: Array<{
+        type: string;
+        text?: { type: string; text: string; emoji?: boolean };
+        elements?: Array<{ type: string; text: string }>;
+    }>;
+}
 
-    if (!url) {
-        professionalLogger.fatal('SLACK_WEBHOOK_URL is missing in environment variables', { correlationId });
-        process.exit(1);
-    }
-
-    professionalLogger.info(`✅ SLACK_WEBHOOK_URL found: ${url.substring(0, 30)}...`, { correlationId });
-
-    const payload = {
+function createSlackPayload(): SlackPayload {
+    return {
         blocks: [
             {
                 type: "header",
@@ -47,6 +46,20 @@ async function testSlack() {
             }
         ]
     };
+}
+
+async function testSlack() {
+    const correlationId = `slack-test-${Date.now()}`;
+    const url = process.env.SLACK_WEBHOOK_URL;
+
+    if (!url) {
+        professionalLogger.fatal('SLACK_WEBHOOK_URL is missing in environment variables', { correlationId });
+        process.exit(1);
+    }
+
+    professionalLogger.info(`✅ SLACK_WEBHOOK_URL found: ${url.substring(0, 30)}...`, { correlationId });
+
+    const payload = createSlackPayload();
 
     try {
         professionalLogger.info('📡 Sending test payload to Slack...', { correlationId });
@@ -62,14 +75,18 @@ async function testSlack() {
             });
             process.exit(1);
         }
-    } catch (error: any) {
+    } catch (error: unknown) {
+        const axiosError = error as AxiosError;
         professionalLogger.fatal('Failed to send Slack alert', { 
             correlationId,
-            error: error.message,
-            responseData: error.response?.data
+            error: axiosError.message,
+            responseData: axiosError.response?.data
         });
         process.exit(1);
     }
 }
 
-testSlack();
+testSlack().catch(err => {
+    console.error('Test failed:', err);
+    process.exit(1);
+});

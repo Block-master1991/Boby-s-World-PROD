@@ -1,67 +1,38 @@
-// src/app/api/game/purchaseHistory/route.ts
-import { logger } from 'utils/logger';
-// API endpoint to fetch user's purchase history
+/**
+ * API Route: Fetch Purchase History
+ * GET /api/game/purchaseHistory
+ */
 
-import { NextResponse } from 'next/server';
-import { initializeAdminApp } from '@/lib/firebase-admin';
-import { getFirestore } from 'firebase-admin/firestore';
 import type { AuthenticatedRequest } from '@/lib/auth-middleware';
 import { withAuth } from '@/lib/auth-middleware';
 import { withCsrfProtection } from '@/lib/csrf-middleware';
-
-export interface PurchaseRecord {
-    id: string;
-    itemId: string;
-    itemName: string;
-    quantity: number;
-    transactionSignature: string;
-    explorerUrl: string;
-    timestamp: Date;
-    amountPaid?: number;
-}
+import { db } from '@/lib/firebase-admin';
+import type { TransactionSignatureDocument } from '@/types/database';
+import { COLLECTIONS } from '@/types/database';
+import { NextResponse } from 'next/server';
+import { logger } from 'utils/logger';
+import { mapToPurchaseRecord } from './purchaseHistoryHelpers';
+export type { PurchaseRecord } from './purchaseHistoryHelpers';
 
 export const GET = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
     logger.log("[API] /api/game/purchaseHistory called");
 
     const userPublicKey = request.user?.sub;
-
     if (!userPublicKey) {
         return NextResponse.json({ error: 'Authentication required.' }, { status: 401 });
     }
 
     try {
-        await initializeAdminApp();
-        const db = getFirestore();
-
-        // Query used transaction signatures for this user
         const signaturesSnapshot = await db
-            .collection('usedTransactionSignatures')
+            .collection(COLLECTIONS.USED_TRANS_SIGS)
             .where('userId', '==', userPublicKey)
             .orderBy('timestamp', 'desc')
-            .limit(50) // Limit to last 50 purchases
+            .limit(50)
             .get();
 
-        const purchases: PurchaseRecord[] = [];
-
-        for (const doc of signaturesSnapshot.docs) {
-            const data = doc.data();
-            const signature = doc.id;
-
-            // Determine cluster for explorer URL
-            const isDevnet = process.env.NEXT_PUBLIC_SOLANA_RPC_URL?.includes('devnet');
-            const explorerUrl = `https://solscan.io/tx/${signature}${isDevnet ? '?cluster=devnet' : ''}`;
-
-            purchases.push({
-                id: doc.id,
-                itemId: data.itemId || 'unknown',
-                itemName: data.itemName || data.itemId || 'Unknown Item',
-                quantity: data.quantity || 1,
-                transactionSignature: signature,
-                explorerUrl,
-                timestamp: data.timestamp?.toDate() || new Date(),
-                amountPaid: data.amountPaid,
-            });
-        }
+        const purchases = signaturesSnapshot.docs.map(doc => 
+            mapToPurchaseRecord(doc.id, doc.data() as TransactionSignatureDocument)
+        );
 
         return NextResponse.json({
             success: true,
@@ -70,7 +41,7 @@ export const GET = withAuth(withCsrfProtection(async (request: AuthenticatedRequ
         });
 
     } catch (error) {
-        logger.error("[API] Error fetching purchase history:", error as Error);
+        logger.error("[Purchase History] Error:", error instanceof Error ? error.message : String(error));
         return NextResponse.json(
             { error: 'Failed to fetch purchase history.' },
             { status: 500 }

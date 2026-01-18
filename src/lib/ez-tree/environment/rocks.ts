@@ -1,10 +1,10 @@
 import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { CHUNK_SIZE } from '../../chunkUtils';
-import { simplex2d } from './noise';
-import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { logger } from 'utils/logger';
+import { CHUNK_SIZE } from '../../chunkUtils';
+import { getModel, putModel } from '../../indexedDB';
+import { simplex2d } from './noise';
 
 let loaded = false;
 let _rock1Mesh: THREE.Mesh | null = null;
@@ -37,63 +37,22 @@ export class Rocks extends THREE.Group {
     dracoLoader.setDecoderPath('/libs/draco/');
     gltfLoader.setDRACOLoader(dracoLoader);
 
-    // Helper function to find the first mesh in a GLTF scene
-    const findMesh = (scene: THREE.Group): THREE.Mesh | null => {
-      let mesh: THREE.Mesh | null = null;
-      scene.traverse((child) => {
-        if (child instanceof THREE.Mesh) {
-          mesh = child;
-        }
-      });
-      return mesh;
-    };
 
-    const loadModel = async (modelPath: string, modelName: string): Promise<THREE.Group> => {
-      try {
-        // Try to load from IndexedDB first
-        const cachedData = await getModel(modelName);
-        if (cachedData) {
-          logger.log(`[Rocks] Loading ${modelName} from IndexedDB`);
-          const gltf = await gltfLoader.parseAsync(cachedData, '');
-          return gltf.scene;
-        } else {
-          logger.log(`[Rocks] Fetching ${modelName} from network: ${modelPath}`);
-          const response = await fetch(modelPath);
-          if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-          const arrayBuffer = await response.arrayBuffer();
-          await putModel(modelName, arrayBuffer); // Store in IndexedDB
-          const gltf = await gltfLoader.parseAsync(arrayBuffer, '');
-          return gltf.scene;
-        }
-      } catch (error) {
-        logger.error(`[Rocks] Error loading or caching model ${modelName}:`, error);
-        // Fallback to direct network load if IndexedDB fails
-        logger.log(`[Rocks] Falling back to direct network load for: ${modelPath}`);
-        const gltf = await gltfLoader.loadAsync(modelPath);
-        return gltf.scene;
-      }
-    };
 
-    const rock1Scene = await loadModel('/models/rock1.glb', 'rock1_model');
-    const rock2Scene = await loadModel('/models/rock2.glb', 'rock2_model');
-    const rock3Scene = await loadModel('/models/rock3.glb', 'rock3_model');
+    const rock1Scene = await loadRockModel(gltfLoader, '/models/rock1.glb', 'rock1_model');
+    const rock2Scene = await loadRockModel(gltfLoader, '/models/rock2.glb', 'rock2_model');
+    const rock3Scene = await loadRockModel(gltfLoader, '/models/rock3.glb', 'rock3_model');
 
-    _rock1Mesh = findMesh(rock1Scene);
-    _rock2Mesh = findMesh(rock2Scene);
-    _rock3Mesh = findMesh(rock3Scene);
+    _rock1Mesh = findRockMesh(rock1Scene);
+    _rock2Mesh = findRockMesh(rock2Scene);
+    _rock3Mesh = findRockMesh(rock3Scene);
 
     loaded = true;
   }
 
   public generateRocksForChunk(chunkX: number, chunkZ: number): THREE.Group | null {
     if (!_rock1Mesh || !_rock2Mesh || !_rock3Mesh) {
-      logger.warn("Rocks: No meshes loaded. Call fetchAssets() first.");
-      logger.log("Rocks: Attempting to fetch assets now...");
-      Rocks.fetchAssets().then(() => {
-        logger.log("Rocks: Assets loaded successfully");
-      }).catch(error => {
-        logger.error("Rocks: Failed to fetch assets:", error);
-      });
+      this.handleMissingAssets();
       return null;
     }
 
@@ -104,49 +63,39 @@ export class Rocks extends THREE.Group {
     const chunkWorldStartX = chunkX * CHUNK_SIZE;
     const chunkWorldStartZ = chunkZ * CHUNK_SIZE;
 
-    logger.log(`[Rocks] Generating ${this.options.rockCountPerChunk} rocks for chunk ${chunkX},${chunkZ}`);
-
     for (let i = 0; i < this.options.rockCountPerChunk; i++) {
-      const localX = Math.random() * CHUNK_SIZE;
-      const localZ = Math.random() * CHUNK_SIZE;
-
-      const worldX = chunkWorldStartX + localX;
-      const worldZ = chunkWorldStartZ + localZ;
-
-      const p = new THREE.Vector3(
-        worldX,
-        0.0,
-        worldZ
-      );
-
-      const n = 0.5 + 0.5 * simplex2d(new THREE.Vector2(
-        p.x / this.options.scale,
-        p.z / this.options.scale
-      ));
-
-      if (n < this.options.patchiness && Math.random() + 0.7 > this.options.patchiness) { continue; }
-
-      const rockMesh = rockMeshes[Math.floor(Math.random() * rockMeshes.length)];
-      const rock = rockMesh.clone();
-      rock.position.copy(p);
-      rock.rotation.set(
-        0,
-        2 * Math.PI * Math.random(),
-        0
-      );
-
-      const scale = this.options.size.x + this.options.sizeVariation.x * Math.random();
-      rock.scale.set(scale, scale, scale);
-
-      rock.castShadow = true;
-      rock.receiveShadow = true;
-      rock.frustumCulled = true;
-
-      rocksGroup.add(rock);
+      const rock = this.createRockInstance(rockMeshes, chunkWorldStartX, chunkWorldStartZ);
+      if (rock) rocksGroup.add(rock);
     }
 
-    logger.log(`[Rocks] Generated ${rocksGroup.children.length} rocks for chunk ${chunkX},${chunkZ}`);
     return rocksGroup;
+  }
+
+  private handleMissingAssets(): void {
+    logger.warn("Rocks: No meshes loaded. Call fetchAssets() first.");
+    Rocks.fetchAssets().catch(error => logger.error("Rocks: Failed to fetch assets:", error));
+  }
+
+  private createRockInstance(meshes: THREE.Mesh[], worldStartX: number, worldStartZ: number): THREE.Mesh | null {
+    const worldX = worldStartX + Math.random() * CHUNK_SIZE;
+    const worldZ = worldStartZ + Math.random() * CHUNK_SIZE;
+    
+    const noise = 0.5 + 0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
+    if (noise < this.options.patchiness && Math.random() + 0.7 > this.options.patchiness) return null;
+
+    const rockMesh = meshes[Math.floor(Math.random() * meshes.length)];
+    if (!rockMesh) return null;
+
+    const rock = rockMesh.clone();
+    rock.position.set(worldX, 0, worldZ);
+    rock.rotation.set(0, 2 * Math.PI * Math.random(), 0);
+    const scale = this.options.size.x + this.options.sizeVariation.x * Math.random();
+    rock.scale.set(scale, scale, scale);
+    rock.castShadow = true;
+    rock.receiveShadow = true;
+    rock.frustumCulled = true;
+
+    return rock;
   }
 
   public generateRocksFromData(data: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] }): THREE.Group | null {
@@ -158,15 +107,16 @@ export class Rocks extends THREE.Group {
     const count = positions.length / 3;
 
     for (let i = 0; i < count; i++) {
-      const rockMesh = rockMeshes[Math.floor(Math.random() * rockMeshes.length)];
-      const rock = rockMesh.clone();
-
-      rock.position.fromArray(positions, i * 3);
-      rock.scale.fromArray(scales, i * 3);
-      rock.quaternion.fromArray(quaternions, i * 4);
-
-      rocksGroup.add(rock);
-    }
+       const rockMesh = rockMeshes[Math.floor(Math.random() * rockMeshes.length)];
+       if (!rockMesh) continue;
+       const rock = rockMesh.clone();
+ 
+       rock.position.fromArray(positions, i * 3);
+       rock.scale.fromArray(scales, i * 3);
+       rock.quaternion.fromArray(quaternions, i * 4);
+ 
+       rocksGroup.add(rock);
+     }
     return rocksGroup;
   }
 
@@ -184,6 +134,34 @@ export class Rocks extends THREE.Group {
         }
       }
     });
-    chunkGroup.clear(); // Remove all children from the group
+    chunkGroup.clear();
   }
+}
+
+async function loadRockModel(loader: GLTFLoader, path: string, name: string): Promise<THREE.Group> {
+  try {
+    const cached = await getModel(name);
+    if (cached) {
+      const gltf = await loader.parseAsync(cached, '');
+      return gltf.scene;
+    }
+    const response = await fetch(path);
+    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+    const buffer = await response.arrayBuffer();
+    await putModel(name, buffer);
+    const gltf = await loader.parseAsync(buffer, '');
+    return gltf.scene;
+  } catch (error) {
+    logger.error(`Error loading rock model ${name}:`, error);
+    const gltf = await loader.loadAsync(path);
+    return gltf.scene;
+  }
+}
+
+function findRockMesh(scene: THREE.Group): THREE.Mesh | null {
+  let mesh: THREE.Mesh | null = null;
+  scene.traverse((child) => {
+    if (child instanceof THREE.Mesh) mesh = child;
+  });
+  return mesh;
 }

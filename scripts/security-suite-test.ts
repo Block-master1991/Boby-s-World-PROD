@@ -3,13 +3,13 @@
  * Runs the main SecurityTestSuite to verify all security components
  */
 
-import { securityTestSuite } from '../src/lib/securityTest';
+import { securityTestSuite } from '../src/tests/utils/securityTest';
 
 async function runSecurityTests() {
     console.log('🧪 Starting Integrated Security Suite Tests...');
 
     try {
-        const results = await securityTestSuite.runAllTests();
+        await securityTestSuite.runAllTests();
         const report = securityTestSuite.getReport();
 
         console.log('\n📊 Security Test Report:');

@@ -1,5 +1,7 @@
 // User-confirmed Mainnet Boby Token Mint Address
 export const BOBY_TOKEN_MINT_ADDRESS = '9EbJs7KsoWqAoUPTtcYf1kVyvydQgoxcvcitSbcUpump';
+// Token decimals
+export const BOBY_TOKEN_DECIMALS = 6;
 // CoinGecko ID for Boby token
 export const BOBY_COINGECKO_ID = 'boby';
 // Mainnet USDT (Tether) Mint Address
@@ -32,7 +34,7 @@ export const FIREBASE_MESSAGING_SENDER_ID = process.env.NEXT_PUBLIC_FIREBASE_MES
 
 export const FIREBASE_APP_ID = process.env.NEXT_PUBLIC_FIREBASE_APP_ID;
 
-export const JUPITER_API_KEY = process.env.JUPITER_API_KEY;
+export const {JUPITER_API_KEY} = process.env;
 
 // World boundaries and enemy protection radius
 // Note: World bounds optimized for performance while maintaining infinite feel

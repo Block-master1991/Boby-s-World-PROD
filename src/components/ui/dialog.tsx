@@ -1,18 +1,14 @@
-
 "use client"
 
-import * as React from "react"
 import * as DialogPrimitive from "@radix-ui/react-dialog"
 import { X } from "lucide-react"
+import * as React from "react"
 
 import { cn } from "@/lib/utils"
 
 const Dialog = DialogPrimitive.Root
-
 const DialogTrigger = DialogPrimitive.Trigger
-
 const DialogPortal = DialogPrimitive.Portal
-
 const DialogClose = DialogPrimitive.Close
 
 const DialogOverlay = React.forwardRef<
@@ -30,48 +26,49 @@ const DialogOverlay = React.forwardRef<
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+const useDialogAria = (
+  children: React.ReactNode,
+  props: Record<string, unknown>
+) => {
+  const titleId = React.useId()
+  const descriptionId = React.useId()
+
+  let hasTitle = false
+  let hasDescription = false
+
+  React.Children.forEach(children, (child) => {
+    if (React.isValidElement(child)) {
+      const type = child.type as React.ComponentType
+      if (type.displayName === DialogTitle.displayName) hasTitle = true
+      if (type.displayName === DialogDescription.displayName) hasDescription = true
+    }
+  })
+
+  const ariaProps: { "aria-labelledby"?: string; "aria-describedby"?: string } = {}
+  
+  if (hasTitle || !props["aria-label"]) {
+    ariaProps["aria-labelledby"] = titleId
+  }
+
+  if (hasDescription || !props["aria-describedby"]) {
+    ariaProps["aria-describedby"] = descriptionId
+  }
+
+  return ariaProps
+}
+
+const DialogCloseButton = () => (
+  <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
+    <X className="h-4 w-4" />
+    <span className="sr-only">Close</span>
+  </DialogPrimitive.Close>
+)
+
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
 >(({ className, children, ...props }, ref) => {
-  const titleId = React.useId();
-  const descriptionId = React.useId();
-  
-  // Check if children already contain DialogTitle or DialogDescription
-  let hasTitle = false;
-  let hasDescription = false;
-  React.Children.forEach(children, child => {
-    if (React.isValidElement(child)) {
-          if ((child.type as React.ComponentType).displayName === DialogTitle.displayName) {
-            hasTitle = true;
-          }
-          if ((child.type as React.ComponentType).displayName === DialogDescription.displayName) {
-            hasDescription = true;
-          }
-
-          }
-  });
-
-  const ariaProps: { 'aria-labelledby'?: string; 'aria-describedby'?: string } = {};
-  if (hasTitle) {
-      ariaProps['aria-labelledby'] = titleId;
-  } else if (props['aria-label']) {
-    // If aria-label is provided, that's sufficient for labelling
-  } else {
-    // If no explicit label or title, and no DialogTitle, provide a default fallback
-      ariaProps['aria-labelledby'] = titleId; 
-  }
-
-  if (hasDescription) {
-    ariaProps['aria-describedby'] = descriptionId;
-  } else if (props['aria-describedby']) {
-    // If aria-describedby is already provided, use it
-  } else {
-    // No explicit description or DialogDescription,
-    // if there's no aria-describedby, this is where the warning might come from.
-  ariaProps['aria-describedby'] = descriptionId;
-  }
-
+  const ariaProps = useDialogAria(children, props)
 
   return (
     <DialogPortal>
@@ -85,16 +82,12 @@ const DialogContent = React.forwardRef<
         {...ariaProps}
         {...props}
       >
-        {/* {!hasTitle && !props['aria-label'] && <DialogTitle id={titleId} className="sr-only">Dialog</DialogTitle>} */}
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground">
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+        <DialogCloseButton />
       </DialogPrimitive.Content>
     </DialogPortal>
-  );
-});
+  )
+})
 DialogContent.displayName = DialogPrimitive.Content.displayName
 
 const DialogHeader = ({
@@ -153,14 +146,6 @@ const DialogDescription = React.forwardRef<
 DialogDescription.displayName = DialogPrimitive.Description.displayName
 
 export {
-  Dialog,
-  DialogPortal,
-  DialogOverlay,
-  DialogClose,
-  DialogTrigger,
-  DialogContent,
-  DialogHeader,
-  DialogFooter,
-  DialogTitle,
-  DialogDescription,
+  Dialog, DialogClose, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogOverlay, DialogPortal, DialogTitle, DialogTrigger
 }
+

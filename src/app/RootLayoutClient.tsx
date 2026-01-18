@@ -6,10 +6,15 @@ import { Toaster } from "@/components/ui/toaster";
 import WalletContextProvider from '@/components/wallet/WalletContextProvider';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AudioProvider, useAudio } from '@/contexts/AudioContext';
-import SoundManager from '@/components/game/SoundManager';
+import dynamic from 'next/dynamic';
 import { swrConfig } from '@/lib/swr-config';
 import { performanceMonitor } from '@/lib/advanced-service-worker';
 import { logger } from '@/utils/logger';
+
+// Dynamically import SoundManager to keep the initial bundle light
+const SoundManager = dynamic(() => import('@/components/game/SoundManager'), {
+  ssr: false,
+});
 
 function AudioInitializer() {
   const { soundManagerRef, isMuted, hasUserInteracted } = useAudio();

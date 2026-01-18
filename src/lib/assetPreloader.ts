@@ -1,39 +1,18 @@
 // Intelligent Asset Preloading System for Boby's World
 import { logger } from 'utils/logger';
-// Optimizes resource loading based on player position and movement patterns
-
-interface AssetMetadata {
-    id: string;
-    url: string;
-    type: 'model' | 'texture' | 'audio';
-    priority: number;
-    estimatedSize: number; // KB
-    dependencies?: string[];
-    chunkCoords?: { x: number; z: number };
-    lastAccessed: number;
-    preloadDistance: number; // How far ahead to preload
-}
-
-import { isMobileDevice } from './utils';
+import { INITIAL_ASSETS, generateEnvironmentAssets } from './asset/manifest';
+import type { AssetMetadata, PreloadZone } from './asset/types';
 import { getModel, putModel } from './indexedDB';
-
-interface PreloadZone {
-    centerX: number;
-    centerZ: number;
-    radius: number;
-    assets: string[];
-    priority: number;
-}
+import { isMobileDevice } from './utils';
 
 class IntelligentAssetPreloader {
     private assets = new Map<string, AssetMetadata>();
     private loadedAssets = new Set<string>();
     private preloadedAssets = new Set<string>();
-    private preloadZones = new Map<string, PreloadZone>();
-    private activePreloads = new Map<string, Promise<any>>();
+    private activePreloads = new Map<string, Promise<ArrayBuffer | null>>();
     private maxConcurrentLoads = isMobileDevice() ? 1 : 2;
-    private preloadDistance = 50; // units ahead of player
-    private cacheSize = isMobileDevice() ? 30 * 1024 * 1024 : 100 * 1024 * 1024; // 30MB mobile, 100MB desktop
+    private preloadDistance = 50; 
+    private cacheLimit = isMobileDevice() ? 30 * 1024 * 1024 : 100 * 1024 * 1024;
     private currentCacheSize = 0;
 
     constructor() {
@@ -42,385 +21,166 @@ class IntelligentAssetPreloader {
     }
 
     private initializeAssetManifest() {
-        // Register all game assets with their metadata
-        this.registerAsset({
-            id: 'dog-model',
-            url: '/models/dog.glb',
-            type: 'model',
-            priority: 10,
-            estimatedSize: 500,
-            preloadDistance: 0, // Always keep loaded
-        });
-
-        this.registerAsset({
-            id: 'coin-model',
-            url: '/models/coin.glb',
-            type: 'model',
-            priority: 8,
-            estimatedSize: 200,
-            preloadDistance: 30,
-        });
-
-        this.registerAsset({
-            id: 'rock1-model',
-            url: '/models/rock1.glb',
-            type: 'model',
-            priority: 7,
-            estimatedSize: 300,
-            preloadDistance: 0,
-        });
-
-        this.registerAsset({
-            id: 'rock2-model',
-            url: '/models/rock2.glb',
-            type: 'model',
-            priority: 7,
-            estimatedSize: 300,
-            preloadDistance: 0,
-        });
-
-        this.registerAsset({
-            id: 'rock3-model',
-            url: '/models/rock3.glb',
-            type: 'model',
-            priority: 7,
-            estimatedSize: 300,
-            preloadDistance: 0,
-        });
-
-        // Register environment assets for different chunks
-        for (let x = -10; x <= 10; x++) {
-            for (let z = -10; z <= 10; z++) {
-                const chunkId = `chunk_${x}_${z}`;
-                this.registerAsset({
-                    id: `grass_${x}_${z}`,
-                    url: `/models/grass.glb?chunk=${chunkId}`,
-                    type: 'model',
-                    priority: 3,
-                    estimatedSize: 150,
-                    chunkCoords: { x, z },
-                    preloadDistance: 40,
-                });
-            }
-        }
-
+        INITIAL_ASSETS.forEach(a => this.registerAsset(a));
+        generateEnvironmentAssets().forEach(a => this.registerAsset(a));
     }
 
     private registerAsset(metadata: Omit<AssetMetadata, 'lastAccessed'>) {
-        this.assets.set(metadata.id, {
-            ...metadata,
-            lastAccessed: Date.now(),
-        });
+        this.assets.set(metadata.id, { ...metadata, lastAccessed: Date.now() });
     }
 
-    // Main preloading method called from game loop
-    async preloadForPosition(playerX: number, playerZ: number, playerVelocity: { x: number; z: number }) {
-        const preloadZones = this.calculatePreloadZones(playerX, playerZ, playerVelocity);
-
-        // Prioritize assets based on zones
-        const prioritizedAssets = this.prioritizeAssets(preloadZones);
-
-        // Start preloading high-priority assets
-        await this.preloadAssets(prioritizedAssets.slice(0, this.maxConcurrentLoads));
-
-        // Clean up distant assets
+    async preloadForPosition(playerX: number, playerZ: number, velocity: { x: number; z: number }) {
+        const zones = this.calculatePreloadZones(playerX, playerZ, velocity);
+        const prioritized = this.prioritizeAssets(zones);
+        await this.preloadAssets(prioritized.slice(0, this.maxConcurrentLoads));
         this.cleanupDistantAssets(playerX, playerZ);
     }
 
-    private calculatePreloadZones(playerX: number, playerZ: number, velocity: { x: number; z: number }): PreloadZone[] {
-        const zones: PreloadZone[] = [];
-
-        // Current zone (immediate area)
-        zones.push({
-            centerX: playerX,
-            centerZ: playerZ,
-            radius: 20,
-            assets: [],
-            priority: 10,
-        });
-
-        // Forward zone (direction of movement)
-        const speed = Math.sqrt(velocity.x ** 2 + velocity.z ** 2);
+    private calculatePreloadZones(px: number, pz: number, v: { x: number; z: number }): PreloadZone[] {
+        const zones: PreloadZone[] = [{ centerX: px, centerZ: pz, radius: 20, assets: [], priority: 10 }];
+        const speed = Math.sqrt(v.x ** 2 + v.z ** 2);
         if (speed > 0.1) {
-            const forwardX = playerX + (velocity.x / speed) * this.preloadDistance;
-            const forwardZ = playerZ + (velocity.z / speed) * this.preloadDistance;
-            zones.push({
-                centerX: forwardX,
-                centerZ: forwardZ,
-                radius: 30,
-                assets: [],
-                priority: 8,
-            });
+            zones.push({ centerX: px + (v.x / speed) * this.preloadDistance, centerZ: pz + (v.z / speed) * this.preloadDistance, radius: 30, assets: [], priority: 8 });
         }
-
-        // Peripheral zones (sides)
-        zones.push({
-            centerX: playerX + 25,
-            centerZ: playerZ,
-            radius: 15,
-            assets: [],
-            priority: 5,
-        });
-
-        zones.push({
-            centerX: playerX - 25,
-            centerZ: playerZ,
-            radius: 15,
-            assets: [],
-            priority: 5,
-        });
-
-        zones.push({
-            centerX: playerX,
-            centerZ: playerZ + 25,
-            radius: 15,
-            assets: [],
-            priority: 5,
-        });
-
-        zones.push({
-            centerX: playerX,
-            centerZ: playerZ - 25,
-            radius: 15,
-            assets: [],
-            priority: 5,
-        });
-
+        this.addPeripheralZones(zones, px, pz);
         return zones;
     }
 
-    private prioritizeAssets(zones: PreloadZone[]): AssetMetadata[] {
-        const assetScores = new Map<string, number>();
+    private addPeripheralZones(zones: PreloadZone[], px: number, pz: number) {
+        const offsets = [[25, 0], [-25, 0], [0, 25], [0, -25]];
+        offsets.forEach((offset) => {
+            const dx = offset[0]!;
+            const dz = offset[1]!;
+            zones.push({ centerX: px + dx, centerZ: pz + dz, radius: 15, assets: [], priority: 5 });
+        });
+    }
 
+    private prioritizeAssets(zones: PreloadZone[]): AssetMetadata[] {
+        const scores = new Map<string, number>();
         for (const zone of zones) {
-            for (const [assetId, asset] of this.assets) {
+            for (const [id, asset] of this.assets) {
                 if (this.isAssetInZone(asset, zone)) {
-                    const distance = this.getDistanceToZone(asset, zone);
-                    const score = zone.priority * (1 / (1 + distance)) * (1 / asset.estimatedSize);
-                    assetScores.set(assetId, (assetScores.get(assetId) || 0) + score);
+                    const dist = this.getDistanceToZone(asset, zone);
+                    const score = zone.priority * (1 / (1 + dist)) * (1 / asset.estimatedSize);
+                    scores.set(id, (scores.get(id) || 0) + score);
                 }
             }
         }
-
-        return Array.from(assetScores.entries())
-            .filter(([assetId]) => !this.loadedAssets.has(assetId))
+        return Array.from(scores.entries())
+            .filter(([id]) => !this.loadedAssets.has(id))
             .sort(([, a], [, b]) => b - a)
-            .map(([assetId]) => this.assets.get(assetId)!);
+            .map(([id]) => this.assets.get(id)!);
     }
 
     private isAssetInZone(asset: AssetMetadata, zone: PreloadZone): boolean {
         if (!asset.chunkCoords) return asset.preloadDistance >= zone.radius;
-
-        const distance = Math.sqrt(
-            (asset.chunkCoords.x * 16 - zone.centerX) ** 2 +
-            (asset.chunkCoords.z * 16 - zone.centerZ) ** 2
-        );
-
-        return distance <= zone.radius + asset.preloadDistance;
+        const d = Math.sqrt((asset.chunkCoords.x * 16 - zone.centerX) ** 2 + (asset.chunkCoords.z * 16 - zone.centerZ) ** 2);
+        return d <= zone.radius + asset.preloadDistance;
     }
 
     private getDistanceToZone(asset: AssetMetadata, zone: PreloadZone): number {
         if (!asset.chunkCoords) return zone.radius;
-
-        return Math.sqrt(
-            (asset.chunkCoords.x * 16 - zone.centerX) ** 2 +
-            (asset.chunkCoords.z * 16 - zone.centerZ) ** 2
-        );
+        return Math.sqrt((asset.chunkCoords.x * 16 - zone.centerX) ** 2 + (asset.chunkCoords.z * 16 - zone.centerZ) ** 2);
     }
 
     private async preloadAssets(assets: AssetMetadata[]): Promise<void> {
-        const preloadPromises = assets.map(asset => this.preloadAsset(asset));
-        await Promise.allSettled(preloadPromises);
+        await Promise.allSettled(assets.map(a => this.preloadAsset(a)));
     }
 
     private async preloadAsset(asset: AssetMetadata): Promise<void> {
-        if (this.loadedAssets.has(asset.id) || this.activePreloads.has(asset.id)) {
-            return;
-        }
-
-        const preloadPromise = this.loadAsset(asset);
-        this.activePreloads.set(asset.id, preloadPromise);
-
+        if (this.loadedAssets.has(asset.id) || this.activePreloads.has(asset.id)) return;
+        const promise = this.loadAsset(asset);
+        this.activePreloads.set(asset.id, promise);
         try {
-            await preloadPromise;
+            await promise;
             this.loadedAssets.add(asset.id);
             this.preloadedAssets.add(asset.id);
             asset.lastAccessed = Date.now();
             logger.log(`[AssetPreloader] Preloaded ${asset.id} (${asset.estimatedSize}KB)`);
-        } catch (error) {
-            logger.warn(`[AssetPreloader] Failed to preload ${asset.id}:`, error);
+        } catch (e) {
+            logger.warn(`[AssetPreloader] Fail: ${asset.id}`, e);
         } finally {
             this.activePreloads.delete(asset.id);
         }
     }
 
-    private async loadAsset(asset: AssetMetadata): Promise<any> {
-        // OFFLINE-FIRST: Always check IndexedDB first
-        const cached = await this.getCachedAsset(asset.id);
-        if (cached) {
-            logger.log(`[AssetPreloader] ✓ Loading from IndexedDB (offline-first): ${asset.id}`);
-            return cached;
+    private async loadAsset(asset: AssetMetadata): Promise<ArrayBuffer | null> {
+        try {
+            const cached = await getModel(asset.id);
+            if (cached) {
+                logger.log(`[AssetPreloader] Loading ${asset.id} from IndexedDB`);
+                return cached;
+            }
+        } catch (error) {
+            logger.warn(`[AssetPreloader] Error loading ${asset.id} from IndexedDB:`, error);
         }
 
-        // EMERGENCY FALLBACK: Only in development mode
         if (process.env.NODE_ENV === 'development') {
-            logger.warn(`[AssetPreloader] ⚠️ Asset not found in IndexedDB, emergency network load: ${asset.id}`);
-
-            const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout
-
-            let data: ArrayBuffer;
-            try {
-                const response = await fetch(asset.url, { signal: controller.signal });
-                if (!response.ok) throw new Error(`Failed to load ${asset.url}`);
-
-                data = await response.arrayBuffer();
-
-                // Cache the asset for future use
-                await this.cacheAsset(asset.id, data, asset.estimatedSize);
-                logger.log(`[AssetPreloader] ✓ Emergency load successful and cached: ${asset.id}`);
-
-                return data;
-            } catch (networkError) {
-                logger.error(`[AssetPreloader] ✗ Emergency network load failed for: ${asset.id}`, networkError);
-                throw new Error(`Asset not available offline and network load failed: ${asset.id}`);
-            } finally {
-                clearTimeout(timeoutId);
-            }
+            return this.emergencyLoad(asset);
         }
-
-        // PRODUCTION: Asset must be preloaded, throw error if not found
-        throw new Error(`Asset not found in IndexedDB preload cache (offline-first mode): ${asset.id}`);
+        throw new Error(`Asset not found: ${asset.id}`);
     }
 
-    private async getCachedAsset(assetId: string): Promise<any | null> {
+    private async emergencyLoad(asset: AssetMetadata): Promise<ArrayBuffer> {
+        logger.warn(`[AssetPreloader] Emergency load: ${asset.id}`);
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 15000);
         try {
-            const cachedData = await getModel(assetId);
-            if (cachedData) {
-                logger.log(`[AssetPreloader] Loading ${assetId} from IndexedDB`);
-                return cachedData;
-            }
-        } catch (error) {
-            logger.warn(`[AssetPreloader] Error loading ${assetId} from IndexedDB:`, error);
-        }
-        return null;
-    }
-
-    private async cacheAsset(assetId: string, data: ArrayBuffer, sizeKB: number): Promise<void> {
-        try {
-            await putModel(assetId, data);
-            this.currentCacheSize += sizeKB * 1024;
-            logger.log(`[AssetPreloader] Cached ${assetId} (${sizeKB}KB) in IndexedDB`);
-        } catch (error) {
-            logger.warn(`[AssetPreloader] Error caching ${assetId} in IndexedDB:`, error);
-            // Still count it in memory usage even if caching failed
-            this.currentCacheSize += sizeKB * 1024;
+            const resp = await fetch(asset.url, { signal: ctrl.signal });
+            if (!resp.ok) throw new Error("Fetch failed");
+            const data = await resp.arrayBuffer();
+            await putModel(asset.id, data);
+            this.currentCacheSize += asset.estimatedSize * 1024;
+            return data;
+        } finally {
+            clearTimeout(tid);
         }
     }
 
-    private cleanupDistantAssets(playerX: number, playerZ: number): void {
-        const maxDistance = 100; // units
-        const assetsToUnload: string[] = [];
-
-        for (const [assetId, asset] of this.assets) {
+    private cleanupDistantAssets(px: number, pz: number): void {
+        const toUnload: string[] = [];
+        for (const [id, asset] of this.assets) {
             if (!asset.chunkCoords) continue;
-
-            const distance = Math.sqrt(
-                (asset.chunkCoords.x * 16 - playerX) ** 2 +
-                (asset.chunkCoords.z * 16 - playerZ) ** 2
-            );
-
-            if (distance > maxDistance && this.loadedAssets.has(assetId)) {
-                assetsToUnload.push(assetId);
-            }
+            const d = Math.sqrt((asset.chunkCoords.x * 16 - px) ** 2 + (asset.chunkCoords.z * 16 - pz) ** 2);
+            if (d > 100 && this.loadedAssets.has(id)) toUnload.push(id);
         }
-
-        // Unload distant assets
-        for (const assetId of assetsToUnload) {
-            this.unloadAsset(assetId);
-        }
+        toUnload.forEach(id => this.unloadAsset(id));
     }
 
-    private unloadAsset(assetId: string): void {
-        this.loadedAssets.delete(assetId);
-        this.preloadedAssets.delete(assetId);
-
-        // Get asset metadata to update cache size
-        const asset = this.assets.get(assetId);
-        if (asset) {
-            this.currentCacheSize -= asset.estimatedSize * 1024;
-        }
-
-        // Note: We don't remove from IndexedDB here as it serves as long-term cache
-        // Only remove from memory tracking
-        logger.log(`[AssetPreloader] Unloaded distant asset: ${assetId}`);
+    private unloadAsset(id: string): void {
+        this.loadedAssets.delete(id);
+        this.preloadedAssets.delete(id);
+        const asset = this.assets.get(id);
+        if (asset) this.currentCacheSize -= asset.estimatedSize * 1024;
     }
 
     private startBackgroundMaintenance(): void {
-        // Periodic cleanup of old cached assets
-        setInterval(() => {
-            this.performMaintenance();
-        }, 30000); // Every 30 seconds
+        setInterval(() => this.performMaintenance(), 30000);
     }
 
     private performMaintenance(): void {
         const now = Date.now();
-        const maxAge = 5 * 60 * 1000; // 5 minutes
-
-        // Clean up old preloaded assets that haven't been accessed
-        for (const assetId of this.preloadedAssets) {
-            const asset = this.assets.get(assetId);
-            if (asset && (now - asset.lastAccessed) > maxAge) {
-                this.unloadAsset(assetId);
-            }
+        for (const id of this.preloadedAssets) {
+            const a = this.assets.get(id);
+            if (a && (now - a.lastAccessed) > 300000) this.unloadAsset(id);
         }
-
-        // Enforce cache size limits
-        if (this.currentCacheSize > this.cacheSize) {
-            this.evictOldAssets();
-        }
+        if (this.currentCacheSize > this.cacheLimit) this.evictOldAssets();
     }
 
     private evictOldAssets(): void {
-        // Implement LRU eviction
-        const assetsByAge = Array.from(this.loadedAssets)
-            .map(assetId => ({ id: assetId, asset: this.assets.get(assetId)! }))
-            .sort((a, b) => a.asset.lastAccessed - b.asset.lastAccessed);
-
-        let freedSpace = 0;
-        const targetSize = this.cacheSize * 0.8; // Target 80% of max size
-
-        for (const { id, asset } of assetsByAge) {
-            if (this.currentCacheSize - freedSpace <= targetSize) break;
+        const sorted = Array.from(this.loadedAssets).map(id => ({ id, a: this.assets.get(id)! })).sort((a, b) => a.a.lastAccessed - b.a.lastAccessed);
+        let freed = 0;
+        const target = this.cacheLimit * 0.8;
+        for (const { id, a } of sorted) {
+            if (this.currentCacheSize - freed <= target) break;
             this.unloadAsset(id);
-            freedSpace += asset.estimatedSize * 1024;
+            freed += a.estimatedSize * 1024;
         }
-
-        logger.log(`[AssetPreloader] Evicted ${(freedSpace / 1024 / 1024).toFixed(1)}MB of old assets`);
     }
 
-    // Public API
-    getLoadedAssets(): string[] {
-        return Array.from(this.loadedAssets);
-    }
-
-    getPreloadedAssets(): string[] {
-        return Array.from(this.preloadedAssets);
-    }
-
-    isAssetLoaded(assetId: string): boolean {
-        return this.loadedAssets.has(assetId);
-    }
-
-    getCacheStats() {
-        return {
-            loadedCount: this.loadedAssets.size,
-            preloadedCount: this.preloadedAssets.size,
-            cacheSizeMB: (this.currentCacheSize / 1024 / 1024).toFixed(2),
-            activePreloads: this.activePreloads.size,
-        };
+    public getCacheStats() {
+        return { loadedCount: this.loadedAssets.size, cacheSizeMB: (this.currentCacheSize / (1024 * 1024)).toFixed(2) };
     }
 }
 
-// Singleton instance
 export const assetPreloader = new IntelligentAssetPreloader();

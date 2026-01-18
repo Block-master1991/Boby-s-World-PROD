@@ -1,8 +1,12 @@
 
+import { RECAPTCHA_SECRET_KEY } from '@/lib/server-constants';
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
-import { RECAPTCHA_SECRET_KEY } from '@/lib/server-constants';
 import { logger } from 'utils/logger';
+
+// Edge Runtime for optimal global performance
+// The "disables static generation" warning is expected - API routes are dynamic by nature
+export const runtime = 'edge';
 
 export async function POST(request: NextRequest) {
   logger.log('[CAPTCHA VERIFY] Received CAPTCHA verification request');
@@ -42,12 +46,11 @@ export async function POST(request: NextRequest) {
 
     if (data.success) {
       // Add score checking for v3 if needed, or other business logic
-      // e.g., if (data.score < 0.5) { return NextResponse.json({ success: false, error: 'Low CAPTCHA score' }); }
       return NextResponse.json({ success: true });
-    } else {
-      logger.error('reCAPTCHA verification failed:', data['error-codes']);
-      return NextResponse.json({ success: false, error: 'CAPTCHA verification failed', details: data['error-codes'] }, { status: 400 });
     }
+
+    logger.error('reCAPTCHA verification failed:', data['error-codes']);
+    return NextResponse.json({ success: false, error: 'CAPTCHA verification failed', details: data['error-codes'] }, { status: 400 });
 
   } catch (error) {
     logger.error('Error in CAPTCHA verification API:', error);

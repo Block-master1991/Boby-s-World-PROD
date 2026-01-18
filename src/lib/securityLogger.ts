@@ -3,8 +3,8 @@
  * Unifies security logs and sends alerts to external systems
  */
 
-import { sendSlackAlert } from './slack-alert';
 import { logger } from 'utils/logger';
+import { sendSlackAlert, type SlackAlertOptions } from './slack-alert';
 
 export enum SecurityEventLevel {
     INFO = 'info',
@@ -20,7 +20,7 @@ export interface SecurityEvent {
     userId?: string;
     ip?: string;
     endpoint?: string;
-    evidence?: any;
+    evidence?: unknown;
     timestamp: number;
 }
 
@@ -50,8 +50,8 @@ export class SecurityLogger {
 
         // 2. Send Slack alert for critical events
         if (fullEvent.level === SecurityEventLevel.CRITICAL || fullEvent.level === SecurityEventLevel.ERROR) {
-            await sendSlackAlert(fullEvent.message, {
-                level: fullEvent.level as any,
+            const alertOptions: SlackAlertOptions = {
+                level: fullEvent.level,
                 title: `Security Event: ${fullEvent.type}`,
                 metadata: {
                     Type: fullEvent.type,
@@ -61,7 +61,9 @@ export class SecurityLogger {
                     Endpoint: fullEvent.endpoint || 'N/A',
                     Evidence: fullEvent.evidence ? JSON.stringify(fullEvent.evidence) : 'None'
                 }
-            });
+            };
+            
+            await sendSlackAlert(fullEvent.message, alertOptions);
         }
 
         // 3. Simulate sending to Sentry/Datadog
