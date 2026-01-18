@@ -27,6 +27,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-kms": "^3.965.0",
+    "@graphql-tools/schema": "^10.0.31",
     "@radix-ui/react-accordion": "^1.2.12",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-avatar": "^1.1.11",
@@ -63,7 +64,6 @@
     "firebase": "^12.7.0",
     "firebase-admin": "^13.6.0",
     "graphql": "^16.12.0",
-    "@graphql-tools/schema": "^10.0.31",
     "graphql-middleware": "^6.1.35",
     "graphql-scalars": "^1.25.0",
     "graphql-shield": "^7.6.5",
@@ -123,7 +123,7 @@
     "raw-loader": "^4.0.2",
     "tailwindcss": "^4.1.18",
     "ts-jest": "^29.4.6",
-    "ts-node": "^10.9.2",
+    "ts-node": "^1.7.1",
     "typescript": "^5.9.3",
     "webpack-bundle-analyzer": "^5.1.1",
     "zod": "^4.3.5"
