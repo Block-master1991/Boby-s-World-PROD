@@ -63,8 +63,56 @@ const envSchema = z.object({
 });
 
 // Parse and validate process.env
-// In the browser, process.env is usually injected by Next.js at build time
-const _env = envSchema.safeParse(process.env);
+// IMPORTANT: Next.js requires NEXT_PUBLIC_ vars to be referenced as literal strings
+// for client-side bundling. Dynamic access to process.env doesn't work on the client.
+const clientEnvValues = {
+  // Server-side (will be undefined on client, which is fine - they're optional)
+  NODE_ENV: process.env.NODE_ENV,
+  RECAPTCHA_SECRET_KEY: process.env['RECAPTCHA_SECRET_KEY'],
+  DEDICATED_RPC_ENDPOINT: process.env['DEDICATED_RPC_ENDPOINT'],
+  FIREBASE_CLIENT_EMAIL: process.env['FIREBASE_CLIENT_EMAIL'],
+  FIREBASE_PRIVATE_KEY: process.env['FIREBASE_PRIVATE_KEY'],
+  JWT_ACCESS_SECRET: process.env['JWT_ACCESS_SECRET'],
+  JWT_REFRESH_SECRET: process.env['JWT_REFRESH_SECRET'],
+  REDIS_URL: process.env['REDIS_URL'],
+  SLACK_WEBHOOK_URL: process.env['SLACK_WEBHOOK_URL'],
+  MASTER_ENCRYPTION_KEY: process.env['MASTER_ENCRYPTION_KEY'],
+  RESEND_API_KEY: process.env['RESEND_API_KEY'],
+  FROM_EMAIL: process.env['FROM_EMAIL'],
+  JUPITER_API_KEY: process.env['JUPITER_API_KEY'],
+  CLOUDFLARE_ZONE_ID: process.env['CLOUDFLARE_ZONE_ID'],
+  CLOUDFLARE_API_TOKEN: process.env['CLOUDFLARE_API_TOKEN'],
+  AWS_CLOUDFRONT_DISTRIBUTION_ID: process.env['AWS_CLOUDFRONT_DISTRIBUTION_ID'],
+  AWS_ACCESS_KEY_ID: process.env['AWS_ACCESS_KEY_ID'],
+  AWS_SECRET_ACCESS_KEY: process.env['AWS_SECRET_ACCESS_KEY'],
+  LOG_LEVEL: process.env['LOG_LEVEL'],
+  LOG_ENCRYPTION_ENABLED: process.env['LOG_ENCRYPTION_ENABLED'],
+  LOG_ENCRYPTION_KEY: process.env['LOG_ENCRYPTION_KEY'],
+  LOG_TAMPER_DETECTION: process.env['LOG_TAMPER_DETECTION'],
+  LOG_SIGNING_SECRET: process.env['LOG_SIGNING_SECRET'],
+  CRON_SECRET: process.env['CRON_SECRET'],
+  ADMIN_TOKEN: process.env['ADMIN_TOKEN'],
+  ALLOWED_ADMIN_IPS: process.env['ALLOWED_ADMIN_IPS'],
+  REDIS_CLUSTER_MODE: process.env['REDIS_CLUSTER_MODE'],
+  
+  // Client-side (MUST be literal strings for Next.js to bundle them)
+  NEXT_PUBLIC_SOLANA_RPC_URL: process.env['NEXT_PUBLIC_SOLANA_RPC_URL'],
+  NEXT_PUBLIC_RECAPTCHA_SITE_KEY: process.env['NEXT_PUBLIC_RECAPTCHA_SITE_KEY'],
+  NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS: process.env['NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS'],
+  NEXT_PUBLIC_ADMIN_WALLET_ADDRESS: process.env['NEXT_PUBLIC_ADMIN_WALLET_ADDRESS'],
+  NEXT_PUBLIC_FIREBASE_API_KEY: process.env['NEXT_PUBLIC_FIREBASE_API_KEY'],
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env['NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN'],
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env['NEXT_PUBLIC_FIREBASE_PROJECT_ID'],
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env['NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET'],
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env['NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'],
+  NEXT_PUBLIC_FIREBASE_APP_ID: process.env['NEXT_PUBLIC_FIREBASE_APP_ID'],
+  NEXT_PUBLIC_CDN_BASE_URL: process.env['NEXT_PUBLIC_CDN_BASE_URL'],
+  NEXT_PUBLIC_APP_URL: process.env['NEXT_PUBLIC_APP_URL'],
+  NEXT_PUBLIC_VERCEL_ENV: process.env['NEXT_PUBLIC_VERCEL_ENV'],
+  NEXT_PUBLIC_VERCEL_URL: process.env['NEXT_PUBLIC_VERCEL_URL'],
+};
+
+const _env = envSchema.safeParse(clientEnvValues);
 
 if (!_env.success) {
   // eslint-disable-next-line no-console
@@ -75,7 +123,7 @@ if (!_env.success) {
   }
 }
 
-export const env = _env.success ? _env.data : (process.env as unknown as z.infer<typeof envSchema>);
+export const env = _env.success ? _env.data : (clientEnvValues as unknown as z.infer<typeof envSchema>);
 
 /**
  * Smart environment detection
