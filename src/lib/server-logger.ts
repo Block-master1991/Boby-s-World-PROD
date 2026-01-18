@@ -5,9 +5,10 @@
 
 import pino from 'pino';
 import pinoHttp from 'pino-http';
+import { isProd } from './config/env';
 
 // Determine environment
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = isProd;
 
 // Server logger configuration
 const loggerConfig: Record<string, unknown> = {

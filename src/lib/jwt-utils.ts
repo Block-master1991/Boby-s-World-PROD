@@ -1,7 +1,7 @@
-
 import { logger } from '@/utils/logger';
 import { createHash, randomBytes } from 'crypto';
 import jwt from 'jsonwebtoken';
+import { isProd } from './config/env';
 import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from './server-constants';
 import { TokenBlacklistManager } from './token-blacklist';
 
@@ -260,9 +260,8 @@ export class JWTManager {
   }
   // maxAge is expected in seconds for cookie
   static createSecureCookieOptions(maxAgeSeconds: number, requestHost?: string) {
-    const isProduction = process.env.NODE_ENV === 'production';
-    let secureCookie = isProduction;
-    let sameSiteValue: 'none' | 'lax' | 'strict' = isProduction ? 'none' : 'lax';
+    let secureCookie = isProd;
+    let sameSiteValue: 'none' | 'lax' | 'strict' = isProd ? 'none' : 'lax';
     let cookieDomain: string | undefined = undefined;
 
     if (requestHost) {
@@ -271,11 +270,11 @@ export class JWTManager {
       // For ngrok or other cross-origin development, we need SameSite=None and Secure=true
       // if the request is coming from an HTTPS origin.
       // We assume if requestHost is provided, it's the public-facing domain.
-      if (!isProduction && hostWithoutPort.includes('ngrok')) { // Specific check for ngrok in dev
+      if (hostWithoutPort.includes('ngrok')) { // Specific check for ngrok in dev
         secureCookie = true;
         sameSiteValue = 'none';
         cookieDomain = hostWithoutPort; // Set domain for cross-origin cookies
-      } else if (isProduction) {
+      } else if (isProd) {
         cookieDomain = hostWithoutPort; // In production, set domain to host
       }
     }
@@ -292,7 +291,7 @@ export class JWTManager {
       options.domain = cookieDomain;
     }
 
-    logger.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProduction: ${isProduction}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path}, Domain=${options.domain || 'N/A'} (NODE_ENV: ${process.env.NODE_ENV}, RequestHost: ${requestHost || 'N/A'})`);
+    logger.log(`[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProd: ${isProd}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path}, Domain=${options.domain || 'N/A'} (RequestHost: ${requestHost || 'N/A'})`);
     return options;
   }
 }

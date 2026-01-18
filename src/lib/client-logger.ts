@@ -110,9 +110,10 @@ export const interactionLogger = {
     /**
      * Log user interactions (without sensitive data)
      */
-    logInteraction(action: string, element?: string, metadata?: LogMetadata) {
+    async logInteraction(action: string, element?: string, metadata?: LogMetadata) {
         // Only log in development or for specific actions
-        if (process.env.NODE_ENV === 'development' || action.includes('error') || action.includes('fail')) {
+        const { isDev } = await import('@/lib/config/env');
+        if (isDev || action.includes('error') || action.includes('fail')) {
             clientLogger.debug({
                 interaction: { action, element },
                 ...metadata

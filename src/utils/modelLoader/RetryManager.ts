@@ -1,3 +1,4 @@
+import { isDev } from '@/lib/config/env';
 import type * as THREE from 'three';
 import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
@@ -57,7 +58,7 @@ export class RetryManager {
     
     if (arrayBuffer) {
       logger.log(`[RetryManager] ✓ Loading model from IndexedDB (offline-first): ${path}`);
-    } else if (process.env.NODE_ENV === 'development') {
+    } else if (isDev) {
       arrayBuffer = await this.emergencyNetworkLoad(path);
     }
 

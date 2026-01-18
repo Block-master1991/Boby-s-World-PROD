@@ -3,6 +3,7 @@
  * Professional audit logging with encryption, tamper detection, and compliance features
  */
 
+import { getAppEnv, isProd } from '../../config/env';
 import { professionalLogger } from '../index';
 import { rateLimitMiddleware } from '../middleware/RateLimitMiddleware';
 import { LogEncryption } from '../security/LogEncryption';
@@ -17,8 +18,8 @@ import type {
 } from '../types/AuditTypes';
 
 const DEFAULT_CONFIG: AuditLoggerConfig = {
-    enableEncryption: process.env.NODE_ENV === 'production',
-    enableTamperDetection: process.env.NODE_ENV === 'production',
+    enableEncryption: isProd,
+    enableTamperDetection: isProd,
     enableRateLimiting: true,
     storage: 'memory',
     retention: {
@@ -123,7 +124,7 @@ export class EnhancedAuditLogger {
             message: params.message,
             metadata: { ...params.metadata },
             timestamp: Date.now(),
-            environment: process.env.NODE_ENV || 'development',
+            environment: getAppEnv(),
             complianceLevel: params.complianceLevel
         };
     }

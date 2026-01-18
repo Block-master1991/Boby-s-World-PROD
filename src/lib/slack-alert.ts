@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { logger } from 'utils/logger';
+import { getAppEnv, isDev } from './config/env';
 
 export interface SlackAlertOptions {
   level?: 'info' | 'warn' | 'error' | 'critical';
@@ -26,12 +27,16 @@ const alertCache = new Map<string, number>();
 const RATE_LIMIT_WINDOW = 60 * 1000;
 
 export async function sendSlackAlert(message: string, options: SlackAlertOptions = {}): Promise<boolean> {
+  if (isDev) {
+    const { level = 'info' } = options;
+    logger.log(`[SlackAlert Simulator] ${level.toUpperCase()}: ${message}`);
+    return true;
+  }
+
   const webhookUrl = process.env.SLACK_WEBHOOK_URL;
   
   if (!webhookUrl) {
-    if (process.env.NODE_ENV === 'development') {
-      logger.warn('[SlackAlert] SLACK_WEBHOOK_URL is not set. Skipping alert.');
-    }
+    logger.warn('[SlackAlert] SLACK_WEBHOOK_URL is not set. Skipping alert.');
     return false;
   }
 
@@ -111,7 +116,7 @@ function buildAlertPayload(
     elements: [
       {
         type: 'mrkdwn',
-        text: `📍 *Env:* ${process.env.NODE_ENV || 'prod'} | 🕒 *Time:* ${new Date().toISOString()}`
+        text: `📍 *Env:* ${getAppEnv()} | 🕒 *Time:* ${new Date().toISOString()}`
       }
     ]
   });

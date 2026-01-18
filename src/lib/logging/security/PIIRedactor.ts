@@ -1,3 +1,4 @@
+import { isProd } from '../../config/env';
 /**
  * PII (Personally Identifiable Information) Redactor
  * Automatically detects and redacts sensitive personal data
@@ -266,7 +267,7 @@ export class PIIRedactor {
  * Default instance
  */
 export const defaultPIIRedactor = new PIIRedactor({
-    enabled: process.env.NODE_ENV === 'production',
+    enabled: isProd,
     strictMode: true
 });
 

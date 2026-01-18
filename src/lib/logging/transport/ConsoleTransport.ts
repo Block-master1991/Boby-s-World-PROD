@@ -1,3 +1,4 @@
+import { isProd } from '../../config/env';
 /**
  * Console Transport - Enhanced Console Logging
  * Pretty-printed logs for development, JSON for production
@@ -15,8 +16,8 @@ export interface ConsoleTransportConfig {
 const DEFAULT_CONFIG: ConsoleTransportConfig = {
     enabled: true,
     level: 'info',
-    pretty: process.env.NODE_ENV !== 'production',
-    colors: process.env.NODE_ENV !== 'production',
+    pretty: !isProd,
+    colors: !isProd,
     timestamps: true,
     includeMetadata: true
 };
@@ -216,8 +217,7 @@ export class ConsoleTransport {
      * Colorize text
      */
     private colorize(color: string, text: string): string {
-        const isProduction = process.env['NODE_ENV'] === 'production';
-        if (!this.config.colors || isProduction) {
+        if (!this.config.colors || isProd) {
             return text;
         }
 
@@ -273,8 +273,8 @@ export class ConsoleTransport {
 export const consoleTransport = new ConsoleTransport({
     enabled: true,
     level: (process.env['LOG_LEVEL'] as 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal') || 'info',
-    pretty: process.env['NODE_ENV'] !== 'production',
-    colors: process.env['NODE_ENV'] !== 'production',
+    pretty: !isProd,
+    colors: !isProd,
     timestamps: true,
     includeMetadata: true
 });

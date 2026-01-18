@@ -21,7 +21,8 @@ export class MarketService {
     }
 
     try {
-      const baseUrl = requestHost ? `http://${requestHost}` : 'http://localhost:3000';
+      const { getAppOrigin } = await import('@/lib/config/env');
+      const baseUrl = getAppOrigin(requestHost);
       const response = await fetch(`${baseUrl}/api/boby-price-jup`, { method: 'GET' });
       
       if (!response.ok) throw new Error('Jupiter API failure');

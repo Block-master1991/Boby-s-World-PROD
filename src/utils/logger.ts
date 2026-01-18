@@ -7,11 +7,12 @@
  */
 
 import pino from 'pino';
+import { isProd } from '../lib/config/env';
 import { professionalLogger, type LogContext } from '../lib/logging';
 
 // Determine if we're in browser or Node.js environment
 const isBrowser = typeof window !== 'undefined';
-const isProduction = process.env.NODE_ENV === 'production';
+const isProduction = isProd;
 
 // Create Pino logger configuration (kept for compatibility)
 const loggerConfig = {

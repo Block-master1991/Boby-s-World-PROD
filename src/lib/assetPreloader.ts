@@ -1,7 +1,8 @@
 // Intelligent Asset Preloading System for Boby's World
-import { logger } from 'utils/logger';
+import { logger } from '../utils/logger';
 import { INITIAL_ASSETS, generateEnvironmentAssets } from './asset/manifest';
 import type { AssetMetadata, PreloadZone } from './asset/types';
+import { isDev } from './config/env';
 import { getModel, putModel } from './indexedDB';
 import { isMobileDevice } from './utils';
 
@@ -115,7 +116,7 @@ class IntelligentAssetPreloader {
             logger.warn(`[AssetPreloader] Error loading ${asset.id} from IndexedDB:`, error);
         }
 
-        if (process.env.NODE_ENV === 'development') {
+        if (isDev) {
             return this.emergencyLoad(asset);
         }
         throw new Error(`Asset not found: ${asset.id}`);

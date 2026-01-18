@@ -4,6 +4,7 @@
  * GET /api/security-test?component=keyvault - Test specific component
  */
 
+import { isDev } from '@/lib/config/env';
 import { SecurityScheduler } from '@/lib/security-scheduler';
 import { securityTestSuite } from '@/tests/utils/securityTest';
 import { type NextRequest, NextResponse } from 'next/server';
@@ -13,7 +14,7 @@ import { logger } from 'utils/logger';
 
 function checkAuthorization(request: NextRequest): boolean {
     return (
-        process.env.NODE_ENV === 'development' ||
+        isDev ||
         request.headers.get('x-admin-token') === process.env['ADMIN_TOKEN']
     );
 }

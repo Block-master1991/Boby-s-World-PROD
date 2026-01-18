@@ -3,6 +3,7 @@
  * Buffers logs in memory and flushes in batches for improved performance
  */
 
+import { isProd } from '../../config/env';
 import { professionalLogger } from '../index';
 
 export interface BufferingConfig {
@@ -248,7 +249,7 @@ export class BufferingMiddleware {
 }
 
 export const bufferingMiddleware = new BufferingMiddleware({
-    enabled: process.env.NODE_ENV === 'production',
+    enabled: isProd,
     maxSize: 100,
     flushInterval: 5000,
     flushOnCritical: true,

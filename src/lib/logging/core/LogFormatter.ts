@@ -1,8 +1,4 @@
-/**
- * Log Formatter
- * Formats log entries for different outputs
- */
-
+import { isProd } from '../../config/env';
 import type { LogContext } from './LogContext';
 import type { LogLevel } from './LogLevel';
 
@@ -243,8 +239,7 @@ export class LogFormatter {
      * Apply color to text
      */
     private colorize(color: string, text: string): string {
-        const isProduction = process.env.NODE_ENV === 'production';
-        if (!this.config.colors || isProduction) {
+        if (!this.config.colors || isProd) {
             return text;
         }
 
@@ -278,7 +273,7 @@ export const developmentFormatter = new LogFormatter({
  * Get appropriate formatter based on environment
  */
 export function getFormatter(): LogFormatter {
-    return process.env.NODE_ENV === 'production'
+    return isProd
         ? productionFormatter
         : developmentFormatter;
 }

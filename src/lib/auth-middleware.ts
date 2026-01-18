@@ -4,6 +4,7 @@ import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
 import { auditLogger } from './audit-logger';
+import { isDev } from './config/env';
 import { JWTManager, type JWTPayload } from './jwt-utils'; // Ensure type is imported if not already
 import { securityIntegration } from './securityIntegration';
 
@@ -140,7 +141,6 @@ async function handleTokenAuth(request: NextRequest, metadata: AuthMetadata): Pr
   const payload = accessToken ? await JWTManager.verifyAccessToken(accessToken, userAgent, ip) : null;
   if (payload) {
     const storedNonce = request.cookies.get("nonce")?.value;
-    const isDev = process.env.NODE_ENV === "development" || ["localhost", "127.0.0.1"].some(h => request.headers.get("host")?.startsWith(h));
     if (!storedNonce || payload.nonce !== storedNonce) {
       if (!isDev) {
         logger.warn(`[AuthMiddleware] Nonce mismatch for ${payload.sub}. Revoking session.`);
@@ -183,8 +183,6 @@ async function validateSecureSession(request: NextRequest, payload: JWTPayload, 
   const isHighFreq = ["/api/game/addCoin", "/api/graphql"].some(path => request.nextUrl.pathname.startsWith(path));
   if (isHighFreq) return { nextSeed: undefined };
 
-  const host = request.headers.get("host") || "";
-  const isDev = process.env.NODE_ENV === "development" || host.startsWith("localhost") || host.startsWith("127.0.0.1");
   const providedSeed = request.cookies.get("session_seed")?.value;
 
   if (!providedSeed) {

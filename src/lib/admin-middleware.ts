@@ -1,3 +1,4 @@
+import { isDev } from '@/lib/config/env';
 import { NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
 import { auditLogger } from './audit-logger';
@@ -42,9 +43,8 @@ async function verifyIpAllowlist(ip: string, publicKey: string): Promise<NextRes
 
 async function handleAdminSession(request: AuthenticatedRequest, publicKey: string): Promise<NextResponse | { securityLevel: string }> {
     const secureSessionId = request.cookies.get("secure_session")?.value;
-    const isDev = process.env.NODE_ENV === "development";
     const host = request.headers.get("host") || "";
-    const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1");
+    const isLocal = host.startsWith("localhost") || host.startsWith("127.0.0.1") || isDev;
 
     if (!secureSessionId) {
         if (isDev || isLocal) {

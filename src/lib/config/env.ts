@@ -42,6 +42,7 @@ const envSchema = z.object({
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().optional(),
   NEXT_PUBLIC_FIREBASE_APP_ID: z.string().optional(),
   NEXT_PUBLIC_CDN_BASE_URL: z.string().url().default('https://cdn.bobyworld.com'),
+  NEXT_PUBLIC_APP_URL: z.string().url().optional(),
 });
 
 // Parse and validate process.env
@@ -78,6 +79,38 @@ export const getAppEnv = (): AppEnv => {
 export const isDev = getAppEnv() === 'development';
 export const isProd = getAppEnv() === 'production';
 export const isStaging = getAppEnv() === 'staging';
+
+/**
+ * Smart origin detection
+ * Works on both client and server side
+ */
+export const getAppOrigin = (requestHost?: string): string => {
+  if (typeof window !== 'undefined') {
+    return window.location.origin;
+  }
+
+  if (requestHost) {
+    const host = requestHost.split(':')[0] || requestHost;
+    const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+    return `${protocol}://${requestHost}`;
+  }
+
+  // Fallback to environment variable or standard default
+  return env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+};
+
+/**
+ * Smart domain detection (strips protocol and port)
+ */
+export const getAppDomain = (requestHost?: string): string => {
+  const origin = getAppOrigin(requestHost);
+  try {
+    const url = new URL(origin);
+    return url.hostname;
+  } catch {
+    return 'localhost';
+  }
+};
 
 /**
  * Unified CDN Configuration

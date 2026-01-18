@@ -1,4 +1,5 @@
 import { logger } from 'utils/logger';
+import { isDev } from './config/env';
 import { MANIFEST_STATS } from './gameAssetManifest';
 import type { DataType } from './indexedDB';
 import type { PreloadProgress } from './preloadTypes';
@@ -48,7 +49,7 @@ export async function fetchAsset(
     const res = await fetch(path, {
         signal,
         headers: {
-            ...(process.env.NODE_ENV === 'development' ? { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } : {}),
+            ...(isDev ? { 'Cache-Control': 'no-cache', 'Pragma': 'no-cache' } : {}),
             ...(skipSW ? { 'Service-Worker': 'script' } : {})
         },
         cache: skipSW ? 'no-cache' : 'default'

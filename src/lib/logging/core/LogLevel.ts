@@ -1,3 +1,4 @@
+import { isProd } from '../../config/env';
 /**
  * Log Levels with Priority System
  * Higher number = higher priority
@@ -80,5 +81,5 @@ export function getLogLevelFromEnv(): LogLevel {
     }
 
     // Default: info in production, debug in development
-    return process.env.NODE_ENV === 'production' ? LogLevel.INFO : LogLevel.DEBUG;
+    return isProd ? LogLevel.INFO : LogLevel.DEBUG;
 }

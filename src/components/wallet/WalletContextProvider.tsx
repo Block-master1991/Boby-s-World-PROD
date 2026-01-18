@@ -9,6 +9,7 @@ import type { FC, ReactNode } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 // Removed static import of WalletConnectWalletAdapter for bundle optimization
 import { useIsMobile } from '@/hooks/use-mobile';
+import { getAppOrigin } from '@/lib/config/env';
 import { SOL_NETWORK } from '@/lib/constants';
 import { logger } from '@/utils/logger';
 
@@ -27,7 +28,7 @@ const WalletContextProvider: FC<WalletContextProps> = ({ children }) => {
             if (!isMobile) return setWallets([]);
             try {
                 const { WalletConnectWalletAdapter } = await import('@solana/wallet-adapter-walletconnect');
-                const appUrl = typeof window !== 'undefined' ? window.location.origin : 'https://bobys.world';
+                const appUrl = getAppOrigin();
                 setWallets([new WalletConnectWalletAdapter({
                     network, 
                     options: {

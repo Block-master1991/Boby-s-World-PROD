@@ -1,8 +1,4 @@
-/**
- * Sampling Middleware - Smart Log Sampling for Production
- * Reduces log volume in production while preserving important logs
- */
-
+import { isProd } from '../../config/env';
 import type { SampledLogEntry, SamplingConfig, SamplingStats } from '../types/SamplingTypes';
 import { commonPriorityRules } from './SamplingRules';
 
@@ -195,7 +191,7 @@ export class SamplingMiddleware {
  * Default instance
  */
 export const samplingMiddleware = new SamplingMiddleware({
-    enabled: process.env.NODE_ENV === 'production',
+    enabled: isProd,
     rates: {
         trace: 0,
         debug: 0.01,

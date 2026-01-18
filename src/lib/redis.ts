@@ -1,6 +1,7 @@
 import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis';
 import Redis from 'ioredis';
 import { logger } from 'utils/logger';
+import { isDev } from './config/env';
 
 let redisInstance: Redis | Cluster | null = null;
 
@@ -40,7 +41,7 @@ const sanitizeRedisUrl = (url: string): string => {
     // Auto-fix Protocol for Upstash (requires TLS 'rediss://')
     if (sanitized.includes('upstash') && sanitized.startsWith('redis://')) {
         sanitized = sanitized.replace('redis://', 'rediss://');
-        if (process.env.NODE_ENV === 'development') {
+        if (isDev) {
             logger.log('[Redis] Auto-converted Upstash URL to rediss:// (TLS)');
         }
     }
@@ -89,7 +90,7 @@ const getRedis = (): Redis | Cluster => {
 
             if (redisInstance) {
                 redisInstance.on('connect', () => {
-                    if (process.env.NODE_ENV === 'development') {
+                    if (isDev) {
                         logger.log('[Redis] Connected successfully.');
                     }
                 });
@@ -99,7 +100,7 @@ const getRedis = (): Redis | Cluster => {
                     // Silent error during build or if it's a known connection issue
                     if (process.env['NEXT_PHASE'] === 'phase-production-build' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
                         // Log as warning only in dev
-                        if (process.env.NODE_ENV === 'development') {
+                        if (isDev) {
                             logger.warn('[Redis] Connection failed (silent fallback enabled):', err.message);
                         }
                     } else {

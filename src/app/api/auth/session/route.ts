@@ -1,5 +1,6 @@
 import type { AuthenticatedRequest } from '@/lib/auth-middleware';
 import { createAuthErrorResponse, withAuth } from '@/lib/auth-middleware';
+import { isDev } from '@/lib/config/env';
 import { setCsrfTokenResponse } from '@/lib/csrf-helper';
 import { logger } from '@/utils/logger';
 import { NextResponse } from 'next/server';
@@ -15,8 +16,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     // 1. Strict Nonce Verification (Consistency Check)
     const storedNonce = request.cookies.get('nonce')?.value;
     const host = request.headers.get('host') || '';
-    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1');
-    const isDev = process.env.NODE_ENV === 'development';
+    const isLocalhost = host.startsWith('localhost') || host.startsWith('127.0.0.1') || isDev;
 
     if (!storedNonce || jwtPayload.nonce !== storedNonce) {
       if (isDev || isLocalhost) {
