@@ -18,7 +18,7 @@ const isAdmin = rule({ cache: 'contextual' })(
 export const permissions = shield({
   Query: {
     me: isAuthenticated,
-    playerData: isAdmin,
+    playerData: isAuthenticated,
     userInventory: isAuthenticated,
   },
   Mutation: {

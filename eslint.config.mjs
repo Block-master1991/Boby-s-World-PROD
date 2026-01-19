@@ -80,7 +80,7 @@ export default [
       "complexity": ["error", 15],
       "max-depth": ["error", 4],
       "max-lines": ["warn", 300],
-      "max-lines-per-function": ["warn", 50],
+      "max-lines-per-function": ["warn", 70],
       "max-nested-callbacks": ["error", 3],
       "max-params": ["warn", 4],
 

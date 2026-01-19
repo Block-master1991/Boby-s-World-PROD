@@ -20,7 +20,7 @@ export const ActiveEffects: React.FC<ActiveEffectsProps> = ({
     isCoinMagnetActive,
     coinMagnetTimeLeft,
 }) => (
-    <div className="absolute top-[calc(2.5rem+var(--sat))] right-[calc(1rem+var(--sar))] z-20 flex flex-col space-y-2">
+    <div className="absolute top-[calc(4rem+var(--sat))] right-[calc(1rem+var(--sar))] z-20 flex flex-col space-y-2">
         {isSpeedBoostActive && speedBoostTimeLeft > 0 && (
             <div className="bg-yellow-500/80 text-white px-3 py-1.5 rounded-lg shadow-md text-sm font-medium animate-pulse flex items-center">
                 <Image src="/items/speedyPawsTreat.png" alt="Speed Boost" width={16} height={16} className="h-4 w-4 mr-1.5 rtl:ml-1.5" /> ({speedBoostTimeLeft}s)

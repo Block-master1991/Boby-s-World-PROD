@@ -1,11 +1,24 @@
 export const inventoryTypeDefs = `
   type InventoryItem {
     id: ID!
-    itemType: String!
+    itemType: String
     name: String!
     quantity: Int!
     rarity: String!
     image: String
+  }
+
+  type StoreItem {
+    id: ID!
+    name: String!
+    description: String!
+    price: Float!
+    image: String!
+    type: String!
+    rarity: String!
+    isActive: Boolean!
+    createdAt: DateTime!
+    updatedAt: DateTime!
   }
 
   type UserInventory {
@@ -25,6 +38,9 @@ export const inventoryTypeDefs = `
 
   extend type Query {
     userInventory(userId: ID!): UserInventory! @auth
+    storeItems: [StoreItem!]!
+    activeStoreItems: [StoreItem!]!
+    storeItem(id: ID!): StoreItem
   }
 
   extend type Mutation {

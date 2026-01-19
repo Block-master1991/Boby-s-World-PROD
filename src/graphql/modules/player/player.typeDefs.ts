@@ -1,6 +1,6 @@
 export const playerTypeDefs = `
   type PlayerStats {
-    coins: Int!
+    coins: Float!
     level: Int!
     experience: Int!
   }
@@ -9,7 +9,7 @@ export const playerTypeDefs = `
     id: ID!
     publicKey: String!
     level: Int!
-    coins: Int!
+    coins: Float!
     experience: Int!
     inventory: [InventoryItem!]!
     createdAt: DateTime!
@@ -24,7 +24,7 @@ export const playerTypeDefs = `
 
   type CoinResult {
     success: Boolean!
-    newBalance: Int!
+    newBalance: Float!
     error: String
   }
 
@@ -34,7 +34,7 @@ export const playerTypeDefs = `
   }
 
   extend type Mutation {
-    addCoins(amount: Int!): CoinResult! @auth
+    addCoins(amount: Float!): CoinResult! @auth
   }
 
   extend type Subscription {

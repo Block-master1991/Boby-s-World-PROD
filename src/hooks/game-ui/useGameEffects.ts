@@ -9,7 +9,16 @@ const COIN_MAGNET_DURATION = 30;
 const useBuffTimer = (duration: number, name: string, endMsg: string) => {
     const { toast } = useToast();
     const [state, setState] = useState({ active: false, time: 0 });
+    const [shouldShowEndToast, setShouldShowEndToast] = useState(false);
     const timer = useRef<NodeJS.Timeout | null>(null);
+
+    // Effect to show toast when buff ends
+    useEffect(() => {
+        if (shouldShowEndToast) {
+            toast({ title: endMsg });
+            setShouldShowEndToast(false);
+        }
+    }, [shouldShowEndToast, endMsg, toast]);
 
     const stop = useCallback(() => {
         if (timer.current) clearInterval(timer.current);
@@ -21,12 +30,12 @@ const useBuffTimer = (duration: number, name: string, endMsg: string) => {
         setState(p => {
             if (p.time <= 1) {
                 stop();
-                toast({ title: endMsg });
+                setShouldShowEndToast(true);
                 return { active: false, time: 0 };
             }
             return { ...p, time: p.time - 1 };
         });
-    }, [endMsg, stop, toast]);
+    }, [stop]);
 
     const activate = useCallback((amt: number) => {
         stop();

@@ -29,21 +29,21 @@ function useCaptchaLogic(isAuthenticated: boolean) {
   const { toast } = useToast();
 
   useEffect(() => {
-    try {
-      if (sessionStorage.getItem('captcha_verified_session') === 'true') {
+    // Sync state with authentication and session storage
+    if (isAuthenticated) {
+      if (!captchaVerified) {
         setCaptchaVerified(true);
+        try { sessionStorage.setItem('captcha_verified_session', 'true'); } catch { /* ignore */ }
       }
-    } catch {
-      logger.warn("Failed to access sessionStorage");
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isAuthenticated && !captchaVerified) {
-      setCaptchaVerified(true);
+    } else {
+      // If not authenticated, rely on session storage (handles logout + persistence)
       try {
-        sessionStorage.setItem('captcha_verified_session', 'true');
-      } catch { /* ignore */ }
+        const stored = sessionStorage.getItem('captcha_verified_session');
+        setCaptchaVerified(stored === 'true');
+      } catch {
+        logger.warn("Failed to access sessionStorage");
+        setCaptchaVerified(false);
+      }
     }
   }, [isAuthenticated, captchaVerified]);
 

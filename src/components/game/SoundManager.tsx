@@ -63,7 +63,12 @@ const useSoundState = (initialVolume: number, isMuted: boolean) => {
       a.volume = volume;
       a.loop = true;
       a.oncanplaythrough = () => setIsReady(true);
-      a.onerror = (e) => logger.error("Audio error:", e);
+      a.onerror = (e) => {
+          const target = (e as Event).currentTarget as HTMLAudioElement;
+          const err = target.error;
+          const msg = err ? `MediaError code ${err.code}: ${err.message}` : 'Unknown Media Error';
+          logger.error(`Audio error: ${msg}`, { src: target.src });
+      };
       audioRef.current = a;
     }
   }, [volume]);

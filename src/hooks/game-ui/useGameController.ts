@@ -24,7 +24,7 @@ export const useGameController = ({ onSheetsStateChange }: UseGameControllerProp
     const { isAuthenticated, user: authUser, isWalletConnectedAndMatching } = useAuth();
     
     // Core Logic Hooks
-    const gameData = useGameData();
+    const gameData = useGameData({ sessionPublicKey: sessionPublicKey?.toBase58() });
     const { fetchPlayerData } = gameData;
     const economy = useGameEconomy({ isAuthenticated, isWalletConnectedAndMatching, authUserPublicKey: authUser?.publicKey, playerGameUSDT: gameData.playerGameUSDT, fetchPlayerData });
     const effects = useGameEffects();

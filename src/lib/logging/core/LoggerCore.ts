@@ -6,7 +6,9 @@ import { contextManager, type LogContext } from './LogContext';
 import type { ILoggerCore, LoggerCoreConfig } from './LoggerTypes';
 import { getLogLevelFromEnv, LogLevel, toPinoLevel } from './LogLevel';
 
-const isBrowser = typeof window !== 'undefined';
+const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+const isWorker = typeof self !== 'undefined' && 'postMessage' in self && !isBrowser;
+
 const DEFAULT_CONFIG: LoggerCoreConfig = {
     level: getLogLevelFromEnv(),
     name: 'BobyWorld',
@@ -14,8 +16,8 @@ const DEFAULT_CONFIG: LoggerCoreConfig = {
     piiProtection: process.env['NODE_ENV'] === 'production',
     sanitization: true,
     includeContext: true,
-    encryptionEnabled: !isBrowser && process.env['LOG_ENCRYPTION_ENABLED'] === 'true',
-    tamperDetectionEnabled: !isBrowser && process.env['LOG_TAMPER_DETECTION'] === 'true'
+    encryptionEnabled: !isBrowser && !isWorker && process.env['LOG_ENCRYPTION_ENABLED'] === 'true',
+    tamperDetectionEnabled: !isBrowser && !isWorker && process.env['LOG_TAMPER_DETECTION'] === 'true'
 };
 
 /**
@@ -46,13 +48,26 @@ export class LoggerCore implements ILoggerCore {
             serializers: { err: pino.stdSerializers.err, error: pino.stdSerializers.err, req: pino.stdSerializers.req, res: pino.stdSerializers.res }
         };
 
-        if (typeof window !== 'undefined') {
+        // Strict environment check
+        const isBrowserEnv = typeof window !== 'undefined' && typeof window.document !== 'undefined';
+        const isWorkerEnv = typeof self !== 'undefined' && 'postMessage' in self && !isBrowserEnv;
+
+        if (isBrowserEnv || isWorkerEnv) {
             pinoConfig.browser = {
-                asObject: !isProduction,
-                transmit: {
-                    level: 'info',
-                    send: (level: unknown, logEvent: unknown) => {
-                        if (isProduction && (level as number) >= 50) console.error('Critical error:', logEvent);
+                asObject: true,
+                write: (o) => {
+                    const obj = o as Record<string, unknown>;
+                    const msg = (obj['msg'] as string) || '';
+                    const err = obj['err'] || obj['error'];
+                    const level = (obj['level'] as number) || 30;
+                    const method = level >= 50 ? 'error' : level >= 40 ? 'warn' : level >= 30 ? 'info' : 'debug';
+
+                    try {
+                        const consoleLog = console[method] || console.log;
+                        if (err) consoleLog(msg, err);
+                        else consoleLog(msg);
+                    } catch {
+                         // Suppress console errors in restricted environments
                     }
                 }
             };
@@ -111,22 +126,63 @@ export class LoggerCore implements ILoggerCore {
     }
 
     private normalizeError(errorOrData: unknown): Error {
-        if (errorOrData instanceof Error) return errorOrData;
-        if (typeof errorOrData === 'string') {
-            const err = new Error(errorOrData);
-            err.name = 'LoggedError';
+        try {
+            if (errorOrData instanceof Error) return errorOrData;
+            if (typeof errorOrData === 'string') {
+                const err = new Error(errorOrData);
+                err.name = 'LoggedError';
+                return err;
+            }
+
+            const record = (errorOrData && typeof errorOrData === 'object') ? errorOrData as Record<string, unknown> : null;
+            if (!record) {
+                const err = new Error(`Logged value: ${String(errorOrData)}`);
+                err.name = 'ValueLog';
+                return err;
+            }
+
+            const message = this.extractMessageFromRecord(record);
+            const err = new Error(message);
+            err.name = record['name'] ? String(record['name']) : 'SerializedError';
+            
+            if (record['stack']) {
+                err.stack = String(record['stack']);
+            }
+            
+            // Re-attach other properties if possible
+            Object.keys(record).forEach(key => {
+                if (key !== 'message' && key !== 'stack' && key !== 'name') {
+                    try {
+                        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                        (err as any)[key] = record[key];
+                    } catch { /* ignore */ }
+                }
+            });
+            
             return err;
+        } catch {
+            return new Error('failed to normalize error');
         }
-        const record = errorOrData as Record<string, unknown>;
-        const msg = (typeof errorOrData === 'object' && errorOrData !== null) 
-            ? String(record['message'] || record['error'] || JSON.stringify(errorOrData)) 
-            : String(errorOrData);
-        const err = new Error(msg);
-        err.name = 'SerializedError';
-        if (errorOrData && typeof errorOrData === 'object' && 'stack' in errorOrData) {
-            err.stack = String(record['stack']);
+    }
+
+    private extractMessageFromRecord(record: Record<string, unknown>): string {
+        if (record['message']) return String(record['message']);
+        if (record['error']) return String(record['error']);
+        if (record['code']) return `Error Code: ${String(record['code'])}`;
+
+        try {
+            const keys = Object.keys(record);
+            if (keys.length === 0) return 'Empty Object';
+
+            let message = `Object with keys: ${keys.join(', ')}`;
+            // Only try full JSON if smallish and not in SSR (window undefined)
+            if (keys.length < 10 && typeof window !== 'undefined') {
+                message += ` | Content: ${JSON.stringify(record).slice(0, 200)}`;
+            }
+            return message;
+        } catch {
+            return 'Complex/Circular Error Object';
         }
-        return err;
     }
 
     child(bindings: Record<string, unknown>): LoggerCore {

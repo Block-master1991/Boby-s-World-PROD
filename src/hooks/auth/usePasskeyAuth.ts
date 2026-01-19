@@ -36,7 +36,11 @@ const confirmRegistration = async (userId: string, description: string, cred: an
  
 const getAssertion = async (uid: string) => {
     const signal = WebAuthnTransactionManager.start();
-    const res = await fetchWithCsrf(`/api/auth/webauthn/authenticate?userId=${uid}`);
+    const res = await fetchWithCsrf('/api/auth/webauthn/authenticate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: uid })
+    });
     const opts = await res.json();
     const challengeBuf = Uint8Array.from(safeBufferFromBase64url(opts.challenge));
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

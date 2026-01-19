@@ -10,6 +10,15 @@ export const inventoryResolvers = {
       const data = await InventoryService.getUserInventoryCounts(userId);
       return data;
     },
+    storeItems: () => {
+      return InventoryService.getStoreItems();
+    },
+    activeStoreItems: () => {
+      return InventoryService.getActiveStoreItems();
+    },
+    storeItem: (_: unknown, { id }: { id: string }) => {
+      return InventoryService.getStoreItem(id);
+    },
   },
   Mutation: {
     useConsumableItem: async (_: unknown, { itemId, quantity }: { itemId: string, quantity: number }, context: GraphQLContext) => {

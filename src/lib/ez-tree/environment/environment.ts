@@ -128,15 +128,20 @@ export class Environment extends THREE.Object3D {
     logger.log(`[Environment] Preloading scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}`);
 
     const chunks = this.generateChunkCoordsAround(centerPosition);
-    const generationPromises = chunks.map(c => this.chunkManager.generateChunkAsync(c.x, c.z));
+    let succeeded = 0;
 
-    try {
-      const results = await Promise.allSettled(generationPromises);
-      const succeeded = results.filter(r => r.status === 'fulfilled').length;
-      logger.log(`[Environment] Preloading complete: ${succeeded}/${chunks.length} succeeded`);
-    } catch (error) {
-      logger.error('[Environment] Unexpected error in preload:', error);
+    // Load sequentially to avoid main thread bottlenecks
+    for (const chunk of chunks) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await this.chunkManager.generateChunkAsync(chunk.x, chunk.z);
+        succeeded++;
+      } catch (error) {
+        logger.error(`[Environment] Chunk preloading failed for ${chunk.x},${chunk.z}:`, error);
+      }
     }
+
+    logger.log(`[Environment] Preloading complete: ${succeeded}/${chunks.length} succeeded`);
   }
 
   private generateChunkCoordsAround(pos: THREE.Vector3): { x: number; z: number }[] {

@@ -98,6 +98,46 @@ export function getMobilePerformanceLevel(): 'low' | 'medium' | 'high' {
 }
 
 // Performance optimization config based on device
+/**
+ * Helper to get environment density multipliers based on device capability
+ */
+function getEnvironmentDensity(isMobile: boolean, performanceLevel: string) {
+  if (!isMobile) {
+    return { grassMultiplier: 1.0, treeMultiplier: 1.0, rocksMultiplier: 1.0, flowersMultiplier: 1.0 };
+  }
+  
+  const isLow = performanceLevel === 'low';
+  return {
+    grassMultiplier: isLow ? 0.1 : 0.2,
+    treeMultiplier: isLow ? 0.5 : 1.0,
+    rocksMultiplier: isLow ? 0.3 : 0.5,
+    flowersMultiplier: isLow ? 0.2 : 0.4,
+  };
+}
+
+/**
+ * Helper to get renderer settings based on device capability
+ */
+function getRendererSettings(isMobile: boolean, performanceLevel: string) {
+  const isLow = isMobile && performanceLevel === 'low';
+  const isHigh = !isMobile || performanceLevel === 'high';
+  
+  let pixelRatio = 1.0;
+  if (typeof window !== 'undefined') {
+    const baseRatio = window.devicePixelRatio || 1;
+    pixelRatio = Math.min(baseRatio, isMobile ? 1.5 : 2.0);
+  }
+
+  return {
+    antialias: isHigh,
+    shadowMapSize: isLow ? 1024 : (isMobile ? 2048 : 4096),
+    pixelRatio,
+  };
+}
+
+/**
+ * Performance optimization config based on device
+ */
 export function getDevicePerformanceConfig() {
   const isMobile = isMobileDevice();
   const performanceLevel = getMobilePerformanceLevel();
@@ -105,23 +145,11 @@ export function getDevicePerformanceConfig() {
   return {
     isMobile,
     performanceLevel,
-    // Environment density multipliers
-    environmentDensity: {
-      grassMultiplier: isMobile ? (performanceLevel === 'low' ? 0.1 : 0.2) : 1.0,
-      treeMultiplier: isMobile ? (performanceLevel === 'low' ? 0.5 : 1.0) : 1.0,
-      rocksMultiplier: isMobile ? (performanceLevel === 'low' ? 0.3 : 0.5) : 1.0,
-      flowersMultiplier: isMobile ? (performanceLevel === 'low' ? 0.2 : 0.4) : 1.0,
-    },
-    // Renderer settings
-    renderer: {
-      antialias: !isMobile || performanceLevel === 'high',
-      shadowMapSize: isMobile ? (performanceLevel === 'low' ? 1024 : 2048) : 4096,
-      pixelRatio: Math.min(window.devicePixelRatio || 1, isMobile ? 1.5 : 2.0),
-    },
-    // Game settings
+    environmentDensity: getEnvironmentDensity(isMobile, performanceLevel),
+    renderer: getRendererSettings(isMobile, performanceLevel),
     game: {
       fpsLimit: isMobile ? 30 : 60,
-      animationUpdates: !isMobile, // Skip animation updates on mobile unless high-end
+      animationUpdates: !isMobile,
     }
   };
 }

@@ -6,6 +6,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameContainerHandlers, useGameContainerState } from '@/hooks/useGameContainer';
 import { useSessionWallet } from '@/hooks/useSessionWallet';
+import { env } from '@/lib/config/env';
 import { ADMIN_WALLET_ADDRESS } from '@/lib/constants';
 import { logger } from '@/utils/logger';
 import { usePathname, useRouter } from 'next/navigation';
@@ -106,7 +107,29 @@ const GameContainer: React.FC<GameContainerProps> = ({ captchaVerified: initialC
         <>
             <SoundControlButton areSheetsOpen={areSheetsOpen} isSoundPlaying={isSoundPlaying} isMuted={isMuted} onToggle={handleSoundToggle} />
             <EnableSoundButton show={showEnableSoundButton} onClick={handlers.handleEnableSoundClick} />
-            <MainContentRenderer isLoadingAuth={isLoadingAuth} captchaVerified={captchaVerified} isAuthenticated={isAuthenticated} isAdminUser={isAdmin} selectedGameMode={selectedGameMode} assetPreloadComplete={assetPreloadComplete} isGameUIVisible={handlers.isGameUIVisible()} isGameUILoading={isGameUILoading} gameUILoadProgress={gameUILoadProgress} octreeRef={octreeRef} onDisconnect={handlers.handleDisconnect} onLoginAttempt={handlers.handleLoginAttempt} onGameModeSelected={handlers.handleGameModeSelected} onSheetsStateChange={handlers.handleSheetsStateChange} onAssetPreloadComplete={onAssetPreloadComplete} onAssetPreloadError={onAssetPreloadError} onGameUILoadStart={onGameUILoadStart} onGameUILoadProgress={onGameUILoadProgress} onGameUILoadComplete={onGameUILoadComplete} />
+            <MainContentRenderer 
+                isLoadingAuth={isLoadingAuth} 
+                captchaVerified={captchaVerified} 
+                isAuthenticated={isAuthenticated} 
+                isAdminUser={isAdmin} 
+                selectedGameMode={selectedGameMode} 
+                assetPreloadComplete={assetPreloadComplete} 
+                isGameUIVisible={handlers.isGameUIVisible()} 
+                isGameUILoading={isGameUILoading} 
+                gameUILoadProgress={gameUILoadProgress} 
+                octreeRef={octreeRef} 
+                onDisconnect={handlers.handleDisconnect} 
+                onLoginAttempt={handlers.handleLoginAttempt} 
+                onGameModeSelected={handlers.handleGameModeSelected} 
+                onSheetsStateChange={handlers.handleSheetsStateChange} 
+                onAssetPreloadComplete={onAssetPreloadComplete} 
+                onAssetPreloadError={onAssetPreloadError} 
+                onGameUILoadStart={onGameUILoadStart} 
+                onGameUILoadProgress={onGameUILoadProgress} 
+                onGameUILoadComplete={onGameUILoadComplete} 
+                siteKey={env.NEXT_PUBLIC_RECAPTCHA_SITE_KEY || ''}
+                onCaptchaSuccess={() => state.setCaptchaVerified(true)}
+            />
         </>
     );
 };

@@ -1,3 +1,4 @@
+import { getActiveStoreItems, getAllStoreItems, getStoreItemById } from '@/lib/server-items-read';
 import type { InventoryItem } from '@/types/database';
 import { UseItemSchema } from '../../validation/schemas';
 import { InventoryRepository } from './inventory.repository';
@@ -11,6 +12,19 @@ export interface InventoryCounts {
 }
 
 export class InventoryService {
+  // Store management
+  static getStoreItems() {
+    return getAllStoreItems();
+  }
+
+  static getActiveStoreItems() {
+    return getActiveStoreItems();
+  }
+
+  static getStoreItem(id: string) {
+    return getStoreItemById(id);
+  }
+
   // Removed static cache and TTL - prioritizing data consistency
 
   static async getUserInventoryCounts(userId: string) {
@@ -31,14 +45,25 @@ export class InventoryService {
       '4': 'coinMagnetTreatCount',
     };
 
-    inventory.forEach((item) => {
-      const key = itemIdMap[String(item.id)];
+    const mappedItems = inventory.map((item) => {
+      const sanitizedItem = {
+        id: String(item.id || `item-${Math.random()}`),
+        itemType: item.type ? String(item.type) : null,
+        name: String(item.name || 'Unknown Item'),
+        rarity: String(item.rarity || 'Common'),
+        image: item.image ? String(item.image) : null,
+        quantity: Math.floor(Number(item.quantity) || 1)
+      };
+
+      const key = itemIdMap[String(sanitizedItem.id)];
       if (key) {
-        counts[key] += item.quantity || 1;
+        counts[key] += sanitizedItem.quantity;
       }
+
+      return sanitizedItem;
     });
 
-    return { ...counts, items: inventory };
+    return { ...counts, items: mappedItems };
   }
 
   static async useItem(userId: string, itemId: string, quantityToUse: number) {

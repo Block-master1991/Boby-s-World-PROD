@@ -216,12 +216,24 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
   const currentTip = useLoadingTips(showTips);
   const phaseInfo = useMemo(() => loadingPhases.find(p => p.id === phase) || loadingPhases[1]!, [phase]);
 
+  // Simplified Indeterminate State (Pulsing Logo)
+  if (variant === 'indeterminate') {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-center p-6">
+        <div className="relative z-10 animate-pulse">
+           <Image src="/Boby-logo.png" alt="Logo" width={120} height={120} priority className="rounded-lg shadow-2xl shadow-primary/20" />
+        </div>
+        {message && <p className="mt-6 text-muted-foreground text-sm font-medium tracking-wide animate-pulse">{message}</p>}
+      </div>
+    );
+  }
+
   return (
     <>
       <LoadingStyles />
-      <div className={`flex flex-col items-center justify-center min-h-screen p-6 text-center relative overflow-hidden ${variant === 'indeterminate' ? 'bg-background' : 'bg-gradient-to-br from-background via-background to-primary/5'}`}>
-        {variant !== 'indeterminate' && <LoadingParticles />}
-        {showLogo && variant === 'default' && <LogoSection isError={isError} />}
+      <div className={`flex flex-col items-center justify-center min-h-screen p-6 text-center relative overflow-hidden bg-gradient-to-br from-background via-background to-primary/5`}>
+        <LoadingParticles />
+        {showLogo && <LogoSection isError={isError} />}
         
         <div className="max-w-md w-full z-10">
           {isError ? <ErrorSection message={message} /> : (

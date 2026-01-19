@@ -1,6 +1,6 @@
 import { initializeAdminApp } from '@/lib/firebase-admin';
+import { logger } from '@/utils/logger';
 import { getFirestore } from 'firebase-admin/firestore';
-import { logger } from 'utils/logger';
 import type { StoreItemDefinition } from './server-items-types';
 
 // Function to fetch single item from Firestore

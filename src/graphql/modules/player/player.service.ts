@@ -20,27 +20,38 @@ import type { GraphQLContext } from '../../context';
 export class PlayerService {
   // Removed static cache and TTL in favor of DataLoader
 
-  private static formatPlayerData(player: DocumentData, userId: string) {
-    // ... same implementation
-    const {
-      gameStats = {},
-      createdAt,
-      lastLogin,
-      publicKey,
-      gameUSDTBalance = 0,
-      inventory = [],
-      id = userId,
-    } = player;
+  private static sanitizeInventory(inventory: unknown[]): unknown[] {
+    return (inventory as Record<string, unknown>[]).map(item => ({
+      id: String(item['id'] || `item-${Math.random()}`),
+      itemType: item['type'] ? String(item['type']) : null,
+      name: String(item['name'] || 'Unknown Item'),
+      rarity: String(item['rarity'] || 'Common'),
+      image: item['image'] ? String(item['image']) : null,
+      quantity: Math.floor(Number(item['quantity']) || 1)
+    }));
+  }
 
+  private static formatTimestamps(player: DocumentData) {
+    const { createdAt, lastLogin } = player;
     return {
-      id,
-      publicKey: publicKey || userId,
-      level: gameStats['level'] || 1,
-      coins: gameUSDTBalance,
-      experience: gameStats['experience'] || 0,
-      inventory,
       createdAt: createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
       lastLogin: lastLogin?.toDate?.()?.toISOString(),
+    };
+  }
+
+  private static formatPlayerData(player: DocumentData, userId: string): PlayerData {
+    const stats = player['gameStats'] || {};
+    const { createdAt, lastLogin } = this.formatTimestamps(player);
+
+    return {
+      id: player['id'] || userId,
+      publicKey: player['publicKey'] || userId,
+      level: Number(stats['level'] || 1),
+      coins: Number(player['gameUSDTBalance'] ?? player['coins'] ?? 0),
+      experience: Math.floor(stats['experience'] || player['experience'] || 0),
+      inventory: this.sanitizeInventory(player['inventory'] || []),
+      createdAt,
+      lastLogin,
     };
   }
 
@@ -69,6 +80,7 @@ export class PlayerService {
     const currentBalance = Number(player['gameUSDTBalance']) || 0;
     const newBalance = currentBalance + amount;
 
+    // Ensure we store reasonable values, but the resolver/formatter guarantees Int return
     await PlayerRepository.updateStats(userId, { gameUSDTBalance: newBalance });
     
     // DataLoader is request-scoped, so no global cache invalidation is needed.

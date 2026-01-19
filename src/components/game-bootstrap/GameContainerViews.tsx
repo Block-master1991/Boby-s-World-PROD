@@ -15,6 +15,7 @@ const InitialAssetLoader = dynamic(() => import('@/components/InitialAssetLoader
 const GameMainMenu = dynamic(() => import('@/components/game/GameMainMenu'), { ssr: false });
 const RunningGameUI = dynamic(() => import('@/components/game/RunningGameUI'), { ssr: false });
 const AuthenticationScreen = dynamic(() => import('@/components/game-bootstrap/AuthenticationScreen'), { ssr: false });
+const CaptchaScreen = dynamic(() => import('@/components/game-bootstrap/CaptchaScreen'), { ssr: false });
 const GameLoadingOverlay = dynamic(() => import('@/components/game-bootstrap/GameLoadingOverlay'), { ssr: false });
 
 // --- Sound Control Button ---
@@ -56,11 +57,15 @@ interface AuthContentProps {
     isAuthenticated: boolean;
     onDisconnect: () => Promise<void>;
     onLoginAttempt: () => Promise<void>;
+    siteKey: string;
+    onCaptchaSuccess: () => void;
 }
 
-const AuthContent: React.FC<AuthContentProps> = ({ isLoadingAuth, captchaVerified, isAuthenticated, onDisconnect, onLoginAttempt }) => {
+const AuthContent: React.FC<AuthContentProps> = ({ isLoadingAuth, captchaVerified, isAuthenticated, onDisconnect, onLoginAttempt, siteKey, onCaptchaSuccess }) => {
     if (isLoadingAuth) return <LoadingScreen message="" showLogo variant="indeterminate" />;
-    if (!captchaVerified && !isAuthenticated) return <LoadingScreen message="Verification required..." showLogo variant="indeterminate" />;
+    if (!captchaVerified && !isAuthenticated) {
+        return <CaptchaScreen siteKey={siteKey} onVerificationSuccess={onCaptchaSuccess} />;
+    }
     if (!isAuthenticated) return <AuthenticationScreen onRequestDisconnect={onDisconnect} onLoginAttempt={onLoginAttempt} captchaVerified={captchaVerified} />;
     return null;
 };
@@ -130,13 +135,15 @@ export interface MainContentRendererProps {
     onGameUILoadStart: () => void;
     onGameUILoadProgress: (progress: number) => void;
     onGameUILoadComplete: (success: boolean) => void;
+    siteKey: string;
+    onCaptchaSuccess: () => void;
 }
 
 export const MainContentRenderer: React.FC<MainContentRendererProps> = (props) => {
-    const { isLoadingAuth, captchaVerified, isAuthenticated, isAdminUser, selectedGameMode, assetPreloadComplete, isGameUIVisible, isGameUILoading, gameUILoadProgress, octreeRef, onDisconnect, onLoginAttempt, onGameModeSelected, onSheetsStateChange, onAssetPreloadComplete, onAssetPreloadError, onGameUILoadStart, onGameUILoadProgress, onGameUILoadComplete } = props;
+    const { isLoadingAuth, captchaVerified, isAuthenticated, isAdminUser, selectedGameMode, assetPreloadComplete, isGameUIVisible, isGameUILoading, gameUILoadProgress, octreeRef, onDisconnect, onLoginAttempt, onGameModeSelected, onSheetsStateChange, onAssetPreloadComplete, onAssetPreloadError, onGameUILoadStart, onGameUILoadProgress, onGameUILoadComplete, siteKey, onCaptchaSuccess } = props;
 
     // Auth states
-    const authContent = <AuthContent isLoadingAuth={isLoadingAuth} captchaVerified={captchaVerified} isAuthenticated={isAuthenticated} onDisconnect={onDisconnect} onLoginAttempt={onLoginAttempt} />;
+    const authContent = <AuthContent isLoadingAuth={isLoadingAuth} captchaVerified={captchaVerified} isAuthenticated={isAuthenticated} onDisconnect={onDisconnect} onLoginAttempt={onLoginAttempt} siteKey={siteKey} onCaptchaSuccess={onCaptchaSuccess} />;
     if (authContent.props && (isLoadingAuth || !isAuthenticated)) return authContent;
 
     // Admin redirect

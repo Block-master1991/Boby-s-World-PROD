@@ -140,7 +140,7 @@ export class Skybox extends THREE.Object3D {
   }
 
   private processHDRResult(width: number, height: number, data: Float32Array | Uint16Array, isHalf: boolean) {
-    const maxTextureSize = this.renderer?.capabilities.maxTextureSize || 4096;
+    const maxTextureSize = this.renderer?.capabilities?.maxTextureSize || 4096;
     let finalWidth = width;
     let finalHeight = height;
     let finalData = data;

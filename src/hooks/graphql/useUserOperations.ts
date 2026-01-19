@@ -9,7 +9,7 @@ import { useBaseGraphQL } from './useBaseGraphQL';
 
 const QUERIES = {
     USER_STATS: `query GetUserStats { userStats { totalUsers onlineUsers offlineUsers activeGames } }`,
-    FETCH_PLAYER: `mutation FetchPlayerData($userId: ID!) { fetchPlayerData(userId: $userId) { success playerData { level coins experience inventory { id itemType name quantity rarity image } } error } }`,
+    FETCH_PLAYER: `query FetchPlayerData($userId: ID!) { playerData(userId: $userId) { success playerData { level coins experience inventory { id itemType name quantity rarity image } } error } }`,
     ADD_COINS: `mutation AddCoins($userId: ID!, $amount: Int!) { addCoins(userId: $userId, amount: $amount) { success newBalance error } }`,
     ACTIVITY_UPDATES: `query UserActivityUpdates { userActivityUpdates @client { onlineUsers activeGames timestamp } }`
 };
@@ -56,16 +56,31 @@ export const useFetchPlayerData = () => {
     const fetchData = useCallback(async (userId: string) => {
         setState(s => ({ ...s, loading: true, error: null }));
         try {
-            const res = await apiFetch('/api/graphql', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ query: QUERIES.FETCH_PLAYER, variables: { userId } }) });
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const res = await apiFetch('/api/graphql', { 
+                method: 'POST', 
+                headers: { 'Content-Type': 'application/json' }, 
+                body: JSON.stringify({ query: QUERIES.FETCH_PLAYER, variables: { userId } }) 
+            });
+            
+            if (!res.ok) {
+                const text = await res.text();
+                logger.error(`[useFetchPlayerData] HTTP Error ${res.status}:`, text.slice(0, 500));
+                throw new Error(`HTTP ${res.status}`);
+            }
+
             const json = await res.json();
-            if (json.errors) throw new Error(json.errors[0].message);
+            if (json.errors) {
+                logger.error('[useFetchPlayerData] GraphQL Errors:', json.errors);
+                throw new Error(json.errors[0].message);
+            }
+
             setState({ data: json.data, loading: false, error: null });
-            return json.data?.fetchPlayerData;
+            return json.data?.playerData;
         } catch (err) {
             const msg = err instanceof Error ? err.message : 'Unknown error';
-            logger.error('[useFetchPlayerData] Error:', msg);
+            logger.error('[useFetchPlayerData] Fetch catch block error:', err);
             setState(s => ({ ...s, loading: false, error: msg }));
+            return { success: false, error: msg };
         }
     }, [apiFetch]);
 
