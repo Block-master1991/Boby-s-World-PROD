@@ -8,12 +8,16 @@ export type { SignedLogEntry, TamperDetectionConfig, VerificationResult };
  */
 const getCrypto = () => {
     try {
-        if (typeof window === 'undefined') {
-            // Use eval to prevent Webpack from bundling 'node:crypto' for Edge Runtime
+        const g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : {}));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((g as any).crypto) return (g as any).crypto;
+        
+        // Final fallback for Node.js environments where it might not be on globalThis
+        if (typeof process !== 'undefined' && process.versions?.node) {
             // eslint-disable-next-line no-eval
             return eval('require("node:crypto")');
         }
-        return window.crypto || null;
+        return null;
     } catch {
         return null;
     }

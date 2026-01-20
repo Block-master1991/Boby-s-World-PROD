@@ -4,10 +4,19 @@ import { LoggerCore } from './core/LoggerCore';
 /**
  * Default logger instance - backward compatible with existing logger
  */
+const getEnv = (key: string): string | undefined => {
+    try {
+        if (typeof process !== 'undefined' && process.env) return process.env[key];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (typeof globalThis !== 'undefined' && (globalThis as any).process?.env) return (globalThis as any).process.env[key];
+    } catch { /* ignore */ }
+    return undefined;
+};
+
 export const professionalLogger = new LoggerCore({
     name: 'BobyWorld',
-    version: process.env['npm_package_version'] || '1.0.0',
-    piiProtection: process.env['NODE_ENV'] === 'production',
+    version: getEnv('npm_package_version') || '1.0.0',
+    piiProtection: getEnv('NODE_ENV') === 'production',
     sanitization: true,
     includeContext: true
 });

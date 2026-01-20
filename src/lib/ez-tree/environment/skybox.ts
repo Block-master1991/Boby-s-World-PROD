@@ -66,24 +66,71 @@ export class Skybox extends THREE.Object3D {
     this.loadHDR();
   }
 
-  private async loadHDR() {
+  /* eslint-disable no-await-in-loop */
+  private async loadHDR(maxAttempts: number = 10) {
     const hdrUrl = '/textures/hdr/citrus_orchard_road_puresky_8k.hdr';
     const modelName = 'hdr_data';
 
-    try {
-      const hdrData = await this.fetchHDRData(hdrUrl, modelName);
-      const blob = new Blob([hdrData], { type: 'application/octet-stream' });
-      const blobUrl = URL.createObjectURL(blob);
-      
-      const worker = new Worker(new URL('../../../workers/hdrWorker.ts', import.meta.url));
-      this.setupHDRWorker(worker, blobUrl);
-      worker.postMessage({ url: blobUrl });
-    } catch (error) {
-      logger.error('[Skybox] HDR Loading failed:', error);
-      this.applyFallbackSky();
-      if (this.resolveLoading) this.resolveLoading();
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const hdrData = await this.fetchHDRData(hdrUrl, modelName);
+        const blob = new Blob([hdrData], { type: 'application/octet-stream' });
+        const blobUrl = URL.createObjectURL(blob);
+        
+        const worker = new Worker(new URL('../../../workers/hdrWorker.ts', import.meta.url));
+        
+        // Wrap setup and execution in a promise to handle retries within this loop
+        await new Promise<void>((resolve, reject) => {
+          const workerTimeout = setTimeout(() => {
+            worker.terminate();
+            URL.revokeObjectURL(blobUrl);
+            reject(new Error('HDR Worker timeout'));
+          }, 45000); // Increased timeout for worker
+
+          worker.onmessage = (e) => {
+            const { status, width, height, data, error } = e.data;
+            if (status === 'progress') return;
+
+            clearTimeout(workerTimeout);
+            if (status === 'success') {
+              this.processHDRResult(width, height, data, e.data.isHalf);
+              worker.terminate();
+              URL.revokeObjectURL(blobUrl);
+              resolve();
+            } else {
+              worker.terminate();
+              URL.revokeObjectURL(blobUrl);
+              reject(new Error(error || 'Worker failed'));
+            }
+          };
+
+          worker.onerror = (err) => {
+            clearTimeout(workerTimeout);
+            worker.terminate();
+            URL.revokeObjectURL(blobUrl);
+            reject(err);
+          };
+
+          worker.postMessage({ url: blobUrl });
+        });
+
+        logger.log(`[Skybox] ✅ HDR Load successful on attempt ${attempt}`);
+        if (this.resolveLoading) this.resolveLoading();
+        return; // Success!
+      } catch (error) {
+        logger.error(`[Skybox] ❌ HDR Loading attempt ${attempt} failed:`, error);
+        if (attempt === maxAttempts) {
+          logger.error('[Skybox] 🚨 All HDR loading attempts failed. Using fallback.');
+          this.applyFallbackSky();
+          if (this.resolveLoading) this.resolveLoading();
+        } else {
+          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          await new Promise(r => setTimeout(r, delay));
+        }
+      }
     }
   }
+  /* eslint-enable no-await-in-loop */
 
   private async fetchHDRData(url: string, name: string): Promise<ArrayBuffer> {
     let data = await getModel(name);
@@ -97,46 +144,6 @@ export class Skybox extends THREE.Object3D {
       logger.log(`[Skybox] Loading HDR from IndexedDB: ${name}`);
     }
     return data;
-  }
-
-  private setupHDRWorker(worker: Worker, blobUrl: string) {
-    const workerTimeout = setTimeout(() => {
-      logger.error('[Skybox] HDR Worker timeout');
-      worker.terminate();
-      URL.revokeObjectURL(blobUrl);
-      this.applyFallbackSky();
-      if (this.resolveLoading) this.resolveLoading();
-    }, 60000);
-
-    worker.onmessage = (e) => this.handleWorkerMessage(e, worker, blobUrl, workerTimeout);
-    worker.onerror = (err) => {
-      logger.error('[Skybox] Worker Crash:', err);
-      worker.terminate();
-      URL.revokeObjectURL(blobUrl);
-      this.applyFallbackSky();
-      if (this.resolveLoading) this.resolveLoading();
-    };
-  }
-
-  private handleWorkerMessage(e: MessageEvent, worker: Worker, blobUrl: string, timeout: ReturnType<typeof setTimeout>) {
-    const { status, width, height, data, error } = e.data;
-
-    if (status === 'progress') {
-      logger.log(`[Skybox] Progress: ${(e.data.progress * 100).toFixed(1)}%`);
-      return;
-    }
-
-    clearTimeout(timeout);
-    if (status === 'success') {
-      this.processHDRResult(width, height, data, e.data.isHalf);
-    } else {
-      logger.error('[Skybox] Worker Error:', error);
-      this.applyFallbackSky();
-    }
-    
-    worker.terminate();
-    URL.revokeObjectURL(blobUrl);
-    if (this.resolveLoading) this.resolveLoading();
   }
 
   private processHDRResult(width: number, height: number, data: Float32Array | Uint16Array, isHalf: boolean) {

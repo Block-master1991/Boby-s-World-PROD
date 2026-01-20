@@ -68,31 +68,41 @@ export class Grass extends THREE.Object3D {
     }
   }
 
-  private static async loadGrassMesh(loader: GLTFLoader): Promise<THREE.Mesh> {
+  /* eslint-disable no-await-in-loop */
+  private static async loadGrassMesh(loader: GLTFLoader, maxAttempts: number = 20): Promise<THREE.Mesh> {
     const modelPath = '/models/grass.glb';
     const modelName = 'grass_model';
 
-    try {
-      const cachedData = await getModel(modelName);
-      if (cachedData) {
-        logger.log(`[Grass] Loading grass model from IndexedDB: ${modelName}`);
-        const gltf = await loader.parseAsync(cachedData, '');
+    for (let i = 1; i <= maxAttempts; i++) {
+      try {
+        const cachedData = await getModel(modelName);
+        if (cachedData) {
+          logger.log(`[Grass] Loading grass model from IndexedDB: ${modelName}`);
+          const gltf = await loader.parseAsync(cachedData, '');
+          return this.findFirstMesh(gltf.scene);
+        }
+        
+        logger.log(`[Grass] Fetching grass model from network (attempt ${i}): ${modelPath}`);
+        const response = await fetch(modelPath);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        await putModel(modelName, arrayBuffer);
+        const gltf = await loader.parseAsync(arrayBuffer, '');
         return this.findFirstMesh(gltf.scene);
+      } catch (error) {
+        logger.warn(`[Grass] Attempt ${i} failed:`, error);
+        if (i === maxAttempts) {
+          logger.error(`[Grass] Persistent failure after ${maxAttempts} attempts. Falling back to direct load.`);
+          const gltf = await loader.loadAsync(modelPath);
+          return this.findFirstMesh(gltf.scene);
+        }
+        const delay = Math.min(1000 * Math.pow(1.5, i - 1), 10000);
+        await new Promise(r => setTimeout(r, delay));
       }
-      
-      logger.log(`[Grass] Fetching grass model from network: ${modelPath}`);
-      const response = await fetch(modelPath);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const arrayBuffer = await response.arrayBuffer();
-      await putModel(modelName, arrayBuffer);
-      const gltf = await loader.parseAsync(arrayBuffer, '');
-      return this.findFirstMesh(gltf.scene);
-    } catch (error) {
-      logger.warn(`[Grass] Error loading from IndexedDB/Network, falling back:`, error);
-      const gltf = await loader.loadAsync(modelPath);
-      return this.findFirstMesh(gltf.scene);
     }
+    throw new Error("Failed to load grass mesh");
   }
+  /* eslint-enable no-await-in-loop */
 
   private static findFirstMesh(scene: THREE.Group): THREE.Mesh {
     let mesh: THREE.Mesh | null = null;

@@ -82,28 +82,38 @@ export class Flowers extends THREE.Group {
     return mesh;
   }
 
-  private static async fetchModelScene(loader: GLTFLoader, modelPath: string, modelName: string): Promise<THREE.Group> {
-    try {
-      const cachedData = await getModel(modelName);
-      if (cachedData) {
-        logger.log(`[Flowers] Loading ${modelName} from IndexedDB`);
-        const gltf = await loader.parseAsync(cachedData, '');
+  /* eslint-disable no-await-in-loop */
+  private static async fetchModelScene(loader: GLTFLoader, modelPath: string, modelName: string, maxAttempts: number = 20): Promise<THREE.Group> {
+    for (let i = 1; i <= maxAttempts; i++) {
+      try {
+        const cachedData = await getModel(modelName);
+        if (cachedData) {
+          logger.log(`[Flowers] Loading ${modelName} from IndexedDB`);
+          const gltf = await loader.parseAsync(cachedData, '');
+          return gltf.scene;
+        }
+        
+        logger.log(`[Flowers] Fetching ${modelName} from network (attempt ${i}): ${modelPath}`);
+        const response = await fetch(modelPath);
+        if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+        const arrayBuffer = await response.arrayBuffer();
+        await putModel(modelName, arrayBuffer);
+        const gltf = await loader.parseAsync(arrayBuffer, '');
         return gltf.scene;
+      } catch (error) {
+        logger.warn(`[Flowers] Attempt ${i} failed for ${modelName}:`, error);
+        if (i === maxAttempts) {
+          logger.error(`[Flowers] Persistent failure for ${modelName}. Falling back to direct load.`);
+          const gltf = await loader.loadAsync(modelPath);
+          return gltf.scene;
+        }
+        const delay = Math.min(1000 * Math.pow(1.5, i - 1), 10000);
+        await new Promise(r => setTimeout(r, delay));
       }
-      
-      logger.log(`[Flowers] Fetching ${modelName} from network: ${modelPath}`);
-      const response = await fetch(modelPath);
-      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      const arrayBuffer = await response.arrayBuffer();
-      await putModel(modelName, arrayBuffer);
-      const gltf = await loader.parseAsync(arrayBuffer, '');
-      return gltf.scene;
-    } catch (error) {
-      logger.warn(`[Flowers] Error loading from IndexedDB/Network, falling back directly:`, error);
-      const gltf = await loader.loadAsync(modelPath);
-      return gltf.scene;
     }
+    throw new Error(`Failed to load flower model ${modelName}`);
   }
+  /* eslint-enable no-await-in-loop */
 
   private static processFlowerMaterials(meshes: (THREE.Mesh | null)[]): void {
     meshes.forEach((mesh) => {

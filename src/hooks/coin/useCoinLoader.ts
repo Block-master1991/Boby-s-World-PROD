@@ -12,13 +12,25 @@ export const useCoinLoader = (sceneRef: MutableRefObject<THREE.Scene | null>) =>
     const isCoinModelLoadedRef = useRef<boolean>(false);
     const coinModelPromiseRef = useRef<Promise<void> | null>(null);
 
-    const loadFromNetwork = async (modelName: string) => {
-        const response = await fetch(COIN_MODEL_PATH);
-        if (!response.ok) throw new Error(`HTTP ${response.status}`);
-        const arr = await response.arrayBuffer();
-        await putModel(modelName, arr);
-        return arr;
+    /* eslint-disable no-await-in-loop */
+    const loadFromNetwork = async (modelName: string, maxAttempts: number = 20) => {
+        for (let i = 1; i <= maxAttempts; i++) {
+            try {
+                const response = await fetch(COIN_MODEL_PATH);
+                if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                const arr = await response.arrayBuffer();
+                await putModel(modelName, arr);
+                return arr;
+            } catch (err) {
+                logger.error(`[CoinLoader] Network attempt ${i} failed:`, err);
+                if (i === maxAttempts) throw err;
+                const delay = Math.min(1000 * Math.pow(1.5, i - 1), 10000);
+                await new Promise(r => setTimeout(r, delay));
+            }
+        }
+        throw new Error('All network attempts failed');
     };
+    /* eslint-enable no-await-in-loop */
 
     const loadCoinModel = useCallback(async () => {
         if (isCoinModelLoadedRef.current || !sceneRef.current) return;
@@ -28,21 +40,28 @@ export const useCoinLoader = (sceneRef: MutableRefObject<THREE.Scene | null>) =>
             try {
                 if (!gltfLoaderRef.current) gltfLoaderRef.current = new GLTFLoader();
                 const cached = await getModel('coin-model');
+                
+                // Use loadFromNetwork with internal retries
                 const data = cached || await loadFromNetwork('coin-model');
+                
                 if (data) {
                     const gltf = await gltfLoaderRef.current.parseAsync(data, '');
                     coinModelRef.current = gltf.scene;
+                    isCoinModelLoadedRef.current = true;
                 }
-                isCoinModelLoadedRef.current = true;
             } catch (error) {
-                logger.error(`[CoinLogic] Error:`, error);
+                logger.error(`[CoinLogic] Persistent failure:`, error);
+                // Last ditch effort - try direct loader load
                 try {
                     if (gltfLoaderRef.current) {
                         const gltf = await gltfLoaderRef.current.loadAsync(COIN_MODEL_PATH);
                         coinModelRef.current = gltf.scene;
                         isCoinModelLoadedRef.current = true;
                     }
-                } catch { coinModelPromiseRef.current = null; }
+                } catch (lastErr) {
+                    logger.error(`[CoinLogic] FATAL: All coin loading failed:`, lastErr);
+                    coinModelPromiseRef.current = null;
+                }
             }
         })();
         await coinModelPromiseRef.current;

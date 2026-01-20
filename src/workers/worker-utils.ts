@@ -1,9 +1,18 @@
 // src/workers/worker-utils.ts
-import { logger } from 'utils/logger';
+// import { logger } from 'utils/logger'; // REMOVED to prevent worker crash
 import type { FlowerOptions } from '../lib/ez-tree/environment/flowers';
 import type { GrassOptions } from '../lib/ez-tree/environment/grass';
 import type { RockOptions as RocksOptions } from '../lib/ez-tree/environment/rocks';
 import type { TreesOptions } from '../lib/ez-tree/environment/trees';
+
+const logger = {
+    // eslint-disable-next-line no-console
+    log: (msg: string) => console.log(msg),
+    // eslint-disable-next-line no-console
+    warn: (msg: string, err?: unknown) => console.warn(msg, err),
+    // eslint-disable-next-line no-console
+    error: (msg: string, err?: unknown) => console.error(msg, err)
+};
 
 export interface ChunkData {
     grassData: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] };

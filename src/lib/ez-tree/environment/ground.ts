@@ -12,30 +12,40 @@ let _dirtNormal: THREE.Texture | null = null;
 export class Ground extends THREE.Mesh {
   public options: GrassOptions;
 
-  public static async fetchAssets(): Promise<void> {
+  /* eslint-disable no-await-in-loop */
+  public static async fetchAssets(maxAttempts: number = 20): Promise<void> {
     if (loaded) return;
     const loader = new THREE.TextureLoader();
     const loadTex = async (path: string, name: string) => {
-      try {
-        const cached = await getModel(name);
-        if (cached) {
-          const blobUrl = URL.createObjectURL(new Blob([cached], { type: 'image/jpeg' }));
+      for (let i = 1; i <= maxAttempts; i++) {
+        try {
+          const cached = await getModel(name);
+          if (cached) {
+            const blobUrl = URL.createObjectURL(new Blob([cached], { type: 'image/jpeg' }));
+            const tex = await loader.loadAsync(blobUrl);
+            URL.revokeObjectURL(blobUrl);
+            return tex;
+          }
+          logger.log(`[Ground] Fetching ${name} from network (attempt ${i}): ${path}`);
+          const response = await fetch(path);
+          if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+          const buffer = await response.arrayBuffer();
+          await putModel(name, buffer);
+          const blobUrl = URL.createObjectURL(new Blob([buffer], { type: 'image/jpeg' }));
           const tex = await loader.loadAsync(blobUrl);
           URL.revokeObjectURL(blobUrl);
           return tex;
+        } catch (e) {
+          logger.warn(`[Ground] Attempt ${i} failed for ${name}:`, e);
+          if (i === maxAttempts) {
+            logger.error(`[Ground] Persistent failure for ${name}. Falling back to direct load.`);
+            return loader.loadAsync(path);
+          }
+          const delay = Math.min(1000 * Math.pow(1.5, i - 1), 10000);
+          await new Promise(r => setTimeout(r, delay));
         }
-        const response = await fetch(path);
-        if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-        const buffer = await response.arrayBuffer();
-        await putModel(name, buffer);
-        const blobUrl = URL.createObjectURL(new Blob([buffer], { type: 'image/jpeg' }));
-        const tex = await loader.loadAsync(blobUrl);
-        URL.revokeObjectURL(blobUrl);
-        return tex;
-      } catch (e) {
-        logger.error(`[Ground] Failed to load ${name}:`, e);
-        return loader.loadAsync(path);
       }
+      throw new Error(`Failed to load ground texture ${name}`);
     };
 
     _grassTexture = await loadTex('/textures/ground/grass.jpg', 'grass_texture');
@@ -47,7 +57,7 @@ export class Ground extends THREE.Mesh {
       tex.wrapT = THREE.RepeatWrapping;
       if (tex !== _dirtNormal) tex.colorSpace = THREE.SRGBColorSpace;
     });
-
+    /* eslint-enable no-await-in-loop */
     loaded = true;
   }
 

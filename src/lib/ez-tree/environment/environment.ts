@@ -19,8 +19,15 @@ export class Environment extends THREE.Object3D {
   private treesInstance: Trees;
   private flowersInstance: Flowers;
 
+  public loadingPromise: Promise<void>;
+  private resolveLoading!: () => void;
+
   constructor(renderer?: THREE.WebGLRenderer) {
     super();
+
+    this.loadingPromise = new Promise((resolve) => {
+      this.resolveLoading = resolve;
+    });
 
     // 1. Initialize core visual components and assign to properties
     const { ground, skybox } = this.createCoreComponents(renderer);
@@ -84,32 +91,39 @@ export class Environment extends THREE.Object3D {
     return { grass, rocks, trees, flowers };
   }
 
-  private async loadAssetsWithRetry(maxAttempts: number = 20): Promise<void> {
+  private async loadAssetsWithRetry(maxAttempts: number = 30): Promise<void> {
+    logger.log(`[Environment] Starting mandatory asset loading sequence (max attempts: ${maxAttempts})`);
+    
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
+        // Enforce sequential or parallel loading with high priority
         /* eslint-disable no-await-in-loop */
         await Promise.all([
           Grass.fetchAssets(),
           Rocks.fetchAssets(),
           this.treesInstance.fetchAssets(),
-          Flowers.fetchAssets()
+          Flowers.fetchAssets(),
+          Ground.fetchAssets() // Added Ground assets verification
         ]);
         /* eslint-enable no-await-in-loop */
 
-        logger.log(`[Environment] All assets loaded successfully on attempt ${attempt}`);
+        logger.log(`[Environment] ✅ All assets loaded and verified in IndexedDB on attempt ${attempt}`);
         this.chunkManager.setGeneratorsReady();
+        if (this.resolveLoading) this.resolveLoading();
         return;
       } catch (error) {
-        logger.warn(`[Environment] Asset loading failed (attempt ${attempt}):`, error);
+        logger.error(`[Environment] ❌ Asset loading failed (attempt ${attempt}/${maxAttempts}):`, error);
 
         if (attempt < maxAttempts) {
-          const delay = Math.min(2000 * Math.pow(1.2, attempt - 1), 15000);
+          const delay = Math.min(1000 * Math.pow(1.5, attempt - 1), 10000);
           /* eslint-disable no-await-in-loop */
           await new Promise(resolve => setTimeout(resolve, delay));
           /* eslint-enable no-await-in-loop */
         } else {
-          logger.error("[Environment] Forcing success with fallbacks after exhaustion");
+          logger.error("[Environment] 🚨 FATAL: All asset loading attempts exhausted. The world may be incomplete.");
+          // Still set ready but it's a critical failure state
           this.chunkManager.setGeneratorsReady();
+          if (this.resolveLoading) this.resolveLoading();
         }
       }
     }
@@ -119,6 +133,7 @@ export class Environment extends THREE.Object3D {
     if (cameraPosition) {
       this.skybox.position.copy(cameraPosition);
       this.ground.position.set(cameraPosition.x, 0, cameraPosition.z);
+      this.chunkManager.updatePlayerPosition(cameraPosition);
     }
     this.skybox.update(elapsedTime);
     this.chunkManager.updateModern(elapsedTime);

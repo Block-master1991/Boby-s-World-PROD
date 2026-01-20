@@ -157,5 +157,45 @@ export const HIGH_PRIORITY_ASSETS: AssetInfo[] = [
         sha256: '2556aa1200aff376017a339cb3496f1319d0a84d58824f220d6f7c033eb4c3ca',
         version: 'v1.0.0',
         description: 'Ground dirt normal texture'
+    },
+    {
+        path: '/models/flower_blue.glb',
+        type: 'model',
+        priority: 'high',
+        estimatedSizeMB: 0.2,
+        lastModified: '2025-12-30T10:00:00.000Z',
+        actualSizeMB: 0.15,
+        version: 'v1.0.0',
+        description: 'Blue flower model'
+    },
+    {
+        path: '/models/flower_white.glb',
+        type: 'model',
+        priority: 'high',
+        estimatedSizeMB: 0.2,
+        lastModified: '2025-12-30T10:01:00.000Z',
+        actualSizeMB: 0.15,
+        version: 'v1.0.0',
+        description: 'White flower model'
+    },
+    {
+        path: '/models/flower_yellow.glb',
+        type: 'model',
+        priority: 'high',
+        estimatedSizeMB: 0.2,
+        lastModified: '2025-12-30T10:02:00.000Z',
+        actualSizeMB: 0.15,
+        version: 'v1.0.0',
+        description: 'Yellow flower model'
+    },
+    {
+        path: '/models/Water-bottle.glb',
+        type: 'model',
+        priority: 'high',
+        estimatedSizeMB: 0.5,
+        lastModified: '2025-12-30T10:03:00.000Z',
+        actualSizeMB: 0.49,
+        version: 'v1.0.0',
+        description: 'Water bottle powerup model'
     }
 ];

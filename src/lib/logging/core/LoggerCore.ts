@@ -7,17 +7,28 @@ import type { ILoggerCore, LoggerCoreConfig } from './LoggerTypes';
 import { getLogLevelFromEnv, LogLevel, toPinoLevel } from './LogLevel';
 
 const isBrowser = typeof window !== 'undefined' && typeof window.document !== 'undefined';
-const isWorker = typeof self !== 'undefined' && 'postMessage' in self && !isBrowser;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const isWorker = typeof self !== 'undefined' && typeof (self as any).postMessage === 'function' && !isBrowser;
+
+const getEnv = (key: string): string | undefined => {
+    try {
+        if (typeof process !== 'undefined' && process.env) return process.env[key];
+        // In some environments, globalThis.process might exist
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (typeof globalThis !== 'undefined' && (globalThis as any).process?.env) return (globalThis as any).process.env[key];
+    } catch { /* ignore */ }
+    return undefined;
+};
 
 const DEFAULT_CONFIG: LoggerCoreConfig = {
     level: getLogLevelFromEnv(),
     name: 'BobyWorld',
     version: '1.0.0',
-    piiProtection: process.env['NODE_ENV'] === 'production',
+    piiProtection: getEnv('NODE_ENV') === 'production',
     sanitization: true,
     includeContext: true,
-    encryptionEnabled: !isBrowser && !isWorker && process.env['LOG_ENCRYPTION_ENABLED'] === 'true',
-    tamperDetectionEnabled: !isBrowser && !isWorker && process.env['LOG_TAMPER_DETECTION'] === 'true'
+    encryptionEnabled: !isBrowser && !isWorker && getEnv('LOG_ENCRYPTION_ENABLED') === 'true',
+    tamperDetectionEnabled: !isBrowser && !isWorker && getEnv('LOG_TAMPER_DETECTION') === 'true'
 };
 
 /**
@@ -37,10 +48,11 @@ export class LoggerCore implements ILoggerCore {
     }
 
     private createPinoLogger(): pino.Logger {
-        const isProduction = process.env['NODE_ENV'] === 'production';
+        const nodeEnv = getEnv('NODE_ENV');
+        const isProduction = nodeEnv === 'production';
         const pinoConfig: pino.LoggerOptions = {
             level: toPinoLevel(this.config.level!),
-            base: { name: this.config.name, version: this.config.version, env: process.env['NODE_ENV'] },
+            base: { name: this.config.name, version: this.config.version, env: nodeEnv },
             formatters: {
                 level: (label: string) => ({ level: label }),
                 log: (obj: Record<string, unknown>) => (obj['err'] ? { ...obj, err: pino.stdSerializers.err(obj['err'] as Error) } : obj)

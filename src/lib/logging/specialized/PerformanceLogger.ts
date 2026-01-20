@@ -27,12 +27,21 @@ interface LogMetricOptions {
     thresholds?: PerformanceThresholds | undefined;
 }
 
+const getEnv = (key: string): string | undefined => {
+    try {
+        if (typeof process !== 'undefined' && process.env) return process.env[key];
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if (typeof globalThis !== 'undefined' && (globalThis as any).process?.env) return (globalThis as any).process.env[key];
+    } catch { /* ignore */ }
+    return undefined;
+};
+
 const DEFAULT_CONFIG: PerformanceLoggerConfig = {
     enabled: true,
     slowRequestThreshold: 1000,
     slowQueryThreshold: 500,
     memoryWarningThreshold: 500 * 1024 * 1024, // 500 MB
-    autoHeapStats: process.env['NODE_ENV'] === 'production'
+    autoHeapStats: getEnv('NODE_ENV') === 'production'
 };
 
 /**

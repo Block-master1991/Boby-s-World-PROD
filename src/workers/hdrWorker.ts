@@ -5,8 +5,8 @@
  */
 
 /// <reference lib="webworker" />
+// import { logger } from 'utils/logger'; // REMOVED dependency
 
-import { logger } from 'utils/logger';
 import {
   calculateDownscaleTarget,
   decodeScanline,
@@ -16,6 +16,13 @@ import {
   toHalf,
   type HDRWorkerMessage
 } from './hdrUtils';
+
+const logger = {
+  // eslint-disable-next-line no-console
+    log: (msg: string) => console.log(msg),
+    // eslint-disable-next-line no-console
+    error: (msg: string, err?: unknown) => console.error(msg, err)
+};
 
 /**
  * Main Async Parser with On-the-Fly Downscaling.

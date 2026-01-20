@@ -7,14 +7,25 @@ import { professionalLogger } from '../logger-instance';
 const getLogger = () => professionalLogger;
 
 // Safe cross-runtime crypto detection (Node, Browser, Edge)
+// Safe cross-runtime crypto detection (Node, Browser, Edge)
 const getCrypto = () => {
     try {
-        if (typeof window === 'undefined') {
-            // Node/Edge environment: Use eval to prevent Webpack from bundling node:crypto for Edge Runtime
-            // eslint-disable-next-line no-eval
-            return eval('require("node:crypto")');
+        // Prioritize Node.js crypto if we're in a Node environment
+        if (typeof process !== 'undefined' && process.versions?.node) {
+            try {
+                // eslint-disable-next-line no-eval
+                return eval('require("node:crypto")');
+            } catch {
+                // Ignore error (e.g. in strict ESM without require), fall through to Web Crypto
+            }
         }
-        return window.crypto || null;
+
+        // Fallback to Web Crypto API (Browser/Edge)
+        const g = typeof globalThis !== 'undefined' ? globalThis : (typeof window !== 'undefined' ? window : (typeof self !== 'undefined' ? self : {}));
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((g as any).crypto) return (g as any).crypto;
+        
+        return null;
     } catch {
         return null;
     }
@@ -63,10 +74,15 @@ export class LogEncryption implements ILogEncryption {
         if (!cryptoModule) return null;
         
         if (this.config.keyDerivation === 'direct') {
-            return cryptoModule.createHash('sha256').update(secret).digest();
+            return cryptoModule.createHash ? cryptoModule.createHash('sha256').update(secret).digest() : null;
         }
 
         const usedSalt = salt || Buffer.from('boby-world-logs');
+        if (!cryptoModule.pbkdf2Sync) {
+            // eslint-disable-next-line no-console
+            console.warn('[LogEncryption] pbkdf2Sync not available in this environment. Encryption disabled.');
+            return null;
+        }
         return cryptoModule.pbkdf2Sync(secret, usedSalt, 100000, 32, 'sha256');
     }
 

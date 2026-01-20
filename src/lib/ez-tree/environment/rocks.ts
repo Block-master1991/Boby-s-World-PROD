@@ -138,25 +138,36 @@ export class Rocks extends THREE.Group {
   }
 }
 
-async function loadRockModel(loader: GLTFLoader, path: string, name: string): Promise<THREE.Group> {
-  try {
-    const cached = await getModel(name);
-    if (cached) {
-      const gltf = await loader.parseAsync(cached, '');
+/* eslint-disable no-await-in-loop */
+async function loadRockModel(loader: GLTFLoader, path: string, name: string, maxAttempts: number = 20): Promise<THREE.Group> {
+  for (let i = 1; i <= maxAttempts; i++) {
+    try {
+      const cached = await getModel(name);
+      if (cached) {
+        const gltf = await loader.parseAsync(cached, '');
+        return gltf.scene;
+      }
+      logger.log(`[Rocks] Fetching ${name} from network (attempt ${i}): ${path}`);
+      const response = await fetch(path);
+      if (!response.ok) throw new Error(`HTTP error ${response.status}`);
+      const buffer = await response.arrayBuffer();
+      await putModel(name, buffer);
+      const gltf = await loader.parseAsync(buffer, '');
       return gltf.scene;
+    } catch (error) {
+      logger.warn(`[Rocks] Attempt ${i} failed for ${name}:`, error);
+      if (i === maxAttempts) {
+        logger.error(`[Rocks] Persistent failure for ${name}. Falling back to direct load.`);
+        const gltf = await loader.loadAsync(path);
+        return gltf.scene;
+      }
+      const delay = Math.min(1000 * Math.pow(1.5, i - 1), 10000);
+      await new Promise(r => setTimeout(r, delay));
     }
-    const response = await fetch(path);
-    if (!response.ok) throw new Error(`HTTP error ${response.status}`);
-    const buffer = await response.arrayBuffer();
-    await putModel(name, buffer);
-    const gltf = await loader.parseAsync(buffer, '');
-    return gltf.scene;
-  } catch (error) {
-    logger.error(`Error loading rock model ${name}:`, error);
-    const gltf = await loader.loadAsync(path);
-    return gltf.scene;
   }
+  throw new Error(`Failed to load rock model ${name}`);
 }
+/* eslint-enable no-await-in-loop */
 
 function findRockMesh(scene: THREE.Group): THREE.Mesh | null {
   let mesh: THREE.Mesh | null = null;

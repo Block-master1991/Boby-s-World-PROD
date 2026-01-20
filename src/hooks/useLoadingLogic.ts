@@ -42,8 +42,19 @@ export const useLoadingLogic = (p: UseLoadingLogicProps) => {
     }, [p.onLoadStart, p.initializeDog, p.initializeCoins, p.initializeEnemies, p.onLoadProgress, p.onLoadComplete, p.rendererRef, p.cameraRef]);
 
     const setupGameWorldAndComplete = useCallback(async () => {
-        if (p.environmentRef.current?.skybox.loadingPromise) await p.environmentRef.current.skybox.loadingPromise;
-        if (p.dogModelRef.current) { await initializeWorldEnvironment(p.dogModelRef.current.position); p.onLoadComplete(true); }
+        // Wait for both skybox and general environment assets (trees, rocks, grass, etc)
+        const env = p.environmentRef.current;
+        if (env) {
+            await Promise.all([
+                env.skybox.loadingPromise,
+                env.loadingPromise
+            ]);
+        }
+        
+        if (p.dogModelRef.current) { 
+            await initializeWorldEnvironment(p.dogModelRef.current.position); 
+            p.onLoadComplete(true); 
+        }
     }, [p.dogModelRef, p.environmentRef, initializeWorldEnvironment, p.onLoadComplete]);
 
     return { loadAllGameAssets, setupGameWorldAndComplete };
