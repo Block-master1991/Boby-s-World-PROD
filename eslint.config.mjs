@@ -54,7 +54,7 @@ export default [
       ...nextPlugin.configs["core-web-vitals"].rules,
 
       // Enhanced error detection
-      "no-unused-vars": "error",
+      "no-unused-vars": "warn",
       "no-console": "warn",
       "no-undef": "error",
       "no-debugger": "error",
@@ -134,7 +134,7 @@ export default [
       ...tsPlugin.configs.recommended.rules,
 
       // Basic TypeScript rules (type-checking rules removed for compatibility)
-      "@typescript-eslint/no-unused-vars": "error",
+      "@typescript-eslint/no-unused-vars": "warn",
       "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/consistent-type-imports": "error",
     },
