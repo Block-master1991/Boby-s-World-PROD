@@ -58,6 +58,7 @@ const handleChunkLoad = (
     data.coinSpawns.forEach(spawn => {
         const coin = createCoin(spawn, props.coinModelRef.current!, props.octreeRef.current);
         if (coin) {
+            coin.chunkKey = chunkKey; // إضافة chunkKey
             props.coinMeshesRef.current.push(coin);
             props.sceneRef.current!.add(coin);
             if (props.octreeRef.current) {

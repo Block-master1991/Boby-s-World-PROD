@@ -5,6 +5,8 @@ import * as THREE from 'three';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
 
+import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils';
+
 type R = { model: THREE.Group; animations: THREE.AnimationClip[] };
 const cache: Record<string, R> = {};
 const loading: Record<string, Promise<R>> = {};
@@ -30,16 +32,46 @@ export const useEnemyLoader = () => {
     const m = t === 'carnivore' ? CARN : HERB;
     const r = f ?? m[Math.floor(Math.random() * m.length)];
     const n = `enemy_${r}`;
-    if (cache[n]) return { model: cache[n].model.clone(), animations: cache[n].animations };
-    if (loading[n]) { const x = await loading[n]; return { model: x.model.clone(), animations: x.animations }; }
+    
+    if (cache[n]) {
+      // Use SkeletonUtils.clone for cached models
+      const clonedModel = SkeletonUtils.clone(cache[n].model) as THREE.Group;
+      return { model: clonedModel, animations: cache[n].animations };
+    }
+    
+    if (loading[n]) { 
+      const x = await loading[n]; 
+      const clonedModel = SkeletonUtils.clone(x.model) as THREE.Group;
+      return { model: clonedModel, animations: x.animations }; 
+    }
+    
     const p = (async () => {
-      try { if (!loader.current) throw new Error('No loader'); const x = await load(loader.current, `/models/Enemies-Animals/${t === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${r}`, n); cache[n] = { model: x.model.clone(), animations: x.animations }; return x; }
-      catch (e) { logger.error(`[useEnemyLoader] ${n}:`, e); return placeholder(); }
+      try { 
+        if (!loader.current) throw new Error('No loader'); 
+        const x = await load(loader.current, `/models/Enemies-Animals/${t === 'carnivore' ? 'Carnivores' : 'Herbivores'}/${r}`, n); 
+        
+        // Ensure matrices are updated before caching/cloning
+        x.model.updateMatrixWorld(true);
+        
+        // Cache the original
+        cache[n] = { model: x.model, animations: x.animations }; 
+        
+        // Return a clone
+        const clonedModel = SkeletonUtils.clone(x.model) as THREE.Group;
+        return { model: clonedModel, animations: x.animations }; 
+      }
+      catch (e) { 
+        logger.error(`[useEnemyLoader] ${n}:`, e); 
+        return placeholder(); 
+      }
       finally { delete loading[n]; }
     })();
+    
     loading[n] = p;
     const res = await p;
-    return { model: res.model.clone(), animations: res.animations };
+    // The promise already returns a clone, but if we await it here we might get the cached struct.
+    // The load function above returns a clone for the first caller.
+    return res; 
   }, []);
 
   const preloadModels = useCallback(async () => { if (preloaded) return; logger.log('[useEnemyLoader] Preloading...'); await Promise.all([...CARN.map(n => loadEnemyModel('carnivore', n)), ...HERB.map(n => loadEnemyModel('herbivore', n))]); preloaded = true; logger.log('[useEnemyLoader] Done.'); }, [loadEnemyModel]);

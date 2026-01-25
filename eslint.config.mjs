@@ -20,7 +20,8 @@ export default [
       "**/*.spec.ts",
       "**/*.test.ts",
       "coverage/**",
-      ".next"
+      ".next",
+      "docs/src/**",
     ],
   },
   {

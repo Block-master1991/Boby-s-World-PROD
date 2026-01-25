@@ -30,6 +30,7 @@ yarn-error.log*
 pnpm-debug.log*
 
 # Editor directories and files
+docs/src
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json

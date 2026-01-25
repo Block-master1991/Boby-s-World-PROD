@@ -75,7 +75,8 @@
     "dist",
     "build",
     "**/*.spec.ts",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "docs/src/**"
   ],
   "ts-node": {
     "esm": true,
