@@ -5,7 +5,12 @@ import type { EnemyData } from '../types';
 
 const playAttack = (e: EnemyData, onFinish?: () => void) => {
   const c = e.enemyType === 'carnivore' ? ENEMY_ANIMATION_NAMES.CARNIVORE : ENEMY_ANIMATION_NAMES.HERBIVORE;
-  const a = e.actions[c.ATTACK];
+  // محاولة العثور على أنيميشن الهجوم، مع استخدام 'Attack' كبديل لـ 'Attack_Kick'
+  let a = e.actions[c.ATTACK];
+  if (!a && c.ATTACK === 'Attack_Kick') {
+    a = e.actions['Attack'];
+  }
+
   if (a) {
     e.isAttacking = true;
     e.currentAction?.fadeOut(0.1);
@@ -22,6 +27,9 @@ const playAttack = (e: EnemyData, onFinish?: () => void) => {
       }
     };
     e.mixer.addEventListener('finished', onFinished);
+  } else {
+    // في حال عدم وجود أي أنيميشن، لا نعلق في وضع الهجوم
+    if (onFinish) onFinish();
   }
 };
 

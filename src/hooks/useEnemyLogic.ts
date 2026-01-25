@@ -18,7 +18,7 @@ import { useDynamicModelLoader } from './useDynamicModelLoader';
 
 interface Props { sceneRef: MutableRefObject<THREE.Scene | null>; dogModelRef: MutableRefObject<THREE.Group | null>; isShieldActiveRef: MutableRefObject<boolean>; protectionBottleCountRef: MutableRefObject<number>; onConsumeProtectionBottle: () => void; onEnemyCollisionPenalty: () => void; isPausedRef: MutableRefObject<boolean>; coinMeshesRef: MutableRefObject<CoinData[]>; loadedCoinChunks: MutableRefObject<Set<string>>; onCoinCollected: () => void; octreeRef: MutableRefObject<Octree<GameObject> | null>; cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>; addFloatingEffect: (options: FloatingEffectOptions) => void; onAttackAnimationFinished?: (event: THREE.Event) => void; }
 
-interface Ctx { delta: number; dogPos: THREE.Vector3; frustum: THREE.Frustum; perf: ReturnType<typeof getDevicePerformanceConfig>; frame: number; }
+interface Ctx { delta: number; dogPos: THREE.Vector3; frustum: THREE.Frustum; perf: ReturnType<typeof getDevicePerformanceConfig>; frame: number; coinMap: Map<string, CoinData>; }
 
 type UpdateEnemyMovementFn = (enemy: EnemyData, delta: number, distance: number) => void;
 type CheckCollisionsFn = (enemy: EnemyData, distance: number) => void;
@@ -30,7 +30,7 @@ type UpdateReconciliationFn = (delta: number) => void;
 type UpdateOneFn = (enemy: EnemyData, ctx: Ctx) => void;
 type FilterDeadFn = (delta: number) => void;
 
-const updateVis = (e: EnemyData, coins: CoinData[]) => { const c = coins.find(x => x.uuid === e.targetCoinId); if (c) e.lod.visible = c.collected || c.visible; };
+const updateVis = (e: EnemyData, coinMap: Map<string, CoinData>) => { const c = coinMap.get(e.targetCoinId); if (c) e.lod.visible = c.collected || c.visible; };
 const getAnimD = (d: number, dt: number, mob: boolean) => d > 150 ? dt * 6 : d > 60 ? dt * (mob ? 3 : 2) : dt;
 const shouldAnim = (d: number, inF: boolean, ctx: Ctx) => { const { perf: p, frame: f } = ctx; if (p.isMobile && p.performanceLevel === 'low' && d > 40) return false; if (d < 60) return inF || d < 15; if (d < 150) return inF && (f % (p.isMobile ? 3 : 2) === 0); return inF && (f % 6 === 0); };
 const animE = (e: EnemyData, d: number, inF: boolean, ctx: Ctx) => { if (e.mixer && shouldAnim(d, inF, ctx)) e.mixer.update(getAnimD(d, ctx.delta, ctx.perf.isMobile)); };
@@ -87,7 +87,7 @@ const initializeEnemyHooks = (props: Props, enemies: React.MutableRefObject<Enem
 };
 
 const createUpdateOneCallback = (
-  coinMeshesRef: React.MutableRefObject<CoinData[]>,
+  _coinMeshesRef: React.MutableRefObject<CoinData[]>, // لم يعد مستخدماً
   updateEnemyMovement: UpdateEnemyMovementFn,
   checkCollisions: CheckCollisionsFn,
   updateOctree: UpdateOctreeFn
@@ -95,13 +95,11 @@ const createUpdateOneCallback = (
   return React.useCallback((e: EnemyData, ctx: Ctx) => {
     const d = ctx.dogPos.distanceTo(e.position);
 
-    // التحقق من رؤية العدو
-    updateVis(e, coinMeshesRef.current);
+    // التحقق من رؤية العدو باستخدام الخريطة السريعة
+    updateVis(e, ctx.coinMap);
 
-    // تحديث الأنيميشن بناءً على الأداء
     animE(e, d, ctx.frustum.containsPoint(e.position), ctx);
 
-    // التعامل مع الغرق
     if (e.isSinking) {
       e.sinkingTimer -= ctx.delta;
       if (e.sinkingTimer <= 0) {
@@ -112,7 +110,6 @@ const createUpdateOneCallback = (
       return;
     }
 
-    // التعامل مع الموت
     if (e.isDying) {
       e.deathTimer -= ctx.delta;
       if (e.deathTimer <= 0 && !e.isSinking) {
@@ -125,20 +122,37 @@ const createUpdateOneCallback = (
       return;
     }
 
+    // التحقق من جمع العملة (موت العدو عند اختفاء العملة)
+    const protectedCoin = ctx.coinMap.get(e.targetCoinId);
+    if (!protectedCoin && !e.isDying) {
+      e.isDying = true;
+      e.deathTimer = 1.5; // ENEMY_DEATH_DURATION
+      e.isAttacking = false;
+      
+      const animName = e.enemyType === 'carnivore' ? 'Death' : 'Death'; // Simplified
+      const action = e.actions[animName];
+      if (action) {
+        e.currentAction?.fadeOut(0.2);
+        action.reset().setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+        action.play();
+        e.currentAction = action;
+      }
+      return;
+    }
+
     // التحقق من الرؤية قبل التحديث
     if (!e.lod.visible) {
       return;
     }
 
     // تحديث الحركة والتصادم
-    if (!e.isDying) {
-      updateEnemyMovement(e, ctx.delta, d);
-      checkCollisions(e, d);
-    }
+    updateEnemyMovement(e, ctx.delta, d);
+    checkCollisions(e, d);
 
     // تحديث Octree
     updateOctree(e);
-  }, [coinMeshesRef, updateEnemyMovement, checkCollisions, updateOctree]);
+  }, [updateEnemyMovement, checkCollisions, updateOctree]);
 };
 
 const createFilterDeadCallback = (
@@ -173,6 +187,7 @@ interface UpdateEnemiesParams {
   dogModelRef: React.MutableRefObject<THREE.Group | null>;
   sceneRef: React.MutableRefObject<THREE.Scene | null>;
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>;
+  coinMeshesRef: React.MutableRefObject<CoinData[]>; // Add this
 }
 
 const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
@@ -186,7 +201,8 @@ const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
     isPausedRef,
     dogModelRef,
     sceneRef,
-    cameraRef
+    cameraRef,
+    coinMeshesRef // Add this
   } = params;
   return React.useCallback((delta: number) => {
     if (isPausedRef.current || !dogModelRef.current || !sceneRef.current || !cameraRef.current) return;
@@ -198,12 +214,17 @@ const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
     const f = new THREE.Frustum();
     f.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
     frameRef.current = (frameRef.current + 1) % 60;
+    // إنشاء خريطة للعملات لتحسين الأداء (O(1) lookup بدلاً من O(N))
+    const coinMap = new Map<string, CoinData>();
+    coinMeshesRef.current.forEach(c => coinMap.set(c.uuid, c));
+
     const ctx: Ctx = {
       delta,
       dogPos: dogModelRef.current.position,
       frustum: f,
       perf: getDevicePerformanceConfig(),
-      frame: frameRef.current
+      frame: frameRef.current,
+      coinMap // تمرير الخريطة للسياق
     };
     enemies.current.forEach(e => updateOne(e, ctx));
   }, [manageChunks, filterDead, updateOne, isPausedRef, dogModelRef, sceneRef, cameraRef, updateReconciliation, enemies]);
@@ -240,7 +261,8 @@ export const useEnemyLogic = (props: Props) => {
     isPausedRef: props.isPausedRef,
     dogModelRef: props.dogModelRef,
     sceneRef: props.sceneRef,
-    cameraRef: props.cameraRef
+    cameraRef: props.cameraRef,
+    coinMeshesRef: props.coinMeshesRef // Pass it here
   });
 
   React.useEffect(() => () => { cleanupModelPool(); enemies.current = []; }, [cleanupModelPool]);
