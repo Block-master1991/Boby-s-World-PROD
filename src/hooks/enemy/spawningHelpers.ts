@@ -1,8 +1,8 @@
 import type { CoinData } from '@/hooks/useCoinLogic';
-import * as THREE from 'three';
-import { WORLD_MIN_BOUND, WORLD_MAX_BOUND, ENEMY_PROTECTION_RADIUS_VAL } from '@/lib/constants';
-import type { GameObject } from '@/types/game';
+import { ENEMY_PROTECTION_RADIUS_VAL, WORLD_MAX_BOUND, WORLD_MIN_BOUND } from '@/lib/constants';
 import type { Octree } from '@/lib/Octree';
+import type { GameObject } from '@/types/game';
+import * as THREE from 'three';
 
 interface ChunkManager {
   getGameplaySpawns: (key: string) => {
@@ -97,6 +97,13 @@ export const getEnemySpawnPosition = (
       if (spawnPosition) {
         return spawnPosition;
       }
+      import('@/utils/logger').then(({ logger }) => {
+        logger.log(`[spawningHelpers] Enemy spawn for coin index ${coinIndex} not found in chunk ${chunkKey}, falling back to random.`);
+      });
+    } else {
+      import('@/utils/logger').then(({ logger }) => {
+        logger.log(`[spawningHelpers] Gameplay data for chunk ${chunkKey} not found, falling back to random.`);
+      });
     }
   }
 

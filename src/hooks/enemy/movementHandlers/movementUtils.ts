@@ -76,8 +76,6 @@ export const determineMovement = (params: MovementParams) => {
   if (dist < ENEMY_ATTACK_DISTANCE) {
     targetPosition.copy(e.lod.position);
     currentAnimation = e.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
-    e.isAttacking = true;
-    e.isIdling = false;
   } else if (dist < ENEMY_CHASE_RADIUS) {
     targetPosition.copy(dogPosition);
     isMoving = true;

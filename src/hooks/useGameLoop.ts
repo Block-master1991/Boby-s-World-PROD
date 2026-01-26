@@ -27,40 +27,47 @@ export const useGameLoop = (p: UseGameLoopProps) => {
     const aFId = useRef<number | null>(null); const lFTRef = useRef<number>(performance.now());
     const lPTRef = useRef<number>(0); const lPURef = useRef<number>(0); const fCRef = useRef<number>(0);
 
+    // Use Refs for callbacks to avoid stale closures in animate()
+    const cb = useRef(p);
+    cb.current = p;
+
     const trackMetrics = useCallback((currT: number, r: THREE.WebGLRenderer) => {
         fCRef.current++; if (currT - lPURef.current <= 5000) return;
         const dt = (currT - lPURef.current) / 1000; const fps = Math.round(fCRef.current / dt);
         fCRef.current = 0; lPURef.current = currT;
         const perf = performance as unknown as { memory?: { usedJSHeapSize: number } };
-        if (r.info) p.trackPerformance({ fps, memoryUsage: perf.memory?.usedJSHeapSize || 0, drawCalls: r.info.render.calls });
-    }, [p.trackPerformance]);
+        if (r.info) cb.current.trackPerformance({ fps, memoryUsage: perf.memory?.usedJSHeapSize || 0, drawCalls: r.info.render.calls });
+    }, []);
 
     const updateCore = useCallback((d: number) => {
-        p.updateDog(d); p.updateCoins(); p.updateEnemies(d); p.updateCamera(d); p.updateFloatingEffects(); p.updateParticles();
-        if (p.cameraRef.current) { getLODManager()?.updateCameraPosition(p.cameraRef.current.position); getGPUInstancingManager()?.updateInstances(); }
+        const { updateDog, updateCoins, updateEnemies, updateCamera, updateFloatingEffects, updateParticles, cameraRef } = cb.current;
+        updateDog(d); updateCoins(); updateEnemies(d); updateCamera(d); updateFloatingEffects(); updateParticles();
+        if (cameraRef.current) { getLODManager()?.updateCameraPosition(cameraRef.current.position); getGPUInstancingManager()?.updateInstances(); }
         if (Math.floor(performance.now() / 16.6) % 120 === 0) getMemoryMonitor()?.recordMemoryUsage();
-    }, [p.updateDog, p.updateCoins, p.updateEnemies, p.updateCamera, p.updateFloatingEffects, p.updateParticles, p.cameraRef]);
+    }, []);
 
     const updateAllSystems = useCallback((d: number) => {
-        if (!p.dogModelRef.current || p.isPausedRef.current) return;
-        updateCore(d); const dPos = p.dogModelRef.current.position;
-        p.speedBeamRef.current?.update(p.isSpeedBoostActiveRef.current, dPos, p.dogModelRef.current.rotation);
-        p.shieldEffectRef.current?.update(p.isShieldActiveRef.current, dPos);
-        if (p.environmentRef.current) {
-            p.environmentRef.current.update(p.clockRef.current.getElapsedTime(), dPos);
-            if (performance.now() - lPTRef.current > 1000) { lPTRef.current = performance.now(); p.environmentRef.current.preloadInitialScene(dPos).catch(logger.warn); }
+        const { dogModelRef, isPausedRef, speedBeamRef, isSpeedBoostActiveRef, shieldEffectRef, isShieldActiveRef, environmentRef, clockRef, cleanupModelPool } = cb.current;
+        if (!dogModelRef.current || isPausedRef.current) return;
+        updateCore(d); const dPos = dogModelRef.current.position;
+        speedBeamRef.current?.update(isSpeedBoostActiveRef.current, dPos, dogModelRef.current.rotation);
+        shieldEffectRef.current?.update(isShieldActiveRef.current, dPos);
+        if (environmentRef.current) {
+            environmentRef.current.update(clockRef.current.getElapsedTime(), dPos);
+            if (performance.now() - lPTRef.current > 1000) { lPTRef.current = performance.now(); environmentRef.current.preloadInitialScene(dPos).catch(logger.warn); }
         }
-        p.cleanupModelPool(60000, 5);
-    }, [updateCore, p.cleanupModelPool, p.dogModelRef, p.isPausedRef, p.isShieldActiveRef, p.isSpeedBoostActiveRef, p.speedBeamRef, p.shieldEffectRef, p.environmentRef, p.clockRef]);
+        cleanupModelPool(60000, 5);
+    }, [updateCore]);
 
     const animate = useCallback(() => {
-        if (!p.rendererRef.current || !p.sceneRef.current || !p.cameraRef.current || !p.sessionPublicKey) { aFId.current = null; return; }
+        const { rendererRef, sceneRef, cameraRef, sessionPublicKey, clockRef } = cb.current;
+        if (!rendererRef.current || !sceneRef.current || !cameraRef.current || !sessionPublicKey) { aFId.current = null; return; }
         const perf = getDevicePerformanceConfig(); const currT = performance.now();
         if (perf.isMobile && currT - lFTRef.current < 1000 / perf.game.fpsLimit) { aFId.current = requestAnimationFrame(animate); return; }
-        lFTRef.current = currT; trackMetrics(currT, p.rendererRef.current); aFId.current = requestAnimationFrame(animate);
-        updateAllSystems(Math.min(p.clockRef.current.getDelta(), 1 / 30));
-        try { p.rendererRef.current.render(p.sceneRef.current, p.cameraRef.current); } catch (e) { logger.error("Render error:", e); }
-    }, [p.sessionPublicKey, trackMetrics, updateAllSystems, p.rendererRef, p.sceneRef, p.cameraRef, p.clockRef]);
+        lFTRef.current = currT; trackMetrics(currT, rendererRef.current); aFId.current = requestAnimationFrame(animate);
+        updateAllSystems(Math.min(clockRef.current.getDelta(), 1 / 30));
+        try { rendererRef.current.render(sceneRef.current, cameraRef.current); } catch (e) { logger.error("Render error:", e); }
+    }, [trackMetrics, updateAllSystems]);
 
     return { animate, animationFrameId: aFId };
 };

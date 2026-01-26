@@ -1,5 +1,6 @@
 import { cacheManager, performanceMonitor } from '@/lib/advanced-service-worker';
 import type { AuthState } from '@/types/auth';
+import { logger } from '@/utils/logger';
 import { useWallet } from '@solana/wallet-adapter-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -101,6 +102,14 @@ const useSessionCheck = (
                     if (data.authenticated && data.user?.wallet) {
                         handleAuthSuccess(data.user.wallet, refs, setAuthState);
                         return true;
+                    }
+                } else if (res?.status === 401 || res?.status === 403) {
+                    // FORCE LOGOUT: If we were authenticated and now we get 401/403, we must clear state.
+                    if (refs.isAuthenticated.current) {
+                        logger.warn('[AuthCore] Session expired or unauthorized. Clearing state.');
+                        handleAuthFailure(refs, setAuthState);
+                        // The AuthProvider will detect this change and can redirect if needed.
+                        return false;
                     }
                 }
                 handleAuthFailure(refs, setAuthState);

@@ -16,19 +16,20 @@ interface SpawningProps {
     coinModelRef: MutableRefObject<THREE.Group | null>;
     isCoinModelLoadedRef: MutableRefObject<boolean>;
     loadCoinModel: () => Promise<void>;
+    collectedSpawnKeysRef: MutableRefObject<Set<string>>;
 }
 
 interface ChunkManager {
     getGameplaySpawns: (key: string) => { coinSpawns: Array<{ position: number[] }> } | undefined;
 }
 
-const createCoin = (spawn: { position: number[] }, model: THREE.Group, octree: Octree<GameObject> | null): CoinData | null => {
+const createCoin = (spawn: { position: number[] }, model: THREE.Group, octree: Octree<GameObject> | null, spawnKey: string): CoinData | null => {
     if (!spawn.position || spawn.position.length < 3) return null;
     const [coinX, , coinZ] = spawn.position;
     if (typeof coinX !== 'number' || typeof coinZ !== 'number') return null;
 
     const coin = model.clone() as CoinData;
-    Object.assign(coin, { collected: false, value: COIN_VALUE, rotationSpeed: COIN_ROTATION_SPEED, userData: {} });
+    Object.assign(coin, { collected: false, value: COIN_VALUE, rotationSpeed: COIN_ROTATION_SPEED, userData: {}, spawnKey });
     
     const coinY = octree ? octree.getGroundHeightAt(coinX, coinZ) + COIN_RADIUS : COIN_RADIUS;
     coin.position.set(coinX, coinY, coinZ);
@@ -56,9 +57,15 @@ const handleChunkLoad = (
     if (!data?.coinSpawns || !props.coinModelRef.current || !props.sceneRef.current) return;
 
     data.coinSpawns.forEach(spawn => {
-        const coin = createCoin(spawn, props.coinModelRef.current!, props.octreeRef.current);
+        const [x, , z] = spawn.position || [0, 0, 0];
+        const spawnKey = `coin_${(x ?? 0).toFixed(2)}_${(z ?? 0).toFixed(2)}`;
+        
+        // PERSISTENT COLLECTION CHECK: Skip if already spent in this session
+        if (props.collectedSpawnKeysRef.current.has(spawnKey)) return;
+
+        const coin = createCoin(spawn, props.coinModelRef.current!, props.octreeRef.current, spawnKey);
         if (coin) {
-            coin.chunkKey = chunkKey; // إضافة chunkKey
+            coin.chunkKey = chunkKey;
             props.coinMeshesRef.current.push(coin);
             props.sceneRef.current!.add(coin);
             if (props.octreeRef.current) {

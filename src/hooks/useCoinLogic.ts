@@ -60,7 +60,8 @@ const resetSystem = (
     refs: { 
         scene: THREE.Scene, dog: THREE.Group, octree: Octree<GameObject> | null, 
         meshes: CoinData[], loaded: Set<string>, remaining: MutableRefObject<number>,
-        chunkRef: MutableRefObject<{ chunkX: number; chunkZ: number } | null>, lastDogPos: MutableRefObject<THREE.Vector3>
+        chunkRef: MutableRefObject<{ chunkX: number; chunkZ: number } | null>, lastDogPos: MutableRefObject<THREE.Vector3>,
+        collectedKeys: MutableRefObject<Set<string>>
     },
     count: number,
     loader: (x: number, z: number) => void,
@@ -70,6 +71,7 @@ const resetSystem = (
     refs.meshes.length = 0;
     refs.loaded.clear();
     refs.remaining.current = count;
+    refs.collectedKeys.current.clear(); // Clear persistent collection on reset
 
     const { chunkX, chunkZ } = getChunkCoordinates(refs.dog.position.x, refs.dog.position.z);
     refs.chunkRef.current = { chunkX, chunkZ };
@@ -85,19 +87,21 @@ export const useCoinLogic = (props: UseCoinLogicProps) => {
     const coinMeshesRef = useRef<CoinData[]>([]);
     const remainingCoinsRef = useRef<number>(props.COIN_COUNT);
     const currentDogChunk = useRef<{ chunkX: number; chunkZ: number } | null>(null);
+    const collectedSpawnKeysRef = useRef<Set<string>>(new Set());
 
     const { coinModelRef, isCoinModelLoadedRef, loadCoinModel } = useCoinLoader(props.sceneRef);
     const { loadedCoinChunks, loadCoinsForChunk, unloadCoinsFromChunk } = useCoinSpawning({
-        ...props, coinMeshesRef, remainingCoinsRef, coinModelRef, isCoinModelLoadedRef, loadCoinModel
+        ...props, coinMeshesRef, remainingCoinsRef, coinModelRef, isCoinModelLoadedRef, loadCoinModel, collectedSpawnKeysRef
     });
-    const { updateCoinPhysics, lastDogPositionRef } = useCoinInteraction({ ...props, coinMeshesRef, remainingCoinsRef });
+    const { updateCoinPhysics, lastDogPositionRef } = useCoinInteraction({ ...props, coinMeshesRef, remainingCoinsRef, collectedSpawnKeysRef });
 
     const initializeCoins = useCallback(() => {
         if (!props.sceneRef.current || !props.dogModelRef.current) return;
         resetSystem({
             scene: props.sceneRef.current, dog: props.dogModelRef.current, octree: props.octreeRef.current,
             meshes: coinMeshesRef.current, loaded: loadedCoinChunks.current, remaining: remainingCoinsRef,
-            chunkRef: currentDogChunk, lastDogPos: lastDogPositionRef
+            chunkRef: currentDogChunk, lastDogPos: lastDogPositionRef,
+            collectedKeys: collectedSpawnKeysRef
         }, props.COIN_COUNT, loadCoinsForChunk, props.onRemainingCoinsUpdate);
     }, [props.sceneRef, props.dogModelRef, props.octreeRef, loadCoinsForChunk, props.onRemainingCoinsUpdate, props.COIN_COUNT, lastDogPositionRef, loadedCoinChunks]);
 

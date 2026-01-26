@@ -30,6 +30,7 @@ export interface PlayerDocument {
   gameUSDTBalance: number;
   lastInteraction: TimestampProperty;
   publicKey: string;
+  lastProcessedBatchId?: string;
   inventory?: InventoryItem[];
   updatedAt?: TimestampProperty;
   lastLogin?: TimestampProperty;

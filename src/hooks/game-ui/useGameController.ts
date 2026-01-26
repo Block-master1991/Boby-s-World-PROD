@@ -26,7 +26,15 @@ export const useGameController = ({ onSheetsStateChange }: UseGameControllerProp
     // Core Logic Hooks
     const gameData = useGameData({ sessionPublicKey: sessionPublicKey?.toBase58() });
     const { fetchPlayerData } = gameData;
-    const economy = useGameEconomy({ isAuthenticated, isWalletConnectedAndMatching, authUserPublicKey: authUser?.publicKey, playerGameUSDT: gameData.playerGameUSDT, fetchPlayerData });
+    const economy = useGameEconomy({ 
+        isAuthenticated, 
+        isWalletConnectedAndMatching, 
+        authUserPublicKey: authUser?.publicKey, 
+        playerGameUSDT: gameData.playerGameUSDT, 
+        fetchPlayerData,
+        updateBalanceLocally: gameData.updateBalanceLocally,
+        lastSyncId: gameData.lastSyncId
+    });
     const effects = useGameEffects();
     const inventory = useGameInventory({
         isAuthenticated, isWalletConnectedAndMatching, authUserPublicKey: authUser?.publicKey, fetchPlayerData,
@@ -46,7 +54,7 @@ export const useGameController = ({ onSheetsStateChange }: UseGameControllerProp
     useEffect(() => { onSheetsStateChange?.(isPaused); }, [isPaused, onSheetsStateChange]);
 
     const overlayProps = useMemo(() => ({
-        sessionCollectedUSDT: economy.sessionCollectedUSDT, remainingCoinsOnMap: economy.remainingCoinsOnMap,
+        sessionCollectedUSDT: economy.displayedPlayerGameUSDT, remainingCoinsOnMap: economy.remainingCoinsOnMap,
         COIN_COUNT: economy.COIN_COUNT_FOR_GAME_LOGIC, protectionBottleCount: inventory.displayedProtectionBottleCount,
         isSpeedBoostActive: effects.isSpeedBoostActive, speedBoostTimeLeft: effects.speedBoostTimeLeft,
         isShieldActive: effects.isShieldActive, shieldTimeLeft: effects.shieldTimeLeft,

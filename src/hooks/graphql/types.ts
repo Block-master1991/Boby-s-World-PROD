@@ -56,6 +56,7 @@ export interface PlayerData {
     coins: number;
     experience: number;
     inventory: UserInventoryItem[];
+    lastProcessedBatchId?: string;
 }
 
 export interface FetchPlayerDataResponse {

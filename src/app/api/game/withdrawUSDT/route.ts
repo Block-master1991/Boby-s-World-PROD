@@ -41,6 +41,7 @@ export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedReq
       }
 
       const updatedBalance = currentBalance - amount;
+      logger.log(`[Database] withdrawUSDT - User: ${userPublicKey}, Old: ${currentBalance}, Withdraw: ${amount}, New: ${updatedBalance}`);
       transaction.update(playerDocRef, {
         gameUSDTBalance: updatedBalance,
         lastInteraction: FieldValue.serverTimestamp(),

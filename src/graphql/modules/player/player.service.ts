@@ -11,6 +11,7 @@ export interface PlayerData {
   inventory: unknown[];
   createdAt: string;
   lastLogin?: string;
+  lastProcessedBatchId?: string;
 }
 
 import type { GraphQLContext } from '../../context';
@@ -52,6 +53,7 @@ export class PlayerService {
       inventory: this.sanitizeInventory(player['inventory'] || []),
       createdAt,
       lastLogin,
+      lastProcessedBatchId: player['lastProcessedBatchId'] || "",
     };
   }
 

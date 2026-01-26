@@ -1,6 +1,7 @@
 import { useToast } from '@/hooks/use-toast';
 import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from '@/lib/items';
 import { useApiFetch } from '@/utils/api';
+import { logger } from '@/utils/logger';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 interface OpUpdate { id: string; type: 'useItem'|'consumeBottle'; amount?: number; itemId?: string | undefined; timestamp: number; status: 'pending'|'failed'; }
@@ -51,15 +52,20 @@ export const useGameInventory = (p: InvProps) => {
                 // eslint-disable-next-line no-await-in-loop
                 const r=await apiFetch('/api/game/consumeProtectionBottle', {method:'POST'}); 
                 if(r.ok){ 
+                    logger.log("[Inventory] API Success: Bottle consumed. Refreshing player data...");
                     // eslint-disable-next-line no-await-in-loop
                     await p.fetchPlayerData(); sOps(prev=>prev.filter(u=>u.id!==curr.id)); 
                 } else throw new Error(); 
             }
-            catch{ sOps(prev=>prev.map(u=>u.id===curr.id?{...u,status:'failed'}:u)); } finally{ q.current.shift(); }
+            catch{ 
+                logger.error("[Inventory] API Error consuming bottle");
+                sOps(prev=>prev.map(u=>u.id===curr.id?{...u,status:'failed'}:u)); 
+            } finally{ q.current.shift(); }
         } proc.current=false;
     }, [apiFetch, p]);
 
     const consumeB = useCallback(() => {
+        logger.log(`[Inventory] consumeB called. Counts.b: ${counts.b}`);
         if(counts.b <= 0) return; const id = addOp('consumeBottle', 1); q.current.push({id});
         if(!proc.current) runQ();
     }, [counts.b, addOp, runQ]);

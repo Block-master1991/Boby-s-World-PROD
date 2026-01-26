@@ -1,7 +1,7 @@
 import { logger } from '@/utils/logger';
 import { useCallback } from 'react';
 import * as THREE from 'three';
-import { ENEMY_ANIMATION_NAMES } from '../constants';
+import { ENEMY_ANIMATION_NAMES, ENEMY_DEATH_DURATION } from '../constants';
 import type { EnemyData } from '../types';
 
 const playDeath = (e: EnemyData) => {
@@ -20,7 +20,7 @@ export const createDeathHandlers = () => {
   const handleDeath = useCallback((e: EnemyData) => {
     if (e.isDying) return;
     e.isDying = true;
-    e.deathTimer = 0;
+    e.deathTimer = ENEMY_DEATH_DURATION;
     playDeath(e);
     logger.log(`[useEnemyCombat] Enemy ${e.uuid} killed.`);
   }, []);

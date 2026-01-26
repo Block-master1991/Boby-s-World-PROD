@@ -1,5 +1,7 @@
+import { ENEMY_COLLISION_PENALTY_USDT } from '@/lib/constants';
+import { logger } from '@/utils/logger';
 import { useCallback } from 'react';
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import type { FloatingEffectOptions } from '../../coin/useCoinInteraction';
 import type { EnemyData } from '../types';
 
@@ -18,44 +20,16 @@ export const createPenaltyHandlers = (params: PenaltyHandlersParams) => {
     onConsumeProtectionBottle, onEnemyCollisionPenalty, addFloatingEffect 
   } = params;
 
-  const penalty = useCallback((e: EnemyData) => {
-    if (isShieldActiveRef.current) {
-      return;
-    }
+  const applyPenalty = useCallback((e: EnemyData) => {
+    if (e.hasAppliedDeathEffect || isShieldActiveRef.current) return;
+
     if (protectionBottleCountRef.current > 0) {
-      onConsumeProtectionBottle();
-      addFloatingEffect({
-        position: e.position.clone().add(new THREE.Vector3(0, 2, 0)),
-        effectType: 'Bottle',
-        value: -1,
-        animationType: 'floatUp',
-        is3DModel: true
-      });
-      return;
-    }
-    if (!e.lastAttackTime || Date.now() - e.lastAttackTime > 2000) {
-      onEnemyCollisionPenalty();
-      const p = dogModelRef.current?.position;
-      if (p) addFloatingEffect({
-        position: p.clone().add(new THREE.Vector3(0, 1, 0)),
-        effectType: 'penalty',
-        value: -50,
-        animationType: 'floatUp'
-      });
-    }
-  }, [isShieldActiveRef, protectionBottleCountRef, onConsumeProtectionBottle, onEnemyCollisionPenalty, addFloatingEffect, dogModelRef]);
-
-  const handleDeathEffect = useCallback((e: EnemyData) => {
-    if (e.hasAppliedDeathEffect) return;
-
-    if (isShieldActiveRef.current) {
-      // الدرع يحمي من العقوبة
-    } else if (protectionBottleCountRef.current > 0) {
+      logger.log(`[Penalty] Consuming bottle. Current Ref: ${protectionBottleCountRef.current}`);
       protectionBottleCountRef.current--;
       onConsumeProtectionBottle();
       if (dogModelRef.current) {
         addFloatingEffect({
-          position: dogModelRef.current.position.clone().add(new THREE.Vector3(0, 2, 0)),
+          position: dogModelRef.current.position.clone(),
           effectType: 'Bottle',
           value: -1,
           animationType: 'followTarget',
@@ -67,16 +41,17 @@ export const createPenaltyHandlers = (params: PenaltyHandlersParams) => {
       onEnemyCollisionPenalty();
       if (dogModelRef.current) {
         addFloatingEffect({
-          position: dogModelRef.current.position.clone().add(new THREE.Vector3(0, 1, 0)),
+          position: dogModelRef.current.position.clone(),
           effectType: 'penalty',
-          value: -50,
+          value: -ENEMY_COLLISION_PENALTY_USDT,
           animationType: 'followTarget',
-          is3DModel: false
+          is3DModel: false,
+          targetMesh: dogModelRef.current
         });
       }
     }
     e.hasAppliedDeathEffect = true;
-  }, [isShieldActiveRef, protectionBottleCountRef, onConsumeProtectionBottle, onEnemyCollisionPenalty, addFloatingEffect, dogModelRef]);
+  }, [isShieldActiveRef, dogModelRef, protectionBottleCountRef, onConsumeProtectionBottle, onEnemyCollisionPenalty, addFloatingEffect]);
 
-  return { penalty, handleDeathEffect };
+  return { penalty: applyPenalty, handleDeathEffect: applyPenalty };
 };

@@ -14,6 +14,7 @@ export const playerTypeDefs = `
     inventory: [InventoryItem!]!
     createdAt: DateTime!
     lastLogin: DateTime
+    lastProcessedBatchId: String
   }
 
   type PlayerDataResult {

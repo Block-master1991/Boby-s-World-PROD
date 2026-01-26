@@ -19,6 +19,7 @@ export interface CoinData extends THREE.Group, BaseGameObject {
   rotationSpeed?: number;
   type: 'item';
   chunkKey?: string; // Chunk key for spatial management
+  spawnKey?: string; // Persistent ID for this spawn point
   userData: {
     isAttracted?: boolean;
     originalRotationSpeed?: number;

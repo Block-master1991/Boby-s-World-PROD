@@ -1,27 +1,40 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 // Explicit type for items to avoid any
 type PersistenceItem = unknown;
+type Processor<T> = (items: T[]) => Promise<void>;
 
-const usePersistence = (key: string, items: PersistenceItem[]) => {
+const usePersistence = (key: string, queue: PersistenceItem[], activeBatch: PersistenceItem[]) => {
     useEffect(() => {
         if (!key) return;
         try { 
-            if (items.length) {
-                localStorage.setItem(key, JSON.stringify(items)); 
+            const allItems = [...activeBatch, ...queue];
+            if (allItems.length) {
+                localStorage.setItem(key, JSON.stringify(allItems)); 
             } else {
                 localStorage.removeItem(key);
             }
         } catch { /* noop */ }
-    }, [key, items]);
+    }, [key, queue, activeBatch]);
 };
-
-type Processor<T> = (items: T[]) => Promise<void>;
 
 export const useBatchedUpdates = <T>(processor: Processor<T>, interval = 2000, persistKey = '') => {
     const [queue, setQueue] = useState<T[]>([]);
+    const [activeBatch, setActiveBatch] = useState<T[]>([]);
+    const [isProcessing, setIsProcessing] = useState(false);
     
-    // Initial Load
+    // Ref-based backup of the queue for Strict-Mode safe flushing
+    const queueRef = useRef<T[]>([]);
+    useEffect(() => { queueRef.current = queue; }, [queue]);
+
+    // Busy lock that can be checked synchronously inside the interval
+    const isBusyRef = useRef(false);
+    useEffect(() => { isBusyRef.current = isProcessing; }, [isProcessing]);
+
+    const procRef = useRef(processor);
+    useEffect(() => { procRef.current = processor; }, [processor]);
+
+    // Initial Load - Only run once on mount
     useEffect(() => {
         if (!persistKey) return;
         try {
@@ -29,36 +42,48 @@ export const useBatchedUpdates = <T>(processor: Processor<T>, interval = 2000, p
             if (saved) {
                 const parsed = JSON.parse(saved);
                 if (Array.isArray(parsed) && parsed.length > 0) {
-                    processor(parsed).then(() => localStorage.removeItem(persistKey)).catch(() => setQueue(prev => [...parsed, ...prev]));
+                    setQueue(prev => [...parsed, ...prev]);
                 }
             }
         } catch { /* noop */ }
-    }, [persistKey, processor]);
+    }, [persistKey]);
 
-    usePersistence(persistKey, queue);
+    usePersistence(persistKey, queue, activeBatch);
 
-    // Process function
     const processQueueChunk = useCallback(async (chunk: T[]) => {
+        if (!chunk.length) return;
+        setIsProcessing(true);
+        setActiveBatch(chunk);
         try {
-            await processor(chunk);
+            await procRef.current(chunk);
+            setActiveBatch([]);
         } catch {
             setQueue(prev => [...chunk, ...prev]);
+            setActiveBatch([]);
+        } finally {
+            setIsProcessing(false);
         }
-    }, [processor]);
+    }, [procRef]);
 
     useEffect(() => {
-        const timer = setInterval(() => {
-            setQueue(current => {
-                if (current.length === 0) return current;
-                // Move execution to next tick/microtask to avoid nesting state updates inside state updates synchronously logic blocks
-                // Actually, just calling the async function is fine, it won't block.
-                processQueueChunk(current);
-                return [];
-            });
-        }, interval);
+        const triggerProcessing = () => {
+            // Check busy lock synchronously to avoid overlapping ticks
+            if (isBusyRef.current || queueRef.current.length === 0) return;
+            
+            // Atomically capture the chunk and clear the queue state
+            // Crucial: The side effect (starting the sync) happens OUTSIDE setQueue
+            const chunkToProcess = [...queueRef.current];
+            setQueue([]); 
+            
+            // Start processing. This is safe from Strict Mode double-firing 
+            // because triggerProcessing is a stable function called by setInterval.
+            processQueueChunk(chunkToProcess);
+        };
+        
+        const timer = setInterval(triggerProcessing, interval);
         return () => clearInterval(timer);
-    }, [processQueueChunk, interval]);
+    }, [processQueueChunk, interval]); // No longer depends on isProcessing state directly
 
     const addUpdate = useCallback((item: T) => setQueue(prev => [...prev, item]), []);
-    return { addUpdate, queueLength: queue.length };
+    return { addUpdate, queueLength: queue.length + activeBatch.length };
 };

@@ -21,7 +21,7 @@ interface Props { sceneRef: MutableRefObject<THREE.Scene | null>; dogModelRef: M
 interface Ctx { delta: number; dogPos: THREE.Vector3; frustum: THREE.Frustum; perf: ReturnType<typeof getDevicePerformanceConfig>; frame: number; coinMap: Map<string, CoinData>; }
 
 type UpdateEnemyMovementFn = (enemy: EnemyData, delta: number, distance: number) => void;
-type CheckCollisionsFn = (enemy: EnemyData, distance: number) => void;
+type CheckCollisionsFn = (enemy: EnemyData) => void;
 type UpdateOctreeFn = (enemy: EnemyData) => void;
 type UpdateDeathStateFn = (enemy: EnemyData, delta: number) => boolean;
 type RemoveFromOctreeFn = (enemy: EnemyData) => void;
@@ -100,27 +100,7 @@ const createUpdateOneCallback = (
 
     animE(e, d, ctx.frustum.containsPoint(e.position), ctx);
 
-    if (e.isSinking) {
-      e.sinkingTimer -= ctx.delta;
-      if (e.sinkingTimer <= 0) {
-        const sinkSpeed = 0.5;
-        e.lod.position.y -= sinkSpeed * ctx.delta;
-        e.position.copy(e.lod.position);
-      }
-      return;
-    }
-
-    if (e.isDying) {
-      e.deathTimer -= ctx.delta;
-      if (e.deathTimer <= 0 && !e.isSinking) {
-        e.isSinking = true;
-        e.sinkingTimer = 1.0;
-        e.initialDeathY = e.lod.position.y;
-        e.lod.visible = true;
-        e.visible = true;
-      }
-      return;
-    }
+    // ملاحظة: تم نقل منطق الموت والغرق إلى updateDeathState الذي يُستدعى في filterDead
 
     // التحقق من جمع العملة (موت العدو عند اختفاء العملة)
     const protectedCoin = ctx.coinMap.get(e.targetCoinId);
@@ -148,7 +128,7 @@ const createUpdateOneCallback = (
 
     // تحديث الحركة والتصادم
     updateEnemyMovement(e, ctx.delta, d);
-    checkCollisions(e, d);
+    checkCollisions(e);
 
     // تحديث Octree
     updateOctree(e);

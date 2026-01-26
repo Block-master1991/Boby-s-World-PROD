@@ -1,4 +1,5 @@
 import type { GameObject } from '@/types/game';
+import { logger } from '@/utils/logger';
 import type { MutableRefObject } from 'react';
 import { useCallback, useRef } from 'react';
 import * as THREE from 'three';
@@ -30,6 +31,7 @@ interface InteractionProps {
     sceneRef: MutableRefObject<THREE.Scene | null>;
     octreeRef: MutableRefObject<Octree<GameObject> | null>;
     addFloatingEffect: (options: FloatingEffectOptions) => void;
+    collectedSpawnKeysRef: MutableRefObject<Set<string>>;
     COIN_MAGNET_RADIUS?: number;
 }
 
@@ -47,6 +49,7 @@ interface ProcessContext {
     };
     refs: {
         remaining: MutableRefObject<number>;
+        collectedKeys: MutableRefObject<Set<string>>;
     };
 }
 
@@ -63,13 +66,27 @@ const removeCoin = (coin: CoinData, scene: THREE.Scene, octree: Octree<GameObjec
     }
 };
 
-const handleCollection = (coin: CoinData, ctx: ProcessContext) => {
-    if (!coin.userData.isCredited) {
+const isSpawnAlreadyCollected = (coin: CoinData, ctx: ProcessContext) => 
+    !!(coin.spawnKey && ctx.refs.collectedKeys.current.has(coin.spawnKey));
+
+const tryCreditCoin = (coin: CoinData, ctx: ProcessContext, source: string) => {
+    if (coin.userData.isCredited) return;
+    
+    if (isSpawnAlreadyCollected(coin, ctx)) {
         coin.userData.isCredited = true;
-        ctx.callbacks.collect();
-        ctx.refs.remaining.current--;
-        ctx.callbacks.updateRemaining(ctx.refs.remaining.current);
+        return;
     }
+
+    coin.userData.isCredited = true;
+    if (coin.spawnKey) ctx.refs.collectedKeys.current.add(coin.spawnKey);
+    logger.log(`[World] Coin ${source}: ${coin.spawnKey || coin.uuid}. Crediting ${coin.value || 0.001} USDT.`);
+    ctx.callbacks.collect();
+    ctx.refs.remaining.current--;
+    ctx.callbacks.updateRemaining(ctx.refs.remaining.current);
+};
+
+const handleCollection = (coin: CoinData, ctx: ProcessContext) => {
+    tryCreditCoin(coin, ctx, 'collected');
 
     const opts: FloatingEffectOptions = {
         position: coin.position.clone(),
@@ -113,6 +130,15 @@ const updateCoinVisuals = (coin: CoinData, ctx: ProcessContext) => {
     }
 };
 
+const handleMagnetAttraction = (coin: CoinData, dist: number, ctx: ProcessContext) => {
+    if (!ctx.isMagnetActive || dist >= ctx.magnetRadius || coin.userData.isAttracted || coin.userData.isAnimatingCollection) {
+        return;
+    }
+    coin.userData.isAttracted = true;
+    tryCreditCoin(coin, ctx, 'attracted (Magnet)');
+    coin.rotationSpeed = COIN_ROTATION_SPEED * 3;
+};
+
 const processSingleCoin = (coin: CoinData, ctx: ProcessContext) => {
     const dist = ctx.dog.position.distanceTo(coin.position);
     coin.visible = dist < VISIBLE_COIN_DISTANCE;
@@ -122,18 +148,10 @@ const processSingleCoin = (coin: CoinData, ctx: ProcessContext) => {
     
     if (dist < threshold) {
         handleCollection(coin, ctx);
-    } else if (ctx.isMagnetActive && dist < ctx.magnetRadius && !coin.userData.isAttracted && !coin.userData.isAnimatingCollection) {
-        coin.userData.isAttracted = true;
-        if (!coin.userData.isCredited) {
-            coin.userData.isCredited = true;
-            ctx.callbacks.collect();
-            ctx.refs.remaining.current--;
-            ctx.callbacks.updateRemaining(ctx.refs.remaining.current);
-        }
-        coin.rotationSpeed = COIN_ROTATION_SPEED * 3;
+    } else {
+        handleMagnetAttraction(coin, dist, ctx);
     }
     
-    // Only update visuals if the coin wasn't removed processing collection
     if (!coin.collected || coin.userData.isAnimatingCollection) {
         updateCoinVisuals(coin, ctx);
     }
@@ -144,7 +162,7 @@ const processSingleCoin = (coin: CoinData, ctx: ProcessContext) => {
 export const useCoinInteraction = (props: InteractionProps) => {
     const { 
         dogModelRef, coinMeshesRef, isCoinMagnetActiveRef, onCoinCollected, 
-        remainingCoinsRef, onRemainingCoinsUpdate, sceneRef, octreeRef, addFloatingEffect 
+        remainingCoinsRef, onRemainingCoinsUpdate, sceneRef, octreeRef, addFloatingEffect, collectedSpawnKeysRef 
     } = props;
     
     const magnetRadius = props.COIN_MAGNET_RADIUS ?? COIN_MAGNET_RADIUS;
@@ -162,7 +180,7 @@ export const useCoinInteraction = (props: InteractionProps) => {
             scene: sceneRef.current,
             octree: octreeRef.current,
             callbacks: { collect: onCoinCollected, updateRemaining: onRemainingCoinsUpdate, addEffect: addFloatingEffect },
-            refs: { remaining: remainingCoinsRef }
+            refs: { remaining: remainingCoinsRef, collectedKeys: collectedSpawnKeysRef }
         };
 
         coinMeshesRef.current = coinMeshesRef.current.filter(coin => processSingleCoin(coin, ctx));

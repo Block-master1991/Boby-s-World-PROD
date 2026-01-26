@@ -9,7 +9,7 @@ import { useBaseGraphQL } from './useBaseGraphQL';
 
 const QUERIES = {
     USER_STATS: `query GetUserStats { userStats { totalUsers onlineUsers offlineUsers activeGames } }`,
-    FETCH_PLAYER: `query FetchPlayerData($userId: ID!) { playerData(userId: $userId) { success playerData { level coins experience inventory { id itemType name quantity rarity image } } error } }`,
+    FETCH_PLAYER: `query FetchPlayerData($userId: ID!) { playerData(userId: $userId) { success playerData { level coins experience lastProcessedBatchId inventory { id itemType name quantity rarity image } } error } }`,
     ADD_COINS: `mutation AddCoins($userId: ID!, $amount: Int!) { addCoins(userId: $userId, amount: $amount) { success newBalance error } }`,
     ACTIVITY_UPDATES: `query UserActivityUpdates { userActivityUpdates @client { onlineUsers activeGames timestamp } }`
 };

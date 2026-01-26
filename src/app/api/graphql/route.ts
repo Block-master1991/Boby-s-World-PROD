@@ -10,6 +10,7 @@ import { logger } from '@/utils/logger';
 import type { DocumentNode, OperationDefinitionNode, SelectionNode } from 'graphql';
 import { applyMiddleware } from 'graphql-middleware';
 import { createGraphQLError, createYoga } from 'graphql-yoga';
+import { NextResponse } from 'next/server';
 
 // Apply Shield Permissions Middleware
 const schemaWithPermissions = applyMiddleware(schema, permissions);
@@ -82,6 +83,14 @@ const yoga = createYoga({
   ]
 });
 
+import type { AuthenticatedRequest } from '@/lib/auth-middleware';
+import { withAuth } from '@/lib/auth-middleware';
+
 // Export Next.js Route Handlers
 export const GET = (request: Request) => yoga.handle(request);
-export const POST = (request: Request) => yoga.handle(request);
+export const POST = withAuth(async (request: AuthenticatedRequest) => {
+  const yogaRes = await yoga.handle(request);
+  // Convert Yoga's Response to NextResponse to satisfy withAuth's signature
+  const response = new NextResponse(yogaRes.body, yogaRes);
+  return response;
+});

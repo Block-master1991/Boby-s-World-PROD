@@ -1,7 +1,6 @@
 import { getClientIp } from '@/lib/request-utils'; // Helper function to extract IP from request
 import { cookies, headers } from 'next/headers';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import type { NextRequest, NextResponse } from 'next/server';
 import { logger } from 'utils/logger';
 import { auditLogger } from './audit-logger';
 import { isDev } from './config/env';
@@ -42,61 +41,11 @@ export interface AuthenticatedRequest extends NextRequest {
   user: JWTPayload;
 }
 
-export interface AuthMetadata {
-  accessToken: string | null;
-  refreshToken: string | null;
-  userAgent: string;
-  ip: string;
-  cookieHeader: string | null;
-}
+import { createAuthErrorResponse, extractAuthRequestMetadata, type AuthMetadata } from './auth-helpers';
+export { createAuthErrorResponse, extractAuthRequestMetadata, type AuthMetadata };
 
-export interface AuthErrorOptions {
-  message: string;
-  code: string;
-  status?: number;
-  details?: string;
-  clearCookies?: boolean;
-}
-
-function extractAuthRequestMetadata(request: NextRequest | Request): AuthMetadata {
-  const isEdge = typeof (request as NextRequest).cookies?.get === "function";
-  const cookieHeader = "headers" in request ? request.headers.get("cookie") : null;
-
-  const accessToken = isEdge
-    ? (request as NextRequest).cookies.get("accessToken")?.value ?? null
-    : cookieHeader
-      ? JWTManager.extractTokenFromCookies(cookieHeader, "accessToken")
-      : null;
-
-  const refreshToken = isEdge
-    ? (request as NextRequest).cookies.get("refreshToken")?.value ?? null
-    : cookieHeader
-      ? JWTManager.extractTokenFromCookies(cookieHeader, "refreshToken")
-      : null;
-
-  const userAgent = request.headers.get("user-agent") || "unknown";
-  const ip = getClientIp(request);
-
-  return { accessToken, refreshToken, userAgent, ip, cookieHeader: cookieHeader ?? null };
-}
-
-export function createAuthErrorResponse(options: AuthErrorOptions) {
-  const { message, code, status = 401, details, clearCookies = false } = options;
-  const response = NextResponse.json({
-    authenticated: false,
-    error: message,
-    code,
-    details
-  }, { status });
-
-  if (clearCookies) {
-    const securityCookies = ["accessToken", "refreshToken", "nonce", "csrfToken", "secure_session", "session_seed"];
-    securityCookies.forEach(name => {
-      response.cookies.delete(name);
-    });
-  }
-
-  return response;
+interface RequestWithTokens extends NextRequest {
+  _nextTokens?: { accessToken: string; newRefreshToken: string };
 }
 
 async function verifyWafRequest(request: NextRequest): Promise<NextResponse | null> {
@@ -154,13 +103,16 @@ async function handleTokenAuth(request: NextRequest, metadata: AuthMetadata): Pr
     return createAuthErrorResponse({ message: "Authentication required.", code: "NO_TOKENS", status: 401, clearCookies: true });
   }
   const refreshResult = await JWTManager.refreshAccessToken(refreshToken, userAgent, ip);
-  if (!refreshResult) {
-    return createAuthErrorResponse({ message: "Invalid session. Please login again.", code: "INVALID_OR_EXPIRED_TOKEN", status: 401, clearCookies: true });
+  if (refreshResult) {
+    const newPayload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
+    if (newPayload) {
+      // ATTACH FOR SYNC: Attach next tokens to the request so withAuth can set them in response cookies
+      (request as RequestWithTokens)._nextTokens = refreshResult;
+      return { payload: newPayload };
+    }
+    return createAuthErrorResponse({ message: "Session refresh failed verification.", code: "REFRESH_VERIFY_FAILED", status: 401, clearCookies: true });
   }
-  const newPayload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
-  return newPayload 
-    ? { payload: newPayload } 
-    : createAuthErrorResponse({ message: "Session refresh failed verification.", code: "REFRESH_VERIFY_FAILED", status: 401, clearCookies: true });
+  return createAuthErrorResponse({ message: "Invalid session. Please login again.", code: "INVALID_OR_EXPIRED_TOKEN", status: 401, clearCookies: true });
 }
 
 async function validateSecureSession(request: NextRequest, payload: JWTPayload, metadata: AuthMetadata): Promise<NextResponse | { nextSeed: string | undefined }> {
@@ -218,6 +170,31 @@ export function withAuth<T extends unknown[]>(handler: (req: AuthenticatedReques
 
       (request as AuthenticatedRequest).user = payload;
       const response = await handler(request as AuthenticatedRequest, ...args);
+
+      // --- TOKEN SYNC RESTORATION ---
+      // If the token was refreshed during handleTokenAuth, we MUST set it in the response cookies.
+      if ((request as RequestWithTokens)._nextTokens) {
+        const { accessToken, newRefreshToken } = (request as RequestWithTokens)._nextTokens!;
+        const requestHost = request.headers.get("host") || undefined;
+        
+        response.cookies.set("accessToken", accessToken,
+          JWTManager.createSecureCookieOptions(15 * 60, requestHost)
+        );
+        response.cookies.set("refreshToken", newRefreshToken,
+          JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
+        );
+
+        // Also issue/sync a fresh CSRF token tied to the new session identity
+        const { CSRFManager } = await import("@/lib/csrf-utils");
+        const csrfToken = await CSRFManager.getOrCreateToken(payload.sub);
+        response.cookies.set("csrfToken", csrfToken, {
+          httpOnly: false,
+          secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
+          sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
+          maxAge: 30 * 60,
+          path: "/",
+        });
+      }
 
       if (sessionResult.nextSeed) {
         const requestHost = request.headers.get("host") || undefined;

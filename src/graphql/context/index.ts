@@ -1,4 +1,4 @@
-import { validateTokenFromRequest } from '@/lib/auth-middleware';
+import { validateTokenFromRequest, type AuthenticatedRequest } from '@/lib/auth-middleware';
 import type { JWTPayload } from '@/lib/jwt-utils';
 import { logger } from '@/utils/logger';
 import type { NextRequest } from 'next/server';
@@ -25,6 +25,22 @@ export const buildContext = async ({ request }: { request: NextRequest }): Promi
   };
 
   try {
+    // 1. Prefer the pre-validated user from the withAuth middleware (if available)
+    // withAuth attaches payload to request as (request as AuthenticatedRequest).user
+    const middlewareUser = (request as unknown as AuthenticatedRequest).user;
+    
+    if (middlewareUser?.sub) {
+      const role = (middlewareUser as GameJWTPayload).role || 'player';
+      return {
+        request,
+        user: { id: middlewareUser.sub, publicKey: middlewareUser.sub },
+        role,
+        loaders,
+        pubsub,
+      };
+    }
+
+    // 2. Fallback to manual validation for non-withAuth wrapped routes (like GET)
     const userPayload = await validateTokenFromRequest(request);
     
     if (userPayload?.sub) {
