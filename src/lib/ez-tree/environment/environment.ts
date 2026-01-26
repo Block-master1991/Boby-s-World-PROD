@@ -139,24 +139,29 @@ export class Environment extends THREE.Object3D {
     this.chunkManager.updateModern(elapsedTime);
   }
 
+  // Optimization: Track last preloaded position to avoid redundant checks
+  private lastPreloadPos = new THREE.Vector3(Infinity, Infinity, Infinity);
+  
   public async preloadInitialScene(centerPosition: THREE.Vector3): Promise<void> {
-    logger.log(`[Environment] Preloading scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}`);
+    // Only preload if moved significantly (> 16m ~ one chunk width approx is 16, but let's say 8m)
+    if (centerPosition.distanceTo(this.lastPreloadPos) < 8) return;
+    this.lastPreloadPos.copy(centerPosition);
+
+    // logger.log(`[Environment] Preloading scene around ${centerPosition.x.toFixed(1)}, ${centerPosition.z.toFixed(1)}`);
 
     const chunks = this.generateChunkCoordsAround(centerPosition);
-    let succeeded = 0;
 
     // Load sequentially to avoid main thread bottlenecks
     for (const chunk of chunks) {
       try {
         // eslint-disable-next-line no-await-in-loop
         await this.chunkManager.generateChunkAsync(chunk.x, chunk.z);
-        succeeded++;
       } catch (error) {
         logger.error(`[Environment] Chunk preloading failed for ${chunk.x},${chunk.z}:`, error);
       }
     }
 
-    logger.log(`[Environment] Preloading complete: ${succeeded}/${chunks.length} succeeded`);
+    // logger.log(`[Environment] Preloading complete: ${succeeded}/${chunks.length} succeeded`);
   }
 
   private generateChunkCoordsAround(pos: THREE.Vector3): { x: number; z: number }[] {

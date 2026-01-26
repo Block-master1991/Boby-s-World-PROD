@@ -30,9 +30,28 @@ type UpdateReconciliationFn = (delta: number) => void;
 type UpdateOneFn = (enemy: EnemyData, ctx: Ctx) => void;
 type FilterDeadFn = (delta: number) => void;
 
-const updateVis = (e: EnemyData, coinMap: Map<string, CoinData>) => { const c = coinMap.get(e.targetCoinId); if (c) e.lod.visible = c.collected || c.visible; };
-const getAnimD = (d: number, dt: number, mob: boolean) => d > 150 ? dt * 6 : d > 60 ? dt * (mob ? 3 : 2) : dt;
-const shouldAnim = (d: number, inF: boolean, ctx: Ctx) => { const { perf: p, frame: f } = ctx; if (p.isMobile && p.performanceLevel === 'low' && d > 40) return false; if (d < 60) return inF || d < 15; if (d < 150) return inF && (f % (p.isMobile ? 3 : 2) === 0); return inF && (f % 6 === 0); };
+import { VISIBLE_ENEMY_DISTANCE } from './coin/constants';
+
+const updateVis = (e: EnemyData, dogPos: THREE.Vector3) => {
+    // Decoupled visibility: Enemies visible based on their own distance, not the coin's
+    const dist = dogPos.distanceTo(e.position);
+    e.lod.visible = dist < VISIBLE_ENEMY_DISTANCE;
+};
+
+// Aggressive throttling for distant enemies (low load)
+const getAnimD = (d: number, dt: number, mob: boolean) => d > 300 ? dt * 10 : d > 150 ? dt * 6 : d > 60 ? dt * (mob ? 3 : 2) : dt;
+
+const shouldAnim = (d: number, inF: boolean, ctx: Ctx) => {
+    const { perf: p, frame: f } = ctx;
+    // Ultra-low priority for very distant enemies (only animate rarely to show movement)
+    if (d > 300) return inF && (f % 10 === 0);
+    
+    if (p.isMobile && p.performanceLevel === 'low' && d > 40) return false;
+    if (d < 60) return inF || d < 15;
+    if (d < 150) return inF && (f % (p.isMobile ? 3 : 2) === 0);
+    return inF && (f % 6 === 0);
+};
+
 const animE = (e: EnemyData, d: number, inF: boolean, ctx: Ctx) => { if (e.mixer && shouldAnim(d, inF, ctx)) e.mixer.update(getAnimD(d, ctx.delta, ctx.perf.isMobile)); };
 const dispE = (e: EnemyData) => { e.mixer.stopAllAction(); e.lod.traverse(c => { const m = c as THREE.Mesh; if (m.isMesh) m.geometry?.dispose(); }); };
 
@@ -95,8 +114,8 @@ const createUpdateOneCallback = (
   return React.useCallback((e: EnemyData, ctx: Ctx) => {
     const d = ctx.dogPos.distanceTo(e.position);
 
-    // التحقق من رؤية العدو باستخدام الخريطة السريعة
-    updateVis(e, ctx.coinMap);
+    // التحقق من رؤية العدو باستخدام المسافة
+    updateVis(e, ctx.dogPos);
 
     animE(e, d, ctx.frustum.containsPoint(e.position), ctx);
 

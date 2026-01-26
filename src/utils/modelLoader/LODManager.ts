@@ -1,5 +1,6 @@
 import type * as THREE from 'three';
-import { logger } from '../logger';
+
+import { getLODManager } from '@/lib/lod-manager';
 
 export class LODManager {
   private static instance: LODManager;
@@ -23,8 +24,12 @@ export class LODManager {
   }
 
   public updateLODDistances(qualityLevel: number): void {
-    logger.log(`[LODManager] Updating LOD distances with quality level: ${qualityLevel}`);
-    // Future implementation: Traverse scene and update LOD objects based on _camera position and qualityLevel
+    // Professional implementation: Bridge to the active LOD system
+    // This scales the LOD switching distances based on performance quality level
+    const activeLODManager = getLODManager();
+    if (activeLODManager) {
+        activeLODManager.setQualityScale(qualityLevel);
+    }
   }
 }
 

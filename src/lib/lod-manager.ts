@@ -2,6 +2,7 @@
 // Provides smooth transitions between quality levels based on distance and performance
 import type { BufferGeometry, Material, Object3D } from '@/lib/three-chunk';
 import { Mesh, Vector3 } from '@/lib/three-chunk';
+import { SimplifyModifier } from 'three/examples/jsm/modifiers/SimplifyModifier';
 import { logger } from 'utils/logger';
 
 interface LODLevel {
@@ -239,17 +240,39 @@ export const createLODLevels = (
     baseMaterial: Material,
     distances: number[] = [10, 25, 50, 100]
 ): LODLevel[] => {
-    return distances.map((distance, index) => ({
-        distance,
-        geometry: baseGeometry,
-        material: baseMaterial,
-        quality: 1 - (index / distances.length),
-        visible: false,
-    }));
+    return distances.map((distance, index) => {
+        const quality = 1 - (index / distances.length);
+        // High quality (first level) uses original geometry
+        // Distant levels use simplified geometry
+        const geometry = index === 0 ? baseGeometry : createSimplifiedGeometry(baseGeometry, quality);
+        
+        return {
+            distance,
+            geometry,
+            material: baseMaterial,
+            quality,
+            visible: false,
+        };
+    });
 };
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-export const createSimplifiedGeometry = (originalGeometry: BufferGeometry, _reductionFactor: number): BufferGeometry => {
-    // Placeholder for geometry simplification
-    return originalGeometry.clone();
+export const createSimplifiedGeometry = (originalGeometry: BufferGeometry, reductionFactor: number): BufferGeometry => {
+    if (reductionFactor >= 1.0) return originalGeometry.clone();
+    
+    try {
+        const modifier = new SimplifyModifier();
+        const posAttr = originalGeometry.getAttribute('position');
+        if (!posAttr) return originalGeometry.clone();
+
+        const count = Math.floor(posAttr.count * (1 - reductionFactor));
+        if (count <= 0) return originalGeometry.clone();
+
+        const simplified = modifier.modify(originalGeometry, count);
+        const simplifiedPos = simplified.getAttribute('position');
+        logger.log(`[LODManager] Simplified geometry: ${posAttr.count} -> ${simplifiedPos?.count ?? 0} vertices`);
+        return simplified;
+    } catch (err) {
+        logger.warn('[LODManager] Geometry simplification failed, falling back to original', err);
+        return originalGeometry.clone();
+    }
 };

@@ -10,6 +10,7 @@ export const COIN_VALUE = ENEMY_COLLISION_PENALTY_USDT;
 export const COLLECTION_THRESHOLD_BASE = 0.5;
 export const COLLECTION_THRESHOLD = COLLECTION_THRESHOLD_BASE + COIN_RADIUS;
 export const VISIBLE_COIN_DISTANCE = 220;
+export const VISIBLE_ENEMY_DISTANCE = 450; // Decoupled from coins, significantly further
 export const COIN_MAGNET_RADIUS = 15; // Added default magnet radius
 export const COIN_MODEL_PATH = '/models/coin.glb';
 

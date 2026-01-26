@@ -48,8 +48,11 @@ const manageChunks = (
     if (!currentChunk.current || cX !== currentChunk.current.chunkX || cZ !== currentChunk.current.chunkZ) {
         currentChunk.current = { chunkX: cX, chunkZ: cZ };
         const keep = new Set<string>();
-        for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
-            for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) keep.add(getChunkKey(cX + x, cZ + z));
+        // Increase coin loading range to ensure distant coins are loaded for distinct enemy spawning
+        // Range: RENDER_DISTANCE_CHUNKS (3) + 3 = 6 chunks ~ 300m radius
+        const range = RENDER_DISTANCE_CHUNKS + 3;
+        for (let x = -range; x <= range; x++) {
+            for (let z = -range; z <= range; z++) keep.add(getChunkKey(cX + x, cZ + z));
         }
         loadedChunks.current.forEach(k => !keep.has(k) && actions.unload(...k.split(',').map(Number) as [number, number]));
         keep.forEach(k => !loadedChunks.current.has(k) && actions.load(...k.split(',').map(Number) as [number, number]));
@@ -77,8 +80,9 @@ const resetSystem = (
     refs.chunkRef.current = { chunkX, chunkZ };
     refs.lastDogPos.current.copy(refs.dog.position);
 
-    for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
-        for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) loader(chunkX + x, chunkZ + z);
+    const range = RENDER_DISTANCE_CHUNKS + 3;
+    for (let x = -range; x <= range; x++) {
+        for (let z = -range; z <= range; z++) loader(chunkX + x, chunkZ + z);
     }
     updater(refs.remaining.current);
 };
@@ -114,8 +118,9 @@ export const useCoinLogic = (props: UseCoinLogicProps) => {
     const forceLoadAreaCoins = useCallback(async (cX: number, cZ: number) => {
         if (!props.sceneRef.current) return;
         const tasks: Promise<void>[] = [];
-        for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
-            for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+        const range = RENDER_DISTANCE_CHUNKS + 3;
+        for (let x = -range; x <= range; x++) {
+            for (let z = -range; z <= range; z++) {
                 if (!loadedCoinChunks.current.has(getChunkKey(cX + x, cZ + z))) tasks.push(loadCoinsForChunk(cX + x, cZ + z));
             }
         }

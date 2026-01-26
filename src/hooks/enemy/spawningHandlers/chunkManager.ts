@@ -10,8 +10,10 @@ interface ChunkManager {
 
 export const getNearKeys = (cx: number, cz: number): Set<string> => {
   const s = new Set<string>();
-  for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
-    for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
+  // Increase range slightly to spawn enemies before they become visible (buffer zone)
+  const range = RENDER_DISTANCE_CHUNKS + 2; 
+  for (let x = -range; x <= range; x++) {
+    for (let z = -range; z <= range; z++) {
       s.add(getChunkKey(cx + x, cz + z));
     }
   }

@@ -59,10 +59,12 @@ const useInternalInitialization = (props: Omit<UseSceneSetupProps, 'isPausedRef'
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
+    const isLowPerf = perfConfig.performanceLevel === 'low';
     const renderer = new THREE.WebGLRenderer({
       antialias: perfConfig.renderer.antialias,
       powerPreference: 'high-performance',
-      logarithmicDepthBuffer: true
+      logarithmicDepthBuffer: !isLowPerf, // Disable on low-end to save GPU
+      precision: isLowPerf ? 'mediump' : 'highp'
     });
 
     configureRenderer(renderer, perfConfig);
