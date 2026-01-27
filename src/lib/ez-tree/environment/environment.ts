@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import { logger } from 'utils/logger';
 import { ChunkManager } from '../../chunk/ChunkManager';
 import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS } from '../../chunkUtils';
+import type { LODManager } from '../../lod-manager';
+import { initializeLODManager } from '../../lod-manager';
 import { getDevicePerformanceConfig } from '../../utils';
 import { FlowerOptions, Flowers } from './flowers';
 import { Grass, GrassOptions } from './grass';
@@ -18,12 +20,17 @@ export class Environment extends THREE.Object3D {
   private rocksInstance: Rocks;
   private treesInstance: Trees;
   private flowersInstance: Flowers;
+  private lodManager: LODManager;
+  private lastTime: number = 0;
 
   public loadingPromise: Promise<void>;
   private resolveLoading!: () => void;
 
   constructor(renderer?: THREE.WebGLRenderer) {
     super();
+
+    // Initialize LOD Manager
+    this.lodManager = initializeLODManager();
 
     this.loadingPromise = new Promise((resolve) => {
       this.resolveLoading = resolve;
@@ -109,6 +116,13 @@ export class Environment extends THREE.Object3D {
 
         logger.log(`[Environment] ✅ All assets loaded and verified in IndexedDB on attempt ${attempt}`);
         this.chunkManager.setGeneratorsReady();
+        
+        // Wait for initial chunks to load before signaling ready
+        logger.log('[Environment] Waiting for initial 49 chunks to load...');
+        // eslint-disable-next-line no-await-in-loop -- Intentional: must wait for chunks before signaling ready
+        await this.chunkManager.waitForInitialChunks(49);
+        logger.log('[Environment] ✅ Initial chunks loaded. World is ready!');
+        
         if (this.resolveLoading) this.resolveLoading();
         return;
       } catch (error) {
@@ -129,14 +143,25 @@ export class Environment extends THREE.Object3D {
     }
   }
 
-  public update(elapsedTime: number, cameraPosition: THREE.Vector3): void {
-    if (cameraPosition) {
+  public update(elapsedTime: number, camera: THREE.Camera): void {
+    // Calculate deltaTime in seconds
+    const deltaTime = this.lastTime === 0 ? 0 : elapsedTime - this.lastTime;
+    this.lastTime = elapsedTime;
+
+    if (camera) {
+      const cameraPosition = camera.position;
       this.skybox.position.copy(cameraPosition);
       this.ground.position.set(cameraPosition.x, 0, cameraPosition.z);
       this.chunkManager.updatePlayerPosition(cameraPosition);
+      
+      // Update LOD manager with camera position
+      this.lodManager?.updateCameraPosition(cameraPosition);
     }
     this.skybox.update(elapsedTime);
-    this.chunkManager.updateModern(elapsedTime);
+    this.chunkManager.updateModern(elapsedTime, camera);
+    
+    // Update LOD state with deltaTime
+    this.lodManager?.update(deltaTime);
   }
 
   // Optimization: Track last preloaded position to avoid redundant checks

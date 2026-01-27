@@ -1,5 +1,4 @@
 import type { GameObject } from '@/types/game';
-import { logger } from '@/utils/logger';
 import type { MutableRefObject } from 'react';
 import { useCallback, useRef } from 'react';
 import * as THREE from 'three';
@@ -78,7 +77,7 @@ const handleChunkLoad = (
         }
     });
     addToLoaded(chunkKey);
-    logger.log(`[CoinLogic] Chunk ${chunkKey} loaded.`);
+    // Removed verbose log: logger.log(`[CoinLogic] Chunk ${chunkKey} loaded.`)
     props.onRemainingCoinsUpdate(props.remainingCoinsRef.current);
 };
 

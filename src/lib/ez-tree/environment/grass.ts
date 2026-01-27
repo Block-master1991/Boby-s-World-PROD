@@ -23,6 +23,7 @@ export class GrassOptions {
 
 export class Grass extends THREE.Object3D {
   public options: GrassOptions;
+  private sharedMaterial: THREE.MeshPhongMaterial | null = null;
 
   constructor(options: GrassOptions = new GrassOptions()) {
     super();
@@ -35,25 +36,10 @@ export class Grass extends THREE.Object3D {
    * @param time Current time
    */
   public updateWindEffect(time: number): void {
-    this.traverse((child) => {
-      if (child instanceof THREE.InstancedMesh && child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach(material => {
-          // Convert GrassOptions to FlowerOptions for use with updateFlowerWindShaderUniforms
-          const flowerOptions = {
-            windStrength: this.options.windStrength,
-            windFrequency: this.options.windFrequency,
-            windScale: this.options.windScale,
-            flowersCountPerChunk: 0,
-            size: { x: 0, y: 0, z: 0 },
-            sizeVariation: { x: 0, y: 0, z: 0 },
-            scale: 0,
-            patchiness: 0
-          };
-          updateFlowerWindShaderUniforms(material, flowerOptions, time);
-        });
-      }
-    });
+    if (this.sharedMaterial) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      updateFlowerWindShaderUniforms(this.sharedMaterial, this.options as any, time);
+    }
   }
 
   public static async fetchAssets(): Promise<void> {
@@ -215,8 +201,10 @@ export class Grass extends THREE.Object3D {
     const { positions, scales, quaternions, colors } = data;
     const count = positions.length / 3;
 
-    const grassMaterial = this.createGrassMaterial(_grassMesh);
-    const instancedGrass = new THREE.InstancedMesh(_grassMesh.geometry, grassMaterial, count);
+    if (!this.sharedMaterial) {
+      this.sharedMaterial = this.createGrassMaterial(_grassMesh);
+    }
+    const instancedGrass = new THREE.InstancedMesh(_grassMesh.geometry, this.sharedMaterial, count);
 
     const dummy = new THREE.Object3D();
     const color = new THREE.Color();

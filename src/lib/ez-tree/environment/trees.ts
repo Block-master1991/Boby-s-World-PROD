@@ -18,6 +18,7 @@ export class TreesOptions {
 export class Trees extends THREE.Object3D {
   public options: TreesOptions;
   private loadedPresets: Map<string, TreeOptions> = new Map();
+  private treeInstanceCache: Map<string, Tree> = new Map();
 
   constructor(options: TreesOptions = new TreesOptions()) {
     super();
@@ -38,17 +39,29 @@ export class Trees extends THREE.Object3D {
 
   /**
    * Helper to create a single tree instance from a preset.
+   * Uses caching to avoid repeated procedural generation.
    */
   private createTreeInstance(presetName: string, position: THREE.Vector3): Tree | null {
     const treeOptions = this.loadedPresets.get(presetName);
     if (!treeOptions) return null;
 
-    const treeInstanceOptions = new TreeOptions();
-    treeInstanceOptions.copy(treeOptions);
-    treeInstanceOptions.seed = Math.random() * 65536;
+    // Check cache first
+    let cachedTree = this.treeInstanceCache.get(presetName);
+    
+    if (!cachedTree) {
+      const treeInstanceOptions = new TreeOptions();
+      treeInstanceOptions.copy(treeOptions);
+      // Fixed seed for cached geometry to maintain consistency per preset
+      treeInstanceOptions.seed = 42; 
 
-    const tree = new Tree(treeInstanceOptions);
-    tree.generate();
+      cachedTree = new Tree(treeInstanceOptions);
+      cachedTree.generate();
+      this.applyShadows(cachedTree);
+      this.treeInstanceCache.set(presetName, cachedTree);
+    }
+
+    // Clone the cached tree
+    const tree = cachedTree.clone() as Tree;
     tree.position.copy(position);
     
     // Default rotation and scale for new trees
@@ -56,7 +69,6 @@ export class Trees extends THREE.Object3D {
     const scale = 0.05;
     tree.scale.set(scale, scale, scale);
 
-    this.applyShadows(tree);
     return tree;
   }
 
@@ -140,14 +152,32 @@ export class Trees extends THREE.Object3D {
   }
 
   public update(elapsedTime: number): void {
-    this.traverse((o) => {
-      if (o instanceof Tree) o.update(elapsedTime);
+    // Optimization: Only update the cached tree instances.
+    // Since all trees in the scene share materials with these cached instances,
+    // updating the cache updates everything efficiently.
+    this.treeInstanceCache.forEach((tree) => {
+      tree.update(elapsedTime);
     });
   }
 
   public disposeChunk(chunkGroup: THREE.Group): void {
     chunkGroup.children.forEach(child => {
       child.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          // IMPORTANT: Do NOT dispose geometry or material here because they are SHARED
+          // from the treeInstanceCache. Only remove from scene.
+          // obj.geometry.dispose(); 
+          // obj.material.dispose();
+        }
+      });
+    });
+    chunkGroup.clear();
+  }
+
+  public dispose(): void {
+    // Dispose cached tree instances and their resources
+    this.treeInstanceCache.forEach(tree => {
+      tree.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
           if (obj.geometry) obj.geometry.dispose();
           if (obj.material) {
@@ -157,6 +187,7 @@ export class Trees extends THREE.Object3D {
         }
       });
     });
-    chunkGroup.clear();
+    this.treeInstanceCache.clear();
+    this.clear();
   }
 }

@@ -19,16 +19,26 @@ import {
 const generatedChunkData = new Map<string, ChunkData>();
 const noiseCache = new Map<string, number>();
 
+const MAX_NOISE_CACHE_SIZE = 15000;
+
 function getCachedNoise(x: number, y: number, scale: number): number {
     const key = `${x}_${y}_${scale}`;
-    if (noiseCache.has(key)) return noiseCache.get(key) as number;
+    const cachedValue = noiseCache.get(key);
+    
+    if (cachedValue !== undefined) {
+        // Simple LRU: move to end of map
+        noiseCache.delete(key);
+        noiseCache.set(key, cachedValue);
+        return cachedValue;
+    }
 
     const value = simplex2d(new THREE.Vector2(x / scale, y / scale));
     noiseCache.set(key, value);
 
-    if (noiseCache.size > 10000) {
-        const keysToDelete = Array.from(noiseCache.keys()).slice(0, 1000);
-        keysToDelete.forEach(k => noiseCache.delete(k));
+    // Evict oldest entries if cache is too large
+    if (noiseCache.size > MAX_NOISE_CACHE_SIZE) {
+        const firstKey = noiseCache.keys().next().value;
+        if (firstKey !== undefined) noiseCache.delete(firstKey);
     }
     return value;
 }

@@ -38,11 +38,16 @@ export class Flowers extends THREE.Group {
    * @param time Current time
    */
   public updateWindEffect(time: number): void {
-    this.traverse((child) => {
-      if (child instanceof THREE.Mesh && child.material) {
-        const materials = Array.isArray(child.material) ? child.material : [child.material];
-        materials.forEach(material => {
-          updateFlowerWindShaderUniforms(material, this.options, time);
+    const templates = [_flowerBlueMesh, _flowerWhiteMesh, _flowerYellowMesh];
+    templates.forEach(mesh => {
+      if (mesh) {
+        mesh.traverse(child => {
+          if (child instanceof THREE.Mesh && child.material) {
+            const materials = Array.isArray(child.material) ? child.material : [child.material];
+            materials.forEach(material => {
+              updateFlowerWindShaderUniforms(material, this.options, time);
+            });
+          }
         });
       }
     });
@@ -197,7 +202,7 @@ export class Flowers extends THREE.Group {
     const { positions } = data;
     const count = positions.length / 3;
 
-    logger.log(`[Flowers] Generating ${count} flowers from data`);
+    // Removed verbose log: logger.log(`[Flowers] Generating ${count} flowers from data`)
 
     for (let i = 0; i < count; i++) {
       const idx = i * 3;

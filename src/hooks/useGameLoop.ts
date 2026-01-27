@@ -25,7 +25,7 @@ interface UseGameLoopProps {
 
 export const useGameLoop = (p: UseGameLoopProps) => {
     const aFId = useRef<number | null>(null); const lFTRef = useRef<number>(performance.now());
-    const lPTRef = useRef<number>(0); const lPURef = useRef<number>(0); const fCRef = useRef<number>(0);
+    const lPURef = useRef<number>(0); const fCRef = useRef<number>(0);
 
     // Use Refs for callbacks to avoid stale closures in animate()
     const cb = useRef(p);
@@ -47,14 +47,13 @@ export const useGameLoop = (p: UseGameLoopProps) => {
     }, []);
 
     const updateAllSystems = useCallback((d: number) => {
-        const { dogModelRef, isPausedRef, speedBeamRef, isSpeedBoostActiveRef, shieldEffectRef, isShieldActiveRef, environmentRef, clockRef, cleanupModelPool } = cb.current;
+        const { dogModelRef, isPausedRef, speedBeamRef, isSpeedBoostActiveRef, shieldEffectRef, isShieldActiveRef, environmentRef, cameraRef, clockRef, cleanupModelPool } = cb.current;
         if (!dogModelRef.current || isPausedRef.current) return;
         updateCore(d); const dPos = dogModelRef.current.position;
         speedBeamRef.current?.update(isSpeedBoostActiveRef.current, dPos, dogModelRef.current.rotation);
         shieldEffectRef.current?.update(isShieldActiveRef.current, dPos);
-        if (environmentRef.current) {
-            environmentRef.current.update(clockRef.current.getElapsedTime(), dPos);
-            if (performance.now() - lPTRef.current > 1000) { lPTRef.current = performance.now(); environmentRef.current.preloadInitialScene(dPos).catch(logger.warn); }
+        if (environmentRef.current && cameraRef.current) {
+            environmentRef.current.update(clockRef.current.getElapsedTime(), cameraRef.current);
         }
         cleanupModelPool(60000, 5);
     }, [updateCore]);

@@ -35,10 +35,15 @@ export const useEnemyReconciliation = ({
     );
 
     if (coinsNeedingGuardians.length > 0) {
+      // Limit spawns to 3 per check to avoid frame spikes
+      const BATCH_LIMIT = 3;
+      const subset = coinsNeedingGuardians.slice(0, BATCH_LIMIT);
+      
       logger.log(
-        `[useEnemyReconciliation] Found ${coinsNeedingGuardians.length} unguarded coins. Spawning enemies...`
+        `[useEnemyReconciliation] Found ${coinsNeedingGuardians.length} unguarded coins. Throttling spawn: processing ${subset.length}...`
       );
-      coinsNeedingGuardians.forEach(coin => {
+      
+      subset.forEach(coin => {
         const chunkKey = coin.chunkKey ?? '';
         if (chunkKey) {
           onSpawnEnemy(coin, chunkKey);

@@ -1,9 +1,9 @@
 import * as THREE from 'three';
-import { logger } from 'utils/logger';
 import type { Flowers } from '../ez-tree/environment/flowers';
 import type { Grass } from '../ez-tree/environment/grass';
 import type { Rocks } from '../ez-tree/environment/rocks';
 import type { Trees } from '../ez-tree/environment/trees';
+import { getLODManager } from '../lod-manager';
 import type { ChunkContent, ChunkData } from './types';
 
 export class ChunkContentManager {
@@ -39,38 +39,40 @@ export class ChunkContentManager {
 
     chunk.gameplayData = gameplayData;
     chunk.isLoaded = true;
-    logger.log(`[ChunkManager] Populated chunk ${chunk.id}`);
   }
 
   public addContentToScene(scene: THREE.Object3D, chunk: ChunkContent): void {
-    logger.log(`[ChunkManager] Adding chunk ${chunk.id} content to scene with ${chunk.objects.length} objects`);
-    chunk.objects.forEach(obj => {
-      scene.add(obj);
-      this.setupShadows(obj);
-      logger.log(`[ChunkManager] Added object ${obj.name || 'unnamed'} to scene`);
-    });
-  }
+    const lodManager = getLODManager();
 
-  private setupShadows(obj: THREE.Object3D): void {
-    if (obj instanceof THREE.InstancedMesh) {
-      obj.castShadow = true; obj.receiveShadow = true; obj.frustumCulled = true;
-    } else {
-      obj.traverse(child => {
-        if (child instanceof THREE.Mesh) {
-          child.castShadow = true; child.receiveShadow = true; child.frustumCulled = true;
-          if (child.material) {
-            const mats = Array.isArray(child.material) ? child.material : [child.material];
-            mats.forEach(m => { m.needsUpdate = true; });
-          }
-        }
-      });
+    for (const obj of chunk.objects) {
+      scene.add(obj);      
+      // Shadow properties and frustum culling should be pre-set in generators for performance
+      
+      // Register with LOD Manager if it's a group (Trees, Rocks, Flowers)
+      if (lodManager && obj instanceof THREE.Group) {
+        lodManager.registerLODObject(`${chunk.id}_${obj.name}`, obj, [
+          { distance: 0, quality: 1 },    
+          { distance: 80, quality: 0.6 }, 
+          { distance: 150, quality: 0 },  
+        ]);
+      }
     }
   }
 
+
+
   public unloadChunk(scene: THREE.Object3D, chunk: ChunkContent): void {
     if (chunk.isDisposed) return;
+    const lodManager = getLODManager();
+
     chunk.objects.forEach(obj => {
       scene.remove(obj);
+      
+      // Unregister from LOD Manager
+      if (lodManager && obj instanceof THREE.Group) {
+        lodManager.unregisterLODObject(`${chunk.id}_${obj.name}`);
+      }
+      
       this.disposeObject(obj, chunk);
     });
     chunk.objects = []; chunk.isLoaded = false; chunk.isDisposed = true;
@@ -78,12 +80,36 @@ export class ChunkContentManager {
 
   private disposeObject(obj: THREE.Object3D, chunk: ChunkContent): void {
     if (obj instanceof THREE.InstancedMesh) {
-      obj.geometry.dispose();
-      (Array.isArray(obj.material) ? obj.material : [obj.material]).forEach(m => m.dispose());
+      // For InstancedMesh (Grass), we ONLY dispose geometry IF it's not shared
+      // In our case, grass geometry is shared, so we DON'T dispose it here.
+      // We also NEVER dispose shared materials.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      obj.geometry = null as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      obj.material = null as any;
     } else if (obj instanceof THREE.Group) {
-      if (chunk.treesGroup === obj) this.treesGenerator.disposeChunk(obj);
-      else if (chunk.rocksGroup === obj) this.rocksGenerator.disposeChunk(obj);
-      else if (chunk.flowersGroup === obj) this.flowersGenerator.disposeChunk(obj);
+      // For groups (Trees, Rocks, Flowers):
+      // - Trees and Flowers use shared materials/geometries from cache
+      // - Rocks might be unique or shared (currently they clone meshes)
+      
+      if (chunk.treesGroup === obj) {
+        // Safe disposal: we want to remove the group from scene but keep cache
+        this.treesGenerator.disposeChunk(obj);
+      } else if (chunk.rocksGroup === obj) {
+        this.rocksGenerator.disposeChunk(obj);
+      } else if (chunk.flowersGroup === obj) {
+        this.flowersGenerator.disposeChunk(obj);
+      }
+      
+      // Crucial: Clear references to help GC
+      obj.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          child.geometry = null as any;
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          child.material = null as any;
+        }
+      });
       obj.clear();
     }
   }

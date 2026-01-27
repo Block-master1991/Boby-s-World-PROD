@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { logger } from 'utils/logger';
-import { RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../chunkUtils';
+import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from '../chunkUtils';
 import { WORLD_MAX_BOUND, WORLD_MIN_BOUND } from '../constants';
 import type { Flowers } from '../ez-tree/environment/flowers';
 import type { Grass } from '../ez-tree/environment/grass';
@@ -16,16 +16,20 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   private lastPlayerChunk: { chunkX: number; chunkZ: number } | null = null;
   private loadingQueue: string[] = [];
   private unloadingQueue: string[] = [];
+  private readonly BATCH_SIZE = 3;
+  private readonly MAX_LOADED_CHUNKS = 81; // 9x9 grid max
   private isProcessingQueue = false;
   private _generatorsReady = false;
   private contentManager: ChunkContentManager;
   private pendingResolves = new Map<string, (data: ChunkData) => void>();
+  private frustum = new THREE.Frustum();
+  private projScreenMatrix = new THREE.Matrix4();
+
+
 
   constructor(
-    private grassGenerator: Grass,
-    private rocksGenerator: Rocks,
-    private treesGenerator: Trees,
-    private flowersGenerator: Flowers
+    private grassGenerator: Grass, private rocksGenerator: Rocks,
+    private treesGenerator: Trees, private flowersGenerator: Flowers
   ) {
     super();
     this.name = 'ChunkManager';
@@ -43,10 +47,8 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
     } else {
       const chunk = this.loadedChunks.get(chunkKey);
       if (chunk) {
-        const data: ChunkData = { grassData, rocksData, treesData, flowersData, gameplayData };
-        this.contentManager.populateChunk(chunk, data);
+        this.contentManager.populateChunk(chunk, { grassData, rocksData, treesData, flowersData, gameplayData });
         this.contentManager.addContentToScene(this, chunk);
-        logger.log(`[ChunkManager] Populated chunk ${chunkKey} (Fallback)`);
       }
     }
   }
@@ -66,7 +68,7 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
         const key = getChunkKey(cx + x, cz + z);
         toKeep.add(key);
-        if (!this.loadedChunks.has(key)) this.loadingQueue.push(key);
+        if (!this.loadedChunks.has(key) && !this.loadingQueue.includes(key)) this.loadingQueue.push(key);
       }
     }
 
@@ -74,114 +76,170 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       if (!toKeep.has(key)) this.unloadingQueue.push(key);
     }
 
+    this.sortLoadingQueueByDistance();
     if (!this.isProcessingQueue) this.processQueue();
+  }
+
+  private sortLoadingQueueByDistance(): void {
+    if (this.loadingQueue.length <= 1) return;
+    const { chunkX: px, chunkZ: pz } = this.lastPlayerChunk!;
+    this.loadingQueue.sort((a, b) => {
+      const aC = this.parseChunkKey(a); const bC = this.parseChunkKey(b);
+      return (Math.abs(aC.chunkX - px) + Math.abs(aC.chunkZ - pz)) - (Math.abs(bC.chunkX - px) + Math.abs(bC.chunkZ - pz));
+    });
   }
 
   private async processQueue(): Promise<void> {
     if (this.isProcessingQueue) return;
     this.isProcessingQueue = true;
 
-    if (!this._generatorsReady && this.loadingQueue.length > 0) {
-      this.isProcessingQueue = false; return;
-    }
-
-    if (this.unloadingQueue.length > 0) {
-      const key = this.unloadingQueue.shift()!;
-      const chunk = this.loadedChunks.get(key);
-      if (chunk) { this.unloadChunk(chunk); this.loadedChunks.delete(key); }
-    } else if (this.loadingQueue.length > 0) {
-      const key = this.loadingQueue.shift()!;
-      const { chunkX, chunkZ } = this.parseChunkKey(key);
-      if (!this.loadedChunks.has(key)) {
-        const chunk = await this.loadChunkModern(chunkX, chunkZ);
-        if (!this.loadedChunks.has(key)) {
-          this.loadedChunks.set(key, chunk);
-          this.contentManager.addContentToScene(this, chunk);
+    while (this.unloadingQueue.length > 0 || (this._generatorsReady && this.loadingQueue.length > 0)) {
+      const unloadBatch = this.unloadingQueue.splice(0, this.BATCH_SIZE * 2);
+      for (const key of unloadBatch) {
+        const chunk = this.loadedChunks.get(key);
+        if (chunk) {
+          this.contentManager.unloadChunk(this, chunk);
+          this.loadedChunks.delete(key);
+          logger.log(`[ChunkManager] Unloaded chunk ${key}`);
         }
       }
-    }
 
+      // Enforce MAX_LOADED_CHUNKS - unload furthest chunks if over limit
+      if (this.loadedChunks.size > this.MAX_LOADED_CHUNKS && this.lastPlayerChunk) {
+        const { chunkX: px, chunkZ: pz } = this.lastPlayerChunk;
+        const sorted = [...this.loadedChunks.entries()].sort(([, ], [, ]) => {
+          // This comparison is just for ordering - we'll recalculate properly
+          return 0;
+        }).map(([k]) => {
+          const c = this.parseChunkKey(k);
+          return { key: k, dist: Math.abs(c.chunkX - px) + Math.abs(c.chunkZ - pz) };
+        }).sort((a, b) => b.dist - a.dist);
+
+        const toRemove = sorted.slice(0, this.loadedChunks.size - this.MAX_LOADED_CHUNKS);
+        for (const { key } of toRemove) {
+          const chunk = this.loadedChunks.get(key);
+          if (chunk) {
+            this.contentManager.unloadChunk(this, chunk);
+            this.loadedChunks.delete(key);
+            logger.log(`[ChunkManager] Force-unloaded distant chunk ${key}`);
+          }
+        }
+      }
+
+      if (this._generatorsReady && this.loadingQueue.length > 0) {
+        const loadBatch = this.loadingQueue.splice(0, this.BATCH_SIZE);
+        // eslint-disable-next-line no-await-in-loop
+        await Promise.all(loadBatch.map(async (key) => {
+          if (this.loadedChunks.has(key)) return;
+          const { chunkX, chunkZ } = this.parseChunkKey(key);
+          try {
+            const chunk = await this.loadChunkModern(chunkX, chunkZ);
+            if (!this.loadedChunks.has(key)) {
+              this.loadedChunks.set(key, chunk);
+              this.contentManager.addContentToScene(this, chunk);
+            }
+          } catch (e) { logger.warn(`[ChunkManager] Load fail ${key}:`, e); }
+        }));
+      }
+      // eslint-disable-next-line no-await-in-loop
+      if (this.unloadingQueue.length > 0 || this.loadingQueue.length > 0) await new Promise(r => requestAnimationFrame(r));
+    }
     this.isProcessingQueue = false;
-    if (this.unloadingQueue.length > 0 || this.loadingQueue.length > 0) {
-      requestAnimationFrame(() => this.processQueue());
+  }
+
+  private loadChunkModern(x: number, z: number): Promise<ChunkContent> {
+    const key = getChunkKey(x, z);
+    const chunk: ChunkContent = {
+      id: key, grassMesh: null, rocksGroup: null, treesGroup: null, flowersGroup: null,
+      objects: [], isLoaded: false, isDisposed: false, gameplayData: { coinSpawns: [], enemySpawns: [] }
+    };
+
+    return new Promise((resolve) => {
+      this.pendingResolves.set(key, (data) => {
+        this.contentManager.populateChunk(chunk, data);
+        chunk.isLoaded = true;
+        this.dispatchEvent({ type: 'chunk-loaded', chunkKey: key, chunk });
+        resolve(chunk);
+      });
+      this.worker.postMessage({
+        chunkX: x, chunkZ: z, grassOptions: this.grassGenerator.options,
+        rocksOptions: this.rocksGenerator.options, treesOptions: this.treesGenerator.options,
+        flowersOptions: this.flowersGenerator.options, chunkKey: key,
+        worldMin: WORLD_MIN_BOUND, worldMax: WORLD_MAX_BOUND,
+      });
+      setTimeout(() => {
+        if (this.pendingResolves.has(key)) {
+          this.pendingResolves.delete(key);
+          resolve(this.createFallbackChunk(key));
+        }
+      }, 10000);
+    });
+  }
+
+  public updateModern(elapsedTime: number, camera?: THREE.Camera): void {
+    if (this.treesGenerator) this.treesGenerator.update(elapsedTime);
+    if (this.flowersGenerator) this.flowersGenerator.updateWindEffect(elapsedTime);
+    if (this.grassGenerator) this.grassGenerator.updateWindEffect(elapsedTime);
+
+    if (camera) {
+      this.projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+      this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
+
+      for (const chunk of this.loadedChunks.values()) {
+        const { chunkX, chunkZ } = this.parseChunkKey(chunk.id);
+        const center = new THREE.Vector3(
+          chunkX * CHUNK_SIZE + CHUNK_SIZE / 2,
+          0,
+          chunkZ * CHUNK_SIZE + CHUNK_SIZE / 2
+        );
+        const isVisible = this.frustum.intersectsSphere(new THREE.Sphere(center, CHUNK_SIZE * 0.866));
+        
+        for (const obj of chunk.objects) obj.visible = isVisible;
+      }
     }
   }
 
   public setGeneratorsReady(): void {
     this._generatorsReady = true;
-    logger.log("[ChunkManager] Generators are ready. Starting queue processing.");
     if (!this.isProcessingQueue) this.processQueue();
   }
 
+  public getLoadedChunkCount(): number {
+    return this.loadedChunks.size;
+  }
+
+  public waitForInitialChunks(requiredCount = 49): Promise<void> {
+    return new Promise((resolve) => {
+      const check = () => {
+        if (this.loadedChunks.size >= requiredCount) {
+          logger.log(`[ChunkManager] Initial ${this.loadedChunks.size} chunks loaded. Ready!`);
+          resolve();
+        } else {
+          requestAnimationFrame(check);
+        }
+      };
+      check();
+    });
+  }
+
   private parseChunkKey(key: string): { chunkX: number; chunkZ: number } {
-    const parts = key.split(',').map(v => parseInt(v));
-    const x = parts[0] ?? 0;
-    const z = parts[1] ?? 0;
-    return { chunkX: x, chunkZ: z };
+    const p = key.split(',').map(v => parseInt(v));
+    return { chunkX: p[0] ?? 0, chunkZ: p[1] ?? 0 };
   }
 
-  private loadChunkModern(chunkX: number, chunkZ: number): Promise<ChunkContent> {
-    const key = getChunkKey(chunkX, chunkZ);
-    if (!this.grassGenerator || !this.rocksGenerator || !this.treesGenerator || !this.flowersGenerator) {
-      return Promise.resolve(this.createFallbackChunk(key));
-    }
-    const chunk: ChunkContent = {
-      id: key, grassMesh: null, rocksGroup: null, treesGroup: null, flowersGroup: null,
-      objects: [], isLoaded: false, isDisposed: false, gameplayData: { coinSpawns: [], enemySpawns: [] }
-    };
-    return this.generateChunkWithRetry(chunk, chunkX, chunkZ);
-  }
-
-  private handleChunkData(chunk: ChunkContent, data: ChunkData): void {
-    try {
-      this.contentManager.populateChunk(chunk, data);
-      this.dispatchEvent({ type: 'chunk-loaded', chunkKey: chunk.id, chunk });
-    } catch (e) {
-      logger.warn(`[ChunkManager] Population failed for ${chunk.id}:`, e);
-      chunk.isLoaded = true;
-      this.dispatchEvent({ type: 'chunk-loaded', chunkKey: chunk.id, chunk });
-    }
+  public async generateChunkAsync(x: number, z: number): Promise<void> {
+    const key = getChunkKey(x, z);
+    if (this.loadedChunks.has(key) || this.loadingQueue.includes(key)) return;
+    this.loadingQueue.unshift(key);
+    if (!this.isProcessingQueue) await this.processQueue();
   }
 
   public getGameplaySpawns(key: string) {
-    const chunk = this.loadedChunks.get(key);
-    return chunk?.gameplayData || null;
-  }
-
-  private unloadChunk(chunk: ChunkContent): void {
-    this.contentManager.unloadChunk(this, chunk);
-  }
-
-  public updateModern(elapsedTime: number): void {
-    this.traverse((o) => {
-      if ((o as THREE.Mesh).isMesh && (o as THREE.Mesh).material) {
-        const mats = (Array.isArray((o as THREE.Mesh).material) ? (o as THREE.Mesh).material : [(o as THREE.Mesh).material]) as THREE.Material[];
-        mats.forEach((m) => {
-          const s = m.userData['shader'] as { uniforms: { uTime: { value: number } } } | undefined;
-          if (s) s.uniforms.uTime.value = elapsedTime;
-        });
-      }
-    });
-    if (this.treesGenerator) this.treesGenerator.update(elapsedTime);
-    if (this.flowersGenerator) this.flowersGenerator.updateWindEffect(elapsedTime);
-  }
-
-  public async generateChunkAsync(chunkX: number, chunkZ: number): Promise<void> {
-    const key = getChunkKey(chunkX, chunkZ);
-    if (this.loadedChunks.has(key)) return;
-    try {
-      const chunk = await this.loadChunkModern(chunkX, chunkZ);
-      if (!this.loadedChunks.has(key)) {
-        this.loadedChunks.set(key, chunk);
-        this.contentManager.addContentToScene(this, chunk);
-      }
-    } catch (e) {
-      logger.error(`[ChunkManager] Preload failed for ${key}:`, e);
-    }
+    return this.loadedChunks.get(key)?.gameplayData || null;
   }
 
   public dispose(): void {
-    this.loadedChunks.forEach(c => this.unloadChunk(c));
+    this.loadedChunks.forEach(c => this.contentManager.unloadChunk(this, c));
     this.loadedChunks.clear();
     this.worker.terminate();
   }
@@ -191,34 +249,6 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       id: key, grassMesh: null, rocksGroup: null, treesGroup: null, flowersGroup: null,
       objects: [], isLoaded: true, isDisposed: false, gameplayData: { coinSpawns: [], enemySpawns: [] }
     };
-    this.dispatchEvent({ type: 'chunk-loaded', chunkKey: key, chunk });
-    return chunk;
-  }
-
-  private async generateChunkWithRetry(chunk: ChunkContent, cx: number, cz: number, max = 10): Promise<ChunkContent> {
-    const key = chunk.id;
-    /* eslint-disable no-await-in-loop */
-    for (let i = 1; i <= max; i++) {
-      try {
-        return await new Promise((resolve, reject) => {
-          const t = setTimeout(() => reject(new Error('timeout')), 45000);
-          this.pendingResolves.set(key, (data) => {
-            clearTimeout(t); this.handleChunkData(chunk, data); resolve(chunk);
-          });
-          this.worker.postMessage({
-            chunkX: cx, chunkZ: cz, grassOptions: this.grassGenerator.options,
-            rocksOptions: this.rocksGenerator.options, treesOptions: this.treesGenerator.options,
-            flowersOptions: this.flowersGenerator.options, chunkKey: key,
-            worldMin: WORLD_MIN_BOUND, worldMax: WORLD_MAX_BOUND,
-          });
-        });
-      } catch {
-        if (i < max) await new Promise(r => setTimeout(r, 1000 * i));
-      }
-    }
-    /* eslint-enable no-await-in-loop */
-    logger.error(`[ChunkManager] All attempts failed for chunk ${key}`);
-    chunk.isLoaded = true;
     this.dispatchEvent({ type: 'chunk-loaded', chunkKey: key, chunk });
     return chunk;
   }
