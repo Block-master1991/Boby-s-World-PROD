@@ -1,3 +1,5 @@
+import type { Octree } from '@/lib/Octree';
+import type { GameObject } from '@/types/game';
 import * as THREE from 'three';
 import { ENEMY_ATTACK_DISTANCE, ENEMY_CHASE_RADIUS } from '../constants';
 import { setAnim } from '../movementHelpers';
@@ -34,29 +36,42 @@ export const handlePatrolMovement = (e: EnemyData, targetPosition: THREE.Vector3
   return true;
 };
 
-export const clampGround = (enemy: EnemyData, scene: THREE.Scene | null) => {
-  if (!scene) return;
-  const origin = enemy.position.clone();
-  origin.y += 5;
-  const raycaster = new THREE.Raycaster();
-  const down = new THREE.Vector3(0, -1, 0);
-  raycaster.set(origin, down);
+// Reusable objects for raycasting/math
+const rayOrigin = new THREE.Vector3();
+const rayDirection = new THREE.Vector3(0, -1, 0);
+const raycaster = new THREE.Raycaster();
+let landscapeCache: THREE.Object3D[] | null = null;
 
-  // التحقق من أن النموذج جاهز قبل استخدام raycaster
-  if (!enemy.lod || !enemy.lod.children || enemy.lod.children.length === 0) {
+export const clampGround = (enemy: EnemyData, scene: THREE.Scene | null, octree?: Octree<GameObject> | null) => {
+  if (!scene) return;
+
+  // Option 1: Fast path using Octree (preferred)
+  if (octree) {
+    enemy.position.y = octree.getGroundHeightAt(enemy.position.x, enemy.position.z);
     return;
   }
 
-  // البحث عن كائنات الأرض فقط لتجنب فحص نماذج الأعداء التي قد تسبب أخطاء
-  const targets: THREE.Object3D[] = [];
-  scene.traverse((object) => {
-    if (object.name.includes('Landscape') || object.name === 'Ground') {
-      targets.push(object);
-    }
-  });
+  // Option 2: Raycast path (fallback, optimized)
+  rayOrigin.copy(enemy.position);
+  rayOrigin.y += 5;
+  raycaster.set(rayOrigin, rayDirection);
 
-  const [hit] = raycaster.intersectObjects(targets, true);
-  if (hit) enemy.position.y = hit.point.y;
+  // Check model readiness
+  if (!enemy.lod || !enemy.lod.children || enemy.lod.children.length === 0) return;
+
+  // Optimized Cache: Find landscape objects only once or periodically
+  if (!landscapeCache || Math.random() < 0.01) { // 1% chance to refresh cache
+     const targets: THREE.Object3D[] = [];
+     scene.traverse((object) => {
+        if (object.name.includes('Landscape') || object.name === 'Ground') targets.push(object);
+     });
+     landscapeCache = targets;
+  }
+
+  if (!landscapeCache || !landscapeCache.length) return;
+  const hits = raycaster.intersectObjects(landscapeCache, true);
+  const [firstHit] = hits;
+  if (firstHit) enemy.position.y = firstHit.point.y;
 };
 
 // تعريف واجهة لجميع المعلمات

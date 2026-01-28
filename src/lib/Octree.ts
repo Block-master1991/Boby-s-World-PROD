@@ -137,20 +137,22 @@ class Octree<T> {
             return false;
         }
 
+        let wasRemoved = false;
         const index = node.objects.findIndex(obj => obj.id === object.id);
         if (index !== -1) {
             node.objects.splice(index, 1);
-            return true;
+            wasRemoved = true;
         }
 
+        // Must check ALL children that intersect, don't return early!
         for (let i = 0; i < 8; i++) {
             if (node.children[i]) {
                 if (this.removeFromNode(node.children[i]!, object)) {
-                    return true;
+                    wasRemoved = true;
                 }
             }
         }
-        return false;
+        return wasRemoved;
     }
 
     clear(): void {

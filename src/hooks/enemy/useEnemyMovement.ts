@@ -1,8 +1,8 @@
 import type { Octree } from '@/lib/Octree';
 import type { GameObject } from '@/types/game';
 import type * as THREE from 'three';
-import { setAnim } from './movementHelpers';
 import { createMovementUpdater } from './movementHandlers/movementUpdater';
+import { setAnim } from './movementHelpers';
 
 interface Props { 
   dogModelRef: React.MutableRefObject<THREE.Group | null>; 
@@ -12,12 +12,13 @@ interface Props {
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>; 
 }
 
-export const useEnemyMovement = ({ dogModelRef, sceneRef, isPausedRef, cameraRef }: Props) => {
+export const useEnemyMovement = ({ dogModelRef, octreeRef, sceneRef, isPausedRef, cameraRef }: Props) => {
   const { updateMovement } = createMovementUpdater({
     dogModelRef,
     sceneRef,
     isPausedRef,
-    cameraRef
+    cameraRef,
+    octreeRef
   });
 
   return { 

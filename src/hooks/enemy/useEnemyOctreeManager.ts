@@ -1,5 +1,6 @@
 import type { Octree } from '@/lib/Octree';
 import type { GameObject } from '@/types/game';
+import * as React from 'react';
 import { useCallback } from 'react';
 import * as THREE from 'three';
 import type { EnemyData } from './types';
@@ -9,6 +10,8 @@ interface Props {
 }
 
 export const useEnemyOctreeManager = ({ octreeRef }: Props) => {
+  const lastPositions = React.useRef<Map<string, THREE.Vector3>>(new Map());
+
   const updateOctree = useCallback((enemy: EnemyData) => {
     if (!octreeRef.current) return;
 
@@ -17,9 +20,16 @@ export const useEnemyOctreeManager = ({ octreeRef }: Props) => {
       return;
     }
 
+    const pos = enemy.lod.position;
+    const lastPos = lastPositions.current.get(enemy.uuid);
+
+    // Optimized: Only update Octree if the enemy has moved significantly (> 0.1 units)
+    if (lastPos && lastPos.distanceToSquared(pos) < 0.01) {
+      return;
+    }
+
     // استخدام حدود يدوية بدلاً من setFromObject لتجنب أخطاء skeleton
     const ENEMY_SIZE = 2; // حجم تقريبي للعدو
-    const pos = enemy.lod.position;
     const bounds = new THREE.Box3(
       new THREE.Vector3(pos.x - ENEMY_SIZE, pos.y, pos.z - ENEMY_SIZE),
       new THREE.Vector3(pos.x + ENEMY_SIZE, pos.y + ENEMY_SIZE * 2, pos.z + ENEMY_SIZE)
@@ -31,11 +41,16 @@ export const useEnemyOctreeManager = ({ octreeRef }: Props) => {
       data: enemy as unknown as GameObject,
     };
 
-    // إزالة الإدخال القديم
+    // إزالة الإدخال القديم وإضافة الجديد (Update)
     octreeRef.current.remove(octreeEntry);
-
-    // إضافة الإدخال الجديد
     octreeRef.current.insert(octreeEntry);
+
+    // تحديث الموقع الأخير
+    if (!lastPos) {
+      lastPositions.current.set(enemy.uuid, pos.clone());
+    } else {
+      lastPos.copy(pos);
+    }
   }, [octreeRef]);
 
   const removeFromOctree = useCallback((enemy: EnemyData) => {

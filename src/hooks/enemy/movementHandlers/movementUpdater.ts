@@ -1,3 +1,5 @@
+import type { Octree } from '@/lib/Octree';
+import type { GameObject } from '@/types/game';
 import { useCallback } from 'react';
 import * as THREE from 'three';
 import { ENEMY_GALLOP_SPEED_MULTIPLIER, ENEMY_SPEED } from '../constants';
@@ -12,11 +14,16 @@ interface MovementUpdaterParams {
   cameraRef: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }
 
-export const createMovementUpdater = (params: MovementUpdaterParams) => {
-  const { dogModelRef, sceneRef, isPausedRef, cameraRef } = params;
+// Reusable vectors to avoid per-frame allocations
+const direction = new THREE.Vector3();
+const targetV3 = new THREE.Vector3();
+const tempV3 = new THREE.Vector3();
+
+export const createMovementUpdater = (params: MovementUpdaterParams & { octreeRef: React.MutableRefObject<Octree<GameObject> | null> }) => {
+  const { dogModelRef, sceneRef, isPausedRef, cameraRef, octreeRef } = params;
 
   const applyMovement = (e: EnemyData, dt: number, targetPosition: THREE.Vector3, currentAnimation: string) => {
-    const direction = new THREE.Vector3().subVectors(targetPosition, e.lod.position);
+    direction.subVectors(targetPosition, e.lod.position);
     direction.y = 0;
     const movementThreshold = 0.001;
 
@@ -25,7 +32,9 @@ export const createMovementUpdater = (params: MovementUpdaterParams) => {
       const speed = currentAnimation === 'Gallop' ? ENEMY_SPEED * ENEMY_GALLOP_SPEED_MULTIPLIER : ENEMY_SPEED;
       e.lod.position.addScaledVector(direction, speed * dt);
       e.position.copy(e.lod.position);
-      e.lookAt(new THREE.Vector3(targetPosition.x, e.lod.position.y, targetPosition.z));
+      
+      tempV3.set(targetPosition.x, e.lod.position.y, targetPosition.z);
+      e.lookAt(tempV3);
     } else {
       e.isIdling = true;
       e.idleDuration = Math.random() * 5 + 3;
@@ -51,23 +60,23 @@ export const createMovementUpdater = (params: MovementUpdaterParams) => {
   const updateMovement = useCallback((e: EnemyData, dt: number, dist: number) => {
     if (isPausedRef.current || e.isDying || e.isAttacking || !dogModelRef.current) return;
 
-    const targetPosition = new THREE.Vector3();
+    targetV3.set(0, 0, 0); // Reset reusable target vector
     const { currentAnimation, isMoving } = determineMovement({
       enemy: e,
       distance: dist,
       deltaTime: dt,
-      targetPosition,
+      targetPosition: targetV3,
       dogPosition: dogModelRef.current.position
     });
 
     if (isMoving) {
-      applyMovement(e, dt, targetPosition, currentAnimation);
+      applyMovement(e, dt, targetV3, currentAnimation);
     }
 
     syncAnimation(e, currentAnimation);
-    clampGround(e, sceneRef.current);
+    clampGround(e, sceneRef.current, octreeRef.current);
     if (cameraRef.current) e.lod.update(cameraRef.current);
-  }, [dogModelRef, sceneRef, isPausedRef, cameraRef]);
+  }, [dogModelRef, sceneRef, isPausedRef, cameraRef, octreeRef]);
 
   return { updateMovement };
 };

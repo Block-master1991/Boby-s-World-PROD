@@ -10,14 +10,18 @@ interface CollisionHandlersParams {
   handleHerbivoreAttack: (e: EnemyData) => void;
 }
 
+// Reusable vectors to avoid per-frame allocations
+const dogXZ = new THREE.Vector3();
+const enemyXZ = new THREE.Vector3();
+
 export const createCollisionHandlers = (params: CollisionHandlersParams) => {
   const { dogModelRef, handleEnemyDeath, handleCarnivoreAttack, handleHerbivoreAttack } = params;
 
   const checkCollisions = useCallback((e: EnemyData) => {
     if (e.isDying || !dogModelRef.current) return;
 
-    const dogXZ = new THREE.Vector3(dogModelRef.current.position.x, 0, dogModelRef.current.position.z);
-    const enemyXZ = new THREE.Vector3(e.lod.position.x, 0, e.lod.position.z);
+    dogXZ.set(dogModelRef.current.position.x, 0, dogModelRef.current.position.z);
+    enemyXZ.set(e.lod.position.x, 0, e.lod.position.z);
     const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
 
     // التحقق من قتل العدو عند الاصطدام

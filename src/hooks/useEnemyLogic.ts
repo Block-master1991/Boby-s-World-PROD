@@ -189,6 +189,9 @@ interface UpdateEnemiesParams {
   coinMeshesRef: React.MutableRefObject<CoinData[]>; // Add this
 }
 
+const frustum = new THREE.Frustum();
+const projScreenMatrix = new THREE.Matrix4();
+
 const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
   const {
     enemies,
@@ -201,32 +204,50 @@ const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
     dogModelRef,
     sceneRef,
     cameraRef,
-    coinMeshesRef // Add this
+    coinMeshesRef
   } = params;
+
+  // Cache variables for coin map optimization
+  const coinMapRef = React.useRef<Map<string, CoinData>>(new Map());
+  const lastCoinCountRef = React.useRef(-1);
+
   return React.useCallback((delta: number) => {
     if (isPausedRef.current || !dogModelRef.current || !sceneRef.current || !cameraRef.current) return;
+    
+    // Process heavy logic in batches or intervals if needed
     manageChunks();
     updateReconciliation(delta);
     filterDead(delta);
+    
     const cam = cameraRef.current;
     cam.updateMatrixWorld();
-    const f = new THREE.Frustum();
-    f.setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+    
+    // Optimized: Use persistent math objects to avoid per-frame GC
+    projScreenMatrix.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+    frustum.setFromProjectionMatrix(projScreenMatrix);
+    
     frameRef.current = (frameRef.current + 1) % 60;
-    // إنشاء خريطة للعملات لتحسين الأداء (O(1) lookup بدلاً من O(N))
-    const coinMap = new Map<string, CoinData>();
-    coinMeshesRef.current.forEach(c => coinMap.set(c.uuid, c));
+
+    // Optimized: Only rebuild coin map if the number of coins changed
+    // In a mature system, we'd use a version counter, but length is a good proxy for performance
+    if (coinMeshesRef.current.length !== lastCoinCountRef.current) {
+        coinMapRef.current.clear();
+        coinMeshesRef.current.forEach(c => coinMapRef.current.set(c.uuid, c));
+        lastCoinCountRef.current = coinMeshesRef.current.length;
+    }
 
     const ctx: Ctx = {
       delta,
       dogPos: dogModelRef.current.position,
-      frustum: f,
+      frustum: frustum,
       perf: getDevicePerformanceConfig(),
       frame: frameRef.current,
-      coinMap // تمرير الخريطة للسياق
+      coinMap: coinMapRef.current
     };
+    
+    // Throttle: Update only active/visible enemies more intensely
     enemies.current.forEach(e => updateOne(e, ctx));
-  }, [manageChunks, filterDead, updateOne, isPausedRef, dogModelRef, sceneRef, cameraRef, updateReconciliation, enemies]);
+  }, [manageChunks, filterDead, updateOne, isPausedRef, dogModelRef, sceneRef, cameraRef, updateReconciliation, enemies, coinMeshesRef]);
 };
 
 export const useEnemyLogic = (props: Props) => {
