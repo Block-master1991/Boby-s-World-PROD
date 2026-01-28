@@ -76,7 +76,11 @@ export const useEnemyLoader = () => {
 
   const preloadModels = useCallback(async () => { if (preloaded) return; logger.log('[useEnemyLoader] Preloading...'); await Promise.all([...CARN.map(n => loadEnemyModel('carnivore', n)), ...HERB.map(n => loadEnemyModel('herbivore', n))]); preloaded = true; logger.log('[useEnemyLoader] Done.'); }, [loadEnemyModel]);
 
+  const getPreloadableModels = useCallback(() => {
+    return Object.values(cache).map(r => r.model);
+  }, []);
+
   const disposeModel = useCallback((m: THREE.Object3D) => { m.traverse(c => { const x = c as THREE.Mesh; if (x.isMesh) { x.geometry?.dispose(); const mt = x.material; if (Array.isArray(mt)) mt.forEach(z => z.dispose()); else (mt as THREE.Material)?.dispose(); } }); }, []);
 
-  return { loadEnemyModel, preloadModels, disposeModel };
+  return { loadEnemyModel, preloadModels, getPreloadableModels, disposeModel };
 };

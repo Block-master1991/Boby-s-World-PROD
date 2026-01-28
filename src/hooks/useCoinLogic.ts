@@ -127,5 +127,5 @@ export const useCoinLogic = (props: UseCoinLogicProps) => {
         await Promise.all(tasks);
     }, [props.sceneRef, loadCoinsForChunk, loadedCoinChunks]);
 
-    return { initializeCoins, updateCoins, resetCoins: initializeCoins, forceLoadAreaCoins, coinMeshesRef, remainingCoinsRef, loadedCoinChunks };
+    return { initializeCoins, updateCoins, resetCoins: initializeCoins, forceLoadAreaCoins, coinMeshesRef, remainingCoinsRef, loadedCoinChunks, coinModelRef };
 };

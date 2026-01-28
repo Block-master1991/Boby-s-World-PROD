@@ -10,11 +10,13 @@ import type * as THREE from 'three';
 interface UseLoadingLogicProps {
     rendererRef: MRef<THREE.WebGLRenderer | null>; cameraRef: MRef<THREE.PerspectiveCamera | null>;
     dogModelRef: MRef<THREE.Object3D | null>; environmentRef: MRef<Environment | null>;
+    coinModelRef: MRef<THREE.Group | null>; // Add this
     currentDogChunkRef: MRef<{ chunkX: number; chunkZ: number } | null>;
     onLoadStart: () => void; onLoadProgress: (p: number, ph?: string) => void; onLoadComplete: (s: boolean) => void;
     initializeDog: () => void | Promise<void>; initializeCoins: () => void | Promise<void>; initializeEnemies: () => void | Promise<void>;
     forceLoadAreaCoins: (cx: number, cz: number) => void | Promise<void>; forceLoadAreaEnemies: (cx: number, cz: number) => void | Promise<void>;
     setupInitialCameraPosition: () => void;
+    getPreloadableEnemies: () => THREE.Object3D[];
 }
 
 export const useLoadingLogic = (p: UseLoadingLogicProps) => {
@@ -30,8 +32,20 @@ export const useLoadingLogic = (p: UseLoadingLogicProps) => {
         try {
             p.environmentRef.current.preloadInitialScene(dogPos).catch(e => logger.warn("[useLoadingLogic] Preload error:", e));
             await new Promise(r => setTimeout(r, 300)); await preloadEntities(dogPos);
+            
+            // Professional Shader Pre-warming: 
+            // Compile all shaders for key game entities BEFORE the player starts moving.
+            if (p.rendererRef.current) {
+                const {ShaderPrewarmer} = await import('@/lib/shaderPrewarmer');
+                const enemies = p.getPreloadableEnemies();
+                ShaderPrewarmer.prewarm(p.rendererRef.current, [
+                    p.dogModelRef.current,
+                    p.coinModelRef.current,
+                    ...enemies
+                ]);
+            }
         } catch (error) { logger.error("[useLoadingLogic] World init error:", error); }
-    }, [p.environmentRef, preloadEntities]);
+    }, [p.environmentRef, preloadEntities, p.rendererRef, p.dogModelRef, p.coinModelRef, p.getPreloadableEnemies]);
 
     const loadAllGameAssets = useCallback(async () => {
         p.onLoadStart();

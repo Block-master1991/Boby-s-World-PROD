@@ -9,6 +9,7 @@ import * as THREE from 'three';
 import type { FloatingEffectOptions } from './coin/useCoinInteraction';
 import type { EnemyData } from './enemy/types';
 import { useEnemyCombat } from './enemy/useEnemyCombat';
+import { useEnemyLoader } from './enemy/useEnemyLoader';
 import { useEnemyMovement } from './enemy/useEnemyMovement';
 import { useEnemyOctreeManager } from './enemy/useEnemyOctreeManager';
 import { useEnemyReconciliation } from './enemy/useEnemyReconciliation';
@@ -41,9 +42,14 @@ const updateVis = (e: EnemyData, dogPos: THREE.Vector3) => {
 // Aggressive throttling for distant enemies (low load)
 const getAnimD = (d: number, dt: number, mob: boolean) => d > 300 ? dt * 10 : d > 150 ? dt * 6 : d > 60 ? dt * (mob ? 3 : 2) : dt;
 
-const shouldAnim = (d: number, inF: boolean, ctx: Ctx) => {
+const shouldAnim = (d: number, inF: boolean, ctx: Ctx, e: EnemyData) => {
+    // Professional Animation Culling:
+    // If e.lod.visible is false (distance-based) OR not in Frustum, STOP calculations completely.
+    // Exception: If very close (d < 10), keep it to avoid pop-in glitches when turning fast.
+    if ((!e.lod.visible || !inF) && d > 10) return false;
+
     const { perf: p, frame: f } = ctx;
-    // Ultra-low priority for very distant enemies (only animate rarely to show movement)
+    // Ultra-low priority for very distant enemies
     if (d > 300) return inF && (f % 10 === 0);
     
     if (p.isMobile && p.performanceLevel === 'low' && d > 40) return false;
@@ -52,7 +58,11 @@ const shouldAnim = (d: number, inF: boolean, ctx: Ctx) => {
     return inF && (f % 6 === 0);
 };
 
-const animE = (e: EnemyData, d: number, inF: boolean, ctx: Ctx) => { if (e.mixer && shouldAnim(d, inF, ctx)) e.mixer.update(getAnimD(d, ctx.delta, ctx.perf.isMobile)); };
+const animE = (e: EnemyData, d: number, inF: boolean, ctx: Ctx) => { 
+    if (e.mixer && shouldAnim(d, inF, ctx, e)) {
+        e.mixer.update(getAnimD(d, ctx.delta, ctx.perf.isMobile)); 
+    }
+};
 const dispE = (e: EnemyData) => { e.mixer.stopAllAction(); e.lod.traverse(c => { const m = c as THREE.Mesh; if (m.isMesh) m.geometry?.dispose(); }); };
 
 const initializeEnemyHooks = (props: Props, enemies: React.MutableRefObject<EnemyData[]>, pendingCoins: React.MutableRefObject<Set<string>>) => {
@@ -88,6 +98,7 @@ const initializeEnemyHooks = (props: Props, enemies: React.MutableRefObject<Enem
     onSpawnEnemy: spawn,
   });
 
+  const { getPreloadableModels } = useEnemyLoader();
   const { cleanupModelPool } = useDynamicModelLoader({ cameraRef, sceneRef, octreeRef, objectsToManage: [] });
 
   return {
@@ -101,6 +112,7 @@ const initializeEnemyHooks = (props: Props, enemies: React.MutableRefObject<Enem
     updateOctree,
     removeFromOctree,
     updateReconciliation,
+    getPreloadableModels,
     cleanupModelPool
   };
 };
@@ -229,7 +241,6 @@ const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
     frameRef.current = (frameRef.current + 1) % 60;
 
     // Optimized: Only rebuild coin map if the number of coins changed
-    // In a mature system, we'd use a version counter, but length is a good proxy for performance
     if (coinMeshesRef.current.length !== lastCoinCountRef.current) {
         coinMapRef.current.clear();
         coinMeshesRef.current.forEach(c => coinMapRef.current.set(c.uuid, c));
@@ -237,15 +248,10 @@ const createUpdateEnemiesCallback = (params: UpdateEnemiesParams) => {
     }
 
     const ctx: Ctx = {
-      delta,
-      dogPos: dogModelRef.current.position,
-      frustum: frustum,
-      perf: getDevicePerformanceConfig(),
-      frame: frameRef.current,
-      coinMap: coinMapRef.current
+      delta, dogPos: dogModelRef.current.position, frustum: frustum,
+      perf: getDevicePerformanceConfig(), frame: frameRef.current, coinMap: coinMapRef.current
     };
     
-    // Throttle: Update only active/visible enemies more intensely
     enemies.current.forEach(e => updateOne(e, ctx));
   }, [manageChunks, filterDead, updateOne, isPausedRef, dogModelRef, sceneRef, cameraRef, updateReconciliation, enemies, coinMeshesRef]);
 };
@@ -266,6 +272,7 @@ export const useEnemyLogic = (props: Props) => {
     updateOctree,
     removeFromOctree,
     updateReconciliation,
+    getPreloadableModels,
     cleanupModelPool
   } = hooks;
 
@@ -286,5 +293,5 @@ export const useEnemyLogic = (props: Props) => {
   });
 
   React.useEffect(() => () => { cleanupModelPool(); enemies.current = []; }, [cleanupModelPool]);
-  return { initializeEnemies, updateEnemies, resetEnemies, forceLoadAreaEnemies, enemyMeshesRef: enemies };
+  return { initializeEnemies, updateEnemies, resetEnemies, forceLoadAreaEnemies, enemyMeshesRef: enemies, getPreloadableEnemies: getPreloadableModels };
 };
