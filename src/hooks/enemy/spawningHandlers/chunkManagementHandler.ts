@@ -2,7 +2,7 @@ import type { CoinData } from '@/hooks/useCoinLogic';
 import type { Octree } from '@/lib/Octree';
 import type { GameObject } from '@/types/game';
 import { useCallback } from 'react';
-import type * as THREE from 'three';
+import * as THREE from 'three';
 import type { EnemyData } from '../types';
 import { getChunkManager } from './chunkManager';
 
@@ -58,6 +58,13 @@ export const createChunkManagementHandler = (params: ChunkManagementHandlerParam
       if (!near.has(k)) {
         enemyMeshesRef.current.filter(e => e.chunkKey === k).forEach(e => {
           sceneRef.current?.remove(e.lod);
+          if (params.octreeRef.current) {
+            params.octreeRef.current.remove({
+                id: `enemy_${e.uuid}`,
+                bounds: new THREE.Box3().setFromObject(e.lod),
+                data: e as unknown as GameObject
+            });
+          }
           disposeModel(e.lod);
         });
         enemyMeshesRef.current = enemyMeshesRef.current.filter(e => e.chunkKey !== k);

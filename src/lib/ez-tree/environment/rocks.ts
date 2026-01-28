@@ -124,14 +124,13 @@ export class Rocks extends THREE.Group {
     chunkGroup.children.forEach(child => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-        if (mesh.geometry) mesh.geometry.dispose();
-        if (mesh.material) {
-          if (Array.isArray(mesh.material)) {
-            mesh.material.forEach(mat => mat.dispose());
-          } else {
-            mesh.material.dispose();
-          }
-        }
+        // Do NOT dispose geometry/material here as they are shared via clone()
+        // form the original loaded assets (_rock1Mesh, etc).
+        // Only break references.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mesh.geometry = null as any;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        mesh.material = null as any;
       }
     });
     chunkGroup.clear();

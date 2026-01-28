@@ -17,7 +17,8 @@ export const useEnemyReconciliation = ({
   onSpawnEnemy,
 }: Props) => {
   const reconciliationTimer = useRef(0);
-  const RECONCILIATION_INTERVAL = 1.0; // Run every 1 second
+  const spawnAttemptedCoins = useRef(new Set<string>()); // Log attempted spawns to prevent spam
+  const RECONCILIATION_INTERVAL = 2.0; // Optimized: Check every 2 seconds instead of 1
 
   const reconcileEnemies = useCallback(() => {
     const guardedCoinIds = new Set<string>();
@@ -27,11 +28,12 @@ export const useEnemyReconciliation = ({
       }
     });
 
-    // Find visible coins that lack a guardian and aren't already pending
+    // Find visible coins that lack a guardian, aren't pending, and haven't been attempted recently
     const coinsNeedingGuardians = coinMeshesRef.current.filter(coin =>
       !coin.collected &&
       !guardedCoinIds.has(coin.uuid) &&
-      !pendingCoins.current.has(coin.uuid)
+      !pendingCoins.current.has(coin.uuid) &&
+      !spawnAttemptedCoins.current.has(coin.uuid)
     );
 
     if (coinsNeedingGuardians.length > 0) {
@@ -39,14 +41,26 @@ export const useEnemyReconciliation = ({
       const BATCH_LIMIT = 3;
       const subset = coinsNeedingGuardians.slice(0, BATCH_LIMIT);
       
-      logger.log(
-        `[useEnemyReconciliation] Found ${coinsNeedingGuardians.length} unguarded coins. Throttling spawn: processing ${subset.length}...`
-      );
+      // Only log if significant backlog
+      if (coinsNeedingGuardians.length > 10) {
+         logger.log(`[useEnemyReconciliation] Found ${coinsNeedingGuardians.length} unguarded coins. Processing ${subset.length}...`);
+      }
       
       subset.forEach(coin => {
         const chunkKey = coin.chunkKey ?? '';
         if (chunkKey) {
-          onSpawnEnemy(coin, chunkKey);
+          spawnAttemptedCoins.current.add(coin.uuid);
+          onSpawnEnemy(coin, chunkKey).catch(() => {
+             // If spawn fails, allow retry later by removing from attempted set
+             spawnAttemptedCoins.current.delete(coin.uuid);
+          });
+          
+          // Clear form attempted list after 10 seconds to allow retry if something got stuck
+          setTimeout(() => {
+              if (spawnAttemptedCoins.current.has(coin.uuid)) {
+                   spawnAttemptedCoins.current.delete(coin.uuid);
+              }
+          }, 10000);
         }
       });
     }

@@ -75,16 +75,17 @@ export class Environment extends THREE.Object3D {
 
   private createGenerators() {
     const perfConfig = getDevicePerformanceConfig();
-    
+
     const grassOpts = new GrassOptions();
-    grassOpts.instanceCountPerChunk = Math.floor(grassOpts.instanceCountPerChunk * perfConfig.environmentDensity.grassMultiplier);
-    
+    // Reduce grass density significantly for performance (from ~2000 to ~500-600 per chunk)
+    grassOpts.instanceCountPerChunk = Math.floor(grassOpts.instanceCountPerChunk * perfConfig.environmentDensity.grassMultiplier * 0.3);
+
     const rockOpts = new RockOptions();
     rockOpts.rockCountPerChunk = Math.floor(rockOpts.rockCountPerChunk * perfConfig.environmentDensity.rocksMultiplier);
-    
+
     const treeOpts = new TreesOptions();
     treeOpts.treeCountPerChunk = Math.floor(treeOpts.treeCountPerChunk * perfConfig.environmentDensity.treeMultiplier);
-    
+
     const flowerOpts = new FlowerOptions();
     flowerOpts.flowersCountPerChunk = Math.floor(flowerOpts.flowersCountPerChunk * perfConfig.environmentDensity.flowersMultiplier);
 
@@ -118,9 +119,9 @@ export class Environment extends THREE.Object3D {
         this.chunkManager.setGeneratorsReady();
         
         // Wait for initial chunks to load before signaling ready
-        logger.log('[Environment] Waiting for initial 49 chunks to load...');
+        logger.log('[Environment] Waiting for initial 25 chunks to load...');
         // eslint-disable-next-line no-await-in-loop -- Intentional: must wait for chunks before signaling ready
-        await this.chunkManager.waitForInitialChunks(49);
+        await this.chunkManager.waitForInitialChunks(25);
         logger.log('[Environment] ✅ Initial chunks loaded. World is ready!');
         
         if (this.resolveLoading) this.resolveLoading();

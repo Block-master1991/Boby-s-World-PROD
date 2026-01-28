@@ -1,7 +1,7 @@
 import type { GameObject } from '@/types/game';
 import type { MutableRefObject } from 'react';
 import { useCallback } from 'react';
-import * as THREE from 'three';
+import type * as THREE from 'three';
 import type { Octree } from '../../lib/Octree';
 import { ANIMATION_NAMES, type DogAnimationName, type DogTransform } from './constants';
 
@@ -22,11 +22,12 @@ export const useDogUpdate = (props: UpdateProps) => {
         octreeRef, lastDogTransformRef, updateAnimationState, applyMovement 
     } = props;
 
-    const handleGroundCollision = (dog: THREE.Group, octree: Octree<GameObject>) => {
-        const box = new THREE.Box3().setFromObject(dog);
-        octree.query(box).forEach(o => {
-            if (o.id === 'ground') dog.position.y = 0;
-        });
+    const handleGroundCollision = (dog: THREE.Group) => {
+        // Optimized: Simple floor clamp for flat ground instead of expensive Octree query
+        if (dog.position.y < 0) {
+            dog.position.y = 0;
+            // Reset vertical velocity if any (assumed handled in movement)
+        }
     };
 
     const updateDog = useCallback((delta: number) => {
@@ -44,7 +45,7 @@ export const useDogUpdate = (props: UpdateProps) => {
         
         updateAnimationState(nextAnim);
         mixer.update(delta);
-        if (octreeRef.current) handleGroundCollision(dog, octreeRef.current);
+        if (octreeRef.current) handleGroundCollision(dog);
 
         if (lastDogTransformRef.current) {
             lastDogTransformRef.current.position.copy(dog.position);

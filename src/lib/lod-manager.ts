@@ -12,12 +12,13 @@ interface LODObject {
     morphing: boolean;
     morphProgress: number;
     morphSpeed: number;
+    cachedMaterials?: Material[]; // Cache for performance
 }
 
 export class LODManager {
     private lodObjects = new Map<string, LODObject>();
     private cameraPosition = new Vector3();
-    private updateInterval = 100; // ms
+    private updateInterval = 200; // Optimized: 200ms check is sufficient for LOD
     private lastUpdateTime = 0;
     private morphingObjects = new Set<string>();
     private globalQualityScale = 1.0;
@@ -129,6 +130,11 @@ export class LODManager {
             if (lodObject.morphProgress >= 1.0) {
                 lodObject.morphing = false;
                 lodObject.morphProgress = 1.0;
+                lodObject.morphing = false;
+                lodObject.morphProgress = 1.0;
+                delete lodObject.cachedMaterials; // Clear cache properly
+                this.morphingObjects.delete(id);
+                this.applyLODLevel(lodObject, lodObject.currentLevel);
                 this.morphingObjects.delete(id);
                 this.applyLODLevel(lodObject, lodObject.currentLevel);
             } else {
@@ -155,26 +161,30 @@ export class LODManager {
     private updateMorphProgress(lodObject: LODObject, progress: number): void {
         if (!lodObject.levels[lodObject.currentLevel]) return;
 
-        if (lodObject.object instanceof Mesh) {
-            this.setObjectOpacity(lodObject.object, progress);
-        } else {
-            lodObject.object.traverse((child) => {
-                if (child instanceof Mesh) this.setObjectOpacity(child, progress);
-            });
-        }
-    }
-
-    private setObjectOpacity(mesh: Mesh, opacity: number): void {
-        if (!mesh.material) return;
-        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-        mats.forEach(mat => {
-            const m = mat as Material & { opacity?: number; transparent?: boolean };
-            if (m && 'opacity' in m) {
-                m.opacity = opacity;
-                m.transparent = opacity < 0.99;
+        // Use cached materials if available to avoid traversal
+        if (!lodObject.cachedMaterials) {
+            lodObject.cachedMaterials = [];
+            if (lodObject.object instanceof Mesh) {
+                if (lodObject.object.material) lodObject.cachedMaterials.push(...(Array.isArray(lodObject.object.material) ? lodObject.object.material : [lodObject.object.material]));
+            } else {
+                lodObject.object.traverse((child) => {
+                    if (child instanceof Mesh && child.material) {
+                         lodObject.cachedMaterials!.push(...(Array.isArray(child.material) ? child.material : [child.material]));
+                    }
+                });
             }
+        }
+
+        lodObject.cachedMaterials.forEach(mat => {
+             const m = mat as Material & { opacity?: number; transparent?: boolean };
+             if (m && 'opacity' in m) {
+                 m.opacity = progress;
+                 m.transparent = progress < 0.99;
+             }
         });
     }
+
+
 
     private ensureGeometryLoaded(level: LODLevel): void {
         const geom = level.geometry as BufferGeometry & { load?: () => Promise<void> };

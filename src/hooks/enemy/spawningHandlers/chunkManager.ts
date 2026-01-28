@@ -10,8 +10,9 @@ interface ChunkManager {
 
 export const getNearKeys = (cx: number, cz: number): Set<string> => {
   const s = new Set<string>();
-  // Increase range slightly to spawn enemies before they become visible (buffer zone)
-  const range = RENDER_DISTANCE_CHUNKS + 2; 
+  // Match range exactly to loaded chunks to prevent thrashing (loading/unloading loop)
+  // Max loaded chunks is 30 (approx 6x6), so 5x5 (range 2) is safe.
+  const range = RENDER_DISTANCE_CHUNKS;
   for (let x = -range; x <= range; x++) {
     for (let z = -range; z <= range; z++) {
       s.add(getChunkKey(cx + x, cz + z));

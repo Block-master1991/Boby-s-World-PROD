@@ -33,8 +33,8 @@ interface ShaderObject {
  */
 export function applyProfessionalFade(
   material: THREE.Material | THREE.Material[],
-  fadeStart: number = 152.0,
-  fadeEnd: number = 155.0
+  fadeStart: number = 122.0,
+  fadeEnd: number = 125.0
 ): void {
   if (!material) return;
   const materials = Array.isArray(material) ? material : [material];
@@ -128,8 +128,8 @@ export function appendWindShader(
   const {
     instanced = false,
     enableFade = false,
-    fadeStart = 152.0,
-    fadeEnd = 155.0
+    fadeStart = 122.0,
+    fadeEnd = 125.0
   } = config;
 
   const materials = Array.isArray(material) ? material : [material];

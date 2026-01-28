@@ -16,8 +16,8 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   private lastPlayerChunk: { chunkX: number; chunkZ: number } | null = null;
   private loadingQueue: string[] = [];
   private unloadingQueue: string[] = [];
-  private readonly BATCH_SIZE = 3;
-  private readonly MAX_LOADED_CHUNKS = 81; // 9x9 grid max
+  // private readonly BATCH_SIZE = 3; 
+  private readonly MAX_LOADED_CHUNKS = 30; // Optimized: Closer to 5x5 (25) visible range + buffer
   private isProcessingQueue = false;
   private _generatorsReady = false;
   private contentManager: ChunkContentManager;
@@ -40,6 +40,12 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
 
   private handleWorkerMessage(e: MessageEvent) {
     const { chunkKey, grassData, rocksData, treesData, flowersData, gameplayData } = e.data;
+
+    /* // Log chunk contents for performance analysis
+    const totalElements = grassData.positions.length / 3 + rocksData.positions.length / 3 +
+                         treesData.positions.length / 3 + flowersData.positions.length / 3;
+    logger.log(`[ChunkManager] Chunk ${chunkKey} loaded - Elements: ${totalElements} (Grass: ${grassData.positions.length/3}, Rocks: ${rocksData.positions.length/3}, Trees: ${treesData.positions.length/3}, Flowers: ${flowersData.positions.length/3})`); */
+
     const resolve = this.pendingResolves.get(chunkKey);
     if (resolve) {
       this.pendingResolves.delete(chunkKey);
@@ -62,13 +68,18 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
     const { chunkX: cx, chunkZ: cz } = getChunkCoordinates(this.playerPosition.x, this.playerPosition.z);
     if (this.lastPlayerChunk?.chunkX === cx && this.lastPlayerChunk?.chunkZ === cz) return;
     this.lastPlayerChunk = { chunkX: cx, chunkZ: cz };
-
+    /* const playerDistance = Math.sqrt(cx * cx + cz * cz) * CHUNK_SIZE;
+    logger.log(`[ChunkManager] Player at chunk (${cx}, ${cz}) - Distance: ${playerDistance.toFixed(1)} units - Loaded chunks: ${this.loadedChunks.size}/${this.MAX_LOADED_CHUNKS}`); */
     const toKeep = new Set<string>();
     for (let x = -RENDER_DISTANCE_CHUNKS; x <= RENDER_DISTANCE_CHUNKS; x++) {
       for (let z = -RENDER_DISTANCE_CHUNKS; z <= RENDER_DISTANCE_CHUNKS; z++) {
         const key = getChunkKey(cx + x, cz + z);
         toKeep.add(key);
-        if (!this.loadedChunks.has(key) && !this.loadingQueue.includes(key)) this.loadingQueue.push(key);
+        // Prevent overloading: only add to queue if we won't exceed safe limit
+        if (!this.loadedChunks.has(key) && !this.loadingQueue.includes(key) &&
+            this.loadedChunks.size + this.loadingQueue.length < this.MAX_LOADED_CHUNKS + 5) {
+          this.loadingQueue.push(key);
+        }
       }
     }
 
@@ -93,14 +104,20 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
     if (this.isProcessingQueue) return;
     this.isProcessingQueue = true;
 
+    // const processStart = performance.now();
+
     while (this.unloadingQueue.length > 0 || (this._generatorsReady && this.loadingQueue.length > 0)) {
-      const unloadBatch = this.unloadingQueue.splice(0, this.BATCH_SIZE * 2);
-      for (const key of unloadBatch) {
-        const chunk = this.loadedChunks.get(key);
-        if (chunk) {
-          this.contentManager.unloadChunk(this, chunk);
-          this.loadedChunks.delete(key);
-          logger.log(`[ChunkManager] Unloaded chunk ${key}`);
+      // Priority: Unload first to prevent overloading
+      if (this.unloadingQueue.length > 0) {
+        // Optimized: Unload only 1 chunk per frame to avoid massive GC spikes
+        const unloadBatch = this.unloadingQueue.splice(0, 1);
+        for (const key of unloadBatch) {
+          const chunk = this.loadedChunks.get(key);
+          if (chunk) {
+            this.contentManager.unloadChunk(this, chunk);
+            this.loadedChunks.delete(key);
+            // logger.log(`[ChunkManager] Unloaded chunk ${key}`); // Muted for performance
+          }
         }
       }
 
@@ -126,8 +143,10 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
         }
       }
 
-      if (this._generatorsReady && this.loadingQueue.length > 0) {
-        const loadBatch = this.loadingQueue.splice(0, this.BATCH_SIZE);
+      // Load new chunks only if we have capacity
+      if (this._generatorsReady && this.loadingQueue.length > 0 && this.loadedChunks.size < this.MAX_LOADED_CHUNKS) {
+        // Optimized: Load only 1 chunk per frame to spread mesh creation cost
+        const loadBatch = this.loadingQueue.splice(0, 1);
         // eslint-disable-next-line no-await-in-loop
         await Promise.all(loadBatch.map(async (key) => {
           if (this.loadedChunks.has(key)) return;
@@ -141,9 +160,13 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
           } catch (e) { logger.warn(`[ChunkManager] Load fail ${key}:`, e); }
         }));
       }
+
+      // Continue processing if there's more work
       // eslint-disable-next-line no-await-in-loop
       if (this.unloadingQueue.length > 0 || this.loadingQueue.length > 0) await new Promise(r => requestAnimationFrame(r));
     }
+
+    
     this.isProcessingQueue = false;
   }
 
@@ -185,6 +208,9 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       this.projScreenMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
       this.frustum.setFromProjectionMatrix(this.projScreenMatrix);
 
+      /* let visibleChunks = 0;
+      let totalObjects = 0; */
+
       for (const chunk of this.loadedChunks.values()) {
         const { chunkX, chunkZ } = this.parseChunkKey(chunk.id);
         const center = new THREE.Vector3(
@@ -193,9 +219,17 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
           chunkZ * CHUNK_SIZE + CHUNK_SIZE / 2
         );
         const isVisible = this.frustum.intersectsSphere(new THREE.Sphere(center, CHUNK_SIZE * 0.866));
-        
+
+        /* if (isVisible) visibleChunks++;
+        totalObjects += chunk.objects.length; */
+
         for (const obj of chunk.objects) obj.visible = isVisible;
       }
+
+      /* // Log performance stats periodically
+      if (Math.floor(performance.now() / 1000) % 5 === 0) { // Every 5 seconds
+        logger.log(`[ChunkManager] Performance: Visible chunks: ${visibleChunks}/${this.loadedChunks.size}, Total objects: ${totalObjects}, Memory usage: ${(performance as any).memory?.usedJSHeapSize / 1024 / 1024 || 'N/A'}MB`);
+      } */
     }
   }
 
@@ -208,7 +242,7 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
     return this.loadedChunks.size;
   }
 
-  public waitForInitialChunks(requiredCount = 49): Promise<void> {
+  public waitForInitialChunks(requiredCount = 25): Promise<void> {
     return new Promise((resolve) => {
       const check = () => {
         if (this.loadedChunks.size >= requiredCount) {

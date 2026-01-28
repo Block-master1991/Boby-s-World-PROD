@@ -97,13 +97,9 @@ export const getEnemySpawnPosition = (
       if (spawnPosition) {
         return spawnPosition;
       }
-      import('@/utils/logger').then(({ logger }) => {
-        logger.log(`[spawningHelpers] Enemy spawn for coin index ${coinIndex} not found in chunk ${chunkKey}, falling back to random.`);
-      });
+      // Silenced verbose log: Enemy spawn for coin index not found, falling back to random.
     } else {
-      import('@/utils/logger').then(({ logger }) => {
-        logger.log(`[spawningHelpers] Gameplay data for chunk ${chunkKey} not found, falling back to random.`);
-      });
+      // Silenced verbose log: Gameplay data for chunk not found, falling back to random.
     }
   }
 

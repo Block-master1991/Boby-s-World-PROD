@@ -108,7 +108,11 @@ export const useCoinSpawning = (props: SpawningProps) => {
         const [maxX, maxZ] = [minX + CHUNK_SIZE, minZ + CHUNK_SIZE];
 
         props.coinMeshesRef.current = props.coinMeshesRef.current.filter(c => {
-            if (c.position.x >= minX && c.position.x < maxX && c.position.z >= minZ && c.position.z < maxZ) {
+            // Robust check: either key match OR spatial match (failsafe)
+            const isTargetChunk = c.chunkKey === key || 
+                                (c.position.x >= minX && c.position.x < maxX && c.position.z >= minZ && c.position.z < maxZ);
+
+            if (isTargetChunk) {
                 sceneRef.current?.remove(c);
                 if (props.octreeRef.current) {
                     props.octreeRef.current.remove({ id: `coin_${c.uuid}`, bounds: new THREE.Box3().setFromObject(c), data: c as unknown as GameObject });

@@ -48,9 +48,9 @@ const manageChunks = (
     if (!currentChunk.current || cX !== currentChunk.current.chunkX || cZ !== currentChunk.current.chunkZ) {
         currentChunk.current = { chunkX: cX, chunkZ: cZ };
         const keep = new Set<string>();
-        // Increase coin loading range to ensure distant coins are loaded for distinct enemy spawning
-        // Range: RENDER_DISTANCE_CHUNKS (3) + 3 = 6 chunks ~ 300m radius
-        const range = RENDER_DISTANCE_CHUNKS + 3;
+        // Optimized: Match RENDER_DISTANCE_CHUNKS (2) exactly for 5x5 area (25 chunks)
+        // This fits perfectly within ChunkManager's MAX_LOADED_CHUNKS (30)
+        const range = RENDER_DISTANCE_CHUNKS;
         for (let x = -range; x <= range; x++) {
             for (let z = -range; z <= range; z++) keep.add(getChunkKey(cX + x, cZ + z));
         }
@@ -80,7 +80,7 @@ const resetSystem = (
     refs.chunkRef.current = { chunkX, chunkZ };
     refs.lastDogPos.current.copy(refs.dog.position);
 
-    const range = RENDER_DISTANCE_CHUNKS + 3;
+    const range = RENDER_DISTANCE_CHUNKS;
     for (let x = -range; x <= range; x++) {
         for (let z = -range; z <= range; z++) loader(chunkX + x, chunkZ + z);
     }
@@ -118,7 +118,7 @@ export const useCoinLogic = (props: UseCoinLogicProps) => {
     const forceLoadAreaCoins = useCallback(async (cX: number, cZ: number) => {
         if (!props.sceneRef.current) return;
         const tasks: Promise<void>[] = [];
-        const range = RENDER_DISTANCE_CHUNKS + 3;
+        const range = RENDER_DISTANCE_CHUNKS;
         for (let x = -range; x <= range; x++) {
             for (let z = -range; z <= range; z++) {
                 if (!loadedCoinChunks.current.has(getChunkKey(cX + x, cZ + z))) tasks.push(loadCoinsForChunk(cX + x, cZ + z));

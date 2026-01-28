@@ -13,7 +13,7 @@ let _grassMesh: THREE.Mesh | null = null;
 export class GrassOptions {
   public instanceCountPerChunk: number = 2000; // Number of grass instances per chunk
   public scale: number = 100;
-  public patchiness: number = 0.7;
+  public patchiness: number = 0.8; // Increased from 0.7 to 0.8 to reduce density for mobile
   public size: { x: number; y: number; z: number } = { x: 0.2, y: 0.2, z: 0.2 };
   public sizeVariation: { x: number; y: number; z: number } = { x: 0.05, y: 0.05, z: 0.05 };
   public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // Apply same wind strength used in flowers
@@ -122,10 +122,12 @@ export class Grass extends THREE.Object3D {
       return null;
     }
 
-    const grassMaterial = this.createGrassMaterial(_grassMesh);
+    if (!this.sharedMaterial) {
+      this.sharedMaterial = this.createGrassMaterial(_grassMesh);
+    }
     const instancedGrass = new THREE.InstancedMesh(
       _grassMesh.geometry,
-      grassMaterial,
+      this.sharedMaterial,
       this.options.instanceCountPerChunk
     );
 
@@ -133,8 +135,8 @@ export class Grass extends THREE.Object3D {
     const count = this.populateInstancedMesh(instancedGrass, chunkX, chunkZ);
 
     instancedGrass.count = count;
-    instancedGrass.receiveShadow = true;
-    instancedGrass.castShadow = true;
+    instancedGrass.receiveShadow = false; // Optimized: Grass shadows are too expensive
+    instancedGrass.castShadow = false; // Optimized: Grass shadows are too expensive
     instancedGrass.frustumCulled = true;
     instancedGrass.instanceMatrix.needsUpdate = true;
     if (instancedGrass.instanceColor) instancedGrass.instanceColor.needsUpdate = true;
@@ -222,8 +224,8 @@ export class Grass extends THREE.Object3D {
     instancedGrass.instanceMatrix.needsUpdate = true;
     if (instancedGrass.instanceColor) instancedGrass.instanceColor.needsUpdate = true;
     instancedGrass.count = count;
-    instancedGrass.receiveShadow = true;
-    instancedGrass.castShadow = true;
+    instancedGrass.receiveShadow = false; // Optimized
+    instancedGrass.castShadow = false; // Optimized
 
     return instancedGrass;
   }
