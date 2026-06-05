@@ -11,7 +11,7 @@ const handleApiError = (error: unknown, title: string) => {
 };
 
 const fetchTotp = async (url: string, options?: RequestInit) => {
-  const res = await fetch(url, options);
+  const res = await fetch(url, { credentials: "include", ...options });
   const data = await res.json();
   if (data.error) throw new Error(data.error);
   return data;
@@ -66,6 +66,12 @@ export const useTOTPManagement = () => {
       // causing isLocked=true and an unwanted page reload / wallet sign screen.
       logger.log("[useTOTPManagement] Calling markTOTPEnabled() to update auth state directly.");
       markTOTPEnabled();
+
+      // Refresh auth session state from the server after enabling TOTP,
+      // so the new TTL/authMethod is synchronized and reload preserves the linked state.
+      if (triggerSessionRefresh) {
+        await triggerSessionRefresh();
+      }
 
       logger.log("[useTOTPManagement] Fetching backup codes...");
       const bcData = await fetchTotp("/api/auth/totp/backup-codes", { method: "POST" });

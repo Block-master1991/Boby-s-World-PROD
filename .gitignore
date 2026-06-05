@@ -42,6 +42,7 @@ docs/src
 *.njsproj
 *.sln
 *.sw?
+*.tsbuildinfo
 
 # Firebase
 firebase-debug.log
