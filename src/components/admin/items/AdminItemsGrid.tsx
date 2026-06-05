@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { AdminItemCard } from '@/components/admin/items/AdminItemCard';
-import { Button } from '@/components/ui/button';
-import type { StoreItemDocument } from '@/types/database';
-import { Package, Plus } from 'lucide-react';
+import { AdminItemCard } from "@/components/admin/items/AdminItemCard";
+import { Button } from "@/components/ui/button";
+import type { StoreItemDocument } from "@/types/database";
+import { Package, Plus } from "lucide-react";
 
 interface AdminItemsGridProps {
   items: StoreItemDocument[];
@@ -44,7 +44,7 @@ export function AdminItemsGrid({
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-      {items.map((item) => (
+      {items.map(item => (
         <AdminItemCard key={item.id} item={item} onEdit={onEdit} onDelete={onDelete} />
       ))}
     </div>

@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import type * as THREE from "three";
 
 export const NORMAL_DOG_SPEED = 6.0;
 export const SPRINT_DOG_SPEED = 18.0;
@@ -15,15 +15,15 @@ export const SPRINT_JOYSTICK_THRESHOLD = 0.99;
 export const CROSSFADE_DURATION = 0.2;
 
 export const ANIMATION_NAMES = {
-    IDLE: 'Idle',
-    WALK: 'Walk',
-    RUN: 'Run',
-    SPRINT_JUMP: 'Run_Jump'
+  IDLE: "Idle",
+  WALK: "Walk",
+  RUN: "Run",
+  SPRINT_JUMP: "Run_Jump",
 } as const;
 
-export type DogAnimationName = typeof ANIMATION_NAMES[keyof typeof ANIMATION_NAMES];
+export type DogAnimationName = (typeof ANIMATION_NAMES)[keyof typeof ANIMATION_NAMES];
 
 export interface DogTransform {
-    position: THREE.Vector3;
-    rotationY: number;
+  position: THREE.Vector3;
+  rotationY: number;
 }

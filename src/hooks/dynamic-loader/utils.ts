@@ -1,10 +1,10 @@
-import { logger } from '@/utils/logger';
-import type * as THREE from 'three';
-import { getModel, putModel } from '../../lib/indexedDB';
-import type { ModelPool } from './constants';
+import { logger } from "@/utils/logger";
+import type * as THREE from "three";
+import { getModel, putModel } from "../../lib/indexedDB";
+import type { ModelPool } from "./constants";
 
 export const disposeModelResources = (model: THREE.Group) => {
-  model.traverse((child) => {
+  model.traverse(child => {
     if ((child as THREE.Mesh).isMesh) {
       const mesh = child as THREE.Mesh;
       if (mesh.geometry) mesh.geometry.dispose();
@@ -41,7 +41,12 @@ export const fetchModel = async (path: string, name: string, maxAttempts: number
 };
 /* eslint-enable no-await-in-loop */
 
-export const initPool = (path: string, model: THREE.Group, animations: THREE.AnimationClip[], pool: ModelPool) => {
+export const initPool = (
+  path: string,
+  model: THREE.Group,
+  animations: THREE.AnimationClip[],
+  pool: ModelPool
+) => {
   if (pool[path]) return;
   const entry: ModelPool[string] = { geometry: null, materials: [], animations, instances: [] };
   model.traverse(c => {

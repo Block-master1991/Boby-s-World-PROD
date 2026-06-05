@@ -4,13 +4,13 @@
  * IndexedDB database configuration
  */
 export const DB_CONFIG = {
-  name: 'BobyGameAssets',
+  name: "BobyGameAssets",
   version: 2,
   stores: {
-    assets: 'assets',
-    metadata: 'metadata',
-    stats: 'stats'
-  }
+    assets: "assets",
+    metadata: "metadata",
+    stats: "stats",
+  },
 } as const;
 
 /**
@@ -19,10 +19,10 @@ export const DB_CONFIG = {
 export const CACHE_LIMITS = {
   mobile: {
     maxSize: 300 * 1024 * 1024, // 300MB - increased to fit actual assets (200.62MB)
-    maxItems: 200
+    maxItems: 200,
   },
   desktop: {
     maxSize: 500 * 1024 * 1024, // 500MB - larger buffer for desktop
-    maxItems: 1000
-  }
+    maxItems: 1000,
+  },
 } as const;

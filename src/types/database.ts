@@ -1,7 +1,7 @@
-import type { Timestamp as AdminTimestamp, FieldValue } from 'firebase-admin/firestore';
+import type { Timestamp as AdminTimestamp, FieldValue } from "firebase-admin/firestore";
 
 /**
- * Flexible type for Firestore timestamps that supports both read (Timestamp) 
+ * Flexible type for Firestore timestamps that supports both read (Timestamp)
  * and write (FieldValue/string) operations.
  */
 export type TimestampProperty = AdminTimestamp | FieldValue | string;
@@ -11,16 +11,16 @@ export type TimestampProperty = AdminTimestamp | FieldValue | string;
  * Use these constants to ensure consistency across the project.
  */
 export const COLLECTIONS = {
-  PLAYERS: 'players',
-  PASSKEYS: 'passkeys', // Subcollection of players
-  STORE_ITEMS: 'storeItems',
-  USED_TRANS_SIGS: 'usedTransactionSignatures',
-  REVOKED_TOKENS: 'revokedAuthTokens',
-  ENCRYPTION_KEYS: 'userEncryptionKeys',
-  WHITELIST: 'ratelimit_whitelist',
-  BLACKLIST: 'ratelimit_blacklist',
-  AUDIT_LOGS: 'security_audit_logs',
-  CSRF_TOKENS: 'csrfTokens',
+  PLAYERS: "players",
+  PASSKEYS: "passkeys", // Subcollection of players
+  STORE_ITEMS: "storeItems",
+  USED_TRANS_SIGS: "usedTransactionSignatures",
+  REVOKED_TOKENS: "revokedAuthTokens",
+  ENCRYPTION_KEYS: "userEncryptionKeys",
+  WHITELIST: "ratelimit_whitelist",
+  BLACKLIST: "ratelimit_blacklist",
+  AUDIT_LOGS: "security_audit_logs",
+  CSRF_TOKENS: "csrfTokens",
 } as const;
 
 /**
@@ -48,8 +48,8 @@ export interface InventoryItem {
   description?: string;
   price?: number;
   image?: string;
-  type?: 'consumable' | 'permanent';
-  rarity?: 'common' | 'rare' | 'epic' | 'legendary';
+  type?: "consumable" | "permanent";
+  rarity?: "common" | "rare" | "epic" | "legendary";
   quantity?: number;
 }
 
@@ -79,8 +79,8 @@ export interface StoreItemDocument {
   usdPrice: number;
   image: string;
   dataAiHint: string;
-  type: 'consumable' | 'permanent';
-  rarity: 'common' | 'rare' | 'epic' | 'legendary';
+  type: "consumable" | "permanent";
+  rarity: "common" | "rare" | "epic" | "legendary";
   isActive: boolean;
   createdAt: string; // ISO string
   updatedAt: string; // ISO string
@@ -91,7 +91,7 @@ export interface StoreItemDocument {
  */
 export interface AuditLogDocument {
   eventType: string;
-  severity: 'info' | 'warn' | 'error' | 'critical';
+  severity: "info" | "warn" | "error" | "critical";
   message: string;
   metadata: Record<string, unknown>;
   timestamp: number;
@@ -99,7 +99,7 @@ export interface AuditLogDocument {
   correlationId?: string;
   encrypted?: boolean;
   signature?: string;
-  complianceLevel?: 'GDPR' | 'CCPA' | 'SOC2' | 'HIPAA';
+  complianceLevel?: "GDPR" | "CCPA" | "SOC2" | "HIPAA";
 }
 
 /**
@@ -130,7 +130,7 @@ export interface UserKeyDocument {
 export interface BlacklistedTokenDocument {
   jti: string;
   exp: number;
-  reason: 'logout' | 'security_breach' | 'expired' | string;
+  reason: "logout" | "security_breach" | "expired" | string;
   revokedAt: TimestampProperty;
 }
 
@@ -149,6 +149,6 @@ export interface CsrfTokenDocument {
 export interface RateLimitDocument {
   addedAt: TimestampProperty;
   reason?: string;
-  blockedAt?: string; // ISO string 
+  blockedAt?: string; // ISO string
   source?: string;
 }

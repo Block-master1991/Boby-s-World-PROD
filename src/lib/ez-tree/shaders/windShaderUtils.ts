@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { PROFESSIONAL_DITHER_GLSL, SIMPLEX_NOISE_GLSL } from './shaderConstants';
+import * as THREE from "three";
+import { PROFESSIONAL_DITHER_GLSL, SIMPLEX_NOISE_GLSL } from "./shaderConstants";
 
 /**
  * Common interface for wind-related options
@@ -33,13 +33,13 @@ interface ShaderObject {
  */
 export function applyProfessionalFade(
   material: THREE.Material | THREE.Material[],
-  fadeStart: number = 122.0,
-  fadeEnd: number = 125.0
+  fadeStart: number = 100.0,
+  fadeEnd: number = 130.0
 ): void {
   if (!material) return;
   const materials = Array.isArray(material) ? material : [material];
 
-  materials.forEach((mat) => {
+  materials.forEach(mat => {
     if (!mat) return;
     const originalOnBeforeCompile = mat.onBeforeCompile;
 
@@ -59,16 +59,16 @@ export function applyProfessionalFade(
       typedShader.fragmentShader = `uniform float uFadeStart;\nuniform float uFadeEnd;\nuniform float uTime;\nvarying float vDist;\n${PROFESSIONAL_DITHER_GLSL}\n${typedShader.fragmentShader}`;
 
       typedShader.vertexShader = typedShader.vertexShader.replace(
-        '#include <project_vertex>',
+        "#include <project_vertex>",
         `#include <project_vertex>\nvec4 fadeWorldPos = modelMatrix * vec4(transformed, 1.0);\nvDist = length(fadeWorldPos.xyz - cameraPosition);`
       );
 
       typedShader.fragmentShader = typedShader.fragmentShader.replace(
-        'void main() {',
+        "void main() {",
         `void main() {\nif (vDist < uFadeStart) {} else if (vDist >= uFadeEnd) { discard; } else {\nfloat fade = smoothstep(uFadeStart, uFadeEnd, vDist);\nif (professionalDither(gl_FragCoord.xy) < fade) discard;\n}`
       );
 
-      mat.userData['shader'] = typedShader;
+      mat.userData["shader"] = typedShader;
     };
   });
 }
@@ -125,18 +125,13 @@ export function appendWindShader(
   material: THREE.Material | THREE.Material[],
   config: WindShaderOptions
 ): void {
-  const {
-    instanced = false,
-    enableFade = false,
-    fadeStart = 122.0,
-    fadeEnd = 125.0
-  } = config;
+  const { instanced = false, enableFade = false, fadeStart = 122.0, fadeEnd = 125.0 } = config;
 
   const materials = Array.isArray(material) ? material : [material];
-  materials.forEach((mat) => {
+  materials.forEach(mat => {
     if (!mat) return;
-    if (mat.userData['shader']?.uniforms?.uWindStrength) {
-      updateUniforms(mat.userData['shader'], config);
+    if (mat.userData["shader"]?.uniforms?.uWindStrength) {
+      updateUniforms(mat.userData["shader"], config);
       return;
     }
 
@@ -144,7 +139,13 @@ export function appendWindShader(
     mat.onBeforeCompile = (shader: any) => {
       const typedShader = shader as ShaderObject;
       typedShader.uniforms.uTime = { value: 0 };
-      typedShader.uniforms.uWindStrength = { value: new THREE.Vector3(config.windStrength.x, config.windStrength.y, config.windStrength.z) };
+      typedShader.uniforms.uWindStrength = {
+        value: new THREE.Vector3(
+          config.windStrength.x,
+          config.windStrength.y,
+          config.windStrength.z
+        ),
+      };
       typedShader.uniforms.uWindFrequency = { value: config.windFrequency || 0.5 };
       typedShader.uniforms.uWindScale = { value: config.windScale || 70.0 };
       if (enableFade) {
@@ -152,15 +153,27 @@ export function appendWindShader(
         typedShader.uniforms.uFadeEnd = { value: fadeEnd };
       }
 
-      typedShader.vertexShader = `uniform float uTime;\nuniform vec3 uWindStrength;\nuniform float uWindFrequency;\nuniform float uWindScale;\n${enableFade ? 'varying float vDist;' : ''}\n${typedShader.vertexShader}`;
-      if (enableFade) typedShader.fragmentShader = `uniform float uFadeStart;\nuniform float uFadeEnd;\nvarying float vDist;\n${PROFESSIONAL_DITHER_GLSL}\n${typedShader.fragmentShader}`;
+      typedShader.vertexShader = `uniform float uTime;\nuniform vec3 uWindStrength;\nuniform float uWindFrequency;\nuniform float uWindScale;\n${enableFade ? "varying float vDist;" : ""}\n${typedShader.vertexShader}`;
+      if (enableFade)
+        typedShader.fragmentShader = `uniform float uFadeStart;\nuniform float uFadeEnd;\nvarying float vDist;\n${PROFESSIONAL_DITHER_GLSL}\n${typedShader.fragmentShader}`;
 
-      typedShader.vertexShader = typedShader.vertexShader.replace('void main() {', `${SIMPLEX_NOISE_GLSL}\nvoid main() {`);
-      typedShader.vertexShader = typedShader.vertexShader.replace('#include <project_vertex>', (enableFade ? 'vec4 fadeWorldPos = modelMatrix * vec4(transformed, 1.0);\nvDist = length(fadeWorldPos.xyz - cameraPosition);' : '') + getWindVertexCode(instanced));
+      typedShader.vertexShader = typedShader.vertexShader.replace(
+        "void main() {",
+        `${SIMPLEX_NOISE_GLSL}\nvoid main() {`
+      );
+      typedShader.vertexShader = typedShader.vertexShader.replace(
+        "#include <project_vertex>",
+        (enableFade
+          ? "vec4 fadeWorldPos = modelMatrix * vec4(transformed, 1.0);\nvDist = length(fadeWorldPos.xyz - cameraPosition);"
+          : "") + getWindVertexCode(instanced)
+      );
       if (enableFade) {
-        typedShader.fragmentShader = typedShader.fragmentShader.replace('void main() {', `void main() {\nif (vDist < uFadeStart) {} else if (vDist >= uFadeEnd) { discard; } else {\nfloat fade = smoothstep(uFadeStart, uFadeEnd, vDist);\nif (professionalDither(gl_FragCoord.xy) < fade) discard;\n}`);
+        typedShader.fragmentShader = typedShader.fragmentShader.replace(
+          "void main() {",
+          `void main() {\nif (vDist < uFadeStart) {} else if (vDist >= uFadeEnd) { discard; } else {\nfloat fade = smoothstep(uFadeStart, uFadeEnd, vDist);\nif (professionalDither(gl_FragCoord.xy) < fade) discard;\n}`
+        );
       }
-      mat.userData['shader'] = typedShader;
+      mat.userData["shader"] = typedShader;
     };
   });
 }

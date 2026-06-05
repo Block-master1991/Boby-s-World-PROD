@@ -1,12 +1,12 @@
-import * as THREE from 'three';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { logger } from 'utils/logger';
-import { CHUNK_SIZE } from '../../chunkUtils';
-import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
-import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
-import { appendWindShader } from '../shaders/windShaderUtils';
-import { simplex2d } from './noise';
+import * as THREE from "three";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { logger } from "utils/logger";
+import { CHUNK_SIZE } from "../../chunkUtils";
+import { getModel, putModel } from "../../indexedDB"; // Import IndexedDB utilities
+import { updateFlowerWindShaderUniforms } from "../shaders/windShaderUpdater";
+import { appendWindShader } from "../shaders/windShaderUtils";
+import { simplex2d } from "./noise";
 
 let loaded = false;
 let _flowerBlueMesh: THREE.Mesh | null = null;
@@ -30,7 +30,7 @@ export class Flowers extends THREE.Group {
   constructor(options: FlowerOptions = new FlowerOptions()) {
     super();
     this.options = options;
-    this.name = 'Flowers';
+    this.name = "Flowers";
   }
 
   /**
@@ -57,30 +57,34 @@ export class Flowers extends THREE.Group {
     if (loaded) return;
 
     try {
-      logger.log('[Flowers] Loading flower models...');
+      logger.log("[Flowers] Loading flower models...");
       const gltfLoader = new GLTFLoader();
       const dracoLoader = new DRACOLoader();
-      dracoLoader.setDecoderPath('/libs/draco/');
+      dracoLoader.setDecoderPath("/libs/draco/");
       gltfLoader.setDRACOLoader(dracoLoader);
 
       const loadModelBound = this.loadModel.bind(this, gltfLoader);
 
-      _flowerBlueMesh = await loadModelBound('/models/flower_blue.glb', 'flower_blue_model');
-      _flowerWhiteMesh = await loadModelBound('/models/flower_white.glb', 'flower_white_model');
-      _flowerYellowMesh = await loadModelBound('/models/flower_yellow.glb', 'flower_yellow_model');
+      _flowerBlueMesh = await loadModelBound("/models/flower_blue.glb", "flower_blue_model");
+      _flowerWhiteMesh = await loadModelBound("/models/flower_white.glb", "flower_white_model");
+      _flowerYellowMesh = await loadModelBound("/models/flower_yellow.glb", "flower_yellow_model");
 
       this.processFlowerMaterials([_flowerWhiteMesh, _flowerBlueMesh, _flowerYellowMesh]);
 
-      logger.log('[Flowers] All flower models loaded successfully');
+      logger.log("[Flowers] All flower models loaded successfully");
     } catch (error) {
-      logger.error('[Flowers] Error loading flower models:', error);
+      logger.error("[Flowers] Error loading flower models:", error);
       this.createFallbackMeshes();
     }
 
     loaded = true;
   }
 
-  private static async loadModel(loader: GLTFLoader, modelPath: string, modelName: string): Promise<THREE.Mesh> {
+  private static async loadModel(
+    loader: GLTFLoader,
+    modelPath: string,
+    modelName: string
+  ): Promise<THREE.Mesh> {
     const scene = await this.fetchModelScene(loader, modelPath, modelName);
     const mesh = scene.children[0] as THREE.Mesh;
     if (!mesh) throw new Error(`Model ${modelName} has no mesh`);
@@ -88,27 +92,34 @@ export class Flowers extends THREE.Group {
   }
 
   /* eslint-disable no-await-in-loop */
-  private static async fetchModelScene(loader: GLTFLoader, modelPath: string, modelName: string, maxAttempts: number = 20): Promise<THREE.Group> {
+  private static async fetchModelScene(
+    loader: GLTFLoader,
+    modelPath: string,
+    modelName: string,
+    maxAttempts: number = 20
+  ): Promise<THREE.Group> {
     for (let i = 1; i <= maxAttempts; i++) {
       try {
         const cachedData = await getModel(modelName);
         if (cachedData) {
           logger.log(`[Flowers] Loading ${modelName} from IndexedDB`);
-          const gltf = await loader.parseAsync(cachedData, '');
+          const gltf = await loader.parseAsync(cachedData, "");
           return gltf.scene;
         }
-        
+
         logger.log(`[Flowers] Fetching ${modelName} from network (attempt ${i}): ${modelPath}`);
         const response = await fetch(modelPath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
         await putModel(modelName, arrayBuffer);
-        const gltf = await loader.parseAsync(arrayBuffer, '');
+        const gltf = await loader.parseAsync(arrayBuffer, "");
         return gltf.scene;
       } catch (error) {
         logger.warn(`[Flowers] Attempt ${i} failed for ${modelName}:`, error);
         if (i === maxAttempts) {
-          logger.error(`[Flowers] Persistent failure for ${modelName}. Falling back to direct load.`);
+          logger.error(
+            `[Flowers] Persistent failure for ${modelName}. Falling back to direct load.`
+          );
           const gltf = await loader.loadAsync(modelPath);
           return gltf.scene;
         }
@@ -121,12 +132,14 @@ export class Flowers extends THREE.Group {
   /* eslint-enable no-await-in-loop */
 
   private static processFlowerMaterials(meshes: (THREE.Mesh | null)[]): void {
-    meshes.forEach((mesh) => {
+    meshes.forEach(mesh => {
       if (!mesh) return;
-      mesh.traverse((o) => {
+      mesh.traverse(o => {
         if (o instanceof THREE.Mesh && o.material) {
           if ((o.material as THREE.MeshStandardMaterial).map) {
-            o.material = new THREE.MeshPhongMaterial({ map: (o.material as THREE.MeshStandardMaterial).map });
+            o.material = new THREE.MeshPhongMaterial({
+              map: (o.material as THREE.MeshStandardMaterial).map,
+            });
           }
           appendWindShader(o.material, { ...new FlowerOptions(), instanced: false });
         }
@@ -140,14 +153,18 @@ export class Flowers extends THREE.Group {
     _flowerYellowMesh = this.createFallbackFlower(0xf1c40f);
   }
 
-  public generateFlowersForChunk(chunkX: number, chunkZ: number, getHeightAt?: (x: number, z: number) => number): THREE.Group | null {
+  public generateFlowersForChunk(
+    chunkX: number,
+    chunkZ: number,
+    getHeightAt?: (x: number, z: number) => number
+  ): THREE.Group | null {
     if (!_flowerBlueMesh || !_flowerWhiteMesh || !_flowerYellowMesh) {
       logger.warn("Flowers: No meshes loaded. Call fetchAssets() first.");
       return null;
     }
 
     const flowersGroup = new THREE.Group();
-    flowersGroup.name = 'flowers';
+    flowersGroup.name = "flowers";
     const flowerMeshes = [_flowerBlueMesh, _flowerWhiteMesh, _flowerYellowMesh];
 
     const chunkWorldStartX = chunkX * CHUNK_SIZE;
@@ -165,13 +182,19 @@ export class Flowers extends THREE.Group {
     return flowersGroup;
   }
 
-  private getRandomFlowerPosition(startX: number, startZ: number, getHeightAt?: (x: number, z: number) => number): THREE.Vector3 | null {
+  private getRandomFlowerPosition(
+    startX: number,
+    startZ: number,
+    getHeightAt?: (x: number, z: number) => number
+  ): THREE.Vector3 | null {
     const r = 10 + Math.random() * 200;
     const theta = Math.random() * 2.0 * Math.PI;
     const worldX = startX + r * Math.cos(theta);
     const worldZ = startZ + r * Math.sin(theta);
 
-    const n = 0.5 + 0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
+    const n =
+      0.5 +
+      0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
     if (n > this.options.patchiness && Math.random() + 0.8 > this.options.patchiness) return null;
 
     const height = getHeightAt ? getHeightAt(worldX, worldZ) : 0;
@@ -194,7 +217,10 @@ export class Flowers extends THREE.Group {
     group.add(flower);
   }
 
-  public generateFlowersFromData(data: { positions: number[] }, getHeightAt?: (x: number, z: number) => number): THREE.Group | null {
+  public generateFlowersFromData(
+    data: { positions: number[] },
+    getHeightAt?: (x: number, z: number) => number
+  ): THREE.Group | null {
     if (!_flowerBlueMesh || !_flowerWhiteMesh || !_flowerYellowMesh || !data) return null;
 
     const flowersGroup = new THREE.Group();
@@ -209,7 +235,7 @@ export class Flowers extends THREE.Group {
       const x = positions[idx] as number;
       const y = positions[idx + 1] as number;
       const z = positions[idx + 2] as number;
-      
+
       const height = getHeightAt ? getHeightAt(x, z) : y;
       const flowerMesh = flowerMeshes[Math.floor(Math.random() * flowerMeshes.length)];
       if (flowerMesh) {
@@ -241,13 +267,13 @@ export class Flowers extends THREE.Group {
     const indices: number[] = [];
 
     for (const geometry of geometries) {
-      const posAttr = geometry.getAttribute('position');
+      const posAttr = geometry.getAttribute("position");
       if (!posAttr) continue;
-      
+
       const posArray = posAttr.array;
       for (let i = 0; i < posArray.length; i++) {
         const val = posArray[i];
-        if (typeof val === 'number') {
+        if (typeof val === "number") {
           positions.push(val);
         }
       }
@@ -257,7 +283,7 @@ export class Flowers extends THREE.Group {
         const indexArray = indexAttr.array;
         for (let i = 0; i < indexArray.length; i++) {
           const val = indexArray[i];
-          if (typeof val === 'number') {
+          if (typeof val === "number") {
             indices.push(val + totalVertexCount);
           }
         }
@@ -265,7 +291,7 @@ export class Flowers extends THREE.Group {
       totalVertexCount += posAttr.count;
     }
 
-    mergedGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    mergedGeometry.setAttribute("position", new THREE.Float32BufferAttribute(positions, 3));
     mergedGeometry.setIndex(indices);
     return mergedGeometry;
   }
@@ -274,7 +300,7 @@ export class Flowers extends THREE.Group {
     chunkGroup.children.forEach(child => {
       if ((child as THREE.Mesh).isMesh) {
         const mesh = child as THREE.Mesh;
-         // Do NOT dispose geometry/material here as they are shared via clone()
+        // Do NOT dispose geometry/material here as they are shared via clone()
         // form the original loaded assets.
         // Only break references.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

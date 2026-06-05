@@ -1,27 +1,27 @@
 "use client";
 
-import { PasskeyOnboardingModal } from '@/components/auth/PasskeyOnboardingModal';
-import CaptchaScreen from '@/components/game-bootstrap/CaptchaScreen';
-import LoadingScreen from '@/components/game-bootstrap/LoadingScreen';
-import { useAudio } from '@/contexts/AudioContext';
-import { useAuthContext } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { RECAPTCHA_SITE_KEY } from '@/lib/constants';
-import { logger } from '@/utils/logger';
-import dynamic from 'next/dynamic';
-import { Suspense, useEffect, useState } from 'react';
+import { PasskeyOnboardingModal } from "@/components/auth/PasskeyOnboardingModal";
+import CaptchaScreen from "@/components/game-bootstrap/CaptchaScreen";
+import LoadingScreen from "@/components/game-bootstrap/LoadingScreen";
+import { useAudio } from "@/contexts/AudioContext";
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { RECAPTCHA_SITE_KEY } from "@/lib/constants";
+import { logger } from "@/utils/logger";
+import dynamic from "next/dynamic";
+import { Suspense, useEffect, useState } from "react";
 
-import type { GameContainerProps } from './GameContainer';
+import type { GameContainerProps } from "./GameContainer";
 
 // Dynamic imports with better loading strategy
-const DynamicGameContainer = dynamic<GameContainerProps>(() => import('./GameContainer'), {
+const DynamicGameContainer = dynamic<GameContainerProps>(() => import("./GameContainer"), {
   ssr: false,
   loading: () => <LoadingScreen variant="indeterminate" />,
 });
 
 // Separate lazy loading for game modes (future enhancement)
-export const loadBobyWorldMode = () => import('./GameContainer');
-export const loadRunningGameMode = () => import('./game/RunningGameUI');
+export const loadBobyWorldMode = () => import("./GameContainer");
+export const loadRunningGameMode = () => import("./game/RunningGameUI");
 
 function useCaptchaLogic(isAuthenticated: boolean) {
   const [captchaVerified, setCaptchaVerified] = useState(false);
@@ -33,13 +33,17 @@ function useCaptchaLogic(isAuthenticated: boolean) {
     if (isAuthenticated) {
       if (!captchaVerified) {
         setCaptchaVerified(true);
-        try { sessionStorage.setItem('captcha_verified_session', 'true'); } catch { /* ignore */ }
+        try {
+          sessionStorage.setItem("captcha_verified_session", "true");
+        } catch {
+          /* ignore */
+        }
       }
     } else {
       // If not authenticated, rely on session storage (handles logout + persistence)
       try {
-        const stored = sessionStorage.getItem('captcha_verified_session');
-        setCaptchaVerified(stored === 'true');
+        const stored = sessionStorage.getItem("captcha_verified_session");
+        setCaptchaVerified(stored === "true");
       } catch {
         logger.warn("Failed to access sessionStorage");
         setCaptchaVerified(false);
@@ -52,9 +56,13 @@ function useCaptchaLogic(isAuthenticated: boolean) {
     setCaptchaVerified(true);
     setHasUserInteracted(true);
     soundManagerRef.current?.playCurrentTrack();
-    toast({ title: 'Verification Successful', description: 'You can now connect your wallet.', duration: 3000 });
+    toast({
+      title: "Verification Successful",
+      description: "You can now connect your wallet.",
+      duration: 3000,
+    });
     try {
-      sessionStorage.setItem('captcha_verified_session', 'true');
+      sessionStorage.setItem("captcha_verified_session", "true");
     } catch {
       logger.warn("Failed to save captcha state");
     }
@@ -68,9 +76,9 @@ function useOnboardingLogic(isLoading: boolean, isAuthenticated: boolean, hasPas
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && !hasPasskey) {
-      const dismissed = localStorage.getItem('passkey_onboarding_dismissed');
+      const dismissed = localStorage.getItem("passkey_onboarding_dismissed");
       const now = Date.now();
-      if (!dismissed || (now - parseInt(dismissed)) > 3 * 24 * 60 * 60 * 1000) {
+      if (!dismissed || now - parseInt(dismissed) > 3 * 24 * 60 * 60 * 1000) {
         setShowOnboarding(true);
       }
     }
@@ -78,7 +86,7 @@ function useOnboardingLogic(isLoading: boolean, isAuthenticated: boolean, hasPas
 
   const handleCloseOnboarding = () => {
     setShowOnboarding(false);
-    localStorage.setItem('passkey_onboarding_dismissed', Date.now().toString());
+    localStorage.setItem("passkey_onboarding_dismissed", Date.now().toString());
   };
 
   return { showOnboarding, handleCloseOnboarding };
@@ -87,7 +95,11 @@ function useOnboardingLogic(isLoading: boolean, isAuthenticated: boolean, hasPas
 function useClientGameContainerLogic() {
   const { isAuthenticated, hasPasskey, isLoading } = useAuthContext();
   const { captchaVerified, handleCaptchaSuccess } = useCaptchaLogic(isAuthenticated);
-  const { showOnboarding, handleCloseOnboarding } = useOnboardingLogic(isLoading, isAuthenticated, hasPasskey);
+  const { showOnboarding, handleCloseOnboarding } = useOnboardingLogic(
+    isLoading,
+    isAuthenticated,
+    hasPasskey
+  );
 
   return {
     isAuthenticated,
@@ -125,10 +137,7 @@ export default function ClientGameContainer() {
   return (
     <Suspense fallback={<LoadingScreen variant="indeterminate" />}>
       <DynamicGameContainer captchaVerified={captchaVerified} />
-      <PasskeyOnboardingModal
-        isOpen={showOnboarding}
-        onClose={handleCloseOnboarding}
-      />
+      <PasskeyOnboardingModal isOpen={showOnboarding} onClose={handleCloseOnboarding} />
     </Suspense>
   );
 }

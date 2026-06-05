@@ -1,7 +1,7 @@
-import { useEffect, useRef } from 'react';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader';
-import { DRACO_DECODER_PATH } from './constants';
+import { useEffect, useRef } from "react";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { DRACO_DECODER_PATH } from "./constants";
 
 export const useModelLoaders = () => {
   const gltfLoaderRef = useRef<GLTFLoader | null>(null);

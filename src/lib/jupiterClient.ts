@@ -1,14 +1,14 @@
-import { BOBY_TOKEN_MINT_ADDRESS, JUPITER_API_KEY, SOL_TOKEN_MINT_ADDRESS } from '@/lib/constants';
-import { logger } from '@/utils/logger';
-import axios, { type AxiosError } from 'axios';
+import { BOBY_TOKEN_MINT_ADDRESS, JUPITER_API_KEY, SOL_TOKEN_MINT_ADDRESS } from "@/lib/constants";
+import { logger } from "@/utils/logger";
+import axios, { type AxiosError } from "axios";
 
 const jupiterApiClient = axios.create({
-  baseURL: 'https://api.jup.ag',
+  baseURL: "https://api.jup.ag",
   timeout: 10000,
   headers: {
-    'Accept': 'application/json',
-    'x-api-key': JUPITER_API_KEY,
-  }
+    Accept: "application/json",
+    "x-api-key": JUPITER_API_KEY,
+  },
 });
 
 interface JupiterPriceData {
@@ -27,7 +27,7 @@ interface JupiterPriceResponse {
 }
 
 function extractPriceFromResponse(responseData: JupiterPriceResponse): number | null {
-  if (!responseData || typeof responseData !== 'object') return null;
+  if (!responseData || typeof responseData !== "object") return null;
 
   // Check direct key
   const directData = responseData[BOBY_TOKEN_MINT_ADDRESS] as JupiterPriceData | undefined;
@@ -57,19 +57,24 @@ export async function getBobyPrice(): Promise<number> {
       return price;
     }
 
-    logger.error('[jupiterClient] Boby token data or usdPrice not found in response:', response.data);
-    throw new Error('Invalid response structure from Jupiter API.');
-
+    logger.error(
+      "[jupiterClient] Boby token data or usdPrice not found in response:",
+      response.data
+    );
+    throw new Error("Invalid response structure from Jupiter API.");
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const axiosError = error as AxiosError;
       logger.error(`[jupiterClient] Axios error fetching price: ${axiosError.message}`);
       if (axiosError.response) {
-        logger.error(`[jupiterClient] Status: ${axiosError.response.status}, Data:`, axiosError.response.data);
+        logger.error(
+          `[jupiterClient] Status: ${axiosError.response.status}, Data:`,
+          axiosError.response.data
+        );
       }
     } else {
-      logger.error('[jupiterClient] An unexpected error occurred:', error);
+      logger.error("[jupiterClient] An unexpected error occurred:", error);
     }
-    throw new Error('Failed to fetch price from Jupiter API.');
+    throw new Error("Failed to fetch price from Jupiter API.");
   }
 }

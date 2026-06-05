@@ -1,4 +1,4 @@
-import { type WorkerTask } from './types';
+import { type WorkerTask } from "./types";
 
 export class WorkerManager {
   private static instance: WorkerManager;
@@ -6,13 +6,15 @@ export class WorkerManager {
   private taskQueue: WorkerTask[] = [];
   private activeTasks: Map<string, WorkerTask> = new Map();
   private readonly MAX_WORKERS = 4;
-  private isBrowser = typeof window !== 'undefined';
+  private isBrowser = typeof window !== "undefined";
 
   private constructor() {
     if (this.isBrowser) {
       for (let i = 0; i < this.MAX_WORKERS; i++) {
         // Updated to use the correct path for the production worker
-        const worker = new Worker(new URL('../../workers/modelProcessor.worker.ts', import.meta.url));
+        const worker = new Worker(
+          new URL("../../workers/modelProcessor.worker.ts", import.meta.url)
+        );
         worker.onmessage = this._onWorkerMessage.bind(this);
         this.workers.push(worker);
       }
@@ -32,7 +34,7 @@ export class WorkerManager {
 
     if (task) {
       this.activeTasks.delete(id);
-      if (type === 'error') {
+      if (type === "error") {
         task.reject(data);
       } else {
         task.resolve(data);
@@ -55,17 +57,29 @@ export class WorkerManager {
     if (worker) {
       this.activeTasks.set(task.id, task);
 
-      const geometryData = (task.data as { geometry: { attributes: Record<string, { array: { buffer: ArrayBuffer } }>; index?: { array: { buffer: ArrayBuffer } } | null } }).geometry;
-      const transferableData: ArrayBuffer[] = Object.values(geometryData.attributes).map(attr => attr.array.buffer);
+      const geometryData = (
+        task.data as {
+          geometry: {
+            attributes: Record<string, { array: { buffer: ArrayBuffer } }>;
+            index?: { array: { buffer: ArrayBuffer } } | null;
+          };
+        }
+      ).geometry;
+      const transferableData: ArrayBuffer[] = Object.values(geometryData.attributes).map(
+        attr => attr.array.buffer
+      );
       if (geometryData.index) {
         transferableData.push(geometryData.index.array.buffer);
       }
 
-      worker.postMessage({
-        type: task.type,
-        id: task.id, // Ensure id is passed
-        data: task.data
-      }, transferableData);
+      worker.postMessage(
+        {
+          type: task.type,
+          id: task.id, // Ensure id is passed
+          data: task.data,
+        },
+        transferableData
+      );
     } else {
       this.taskQueue.unshift(task);
     }
@@ -81,7 +95,7 @@ export class WorkerManager {
         type,
         data,
         resolve,
-        reject
+        reject,
       };
 
       this.taskQueue.push(task);
@@ -93,7 +107,7 @@ export class WorkerManager {
     return {
       total: this.workers.length,
       active: this.activeTasks.size,
-      queued: this.taskQueue.length
+      queued: this.taskQueue.length,
     };
   }
 

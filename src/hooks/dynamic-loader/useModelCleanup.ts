@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import type { MutableRefObject } from 'react';
-import { useEffect } from 'react';
-import type { DynamicLoadableObject, ModelPool } from './constants';
-import { disposeModelResources } from './useModelPool';
+import type { MutableRefObject } from "react";
+import { useEffect } from "react";
+import type { DynamicLoadableObject, ModelPool } from "./constants";
+import { disposeModelResources } from "./useModelPool";
 
 export const useModelLoaderCleanup = (
   modelPoolRef: MutableRefObject<ModelPool>,

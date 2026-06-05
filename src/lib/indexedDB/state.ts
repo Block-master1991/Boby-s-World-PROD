@@ -1,7 +1,7 @@
 // src/lib/indexedDB/state.ts - State management and statistics
-import { isMobileDevice } from '../utils';
-import { CACHE_LIMITS, DB_CONFIG } from './config';
-import type { CacheStats } from './types';
+import { isMobileDevice } from "../utils";
+import { CACHE_LIMITS, DB_CONFIG } from "./config";
+import type { CacheStats } from "./types";
 
 // Statistics tracking with mutex for thread safety
 // Initialize with safe defaults, update actual limits on first access
@@ -12,11 +12,11 @@ let cacheStats: CacheStats = {
   hitRate: 0,
   missRate: 0,
   evictions: 0,
-  lastCleanup: Date.now()
+  lastCleanup: Date.now(),
 };
 
 // Lazy update of limits
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   setTimeout(() => {
     if (isMobileDevice()) {
       cacheStats.maxSize = CACHE_LIMITS.mobile.maxSize;
@@ -59,13 +59,13 @@ export async function updateCacheStatsInternal(updates: Partial<CacheStats>): Pr
     await statsMutex;
   }
 
-  statsMutex = ((() => {
+  statsMutex = (() => {
     try {
       cacheStats = { ...cacheStats, ...updates };
     } finally {
       statsMutex = null;
     }
-  })() as unknown as Promise<void>);
+  })() as unknown as Promise<void>;
 
   return statsMutex;
 }
@@ -74,15 +74,15 @@ export async function updateCacheStatsInternal(updates: Partial<CacheStats>): Pr
  * Save statistics to IndexedDB
  */
 export function saveStatsToDb(db: IDBDatabase): Promise<void> {
-  return new Promise((resolve) => {
-    const transaction = db.transaction([DB_CONFIG.stores.stats], 'readwrite');
+  return new Promise(resolve => {
+    const transaction = db.transaction([DB_CONFIG.stores.stats], "readwrite");
     const store = transaction.objectStore(DB_CONFIG.stores.stats);
 
     const statsData = {
-      key: 'cache_stats',
+      key: "cache_stats",
       ...cacheStats,
       hitRate: accessCount > 0 ? hitCount / accessCount : 0,
-      missRate: accessCount > 0 ? (accessCount - hitCount) / accessCount : 0
+      missRate: accessCount > 0 ? (accessCount - hitCount) / accessCount : 0,
     };
 
     store.put(statsData).onsuccess = () => resolve();
@@ -93,10 +93,10 @@ export function saveStatsToDb(db: IDBDatabase): Promise<void> {
  * Load statistics from IndexedDB
  */
 export function loadStatsFromDb(db: IDBDatabase): Promise<void> {
-  return new Promise((resolve) => {
-    const transaction = db.transaction([DB_CONFIG.stores.stats], 'readonly');
+  return new Promise(resolve => {
+    const transaction = db.transaction([DB_CONFIG.stores.stats], "readonly");
     const store = transaction.objectStore(DB_CONFIG.stores.stats);
-    const request = store.get('cache_stats');
+    const request = store.get("cache_stats");
 
     request.onsuccess = () => {
       const stats = request.result;

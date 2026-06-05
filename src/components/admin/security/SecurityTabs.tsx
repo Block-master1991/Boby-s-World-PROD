@@ -1,11 +1,18 @@
-'use client';
+"use client";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { BlockedIp, SuspiciousActivity } from '@/types/security';
+import type { BlockedIp, SuspiciousActivity } from "@/types/security";
 
 interface BlockedIpTableProps {
   blockedIps: BlockedIp[];
@@ -32,15 +39,24 @@ function BlockedIpTable({ blockedIps, onUnblock, isProcessing }: BlockedIpTableP
           </TableHeader>
           <TableBody>
             {blockedIps.length === 0 ? (
-              <TableRow><TableCell colSpan={4} className="text-center">No blocked IPs found.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={4} className="text-center">
+                  No blocked IPs found.
+                </TableCell>
+              </TableRow>
             ) : (
-              blockedIps.map((block) => (
+              blockedIps.map(block => (
                 <TableRow key={block.ip}>
                   <TableCell className="font-mono">{block.ip}</TableCell>
                   <TableCell>{block.reason}</TableCell>
                   <TableCell>{new Date(block.blockedAt).toLocaleString()}</TableCell>
                   <TableCell>
-                    <Button variant="outline" size="sm" onClick={() => onUnblock(block.ip)} disabled={isProcessing}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onUnblock(block.ip)}
+                      disabled={isProcessing}
+                    >
                       Unblock
                     </Button>
                   </TableCell>
@@ -74,13 +90,17 @@ function SuspiciousActivityTable({ activities }: { activities: SuspiciousActivit
           </TableHeader>
           <TableBody>
             {activities.length === 0 ? (
-              <TableRow><TableCell colSpan={5} className="text-center">No recent suspicious activity.</TableCell></TableRow>
+              <TableRow>
+                <TableCell colSpan={5} className="text-center">
+                  No recent suspicious activity.
+                </TableCell>
+              </TableRow>
             ) : (
               activities.map((activity, idx) => (
                 <TableRow key={idx}>
-                  <TableCell className="capitalize">{activity.type?.replace('_', ' ')}</TableCell>
+                  <TableCell className="capitalize">{activity.type?.replace("_", " ")}</TableCell>
                   <TableCell>
-                    <Badge variant={activity.severity === 'critical' ? 'destructive' : 'secondary'}>
+                    <Badge variant={activity.severity === "critical" ? "destructive" : "secondary"}>
                       {activity.severity}
                     </Badge>
                   </TableCell>
@@ -104,7 +124,12 @@ interface SecurityTabsProps {
   isProcessing: boolean;
 }
 
-export function SecurityTabs({ blockedIps, suspiciousActivity, onUnblock, isProcessing }: SecurityTabsProps) {
+export function SecurityTabs({
+  blockedIps,
+  suspiciousActivity,
+  onUnblock,
+  isProcessing,
+}: SecurityTabsProps) {
   return (
     <Tabs defaultValue="blocked" className="space-y-4">
       <TabsList>

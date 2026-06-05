@@ -1,6 +1,5 @@
-
-import type { BaseGameObject } from '@/types/game';
-import type * as THREE from 'three';
+import type { BaseGameObject } from "@/types/game";
+import type * as THREE from "three";
 
 export interface EnemyCustomData {
   targetCoinId: string; // New: Unique ID of the coin this enemy is protecting
@@ -19,7 +18,7 @@ export interface EnemyCustomData {
   initialDeathY: number; // New: Initial Y position when death animation finishes
   mixer: THREE.AnimationMixer;
   animations: THREE.AnimationClip[];
-  enemyType: 'carnivore' | 'herbivore';
+  enemyType: "carnivore" | "herbivore";
   currentAction: THREE.AnimationAction | null;
   actions: { [key: string]: THREE.AnimationAction };
   chunkKey: string;

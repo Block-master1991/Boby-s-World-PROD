@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { AdminUserStatsSkeleton } from '@/components/admin/AdminStatSkeleton';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Users } from 'lucide-react';
+import { AdminUserStatsSkeleton } from "@/components/admin/AdminStatSkeleton";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users } from "lucide-react";
 
 export interface UserStatsPayload {
   userStats?: {

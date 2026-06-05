@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import type * as THREE from "three";
 
 export interface BaseGameObject {
   // Use uuid instead of id as a unique string identifier
@@ -12,7 +12,7 @@ export interface GameObject extends BaseGameObject {
   scale: { x: number; y: number; z: number };
 
   // Object classification
-  type: 'player' | 'enemy' | 'item' | 'terrain' | 'staticTree';
+  type: "player" | "enemy" | "item" | "terrain" | "staticTree";
 
   // Visibility and rendering
   visible: boolean;
@@ -31,7 +31,7 @@ export interface GameObject extends BaseGameObject {
   actions?: { [key: string]: THREE.AnimationAction };
 
   // Specific to enemy types
-  enemyType?: 'carnivore' | 'herbivore';
+  enemyType?: "carnivore" | "herbivore";
 
   // For object pooling optimization
   isPooled?: boolean;

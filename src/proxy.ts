@@ -1,14 +1,14 @@
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export function proxy(request: NextRequest) {
   const nonce = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(16))));
-  const isDev = process.env.NODE_ENV === 'development';
-  
+  const isDev = process.env.NODE_ENV === "development";
+
   // CSP Header Configuration
   // In development: Be very permissive to allow Next.js tooling and HMR
   // In production: Strict CSP with nonce-based scripts
-  
+
   let cspHeader: string;
 
   if (isDev) {
@@ -21,7 +21,9 @@ export function proxy(request: NextRequest) {
       base-uri 'self'; form-action 'self'; frame-ancestors 'self';
       frame-src 'self' https://www.google.com/recaptcha/ https://challenges.cloudflare.com;
       connect-src 'self' https: wss: ws: blob: data:; worker-src 'self' blob: data:;
-    `.replace(/\s{2,}/g, ' ').trim();
+    `
+      .replace(/\s{2,}/g, " ")
+      .trim();
   } else {
     // Production: Strict CSP with nonce
     cspHeader = `
@@ -33,12 +35,14 @@ export function proxy(request: NextRequest) {
       frame-src 'self' https://www.google.com/recaptcha/ https://challenges.cloudflare.com;
       connect-src 'self' https: wss: blob: data:;
       worker-src 'self' blob: data:; upgrade-insecure-requests;
-    `.replace(/\s{2,}/g, ' ').trim();
+    `
+      .replace(/\s{2,}/g, " ")
+      .trim();
   }
 
   const requestHeaders = new Headers(request.headers);
-  requestHeaders.set('x-nonce', nonce);
-  requestHeaders.set('Content-Security-Policy', cspHeader);
+  requestHeaders.set("x-nonce", nonce);
+  requestHeaders.set("Content-Security-Policy", cspHeader);
 
   const response = NextResponse.next({
     request: {
@@ -46,8 +50,8 @@ export function proxy(request: NextRequest) {
     },
   });
 
-  response.headers.set('Content-Security-Policy', cspHeader);
-  response.headers.set('x-nonce', nonce);
+  response.headers.set("Content-Security-Policy", cspHeader);
+  response.headers.set("x-nonce", nonce);
 
   return response;
 }
@@ -62,10 +66,10 @@ export const config = {
      * - favicon.ico (favicon file)
      */
     {
-      source: '/((?!api|_next/static|_next/image|favicon.ico).*)',
+      source: "/((?!api|_next/static|_next/image|favicon.ico).*)",
       missing: [
-        { type: 'header', key: 'next-router-prefetch' },
-        { type: 'header', key: 'purpose', value: 'prefetch' },
+        { type: "header", key: "next-router-prefetch" },
+        { type: "header", key: "purpose", value: "prefetch" },
       ],
     },
   ],

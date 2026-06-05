@@ -1,23 +1,23 @@
-export { };
+export {};
 
 declare global {
   namespace NodeJS {
     interface ProcessEnv {
       // System
-      NODE_ENV: 'development' | 'production' | 'test';
+      NODE_ENV: "development" | "production" | "test";
       PORT?: string;
 
       // Database & Cache
       REDIS_URL: string;
       REDIS_CLUSTER_MODE?: string;
-      
+
       // Firebase Admin
       FIREBASE_PROJECT_ID: string;
       FIREBASE_CLIENT_EMAIL: string;
       FIREBASE_PRIVATE_KEY: string;
 
       // Logging & Security
-      LOG_LEVEL?: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
+      LOG_LEVEL?: "trace" | "debug" | "info" | "warn" | "error" | "fatal";
       LOG_ENCRYPTION_ENABLED?: string; // usually 'true' or 'false' string
       LOG_ENCRYPTION_KEY?: string;
       LOG_TAMPER_DETECTION?: string;
@@ -40,7 +40,7 @@ declare global {
       NEXT_PUBLIC_SOLANA_RPC_URL?: string;
       NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS?: string;
       NEXT_PUBLIC_GAME_ENCRYPTION_KEY?: string;
-      
+
       // Firebase Public Configs
       NEXT_PUBLIC_FIREBASE_PROJECT_ID?: string;
       NEXT_PUBLIC_FIREBASE_API_KEY?: string;

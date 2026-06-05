@@ -1,0 +1,142 @@
+"use client";
+
+import React, { useState } from "react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Shield, Loader2, KeyRound } from "lucide-react";
+import {
+  InputOTP,
+  InputOTPGroup,
+  InputOTPSlot,
+  InputOTPSeparator,
+} from "@/components/ui/input-otp";
+import { Input } from "@/components/ui/input";
+
+interface TOTPVerificationDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onVerify: (token: string) => Promise<void>;
+  loading: boolean;
+}
+
+const OTPInputSection = ({
+  token,
+  setToken,
+  onComplete,
+}: {
+  token: string;
+  setToken: (v: string) => void;
+  onComplete: () => void;
+}) => (
+  <div className="space-y-2">
+    <Label htmlFor="token" className="sr-only">
+      Verification Code
+    </Label>
+    <InputOTP maxLength={6} value={token} onChange={setToken} onComplete={onComplete}>
+      <InputOTPGroup>
+        <InputOTPSlot index={0} />
+        <InputOTPSlot index={1} />
+        <InputOTPSlot index={2} />
+      </InputOTPGroup>
+      <InputOTPSeparator />
+      <InputOTPGroup>
+        <InputOTPSlot index={3} />
+        <InputOTPSlot index={4} />
+        <InputOTPSlot index={5} />
+      </InputOTPGroup>
+    </InputOTP>
+  </div>
+);
+
+const BackupInputSection = ({
+  token,
+  setToken,
+}: {
+  token: string;
+  setToken: (v: string) => void;
+}) => (
+  <div className="w-full space-y-2">
+    <Label htmlFor="backup">Backup Code</Label>
+    <Input
+      id="backup"
+      placeholder="8-character code"
+      value={token}
+      onChange={e => setToken(e.target.value.toUpperCase())}
+      maxLength={8}
+      className="text-center font-mono tracking-widest"
+    />
+  </div>
+);
+
+export const TOTPVerificationDialog: React.FC<TOTPVerificationDialogProps> = ({
+  isOpen,
+  onOpenChange,
+  onVerify,
+  loading,
+}) => {
+  const [token, setToken] = useState("");
+  const [useBackupCode, setUseBackupCode] = useState(false);
+
+  const handleVerify = async () => {
+    await onVerify(token);
+    setToken("");
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {useBackupCode ? (
+              <KeyRound className="h-5 w-5 text-primary" />
+            ) : (
+              <Shield className="h-5 w-5 text-primary" />
+            )}
+            {useBackupCode ? "Backup Code" : "Two-Factor Authentication"}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="flex flex-col items-center gap-4 py-4">
+          <p className="text-sm text-muted-foreground text-center">
+            {useBackupCode
+              ? "Enter one of your 8-character backup codes."
+              : "Enter the 6-digit code from your authenticator app."}
+          </p>
+          <div className="w-full flex justify-center py-2">
+            {useBackupCode ? (
+              <BackupInputSection token={token} setToken={setToken} />
+            ) : (
+              <OTPInputSection token={token} setToken={setToken} onComplete={handleVerify} />
+            )}
+          </div>
+          <Button
+            variant="link"
+            size="sm"
+            onClick={() => {
+              setUseBackupCode(!useBackupCode);
+              setToken("");
+            }}
+            className="text-xs"
+          >
+            {useBackupCode ? "Use authenticator app instead" : "Lost access? Use a backup code"}
+          </Button>
+        </div>
+        <DialogFooter>
+          <Button
+            onClick={handleVerify}
+            disabled={loading || (useBackupCode ? token.length !== 8 : token.length !== 6)}
+            className="w-full"
+          >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Verify
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+};

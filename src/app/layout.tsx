@@ -1,30 +1,24 @@
-import '@solana/wallet-adapter-react-ui/styles.css'; // Added Solana wallet UI styles
-import type { Metadata } from 'next';
-import { Inter } from 'next/font/google';
-import './globals.css';
-import RootLayoutClient from './RootLayoutClient'; // Import the new client component
+import "@solana/wallet-adapter-react-ui/styles.css"; // Added Solana wallet UI styles
+import type { Metadata } from "next";
+import { Inter } from "next/font/google";
+import "./globals.css";
+import RootLayoutClient from "./RootLayoutClient"; // Import the new client component
 
-const inter = Inter({ subsets: ['latin'] });
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env['NEXT_PUBLIC_APP_URL'] || 'http://localhost:3000'),
+  metadataBase: new URL(process.env["NEXT_PUBLIC_APP_URL"] || "http://localhost:3000"),
   title: "Boby World",
-  description: 'An open-world dog adventure game on Solana.',
+  description: "An open-world dog adventure game on Solana.",
   icons: {
-    icon: '/Boby-logo.png',
-    shortcut: '/Boby-logo.png',
-    apple: '/Boby-logo.png',
+    icon: "/Boby-logo.png",
+    shortcut: "/Boby-logo.png",
+    apple: "/Boby-logo.png",
   },
-  manifest: '/manifest.json',
+  manifest: "/manifest.json",
 };
 
-
-
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
       <head>

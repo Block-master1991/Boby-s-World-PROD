@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { ServerOff, ShieldAlert } from 'lucide-react';
+import { ServerOff, ShieldAlert } from "lucide-react";
 
 interface SecurityAlertsProps {
   redisStatus: string;
@@ -12,13 +12,13 @@ export function SecurityAlerts({ redisStatus, isPanicMode }: SecurityAlertsProps
   return (
     <>
       {/* System Status Alert */}
-      {redisStatus !== 'connected' && (
+      {redisStatus !== "connected" && (
         <Alert variant="destructive">
           <ServerOff className="h-4 w-4" />
           <AlertTitle>Connection Issue</AlertTitle>
           <AlertDescription>
-            Could not connect to Redis Stats Service. Real-time metrics may be unavailable.
-            (Status: {redisStatus})
+            Could not connect to Redis Stats Service. Real-time metrics may be unavailable. (Status:{" "}
+            {redisStatus})
           </AlertDescription>
         </Alert>
       )}

@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
-import { Button, type ButtonProps } from '@/components/ui/button';
-import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import { useSessionWallet } from '@/hooks/useSessionWallet';
-import { logger } from '@/utils/logger';
-import { LogOut, PawPrint } from 'lucide-react';
-import { usePathname, useRouter } from 'next/navigation';
-import React, { useState } from 'react';
+import { Button, type ButtonProps } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/hooks/useAuth";
+import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { logger } from "@/utils/logger";
+import { LogOut, PawPrint } from "lucide-react";
+import { usePathname, useRouter } from "next/navigation";
+import React, { useState } from "react";
 
-interface DisconnectButtonProps extends Omit<ButtonProps, 'onClick' | 'disabled' | 'children'> {
+interface DisconnectButtonProps extends Omit<ButtonProps, "onClick" | "disabled" | "children"> {
   onDisconnect?: () => void;
   redirectPath?: string;
 }
 
 // --- Hooks ---
 
-const useDisconnect = (onDisconnect?: () => void, redirectPath: string = '/') => {
+const useDisconnect = (onDisconnect?: () => void, redirectPath: string = "/") => {
   const { logout: logoutAuthHook } = useAuth();
   const { disconnectFromSession, sessionPublicKey } = useSessionWallet();
   const { toast } = useToast();
@@ -26,7 +26,11 @@ const useDisconnect = (onDisconnect?: () => void, redirectPath: string = '/') =>
 
   const handleDisconnect = async () => {
     if (!sessionPublicKey) {
-      toast({ title: "Not Connected", description: "No active session to disconnect.", variant: "default" });
+      toast({
+        title: "Not Connected",
+        description: "No active session to disconnect.",
+        variant: "default",
+      });
       return;
     }
 
@@ -36,22 +40,21 @@ const useDisconnect = (onDisconnect?: () => void, redirectPath: string = '/') =>
     try {
       logger.log("[DisconnectButton] Logging out from auth hook...");
       await logoutAuthHook();
-      
+
       logger.log("[DisconnectButton] Auth hook logout complete. Disconnecting wallet session...");
       await disconnectFromSession();
-      
+
       logger.log("[DisconnectButton] Wallet session disconnect complete.");
       toast({ title: "Disconnected", description: "Session ended successfully.", duration: 3000 });
 
       if (onDisconnect) onDisconnect();
       if (pathname !== redirectPath) router.push(redirectPath);
       else router.push(redirectPath);
-
     } catch (error: unknown) {
       logger.error("[DisconnectButton] Error during full disconnect process:", error);
       toast({
         title: "Disconnection Error",
-        description: `An error occurred: ${error instanceof Error ? error.message : 'Unknown error'}.`,
+        description: `An error occurred: ${error instanceof Error ? error.message : "Unknown error"}.`,
         variant: "destructive",
         duration: 5000,
       });
@@ -65,22 +68,24 @@ const useDisconnect = (onDisconnect?: () => void, redirectPath: string = '/') =>
 
 // --- Sub-components ---
 
-const DisconnectIcon = ({ isDisconnecting }: { isDisconnecting: boolean }) => (
+const DisconnectIcon = ({ isDisconnecting }: { isDisconnecting: boolean }) =>
   isDisconnecting ? (
     <PawPrint className="mr-2 rtl:ml-2 h-5 w-5 animate-pulse" />
   ) : (
     <LogOut className="mr-2 rtl:ml-2 h-5 w-5" />
-  )
-);
+  );
 
 // --- Main Component ---
 
 const DisconnectButton: React.FC<DisconnectButtonProps> = ({
   onDisconnect,
-  redirectPath = '/',
+  redirectPath = "/",
   ...buttonProps
 }) => {
-  const { handleDisconnect, isDisconnecting, isConnected } = useDisconnect(onDisconnect, redirectPath);
+  const { handleDisconnect, isDisconnecting, isConnected } = useDisconnect(
+    onDisconnect,
+    redirectPath
+  );
 
   return (
     <Button
@@ -91,7 +96,7 @@ const DisconnectButton: React.FC<DisconnectButtonProps> = ({
       {...buttonProps}
     >
       <DisconnectIcon isDisconnecting={isDisconnecting} />
-      {isDisconnecting ? 'Disconnecting...' : 'Disconnect'}
+      {isDisconnecting ? "Disconnecting..." : "Disconnect"}
     </Button>
   );
 };

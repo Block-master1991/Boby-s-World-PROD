@@ -1,17 +1,18 @@
-'use client';
+"use client";
 
-import { performanceMonitor } from '@/lib/advanced-service-worker';
-import type { AuthContextType } from '@/types/auth';
-import type { ReactNode } from 'react';
-import React, { createContext, useContext } from 'react';
+import { performanceMonitor } from "@/lib/advanced-service-worker";
+import type { AuthContextType } from "@/types/auth";
+import type { ReactNode } from "react";
+import React, { createContext, useContext } from "react";
 
-import { useAuthCore } from '@/hooks/auth/useAuthCore';
-import { useLogout } from '@/hooks/auth/useLogout';
-import { usePasskeyAuth } from '@/hooks/auth/usePasskeyAuth';
-import { useSolanaAuth } from '@/hooks/auth/useSolanaAuth';
+import { useAuthCore } from "@/hooks/auth/useAuthCore";
+import { useLogout } from "@/hooks/auth/useLogout";
+import { usePasskeyAuth } from "@/hooks/auth/usePasskeyAuth";
+import { useSolanaAuth } from "@/hooks/auth/useSolanaAuth";
+import { useTOTPAuth } from "@/hooks/auth/useTOTPAuth";
 
 // Global Guard
-if (typeof window !== 'undefined') {
+if (typeof window !== "undefined") {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (window as any).__initialAuthCheckStarted = false;
 }
@@ -19,10 +20,25 @@ if (typeof window !== 'undefined') {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { authState, setAuthState, checkSession, isWalletConnectedAndMatching, retrySessionCheck, isOnline } = useAuthCore();
-  const { logout, logoutAndRedirect } = useLogout({ setAuthState, userPublicKey: authState.user?.publicKey });
+  const {
+    authState,
+    setAuthState,
+    checkSession,
+    isWalletConnectedAndMatching,
+    retrySessionCheck,
+    isOnline,
+    markTOTPEnabled,
+  } = useAuthCore();
+  const { logout, logoutAndRedirect } = useLogout({
+    setAuthState,
+    userPublicKey: authState.user?.publicKey,
+  });
   const { login } = useSolanaAuth({ authState, setAuthState, logoutAndRedirect });
-  const { registerPasskey, loginWithPasskey, hasPasskey } = usePasskeyAuth({ authState, setAuthState });
+  const { registerPasskey, loginWithPasskey, hasPasskey } = usePasskeyAuth({
+    authState,
+    setAuthState,
+  });
+  const { verifyTOTP } = useTOTPAuth({ setAuthState });
 
   const contextValue: AuthContextType = {
     ...authState,
@@ -32,13 +48,21 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     isWalletConnectedAndMatching,
     logoutAndRedirect,
     retrySessionCheck,
-    triggerSessionRefresh: checkSession, // Directly use checkSession (it returns Promise<boolean>)
+    triggerSessionRefresh: checkSession,
+    markTOTPEnabled,
     registerPasskey,
     loginWithPasskey,
+    verifyTOTP,
     hasPasskey,
-    securityLevel: hasPasskey ? 'Maximum' : (authState.isAuthenticated ? 'Enhanced' : 'Standard'),
+    totpEnabled: !!authState.user?.totpEnabled,
+    securityLevel:
+      hasPasskey || !!authState.user?.totpEnabled
+        ? "Maximum"
+        : authState.isAuthenticated
+          ? "Enhanced"
+          : "Standard",
     isOnline,
-    performanceStats: performanceMonitor.getPerformanceStats()
+    performanceStats: performanceMonitor.getPerformanceStats(),
   };
 
   return <AuthContext.Provider value={contextValue}>{children}</AuthContext.Provider>;
@@ -46,6 +70,6 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
 
 export const useAuthContext = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) throw new Error('useAuthContext must be used within an AuthProvider');
+  if (context === undefined) throw new Error("useAuthContext must be used within an AuthProvider");
   return context;
 };

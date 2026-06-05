@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 interface DogSpeedBeamOptions {
   scene: THREE.Scene;
@@ -18,7 +18,11 @@ class DogSpeedBeam {
     this.dogRotation = options.dogRotation;
 
     const geometry = new THREE.BoxGeometry(0.2, 0.2, 1); // Width, Height, Depth of the beam
-    const material = new THREE.MeshBasicMaterial({ color: 0x00FFFF, transparent: true, opacity: 0.7 }); // Cyan color
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x00ffff,
+      transparent: true,
+      opacity: 0.7,
+    }); // Cyan color
     this.mesh = new THREE.Mesh(geometry, material);
     this.scene.add(this.mesh);
   }

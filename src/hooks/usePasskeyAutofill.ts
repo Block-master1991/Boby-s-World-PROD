@@ -1,7 +1,7 @@
-import { safeBufferFromBase64url } from '@/utils/base64';
-import { logger } from '@/utils/logger';
-import WebAuthnTransactionManager from '@/utils/webauthn-transaction';
-import { useEffect } from 'react';
+import { safeBufferFromBase64url } from "@/utils/base64";
+import { logger } from "@/utils/logger";
+import WebAuthnTransactionManager from "@/utils/webauthn-transaction";
+import { useEffect } from "react";
 
 interface PasskeyAutofillProps {
   loginWithPasskey: (credential: PublicKeyCredential) => void;
@@ -24,7 +24,11 @@ const triggerConditionalUI = async (loginWithPasskey: (c: PublicKeyCredential) =
 
     logger.log("[WebAuthn] Conditional UI is available. Preparing autofill...");
 
-    const challengeResponse = await fetch('/api/auth/webauthn/authenticate');
+    const challengeResponse = await fetch("/api/auth/webauthn/authenticate", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ userId: undefined }),
+    });
     if (!challengeResponse.ok) return;
     const options = await challengeResponse.json();
 
@@ -34,14 +38,14 @@ const triggerConditionalUI = async (loginWithPasskey: (c: PublicKeyCredential) =
     transactionStarted = true;
 
     // Cast options to generic object to satisfy TS for this specific browser API
-    const credential = await navigator.credentials.get({
+    const credential = (await navigator.credentials.get({
       publicKey: {
         ...options,
         challenge: safeBufferFromBase64url(options.challenge),
       },
-      mediation: 'conditional',
-      signal: signal
-    } as CredentialCreationOptions) as PublicKeyCredential;
+      mediation: "conditional",
+      signal: signal,
+    } as CredentialCreationOptions)) as PublicKeyCredential;
 
     if (credential) {
       logger.log("[WebAuthn] Autofill credential selected!");
@@ -49,7 +53,7 @@ const triggerConditionalUI = async (loginWithPasskey: (c: PublicKeyCredential) =
     }
   } catch (error) {
     const err = error as WebAuthnError;
-    if (err.name !== 'AbortError' && err.message !== 'A WebAuthn request is already pending.') {
+    if (err.name !== "AbortError" && err.message !== "A WebAuthn request is already pending.") {
       logger.error("[WebAuthn] Conditional UI Error:", err);
     }
   } finally {
@@ -64,8 +68,8 @@ export const usePasskeyAutofill = ({ loginWithPasskey }: PasskeyAutofillProps) =
     const setup = async () => {
       const pkCred = window.PublicKeyCredential as unknown as ExtendedPublicKeyCredential;
       const isAvailable = await pkCred?.isConditionalMediationAvailable?.();
-      
-      if (typeof window !== 'undefined' && window.PublicKeyCredential && isAvailable) {
+
+      if (typeof window !== "undefined" && window.PublicKeyCredential && isAvailable) {
         await triggerConditionalUI(loginWithPasskey);
       }
     };

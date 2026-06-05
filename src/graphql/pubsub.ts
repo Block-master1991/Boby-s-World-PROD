@@ -1,9 +1,9 @@
-import { createPubSub } from 'graphql-yoga';
+import { createPubSub } from "graphql-yoga";
 
 export const EVENTS = {
-  PLAYER_UPDATED: 'PLAYER_UPDATED',
-  INVENTORY_UPDATED: 'INVENTORY_UPDATED',
-  MARKET_UPDATED: 'MARKET_UPDATED',
+  PLAYER_UPDATED: "PLAYER_UPDATED",
+  INVENTORY_UPDATED: "INVENTORY_UPDATED",
+  MARKET_UPDATED: "MARKET_UPDATED",
 };
 
 export type PubSubEvents = {

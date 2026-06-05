@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import type { IpEntry } from '@/hooks/useAdminIpManagement'; // Fixed: Type import
-import { Trash2 } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
+import type { IpEntry } from "@/hooks/useAdminIpManagement"; // Fixed: Type import
+import { Trash2 } from "lucide-react";
 
 interface IpListTableProps {
   title: string;
@@ -42,7 +42,7 @@ export function IpListTable({
               </tr>
             </thead>
             <tbody>
-              {list.map((item) => (
+              {list.map(item => (
                 <IpListRow key={item.ip} item={item} onDelete={onDelete} />
               ))}
             </tbody>
@@ -73,7 +73,7 @@ function IpListRow({ item, onDelete }: { item: IpEntry; onDelete: (ip: string) =
   return (
     <tr>
       <td>{item.ip}</td>
-      <td>{item.addedAt || '-'}</td>
+      <td>{item.addedAt || "-"}</td>
       <td>
         <Button variant="ghost" size="icon" onClick={() => onDelete(item.ip)}>
           <Trash2 className="w-4 h-4 text-red-500" />

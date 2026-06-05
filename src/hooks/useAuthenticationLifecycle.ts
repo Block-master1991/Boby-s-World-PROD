@@ -1,7 +1,7 @@
-import { useAudio } from '@/contexts/AudioContext';
-import { useWallet } from '@solana/wallet-adapter-react';
-import { useEffect, useRef, useState } from 'react';
-import { usePasskeyAutofill } from './usePasskeyAutofill';
+import { useAudio } from "@/contexts/AudioContext";
+import { useWallet } from "@solana/wallet-adapter-react";
+import { useEffect, useRef, useState } from "react";
+import { usePasskeyAutofill } from "./usePasskeyAutofill";
 
 interface UseAuthenticationLifecycleProps {
   loginWithPasskey: (credential: PublicKeyCredential) => void;
@@ -12,7 +12,7 @@ interface UseAuthenticationLifecycleProps {
 export const useAuthenticationLifecycle = ({
   loginWithPasskey,
   isAuthenticated,
-  captchaVerified
+  captchaVerified,
 }: UseAuthenticationLifecycleProps) => {
   const { setCurrentScreen } = useAudio();
   const wallet = useWallet();
@@ -21,14 +21,14 @@ export const useAuthenticationLifecycle = ({
 
   // Initialize PWA detection
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      setIsPWA(window.matchMedia('(display-mode: standalone)').matches);
+    if (typeof window !== "undefined") {
+      setIsPWA(window.matchMedia("(display-mode: standalone)").matches);
     }
   }, []);
 
   // Update Audio Context
   useEffect(() => {
-    setCurrentScreen('authentication');
+    setCurrentScreen("authentication");
   }, [setCurrentScreen]);
 
   // Handle Passkey Autofill

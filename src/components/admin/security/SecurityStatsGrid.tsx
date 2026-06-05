@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { SecurityStats } from '@/types/security';
-import type { LucideIcon } from 'lucide-react';
-import { Activity, Lock, Shield, ShieldAlert } from 'lucide-react';
+import type { SecurityStats } from "@/types/security";
+import type { LucideIcon } from "lucide-react";
+import { Activity, Lock, Shield, ShieldAlert } from "lucide-react";
 
 interface StatCardProps {
   title: string;
@@ -19,10 +19,10 @@ function StatCard({ title, icon: Icon, value, subtext, iconColor, valueClassName
     <Card>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className={`h-4 w-4 ${iconColor || 'text-muted-foreground'}`} />
+        <Icon className={`h-4 w-4 ${iconColor || "text-muted-foreground"}`} />
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl font-bold ${valueClassName || ''}`}>{value}</div>
+        <div className={`text-2xl font-bold ${valueClassName || ""}`}>{value}</div>
         <p className="text-xs text-muted-foreground mt-1">{subtext}</p>
       </CardContent>
     </Card>
@@ -31,10 +31,14 @@ function StatCard({ title, icon: Icon, value, subtext, iconColor, valueClassName
 
 function getHealthColor(health: string) {
   switch (health) {
-    case 'healthy': return 'bg-green-500';
-    case 'degraded': return 'bg-yellow-500';
-    case 'critical': return 'bg-red-500';
-    default: return 'bg-gray-500';
+    case "healthy":
+      return "bg-green-500";
+    case "degraded":
+      return "bg-yellow-500";
+    case "critical":
+      return "bg-red-500";
+    default:
+      return "bg-gray-500";
   }
 }
 
@@ -46,8 +50,10 @@ export function SecurityStatsGrid({ stats }: { stats: SecurityStats }) {
         icon={Activity}
         value={
           <div className="flex items-center gap-2">
-            <div className={`h-3 w-3 rounded-full ${getHealthColor(stats.systemHealth || 'unknown')}`} />
-            <span className="capitalize">{stats.systemHealth || 'Unknown'}</span>
+            <div
+              className={`h-3 w-3 rounded-full ${getHealthColor(stats.systemHealth || "unknown")}`}
+            />
+            <span className="capitalize">{stats.systemHealth || "Unknown"}</span>
           </div>
         }
         subtext={`Redis: ${stats.redisStatus}`}

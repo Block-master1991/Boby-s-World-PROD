@@ -1,24 +1,28 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useSessionWallet } from '@/hooks/useSessionWallet';
-import { BOBY_TOKEN_MINT_ADDRESS, LAMPORTS_PER_SOL, USDT_TOKEN_MINT_ADDRESS } from '@/lib/constants';
-import { logger } from '@/utils/logger';
-import { useConnection } from '@solana/wallet-adapter-react';
-import type { Connection } from '@solana/web3.js';
-import { PublicKey } from '@solana/web3.js';
-import { AlertTriangle, PawPrint, WalletCards } from 'lucide-react';
-import Image from 'next/image';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useSessionWallet } from "@/hooks/useSessionWallet";
+import {
+  BOBY_TOKEN_MINT_ADDRESS,
+  LAMPORTS_PER_SOL,
+  USDT_TOKEN_MINT_ADDRESS,
+} from "@/lib/constants";
+import { logger } from "@/utils/logger";
+import { useConnection } from "@solana/wallet-adapter-react";
+import type { Connection } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
+import { AlertTriangle, PawPrint, WalletCards } from "lucide-react";
+import Image from "next/image";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 
-type ErrorType = 'rpc' | 'other' | null;
+type ErrorType = "rpc" | "other" | null;
 
 // --- Helpers ---
 
 const getErrorMessage = (error: unknown): ErrorType => {
-  if (error instanceof Error && error.message.includes('RPC')) return 'rpc';
-  return 'other';
+  if (error instanceof Error && error.message.includes("RPC")) return "rpc";
+  return "other";
 };
 
 const fetchSolBalance = async (conn: Connection, pubkey: PublicKey): Promise<number> => {
@@ -26,7 +30,11 @@ const fetchSolBalance = async (conn: Connection, pubkey: PublicKey): Promise<num
   return lamports / LAMPORTS_PER_SOL;
 };
 
-const fetchSplBalance = async (conn: Connection, owner: PublicKey, mint: string): Promise<number> => {
+const fetchSplBalance = async (
+  conn: Connection,
+  owner: PublicKey,
+  mint: string
+): Promise<number> => {
   const mintPk = new PublicKey(mint);
   const accounts = await conn.getParsedTokenAccountsByOwner(owner, { mint: mintPk });
   if (accounts.value.length > 0) {
@@ -54,12 +62,18 @@ const useTokenBalances = () => {
   const fetchAll = useCallback(async () => {
     if (!connection || !sessionPublicKey || !isAdapterConnected) {
       const empty = { bal: null, loading: false, err: null };
-      setSol(empty); setBoby(empty); setUsdt(empty);
+      setSol(empty);
+      setBoby(empty);
+      setUsdt(empty);
       return;
     }
 
     // Atomic fetchers with state updates
-    const run = async (setter: React.Dispatch<React.SetStateAction<TokenState>>, fetcher: () => Promise<number>, name: string) => {
+    const run = async (
+      setter: React.Dispatch<React.SetStateAction<TokenState>>,
+      fetcher: () => Promise<number>,
+      name: string
+    ) => {
       setter(prev => ({ ...prev, loading: true, err: null }));
       try {
         const result = await fetcher();
@@ -71,9 +85,17 @@ const useTokenBalances = () => {
     };
 
     await Promise.allSettled([
-      run(setSol, () => fetchSolBalance(connection, sessionPublicKey), 'SOL'),
-      run(setBoby, () => fetchSplBalance(connection, sessionPublicKey, BOBY_TOKEN_MINT_ADDRESS), 'Boby'),
-      run(setUsdt, () => fetchSplBalance(connection, sessionPublicKey, USDT_TOKEN_MINT_ADDRESS), 'USDT'),
+      run(setSol, () => fetchSolBalance(connection, sessionPublicKey), "SOL"),
+      run(
+        setBoby,
+        () => fetchSplBalance(connection, sessionPublicKey, BOBY_TOKEN_MINT_ADDRESS),
+        "Boby"
+      ),
+      run(
+        setUsdt,
+        () => fetchSplBalance(connection, sessionPublicKey, USDT_TOKEN_MINT_ADDRESS),
+        "USDT"
+      ),
     ]);
   }, [connection, sessionPublicKey, isAdapterConnected]);
 
@@ -98,7 +120,7 @@ interface BalanceDisplayProps {
 const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ state, currencyName, icon, onRetry }) => {
   const { loading, bal, err } = state;
   const formatted = useMemo(() => {
-    if (bal === null) return '---';
+    if (bal === null) return "---";
     return bal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 4 });
   }, [bal]);
 
@@ -113,10 +135,14 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ state, currencyName, ic
         {!loading && err && (
           <div className="flex items-center text-destructive text-sm">
             <AlertTriangle className="h-4 w-4 mr-1 rtl:ml-1" /> Error
-            <Button onClick={onRetry} size="sm" variant="ghost" className="ml-1 h-auto p-1 text-xs">Retry</Button>
+            <Button onClick={onRetry} size="sm" variant="ghost" className="ml-1 h-auto p-1 text-xs">
+              Retry
+            </Button>
           </div>
         )}
-        {!loading && !err && <span className="text-base font-semibold text-primary">{formatted}</span>}
+        {!loading && !err && (
+          <span className="text-base font-semibold text-primary">{formatted}</span>
+        )}
       </div>
     </div>
   );
@@ -125,10 +151,14 @@ const BalanceDisplay: React.FC<BalanceDisplayProps> = ({ state, currencyName, ic
 const DisconnectedView = () => (
   <Card className="w-full shadow-md bg-background/80 backdrop-blur-sm border-primary/50">
     <CardHeader className="p-3 pb-2">
-      <CardTitle className="text-md font-headline flex items-center gap-2"><WalletCards /> Your Balances</CardTitle>
+      <CardTitle className="text-md font-headline flex items-center gap-2">
+        <WalletCards /> Your Balances
+      </CardTitle>
     </CardHeader>
     <CardContent className="p-3 pt-0">
-      <p className="text-sm text-muted-foreground text-center">Connect your wallet to see balances.</p>
+      <p className="text-sm text-muted-foreground text-center">
+        Connect your wallet to see balances.
+      </p>
     </CardContent>
   </Card>
 );
@@ -139,34 +169,82 @@ const TokenBalance: React.FC = () => {
   if (!sessionPublicKey) return <DisconnectedView />;
 
   const hasError = sol.err || boby.err || usdt.err;
-  const isRpcError = sol.err === 'rpc' || boby.err === 'rpc' || usdt.err === 'rpc';
+  const isRpcError = sol.err === "rpc" || boby.err === "rpc" || usdt.err === "rpc";
 
   return (
     <Card className="w-full shadow-md bg-background/80 backdrop-blur-sm">
       <CardHeader className="p-4 pb-2">
-        <CardTitle className="text-md font-headline flex items-center gap-2"><WalletCards /> Your Balances</CardTitle>
+        <CardTitle className="text-md font-headline flex items-center gap-2">
+          <WalletCards /> Your Balances
+        </CardTitle>
       </CardHeader>
       <CardContent className="p-4 pt-2 space-y-2.5">
-        <BalanceDisplay state={sol} currencyName="SOL" onRetry={fetchAll} icon={
-          <Image src="/Solana-logo.png" alt="SOL" width={24} height={24} className="rounded-full" priority />
-        } />
-        <BalanceDisplay state={boby} currencyName="Boby" onRetry={fetchAll} icon={
-          <Image src="/Boby-logo.png" alt="Boby" width={24} height={24} className="rounded-none" priority />
-        } />
-        <BalanceDisplay state={usdt} currencyName="USDT" onRetry={fetchAll} icon={
-          <Image src="/USDT-logo.png" alt="USDT" width={24} height={24} className="rounded-full" priority />
-        } />
+        <BalanceDisplay
+          state={sol}
+          currencyName="SOL"
+          onRetry={fetchAll}
+          icon={
+            <Image
+              src="/Solana-logo.png"
+              alt="SOL"
+              width={24}
+              height={24}
+              className="rounded-full"
+              priority
+            />
+          }
+        />
+        <BalanceDisplay
+          state={boby}
+          currencyName="Boby"
+          onRetry={fetchAll}
+          icon={
+            <Image
+              src="/Boby-logo.png"
+              alt="Boby"
+              width={24}
+              height={24}
+              className="rounded-none"
+              priority
+            />
+          }
+        />
+        <BalanceDisplay
+          state={usdt}
+          currencyName="USDT"
+          onRetry={fetchAll}
+          icon={
+            <Image
+              src="/USDT-logo.png"
+              alt="USDT"
+              width={24}
+              height={24}
+              className="rounded-full"
+              priority
+            />
+          }
+        />
 
         {hasError && (
           <CardDescription className="text-xs text-destructive/80 pt-2 text-center px-2">
-            {isRpcError ? "A network error (RPC) occurred. Try again later." : "An error occurred while fetching balances."}
+            {isRpcError
+              ? "A network error (RPC) occurred. Try again later."
+              : "An error occurred while fetching balances."}
           </CardDescription>
         )}
-        {[boby, usdt].map((t, i) => t.bal === 0 && !t.loading && !t.err && (
-          <CardDescription key={i} className="text-xs text-muted-foreground pt-1 text-center px-2">
-            No {i === 0 ? 'Boby' : 'USDT'} token balance found.
-          </CardDescription>
-        ))}
+        {[boby, usdt].map(
+          (t, i) =>
+            t.bal === 0 &&
+            !t.loading &&
+            !t.err && (
+              <CardDescription
+                key={i}
+                className="text-xs text-muted-foreground pt-1 text-center px-2"
+              >
+                No {i === 0 ? "Boby" : "USDT"} token balance found.
+              </CardDescription>
+            )
+        )}
       </CardContent>
     </Card>
   );

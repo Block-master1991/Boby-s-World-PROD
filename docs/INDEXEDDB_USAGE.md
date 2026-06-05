@@ -42,7 +42,7 @@ A backup will be created automatically before updating.
 ```typescript
 import { verifyAssetIntegrity } from "@/lib/assetIntegrity";
 
-const data = await fetch("/models/dog.glb").then((r) => r.arrayBuffer());
+const data = await fetch("/models/dog.glb").then(r => r.arrayBuffer());
 
 const check = await verifyAssetIntegrity(
   "/models/dog.glb",
@@ -127,7 +127,7 @@ console.log(`Worth compressing: ${benefit.worthCompressing ? "Yes" : "No"}`);
 import { initialAssetPreloader } from "@/lib/initialAssetPreloader";
 
 const success = await initialAssetPreloader.preloadAllAssets({
-  onProgress: (progress) => {
+  onProgress: progress => {
     console.log(`Progress: ${progress.loadedAssets}/${progress.totalAssets}`);
     console.log(`Size: ${progress.loadedSizeMB}/${progress.totalSizeMB}MB`);
     console.log(`Speed: ${progress.downloadSpeed.toFixed(2)}MB/s`);
@@ -222,7 +222,7 @@ import InitialAssetLoader from "@/components/InitialAssetLoader";
     console.log("Loading completed!");
     // Navigate to game
   }}
-  onError={(error) => {
+  onError={error => {
     console.error("Loading failed:", error);
     // Show error message to user
   }}
@@ -276,7 +276,6 @@ import InitialAssetLoader from "@/components/InitialAssetLoader";
 ### Performance Optimization Tips
 
 1. **Use Priorities Wisely**
-
    - `critical`: Only essential resources
    - `high`: Main game resources
    - `medium`: Visual improvements
@@ -312,11 +311,7 @@ import InitialAssetLoader from "@/components/InitialAssetLoader";
 import { getAsset, deleteAsset, putAsset } from "@/lib/indexedDB";
 import { verifyAssetIntegrity } from "@/lib/assetIntegrity";
 
-async function updateAsset(
-  path: string,
-  newData: ArrayBuffer,
-  newSHA256: string
-) {
+async function updateAsset(path: string, newData: ArrayBuffer, newSHA256: string) {
   // Delete old version
   await deleteAsset(path);
 
@@ -347,7 +342,7 @@ import { GAME_ASSET_MANIFEST } from "@/lib/gameAssetManifest";
 
 // Load only critical and high priority resources
 const priorityAssets = GAME_ASSET_MANIFEST.filter(
-  (asset) => asset.priority === "critical" || asset.priority === "high"
+  asset => asset.priority === "critical" || asset.priority === "high"
 );
 
 for (const asset of priorityAssets) {

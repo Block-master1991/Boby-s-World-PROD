@@ -1,5 +1,5 @@
-import type { WorldEntity } from '@/utils/procedural-core';
-import { ProceduralCore } from '@/utils/procedural-core';
+import type { WorldEntity } from "@/utils/procedural-core";
+import { ProceduralCore } from "@/utils/procedural-core";
 
 export interface WorldChunk {
   x: number;
@@ -9,7 +9,7 @@ export interface WorldChunk {
 }
 
 export class WorldService {
-  private static chunkCache = new Map<string, { data: WorldChunk, timestamp: number }>();
+  private static chunkCache = new Map<string, { data: WorldChunk; timestamp: number }>();
   private static readonly TTL = 300000; // 5 minutes
 
   /**
@@ -18,8 +18,8 @@ export class WorldService {
   private static getTerrainType(x: number, z: number): string {
     const seed = x * 10000 + z;
     const val = Math.abs(Math.sin(seed) * 1000) % 1;
-    const types = ['GRASS', 'DIRT', 'SAND', 'FOREST'];
-    return types[Math.floor(val * types.length)] || 'GRASS';
+    const types = ["GRASS", "DIRT", "SAND", "FOREST"];
+    return types[Math.floor(val * types.length)] || "GRASS";
   }
 
   static getChunks(chunkX: number, chunkZ: number, radius: number = 1): WorldChunk[] {
@@ -31,18 +31,18 @@ export class WorldService {
         const key = `${x},${z}`;
         const cached = this.chunkCache.get(key);
 
-        if (cached && (now - cached.timestamp < this.TTL)) {
+        if (cached && now - cached.timestamp < this.TTL) {
           chunks.push(cached.data);
           continue;
         }
 
-        const newChunk: WorldChunk = { 
-          x, 
-          z, 
-          terrainType: this.getTerrainType(x, z), 
-          objects: ProceduralCore.generateGameplayEntities(x, z) 
+        const newChunk: WorldChunk = {
+          x,
+          z,
+          terrainType: this.getTerrainType(x, z),
+          objects: ProceduralCore.generateGameplayEntities(x, z),
         };
-        
+
         this.chunkCache.set(key, { data: newChunk, timestamp: now });
         chunks.push(newChunk);
       }

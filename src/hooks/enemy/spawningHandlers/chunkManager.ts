@@ -1,11 +1,13 @@
-import { getChunkKey, RENDER_DISTANCE_CHUNKS } from '@/lib/chunkUtils';
-import type * as THREE from 'three';
+import { getChunkKey, RENDER_DISTANCE_CHUNKS } from "@/lib/chunkUtils";
+import type * as THREE from "three";
 
 interface ChunkManager {
-  getGameplaySpawns: (key: string) => {
-    coinSpawns: Array<{ position: number[] }>;
-    enemySpawns: Array<{ coinIndex: number; position: number[] }>;
-  } | undefined;
+  getGameplaySpawns: (key: string) =>
+    | {
+        coinSpawns: Array<{ position: number[] }>;
+        enemySpawns: Array<{ coinIndex: number; position: number[] }>;
+      }
+    | undefined;
 }
 
 export const getNearKeys = (cx: number, cz: number): Set<string> => {
@@ -22,15 +24,15 @@ export const getNearKeys = (cx: number, cz: number): Set<string> => {
 };
 
 export const parseKey = (k: string): { cx: number; cz: number } => {
-  const parts = k.split(',');
+  const parts = k.split(",");
   return {
-    cx: parseInt(parts[0] ?? '0', 10),
-    cz: parseInt(parts[1] ?? '0', 10)
+    cx: parseInt(parts[0] ?? "0", 10),
+    cz: parseInt(parts[1] ?? "0", 10),
   };
 };
 
 export const getChunkManager = (scene: THREE.Scene | null): ChunkManager | null => {
-  const obj = scene?.getObjectByName('ChunkManager');
+  const obj = scene?.getObjectByName("ChunkManager");
   if (!obj) return null;
   return obj as unknown as ChunkManager;
 };

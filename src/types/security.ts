@@ -1,9 +1,9 @@
-export type RedisStatus = 'connected' | 'disconnected' | 'error' | 'not_configured' | 'unknown';
-export type SystemHealth = 'healthy' | 'degraded' | 'critical' | 'unknown';
+export type RedisStatus = "connected" | "disconnected" | "error" | "not_configured" | "unknown";
+export type SystemHealth = "healthy" | "degraded" | "critical" | "unknown";
 
 export interface SuspiciousActivity {
   type: string;
-  severity: 'critical' | 'warning' | 'info';
+  severity: "critical" | "warning" | "info";
   endpoint: string;
   ip: string;
   timestamp: string | number | Date;

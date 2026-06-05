@@ -1,36 +1,38 @@
-import type * as THREE from 'three';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { logger } from '../logger';
-import { lodManager } from './LODManager';
-import { memoryManager } from './MemoryManager';
-import { modelGrouper } from './ModelGrouper';
-import { occlusionCullingManager } from './OcclusionCullingManager';
-import { performanceOptimizer } from './PerformanceOptimizer';
-import { priorityManager } from './PriorityManager';
-import { retryManager } from './RetryManager';
-import { LoadPriority } from './types';
-import { workerManager } from './WorkerManager';
+import type * as THREE from "three";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { logger } from "../logger";
+import { lodManager } from "./LODManager";
+import { memoryManager } from "./MemoryManager";
+import { modelGrouper } from "./ModelGrouper";
+import { occlusionCullingManager } from "./OcclusionCullingManager";
+import { performanceOptimizer } from "./PerformanceOptimizer";
+import { priorityManager } from "./PriorityManager";
+import { retryManager } from "./RetryManager";
+import { LoadPriority } from "./types";
+import { workerManager } from "./WorkerManager";
 
 /**
  * Standard GLTF loading function used by the system.
  * Orchestrates priority, compression, and occlusion registration.
  */
 export const loadGLTF = (
-  path: string, 
-  compress: boolean = true, 
-  instanceId?: string, 
+  path: string,
+  compress: boolean = true,
+  instanceId?: string,
   priority: LoadPriority = LoadPriority.MEDIUM
 ): Promise<THREE.Group> => {
   const promise = priorityManager.addToQueue(path, priority, compress, instanceId);
-  
-  promise.then(model => {
-    // Automatically add loaded models to the occlusion culling system
-    const id = instanceId || path;
-    occlusionCullingManager.addObject(id, model);
-  }).catch(error => {
-    logger.error(`Failed to load model for occlusion culling: ${path}`, error);
-  });
-  
+
+  promise
+    .then(model => {
+      // Automatically add loaded models to the occlusion culling system
+      const id = instanceId || path;
+      occlusionCullingManager.addObject(id, model);
+    })
+    .catch(error => {
+      logger.error(`Failed to load model for occlusion culling: ${path}`, error);
+    });
+
   return promise;
 };
 
@@ -39,7 +41,7 @@ export class ModelLoader {
   private initialized = false;
   private dracoLoader: DRACOLoader | null = null;
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): ModelLoader {
     if (!ModelLoader.instance) {
@@ -53,7 +55,7 @@ export class ModelLoader {
 
     // Initialize DRACOLoader
     this.dracoLoader = new DRACOLoader();
-    this.dracoLoader.setDecoderPath('/libs/draco/');
+    this.dracoLoader.setDecoderPath("/libs/draco/");
     logger.log("[ModelLoader] DRACOLoader initialized.");
 
     await this.dracoLoader.preload();
@@ -77,7 +79,7 @@ export class ModelLoader {
     instanceId?: string
   ): Promise<THREE.Group> {
     if (!this.initialized) {
-      throw new Error('ModelLoader not initialized. Call initialize() first.');
+      throw new Error("ModelLoader not initialized. Call initialize() first.");
     }
 
     const model = await loadGLTF(path, compress, instanceId, priority);
@@ -103,7 +105,7 @@ export class ModelLoader {
       performance: performanceOptimizer.getMetrics(),
       workers: workerManager.getWorkerStatus(),
       occlusion: occlusionCullingManager.getOcclusionStats(),
-      queue: priorityManager.getQueueStatus()
+      queue: priorityManager.getQueueStatus(),
     };
   }
 }

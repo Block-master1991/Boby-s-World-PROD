@@ -1,10 +1,10 @@
-import * as THREE from 'three';
-import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { logger } from 'utils/logger';
-import { CHUNK_SIZE } from '../../chunkUtils';
-import { getModel, putModel } from '../../indexedDB';
-import { simplex2d } from './noise';
+import * as THREE from "three";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { logger } from "utils/logger";
+import { CHUNK_SIZE } from "../../chunkUtils";
+import { getModel, putModel } from "../../indexedDB";
+import { simplex2d } from "./noise";
 
 let loaded = false;
 let _rock1Mesh: THREE.Mesh | null = null;
@@ -25,7 +25,7 @@ export class Rocks extends THREE.Group {
   constructor(options: RockOptions = new RockOptions()) {
     super();
     this.options = options;
-    this.name = 'Rocks';
+    this.name = "Rocks";
   }
 
   public static async fetchAssets(): Promise<void> {
@@ -34,14 +34,12 @@ export class Rocks extends THREE.Group {
     const gltfLoader = new GLTFLoader();
 
     const dracoLoader = new DRACOLoader();
-    dracoLoader.setDecoderPath('/libs/draco/');
+    dracoLoader.setDecoderPath("/libs/draco/");
     gltfLoader.setDRACOLoader(dracoLoader);
 
-
-
-    const rock1Scene = await loadRockModel(gltfLoader, '/models/rock1.glb', 'rock1_model');
-    const rock2Scene = await loadRockModel(gltfLoader, '/models/rock2.glb', 'rock2_model');
-    const rock3Scene = await loadRockModel(gltfLoader, '/models/rock3.glb', 'rock3_model');
+    const rock1Scene = await loadRockModel(gltfLoader, "/models/rock1.glb", "rock1_model");
+    const rock2Scene = await loadRockModel(gltfLoader, "/models/rock2.glb", "rock2_model");
+    const rock3Scene = await loadRockModel(gltfLoader, "/models/rock3.glb", "rock3_model");
 
     _rock1Mesh = findRockMesh(rock1Scene);
     _rock2Mesh = findRockMesh(rock2Scene);
@@ -57,7 +55,7 @@ export class Rocks extends THREE.Group {
     }
 
     const rocksGroup = new THREE.Group();
-    rocksGroup.name = 'rocks';
+    rocksGroup.name = "rocks";
     const rockMeshes = [_rock1Mesh, _rock2Mesh, _rock3Mesh];
 
     const chunkWorldStartX = chunkX * CHUNK_SIZE;
@@ -76,12 +74,19 @@ export class Rocks extends THREE.Group {
     Rocks.fetchAssets().catch(error => logger.error("Rocks: Failed to fetch assets:", error));
   }
 
-  private createRockInstance(meshes: THREE.Mesh[], worldStartX: number, worldStartZ: number): THREE.Mesh | null {
+  private createRockInstance(
+    meshes: THREE.Mesh[],
+    worldStartX: number,
+    worldStartZ: number
+  ): THREE.Mesh | null {
     const worldX = worldStartX + Math.random() * CHUNK_SIZE;
     const worldZ = worldStartZ + Math.random() * CHUNK_SIZE;
-    
-    const noise = 0.5 + 0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
-    if (noise < this.options.patchiness && Math.random() + 0.7 > this.options.patchiness) return null;
+
+    const noise =
+      0.5 +
+      0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
+    if (noise < this.options.patchiness && Math.random() + 0.7 > this.options.patchiness)
+      return null;
 
     const rockMesh = meshes[Math.floor(Math.random() * meshes.length)];
     if (!rockMesh) return null;
@@ -98,7 +103,12 @@ export class Rocks extends THREE.Group {
     return rock;
   }
 
-  public generateRocksFromData(data: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] }): THREE.Group | null {
+  public generateRocksFromData(data: {
+    positions: number[];
+    scales: number[];
+    quaternions: number[];
+    colors: number[];
+  }): THREE.Group | null {
     if (!_rock1Mesh || !_rock2Mesh || !_rock3Mesh || !data) return null;
 
     const rocksGroup = new THREE.Group();
@@ -107,16 +117,16 @@ export class Rocks extends THREE.Group {
     const count = positions.length / 3;
 
     for (let i = 0; i < count; i++) {
-       const rockMesh = rockMeshes[Math.floor(Math.random() * rockMeshes.length)];
-       if (!rockMesh) continue;
-       const rock = rockMesh.clone();
- 
-       rock.position.fromArray(positions, i * 3);
-       rock.scale.fromArray(scales, i * 3);
-       rock.quaternion.fromArray(quaternions, i * 4);
- 
-       rocksGroup.add(rock);
-     }
+      const rockMesh = rockMeshes[Math.floor(Math.random() * rockMeshes.length)];
+      if (!rockMesh) continue;
+      const rock = rockMesh.clone();
+
+      rock.position.fromArray(positions, i * 3);
+      rock.scale.fromArray(scales, i * 3);
+      rock.quaternion.fromArray(quaternions, i * 4);
+
+      rocksGroup.add(rock);
+    }
     return rocksGroup;
   }
 
@@ -138,12 +148,17 @@ export class Rocks extends THREE.Group {
 }
 
 /* eslint-disable no-await-in-loop */
-async function loadRockModel(loader: GLTFLoader, path: string, name: string, maxAttempts: number = 20): Promise<THREE.Group> {
+async function loadRockModel(
+  loader: GLTFLoader,
+  path: string,
+  name: string,
+  maxAttempts: number = 20
+): Promise<THREE.Group> {
   for (let i = 1; i <= maxAttempts; i++) {
     try {
       const cached = await getModel(name);
       if (cached) {
-        const gltf = await loader.parseAsync(cached, '');
+        const gltf = await loader.parseAsync(cached, "");
         return gltf.scene;
       }
       logger.log(`[Rocks] Fetching ${name} from network (attempt ${i}): ${path}`);
@@ -151,7 +166,7 @@ async function loadRockModel(loader: GLTFLoader, path: string, name: string, max
       if (!response.ok) throw new Error(`HTTP error ${response.status}`);
       const buffer = await response.arrayBuffer();
       await putModel(name, buffer);
-      const gltf = await loader.parseAsync(buffer, '');
+      const gltf = await loader.parseAsync(buffer, "");
       return gltf.scene;
     } catch (error) {
       logger.warn(`[Rocks] Attempt ${i} failed for ${name}:`, error);
@@ -170,7 +185,7 @@ async function loadRockModel(loader: GLTFLoader, path: string, name: string, max
 
 function findRockMesh(scene: THREE.Group): THREE.Mesh | null {
   let mesh: THREE.Mesh | null = null;
-  scene.traverse((child) => {
+  scene.traverse(child => {
     if (child instanceof THREE.Mesh) mesh = child;
   });
   return mesh;

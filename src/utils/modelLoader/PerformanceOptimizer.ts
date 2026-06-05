@@ -1,9 +1,9 @@
-import type * as THREE from 'three';
-import { compressionManager } from './CompressionManager';
-import { lodManager } from './LODManager';
-import { memoryManager } from './MemoryManager';
-import { occlusionCullingManager } from './OcclusionCullingManager';
-import { type PerformanceMetrics } from './types';
+import type * as THREE from "three";
+import { compressionManager } from "./CompressionManager";
+import { lodManager } from "./LODManager";
+import { memoryManager } from "./MemoryManager";
+import { occlusionCullingManager } from "./OcclusionCullingManager";
+import { type PerformanceMetrics } from "./types";
 
 export class PerformanceOptimizer {
   private static instance: PerformanceOptimizer;
@@ -11,7 +11,7 @@ export class PerformanceOptimizer {
     fps: 60,
     memory: 0,
     drawCalls: 0,
-    triangles: 0
+    triangles: 0,
   };
   private targetFPS = 60;
   private targetMemory = 500 * 1024 * 1024; // 500MB
@@ -20,7 +20,7 @@ export class PerformanceOptimizer {
   private optimizationInterval = 5000; // 5 seconds
   private renderer: THREE.WebGLRenderer | null = null;
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): PerformanceOptimizer {
     if (!PerformanceOptimizer.instance) {
@@ -35,7 +35,7 @@ export class PerformanceOptimizer {
   }
 
   private startMonitoring(): void {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
 
     let lastTime = performance.now();
     let frames = 0;
@@ -66,7 +66,9 @@ export class PerformanceOptimizer {
     this.metrics.drawCalls = info.render.calls;
     this.metrics.triangles = info.render.triangles;
 
-    const performanceWithMemory = performance as Performance & { memory?: { usedJSHeapSize: number } };
+    const performanceWithMemory = performance as Performance & {
+      memory?: { usedJSHeapSize: number };
+    };
     if (performanceWithMemory.memory) {
       this.metrics.memory = performanceWithMemory.memory.usedJSHeapSize;
     }
@@ -102,7 +104,7 @@ export class PerformanceOptimizer {
   }
 
   private applyQualitySettings(): void {
-    compressionManager.setCompressionLevel('*', this.qualityLevel);
+    compressionManager.setCompressionLevel("*", this.qualityLevel);
     lodManager.updateLODDistances(this.qualityLevel);
     occlusionCullingManager.setCheckInterval(Math.round(100 / this.qualityLevel));
   }

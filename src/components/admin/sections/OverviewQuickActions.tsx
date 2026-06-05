@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { FileText, Package, Settings, Shield } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { FileText, Package, Settings, Shield } from "lucide-react";
 
 interface OverviewQuickActionsProps {
   setActiveSection: (section: string) => void;
@@ -24,7 +24,7 @@ export function OverviewQuickActions({ setActiveSection }: OverviewQuickActionsP
             variant="outline"
             size="sm"
             className="w-full justify-start"
-            onClick={() => setActiveSection('items')}
+            onClick={() => setActiveSection("items")}
           >
             <Package className="h-4 w-4 mr-2" />
             Manage Store Items
@@ -33,7 +33,7 @@ export function OverviewQuickActions({ setActiveSection }: OverviewQuickActionsP
             variant="outline"
             size="sm"
             className="w-full justify-start"
-            onClick={() => setActiveSection('security')}
+            onClick={() => setActiveSection("security")}
           >
             <Shield className="h-4 w-4 mr-2" />
             Security Settings
@@ -42,7 +42,7 @@ export function OverviewQuickActions({ setActiveSection }: OverviewQuickActionsP
             variant="outline"
             size="sm"
             className="w-full justify-start"
-            onClick={() => setActiveSection('logs')}
+            onClick={() => setActiveSection("logs")}
           >
             <FileText className="h-4 w-4 mr-2" />
             View Logs

@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useToast } from '@/hooks/use-toast';
-import { useSessionWallet } from '@/hooks/useSessionWallet';
-import { createSignedAdminHeaders } from '@/utils/frontend-auth';
-import { logger } from '@/utils/logger';
+import { useToast } from "@/hooks/use-toast";
+import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { createSignedAdminHeaders } from "@/utils/frontend-auth";
+import { logger } from "@/utils/logger";
 
 export const useStoreMigration = () => {
   const { toast } = useToast();
@@ -11,14 +11,10 @@ export const useStoreMigration = () => {
 
   const handleMigration = async (): Promise<boolean> => {
     try {
-      const signedHeaders = await createSignedAdminHeaders(
-        signMessage,
-        walletPublicKey,
-        {}
-      );
+      const signedHeaders = await createSignedAdminHeaders(signMessage, walletPublicKey, {});
 
-      const response = await fetch('/api/admin/migrate-inventory', {
-        method: 'POST',
+      const response = await fetch("/api/admin/migrate-inventory", {
+        method: "POST",
         headers: signedHeaders,
         body: JSON.stringify({}),
       });
@@ -27,26 +23,26 @@ export const useStoreMigration = () => {
 
       if (data.success) {
         toast({
-          title: 'Migration Completed',
-          description: 'Inventory migration completed successfully',
+          title: "Migration Completed",
+          description: "Inventory migration completed successfully",
         });
-        logger.log('Migration output:', data.output);
+        logger.log("Migration output:", data.output);
         return true;
       }
-      
+
       toast({
-        title: 'Migration Failed',
-        description: data.error || 'Migration failed',
-        variant: 'destructive',
+        title: "Migration Failed",
+        description: data.error || "Migration failed",
+        variant: "destructive",
       });
-      logger.error('Migration error:', data.errorOutput);
+      logger.error("Migration error:", data.errorOutput);
       return false;
     } catch (error) {
-      logger.error('Error running migration:', error as Error);
+      logger.error("Error running migration:", error as Error);
       toast({
-        title: 'Migration Error',
-        description: 'Failed to run migration',
-        variant: 'destructive',
+        title: "Migration Error",
+        description: "Failed to run migration",
+        variant: "destructive",
       });
       return false;
     }

@@ -1,16 +1,16 @@
-import type { CoinData } from '@/hooks/useCoinLogic';
-import { getChunkCoordinates } from '@/lib/chunkUtils';
-import type { Octree } from '@/lib/Octree';
-import type { GameObject } from '@/types/game';
-import { useCallback } from 'react';
-import type * as THREE from 'three';
-import type { EnemyData } from '../types';
-import { useEnemyLoader } from '../useEnemyLoader';
-import { createChunkManagementHandler } from './chunkManagementHandler';
-import { getNearKeys, parseKey } from './chunkManager';
-import { createInitializationHandler } from './initializationHandler';
-import { createQueueHandler } from './queueHandler';
-import { createSpawnHandler } from './spawnHandler';
+import type { CoinData } from "@/hooks/useCoinLogic";
+import { getChunkCoordinates } from "@/lib/chunkUtils";
+import type { Octree } from "@/lib/Octree";
+import type { GameObject } from "@/types/game";
+import { useCallback } from "react";
+import type * as THREE from "three";
+import type { EnemyData } from "../types";
+import { useEnemyLoader } from "../useEnemyLoader";
+import { createChunkManagementHandler } from "./chunkManagementHandler";
+import { getNearKeys, parseKey } from "./chunkManager";
+import { createInitializationHandler } from "./initializationHandler";
+import { createQueueHandler } from "./queueHandler";
+import { createSpawnHandler } from "./spawnHandler";
 
 interface EnemySpawningLogicParams {
   sceneRef: React.MutableRefObject<THREE.Scene | null>;
@@ -23,34 +23,62 @@ interface EnemySpawningLogicParams {
 }
 
 export const createEnemySpawningLogic = (params: EnemySpawningLogicParams) => {
-  const { sceneRef, octreeRef, enemyMeshesRef, coinMeshesRef, loadedCoinChunks, cameraRef, dogModelRef } = params;
+  const {
+    sceneRef,
+    octreeRef,
+    enemyMeshesRef,
+    coinMeshesRef,
+    loadedCoinChunks,
+    cameraRef,
+    dogModelRef,
+  } = params;
   const { loadEnemyModel, disposeModel, preloadModels } = useEnemyLoader();
 
   // إنشاء معالجات الإنجاب
   const { spawn, pending } = createSpawnHandler({
-    sceneRef, octreeRef, enemyMeshesRef, loadEnemyModel
+    sceneRef,
+    octreeRef,
+    enemyMeshesRef,
+    loadEnemyModel,
   });
 
   // إنشاء معالج القائمة
   const { queueSpawns, process } = createQueueHandler({
-    coinMeshesRef, enemyMeshesRef, pending
+    coinMeshesRef,
+    enemyMeshesRef,
+    pending,
   });
 
   // إنشاء معالج الأجزاء
   const { loaded, unload, loadChunk, setupChunkListeners } = createChunkManagementHandler({
-    sceneRef, octreeRef, enemyMeshesRef, coinMeshesRef, loadedCoinChunks, spawn, disposeModel
+    sceneRef,
+    octreeRef,
+    enemyMeshesRef,
+    coinMeshesRef,
+    loadedCoinChunks,
+    spawn,
+    disposeModel,
   });
 
   // إنشاء معالج التهيئة
   const { initializeEnemies } = createInitializationHandler({
-    sceneRef, octreeRef, enemyMeshesRef, dogModelRef, preloadModels,
-    disposeModel, loadChunk, loaded
+    sceneRef,
+    octreeRef,
+    enemyMeshesRef,
+    dogModelRef,
+    preloadModels,
+    disposeModel,
+    loadChunk,
+    loaded,
   });
 
   const manageChunks = useCallback(() => {
     if (!cameraRef.current) return;
 
-    const { chunkX, chunkZ } = getChunkCoordinates(cameraRef.current.position.x, cameraRef.current.position.z);
+    const { chunkX, chunkZ } = getChunkCoordinates(
+      cameraRef.current.position.x,
+      cameraRef.current.position.z
+    );
     const near = getNearKeys(chunkX, chunkZ);
 
     unload(near);
@@ -63,21 +91,32 @@ export const createEnemySpawningLogic = (params: EnemySpawningLogicParams) => {
     initializeEnemies();
   }, [initializeEnemies]);
 
-  const forceLoadAreaEnemies = useCallback(async (cx: number, cz: number) => {
-    if (!sceneRef.current) return;
+  const forceLoadAreaEnemies = useCallback(
+    async (cx: number, cz: number) => {
+      if (!sceneRef.current) return;
 
-    const keys = getNearKeys(cx, cz);
-    await Promise.all(Array.from(keys).filter(k => !loaded.has(k)).map(k => {
-      const { cx: x, cz: z } = parseKey(k);
-      return loadChunk(x, z);
-    }));
+      const keys = getNearKeys(cx, cz);
+      await Promise.all(
+        Array.from(keys)
+          .filter(k => !loaded.has(k))
+          .map(k => {
+            const { cx: x, cz: z } = parseKey(k);
+            return loadChunk(x, z);
+          })
+      );
 
-    return keys.size;
-  }, [sceneRef, loadChunk, loaded]);
+      return keys.size;
+    },
+    [sceneRef, loadChunk, loaded]
+  );
 
   return {
-    spawn, loaded, manageChunks, initializeEnemies,
-    resetEnemies, forceLoadAreaEnemies,
-    setupChunkListeners
+    spawn,
+    loaded,
+    manageChunks,
+    initializeEnemies,
+    resetEnemies,
+    forceLoadAreaEnemies,
+    setupChunkListeners,
   };
 };

@@ -1,7 +1,7 @@
-import { getActiveStoreItems, getAllStoreItems, getStoreItemById } from '@/lib/server-items-read';
-import type { InventoryItem } from '@/types/database';
-import { UseItemSchema } from '../../validation/schemas';
-import { InventoryRepository } from './inventory.repository';
+import { getActiveStoreItems, getAllStoreItems, getStoreItemById } from "@/lib/server-items-read";
+import type { InventoryItem } from "@/types/database";
+import { UseItemSchema } from "../../validation/schemas";
+import { InventoryRepository } from "./inventory.repository";
 
 export interface InventoryCounts {
   protectionBottleCount: number;
@@ -30,7 +30,7 @@ export class InventoryService {
   static async getUserInventoryCounts(userId: string) {
     // Direct repository access ensures fresh data
     const inventory = await InventoryRepository.getUserInventory(userId);
-    
+
     const counts = {
       protectionBottleCount: 0,
       guardianShieldCount: 0,
@@ -39,20 +39,20 @@ export class InventoryService {
     };
 
     const itemIdMap: Record<string, keyof typeof counts> = {
-      '1': 'protectionBottleCount',
-      '2': 'guardianShieldCount',
-      '3': 'speedyPawsTreatCount',
-      '4': 'coinMagnetTreatCount',
+      "1": "protectionBottleCount",
+      "2": "guardianShieldCount",
+      "3": "speedyPawsTreatCount",
+      "4": "coinMagnetTreatCount",
     };
 
-    const mappedItems = inventory.map((item) => {
+    const mappedItems = inventory.map(item => {
       const sanitizedItem = {
         id: String(item.id || `item-${Math.random()}`),
         itemType: item.type ? String(item.type) : null,
-        name: String(item.name || 'Unknown Item'),
-        rarity: String(item.rarity || 'Common'),
+        name: String(item.name || "Unknown Item"),
+        rarity: String(item.rarity || "Common"),
         image: item.image ? String(item.image) : null,
-        quantity: Math.floor(Number(item.quantity) || 1)
+        quantity: Math.floor(Number(item.quantity) || 1),
       };
 
       const key = itemIdMap[String(sanitizedItem.id)];
@@ -71,10 +71,13 @@ export class InventoryService {
     UseItemSchema.parse({ userId, itemId, quantity: quantityToUse });
 
     const inventory = await InventoryRepository.getUserInventory(userId);
-    
+
     // Logic remains same ...
-    const matchingItems = inventory.filter((item) => String(item.id) === String(itemId));
-    const totalAvailable = matchingItems.reduce((sum: number, item) => sum + (item.quantity || 1), 0);
+    const matchingItems = inventory.filter(item => String(item.id) === String(itemId));
+    const totalAvailable = matchingItems.reduce(
+      (sum: number, item) => sum + (item.quantity || 1),
+      0
+    );
 
     if (totalAvailable < quantityToUse) {
       throw new Error(`Insufficient quantity. Have ${totalAvailable}, need ${quantityToUse}`);
@@ -98,7 +101,7 @@ export class InventoryService {
     }
 
     await InventoryRepository.updateInventory(userId, newInventory);
-    
+
     return totalAvailable - quantityToUse;
   }
 }

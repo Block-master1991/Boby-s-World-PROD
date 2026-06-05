@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 /**
  * Standard mod-289 function used in Simplex noise.
@@ -15,11 +15,9 @@ function mod3(v: THREE.Vector3): THREE.Vector3 {
  * Permutation function for Simplex noise hashing.
  */
 function permute3(v: THREE.Vector3): THREE.Vector3 {
-  return mod3(new THREE.Vector3(
-    ((v.x * 34.0) + 1.0) * v.x,
-    ((v.y * 34.0) + 1.0) * v.y,
-    ((v.z * 34.0) + 1.0) * v.z
-  ));
+  return mod3(
+    new THREE.Vector3((v.x * 34.0 + 1.0) * v.x, (v.y * 34.0 + 1.0) * v.y, (v.z * 34.0 + 1.0) * v.z)
+  );
 }
 
 // Constant vector used in Simplex 2D calculations
@@ -39,22 +37,11 @@ function prepareGrid(v: THREE.Vector2) {
     Math.floor(v.y + C.y * (v.x + v.y))
   );
 
-  const x0 = new THREE.Vector2(
-    v.x - i.x + C.x * (i.x + i.y),
-    v.y - i.y + C.x * (i.x + i.y),
-  );
+  const x0 = new THREE.Vector2(v.x - i.x + C.x * (i.x + i.y), v.y - i.y + C.x * (i.x + i.y));
 
-  const i1 = new THREE.Vector2(
-    (x0.x > x0.y) ? 1.0 : 0.0,
-    (x0.x > x0.y) ? 0.0 : 1.0
-  );
+  const i1 = new THREE.Vector2(x0.x > x0.y ? 1.0 : 0.0, x0.x > x0.y ? 0.0 : 1.0);
 
-  const x12 = new THREE.Vector4(
-    x0.x + C.x - i1.x,
-    x0.y + C.x - i1.y,
-    x0.x + C.z,
-    x0.y + C.z
-  );
+  const x12 = new THREE.Vector4(x0.x + C.x - i1.x, x0.y + C.x - i1.y, x0.x + C.z, x0.y + C.z);
 
   return { i, x0, i1, x12 };
 }
@@ -68,19 +55,11 @@ function computeHashes(i: THREE.Vector2, i1: THREE.Vector2): THREE.Vector3 {
     i.y - Math.floor(i.y * (1.0 / 289.0)) * 289.0
   );
 
-  let p = new THREE.Vector3(
-    iMod.y,
-    iMod.y + i1.y,
-    iMod.y + 1.0
-  );
-  
+  let p = new THREE.Vector3(iMod.y, iMod.y + i1.y, iMod.y + 1.0);
+
   p = permute3(p);
-  p = permute3(new THREE.Vector3(
-    p.x + iMod.x,
-    p.y + iMod.x + i1.x,
-    p.z + iMod.x + 1.0
-  ));
-  
+  p = permute3(new THREE.Vector3(p.x + iMod.x, p.y + iMod.x + i1.x, p.z + iMod.x + 1.0));
+
   return p;
 }
 
@@ -98,9 +77,9 @@ function calculateFinalNoise(p: THREE.Vector3, x0: THREE.Vector2, x12: THREE.Vec
 
   // Gradients
   const x = new THREE.Vector3(
-    2.0 * ((p.x * C.w) - Math.floor(p.x * C.w)) - 1.0,
-    2.0 * ((p.y * C.w) - Math.floor(p.y * C.w)) - 1.0,
-    2.0 * ((p.z * C.w) - Math.floor(p.z * C.w)) - 1.0
+    2.0 * (p.x * C.w - Math.floor(p.x * C.w)) - 1.0,
+    2.0 * (p.y * C.w - Math.floor(p.y * C.w)) - 1.0,
+    2.0 * (p.z * C.w - Math.floor(p.z * C.w)) - 1.0
   );
 
   const h = new THREE.Vector3(Math.abs(x.x) - 0.5, Math.abs(x.y) - 0.5, Math.abs(x.z) - 0.5);

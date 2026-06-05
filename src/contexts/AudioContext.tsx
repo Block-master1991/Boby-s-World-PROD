@@ -1,13 +1,29 @@
-'use client';
+"use client";
 
-import type { ReactNode } from 'react';
-import React, { createContext, useContext, useState, useRef } from 'react';
-import type { SoundManagerRef } from '@/components/game/SoundManager';
+import type { ReactNode } from "react";
+import React, { createContext, useContext, useState, useRef } from "react";
+import type { SoundManagerRef } from "@/components/game/SoundManager";
 
 interface AudioContextType {
   soundManagerRef: React.RefObject<SoundManagerRef | null>;
-  currentScreen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin';
-  setCurrentScreen: (screen: 'captcha' | 'authentication' | 'mainMenu' | 'boby-world' | 'running-game' | 'loading' | 'admin') => void;
+  currentScreen:
+    | "captcha"
+    | "authentication"
+    | "mainMenu"
+    | "boby-world"
+    | "running-game"
+    | "loading"
+    | "admin";
+  setCurrentScreen: (
+    screen:
+      | "captcha"
+      | "authentication"
+      | "mainMenu"
+      | "boby-world"
+      | "running-game"
+      | "loading"
+      | "admin"
+  ) => void;
   isMuted: boolean;
   toggleMute: () => void;
   hasUserInteracted: boolean;
@@ -18,11 +34,12 @@ const AudioContext = createContext<AudioContextType | undefined>(undefined);
 
 export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const soundManagerRef = useRef<SoundManagerRef>(null);
-  const [currentScreen, setCurrentScreenState] = useState<AudioContextType['currentScreen']>('loading');
+  const [currentScreen, setCurrentScreenState] =
+    useState<AudioContextType["currentScreen"]>("loading");
   const [isMuted, setIsMuted] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
-  const setCurrentScreen = (screen: AudioContextType['currentScreen']) => {
+  const setCurrentScreen = (screen: AudioContextType["currentScreen"]) => {
     setCurrentScreenState(screen);
     if (soundManagerRef.current) {
       soundManagerRef.current.setTrack(screen);
@@ -39,15 +56,17 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AudioContext.Provider value={{
-      soundManagerRef,
-      currentScreen,
-      setCurrentScreen,
-      isMuted,
-      toggleMute,
-      hasUserInteracted,
-      setHasUserInteracted
-    }}>
+    <AudioContext.Provider
+      value={{
+        soundManagerRef,
+        currentScreen,
+        setCurrentScreen,
+        isMuted,
+        toggleMute,
+        hasUserInteracted,
+        setHasUserInteracted,
+      }}
+    >
       {children}
     </AudioContext.Provider>
   );
@@ -56,7 +75,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
 export const useAudio = () => {
   const context = useContext(AudioContext);
   if (context === undefined) {
-    throw new Error('useAudio must be used within an AudioProvider');
+    throw new Error("useAudio must be used within an AudioProvider");
   }
   return context;
 };

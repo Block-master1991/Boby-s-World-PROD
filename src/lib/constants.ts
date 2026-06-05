@@ -1,18 +1,18 @@
 // User-confirmed Mainnet Boby Token Mint Address
-export const BOBY_TOKEN_MINT_ADDRESS = '9EbJs7KsoWqAoUPTtcYf1kVyvydQgoxcvcitSbcUpump';
+export const BOBY_TOKEN_MINT_ADDRESS = "9EbJs7KsoWqAoUPTtcYf1kVyvydQgoxcvcitSbcUpump";
 // Token decimals
 export const BOBY_TOKEN_DECIMALS = 6;
 // CoinGecko ID for Boby token
-export const BOBY_COINGECKO_ID = 'boby';
+export const BOBY_COINGECKO_ID = "boby";
 // Mainnet USDT (Tether) Mint Address
-export const USDT_TOKEN_MINT_ADDRESS = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
+export const USDT_TOKEN_MINT_ADDRESS = "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB";
 // Mainnet USDC Mint Address
-export const USDC_MINT_ADDRESS = 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v';
+export const USDC_MINT_ADDRESS = "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v";
 // Wrapped SOL Mint Address
-export const SOL_TOKEN_MINT_ADDRESS = 'So11111111111111111111111111111111111111112';
+export const SOL_TOKEN_MINT_ADDRESS = "So11111111111111111111111111111111111111112";
 // 1 Billion Lamports per SOL
 export const LAMPORTS_PER_SOL = 1_000_000_000;
-import { env, isProd } from './config/env';
+import { env, isProd } from "./config/env";
 
 // Default Public Mainnet-beta RPC
 export const SOL_NETWORK = env.NEXT_PUBLIC_SOLANA_RPC_URL;
@@ -51,7 +51,7 @@ export const PERFORMANCE_SETTINGS = {
   LOD_DISTANCES: {
     HIGH: 50,
     MEDIUM: 100,
-    LOW: 200
+    LOW: 200,
   },
 
   // Loading Settings
@@ -72,7 +72,7 @@ export const PERFORMANCE_SETTINGS = {
 
   // Occlusion Culling Settings
   OCCLUSION_CHECK_INTERVAL: 100, // ms
-  MAX_OCCLUSION_OBJECTS: 1000
+  MAX_OCCLUSION_OBJECTS: 1000,
 };
 
 // Asset Compression Configuration
@@ -82,9 +82,9 @@ export const ASSET_COMPRESSION_CONFIG = {
     enableAVIF: true,
     webPQuality: 85,
     avifQuality: 80,
-    fallbackFormat: 'png',
+    fallbackFormat: "png",
     maxWidth: 2048,
-    maxHeight: 2048
+    maxHeight: 2048,
   },
 
   models: {
@@ -94,7 +94,7 @@ export const ASSET_COMPRESSION_CONFIG = {
     normalQuality: 10,
     positionQuality: 14,
     texCoordQuality: 12,
-    colorQuality: 8
+    colorQuality: 8,
   },
 
   audio: {
@@ -102,7 +102,7 @@ export const ASSET_COMPRESSION_CONFIG = {
     targetBitrate: 128, // kbps
     sampleRate: 44100,
     channels: 2,
-    formats: ['mp3', 'ogg', 'm4a']
+    formats: ["mp3", "ogg", "m4a"],
   },
 
   textures: {
@@ -110,44 +110,44 @@ export const ASSET_COMPRESSION_CONFIG = {
     enableASTC: true,
     enableETC2: true,
     maxAnisotropy: 16,
-    compressionFormat: 'auto' // auto-detects best format
-  }
+    compressionFormat: "auto", // auto-detects best format
+  },
 };
 
 // CDN Configuration
 export const CDN_CONFIG = {
   enabled: isProd,
-  primaryProvider: 'cloudflare', // cloudflare, aws, vercel
+  primaryProvider: "cloudflare", // cloudflare, aws, vercel
 
   cloudflare: {
     zoneId: env.CLOUDFLARE_ZONE_ID,
     apiToken: env.CLOUDFLARE_API_TOKEN,
     baseUrl: env.NEXT_PUBLIC_CDN_BASE_URL,
-    regions: ['us-east-1', 'eu-west-1', 'asia-east-1']
+    regions: ["us-east-1", "eu-west-1", "asia-east-1"],
   },
 
   aws: {
     cloudFrontDistributionId: env.AWS_CLOUDFRONT_DISTRIBUTION_ID,
     accessKeyId: env.AWS_ACCESS_KEY_ID,
     secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
-    region: 'us-east-1',
-    bucketName: 'boby-world-assets'
+    region: "us-east-1",
+    bucketName: "boby-world-assets",
   },
 
   // Geo-routing and performance
   routing: {
     enableGeoBasedRouting: true,
     cacheTTL: 3600, // 1 hour
-    staleWhileRevalidate: 86400 // 24 hours
+    staleWhileRevalidate: 86400, // 24 hours
   },
 
   // Preload priorities for different regions
   regionalPreload: {
-    'US': ['america-assets.json'],
-    'EU': ['europe-assets.json'],
-    'AS': ['asia-assets.json'],
-    'default': ['global-assets.json']
-  }
+    US: ["america-assets.json"],
+    EU: ["europe-assets.json"],
+    AS: ["asia-assets.json"],
+    default: ["global-assets.json"],
+  },
 };
 
 // Build-time Asset Processing
@@ -160,19 +160,19 @@ export const BUILD_ASSET_PROCESSING = {
     removeUnusedMaterials: true,
     mergeGeometries: true,
     optimizeAnimations: true,
-    compressTextures: true
+    compressTextures: true,
   },
 
   manifest: {
     includeFileSizes: true,
     includeETags: true,
     includeDependencies: true,
-    generateSpritemaps: true
+    generateSpritemaps: true,
   },
 
   cdn: {
     uploadAfterBuild: isProd,
     invalidateOldAssets: true,
-    generateCDNManifest: true
-  }
+    generateCDNManifest: true,
+  },
 };

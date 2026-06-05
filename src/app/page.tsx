@@ -1,7 +1,5 @@
-import ClientGameContainer from '@/components/ClientGameContainer';
+import ClientGameContainer from "@/components/ClientGameContainer";
 
 export default function HomePage() {
-  return (
-    <ClientGameContainer />
-  );
+  return <ClientGameContainer />;
 }

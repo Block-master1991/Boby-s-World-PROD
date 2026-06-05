@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useUserActivityUpdates, useUserStats } from '@/hooks/useAdminStats';
-import { useApiFetch } from '@/utils/api';
-import { logger } from '@/utils/logger';
-import { useCallback, useEffect, useState } from 'react';
+import { useUserActivityUpdates, useUserStats } from "@/hooks/useAdminStats";
+import { useApiFetch } from "@/utils/api";
+import { logger } from "@/utils/logger";
+import { useCallback, useEffect, useState } from "react";
 
 export interface UserStatsState {
   totalUsers: number;
@@ -14,19 +14,19 @@ export interface UserStatsState {
 export function useAdminDashboardData(isAdmin: boolean) {
   const [userStats, setUserStats] = useState<UserStatsState | null>(null);
   const { apiFetch } = useApiFetch();
-  
+
   // GraphQL Stats Hooks
   const { data: graphqlUserStats, loading: graphqlLoading, error: graphqlError } = useUserStats();
   const { data: liveActivityData, error: activityError } = useUserActivityUpdates();
 
   const fetchUserStats = useCallback(async () => {
     try {
-      const response = await apiFetch('/api/admin/users');
-      if (!response.ok) throw new Error('Failed to fetch user statistics');
+      const response = await apiFetch("/api/admin/users");
+      if (!response.ok) throw new Error("Failed to fetch user statistics");
       const data = await response.json();
       setUserStats(data);
     } catch (err) {
-      logger.error('Error fetching user stats:', err as Error);
+      logger.error("Error fetching user stats:", err as Error);
     }
   }, [apiFetch]);
 
@@ -42,6 +42,6 @@ export function useAdminDashboardData(isAdmin: boolean) {
     graphqlLoading,
     graphqlError,
     liveActivityData,
-    activityError
+    activityError,
   };
 }

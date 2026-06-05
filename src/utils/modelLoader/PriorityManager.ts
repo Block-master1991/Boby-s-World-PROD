@@ -1,6 +1,6 @@
-import type * as THREE from 'three';
-import { retryManager } from './RetryManager';
-import { LoadPriority, type LoadOptions, type PriorityRequest } from './types';
+import type * as THREE from "three";
+import { retryManager } from "./RetryManager";
+import { LoadPriority, type LoadOptions, type PriorityRequest } from "./types";
 
 export class PriorityManager {
   private static instance: PriorityManager;
@@ -10,7 +10,9 @@ export class PriorityManager {
   private processingQueue = false;
 
   private constructor() {
-    const priorities = Object.values(LoadPriority).filter(v => typeof v === 'number') as LoadPriority[];
+    const priorities = Object.values(LoadPriority).filter(
+      v => typeof v === "number"
+    ) as LoadPriority[];
     for (const priority of priorities) {
       this.loadQueues.set(priority, []);
     }
@@ -23,7 +25,12 @@ export class PriorityManager {
     return PriorityManager.instance;
   }
 
-  public addToQueue(path: string, priority: LoadPriority, compress: boolean, instanceId?: string): Promise<THREE.Group> {
+  public addToQueue(
+    path: string,
+    priority: LoadPriority,
+    compress: boolean,
+    instanceId?: string
+  ): Promise<THREE.Group> {
     return new Promise((resolve, reject) => {
       const request: PriorityRequest = { path, priority, resolve, reject, compress, instanceId };
       this.loadQueues.get(priority)?.push(request);
@@ -47,7 +54,7 @@ export class PriorityManager {
         compress: request.compress,
         instanceId: request.instanceId,
         priority: request.priority,
-        abortController
+        abortController,
       };
 
       try {
@@ -62,7 +69,7 @@ export class PriorityManager {
     }
 
     this.processingQueue = false;
-    
+
     const hasMore = Array.from(this.loadQueues.values()).some(q => q.length > 0);
     if (hasMore) {
       this.processQueue();
@@ -71,7 +78,7 @@ export class PriorityManager {
 
   private getNextRequest(): PriorityRequest | null {
     const priorities = Object.values(LoadPriority)
-      .filter(v => typeof v === 'number')
+      .filter(v => typeof v === "number")
       .sort((a, b) => (a as number) - (b as number)) as LoadPriority[];
 
     for (const priority of priorities) {

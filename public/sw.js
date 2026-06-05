@@ -26,8 +26,8 @@ const ASSETS_TO_CACHE = [
     '/textures/ground/grass.jpg',
     '/textures/ground/dirt_color.jpg',
     '/textures/ground/dirt_normal.jpg',
-    '/textures/hdr/citrus_orchard_road_puresky_8k.hdr',
-    '/textures/hdr/qwantani_moon_noon_puresky_8k.hdr',
+    // Large HDR textures are handled by InitialAssetPreloader and stored in IndexedDB
+    // to avoid Service Worker cache limits and memory pressure.
 
 
     // Models
@@ -103,13 +103,15 @@ self.addEventListener('fetch', event => {
     // Only cache GET requests for game assets
     if (event.request.method !== 'GET') return;
 
+    const isLargeAsset = url.includes('.hdr') || url.includes('.glb') && (url.includes('fox') || url.includes('wolf'));
+
     // Check if it's a game asset we want to cache
-    const isGameAsset = event.request.destination === 'image' ||
+    const isGameAsset = (event.request.destination === 'image' ||
         event.request.destination === 'audio' ||
         url.includes('/textures/') ||
         url.includes('/models/') ||
         url.includes('/libs/') ||
-        ASSETS_TO_CACHE.some(asset => url.includes(asset));
+        ASSETS_TO_CACHE.some(asset => url.includes(asset))) && !isLargeAsset;
 
     if (isGameAsset) {
         event.respondWith(

@@ -1,9 +1,9 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * Environment types
  */
-export type AppEnv = 'development' | 'staging' | 'production' | 'test';
+export type AppEnv = "development" | "staging" | "production" | "test";
 
 /**
  * Schema for environment variables.
@@ -11,7 +11,7 @@ export type AppEnv = 'development' | 'staging' | 'production' | 'test';
  */
 const envSchema = z.object({
   // Backend / Server-side secrets
-  NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
+  NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   RECAPTCHA_SECRET_KEY: z.string().optional(),
   DEDICATED_RPC_ENDPOINT: z.string().url().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
@@ -29,24 +29,33 @@ const envSchema = z.object({
   AWS_CLOUDFRONT_DISTRIBUTION_ID: z.string().optional(),
   AWS_ACCESS_KEY_ID: z.string().optional(),
   AWS_SECRET_ACCESS_KEY: z.string().optional(),
-  
+
   // Logging & Monitoring
-  LOG_LEVEL: z.enum(['trace', 'debug', 'info', 'warn', 'error', 'fatal']).default('info'),
-  LOG_ENCRYPTION_ENABLED: z.string().transform(v => v === 'true').optional(),
+  LOG_LEVEL: z.enum(["trace", "debug", "info", "warn", "error", "fatal"]).default("info"),
+  LOG_ENCRYPTION_ENABLED: z
+    .string()
+    .transform(v => v === "true")
+    .optional(),
   LOG_ENCRYPTION_KEY: z.string().optional(),
-  LOG_TAMPER_DETECTION: z.string().transform(v => v === 'true').optional(),
+  LOG_TAMPER_DETECTION: z
+    .string()
+    .transform(v => v === "true")
+    .optional(),
   LOG_SIGNING_SECRET: z.string().optional(),
 
   // Security & Admin
   CRON_SECRET: z.string().optional(),
   ADMIN_TOKEN: z.string().optional(),
   ALLOWED_ADMIN_IPS: z.string().optional(),
-  
+
   // Infrastructure
-  REDIS_CLUSTER_MODE: z.string().transform(v => v === 'true').optional(),
+  REDIS_CLUSTER_MODE: z
+    .string()
+    .transform(v => v === "true")
+    .optional(),
 
   // Client-side / Public variables (Must be prefixed with NEXT_PUBLIC_)
-  NEXT_PUBLIC_SOLANA_RPC_URL: z.string().url().default('https://api.mainnet-beta.solana.com'),
+  NEXT_PUBLIC_SOLANA_RPC_URL: z.string().url().default("https://api.mainnet-beta.solana.com"),
   NEXT_PUBLIC_RECAPTCHA_SITE_KEY: z.string().optional(),
   NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS: z.string().optional(),
   NEXT_PUBLIC_ADMIN_WALLET_ADDRESS: z.string().optional(),
@@ -56,9 +65,9 @@ const envSchema = z.object({
   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: z.string().optional(),
   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: z.string().optional(),
   NEXT_PUBLIC_FIREBASE_APP_ID: z.string().optional(),
-  NEXT_PUBLIC_CDN_BASE_URL: z.string().url().default('https://cdn.bobyworld.com'),
+  NEXT_PUBLIC_CDN_BASE_URL: z.string().url().default("https://cdn.bobyworld.com"),
   NEXT_PUBLIC_APP_URL: z.string().url().optional(),
-  NEXT_PUBLIC_VERCEL_ENV: z.enum(['production', 'preview', 'development']).optional(),
+  NEXT_PUBLIC_VERCEL_ENV: z.enum(["production", "preview", "development"]).optional(),
   NEXT_PUBLIC_VERCEL_URL: z.string().optional(),
 });
 
@@ -68,107 +77,110 @@ const envSchema = z.object({
 const clientEnvValues = {
   // Server-side (will be undefined on client, which is fine - they're optional)
   NODE_ENV: process.env.NODE_ENV,
-  RECAPTCHA_SECRET_KEY: process.env['RECAPTCHA_SECRET_KEY'],
-  DEDICATED_RPC_ENDPOINT: process.env['DEDICATED_RPC_ENDPOINT'],
-  FIREBASE_CLIENT_EMAIL: process.env['FIREBASE_CLIENT_EMAIL'],
-  FIREBASE_PRIVATE_KEY: process.env['FIREBASE_PRIVATE_KEY'],
-  JWT_ACCESS_SECRET: process.env['JWT_ACCESS_SECRET'],
-  JWT_REFRESH_SECRET: process.env['JWT_REFRESH_SECRET'],
-  REDIS_URL: process.env['REDIS_URL'],
-  SLACK_WEBHOOK_URL: process.env['SLACK_WEBHOOK_URL'],
-  MASTER_ENCRYPTION_KEY: process.env['MASTER_ENCRYPTION_KEY'],
-  RESEND_API_KEY: process.env['RESEND_API_KEY'],
-  FROM_EMAIL: process.env['FROM_EMAIL'],
-  JUPITER_API_KEY: process.env['JUPITER_API_KEY'],
-  CLOUDFLARE_ZONE_ID: process.env['CLOUDFLARE_ZONE_ID'],
-  CLOUDFLARE_API_TOKEN: process.env['CLOUDFLARE_API_TOKEN'],
-  AWS_CLOUDFRONT_DISTRIBUTION_ID: process.env['AWS_CLOUDFRONT_DISTRIBUTION_ID'],
-  AWS_ACCESS_KEY_ID: process.env['AWS_ACCESS_KEY_ID'],
-  AWS_SECRET_ACCESS_KEY: process.env['AWS_SECRET_ACCESS_KEY'],
-  LOG_LEVEL: process.env['LOG_LEVEL'],
-  LOG_ENCRYPTION_ENABLED: process.env['LOG_ENCRYPTION_ENABLED'],
-  LOG_ENCRYPTION_KEY: process.env['LOG_ENCRYPTION_KEY'],
-  LOG_TAMPER_DETECTION: process.env['LOG_TAMPER_DETECTION'],
-  LOG_SIGNING_SECRET: process.env['LOG_SIGNING_SECRET'],
-  CRON_SECRET: process.env['CRON_SECRET'],
-  ADMIN_TOKEN: process.env['ADMIN_TOKEN'],
-  ALLOWED_ADMIN_IPS: process.env['ALLOWED_ADMIN_IPS'],
-  REDIS_CLUSTER_MODE: process.env['REDIS_CLUSTER_MODE'],
-  
+  RECAPTCHA_SECRET_KEY: process.env["RECAPTCHA_SECRET_KEY"],
+  DEDICATED_RPC_ENDPOINT: process.env["DEDICATED_RPC_ENDPOINT"],
+  FIREBASE_CLIENT_EMAIL: process.env["FIREBASE_CLIENT_EMAIL"],
+  FIREBASE_PRIVATE_KEY: process.env["FIREBASE_PRIVATE_KEY"],
+  JWT_ACCESS_SECRET: process.env["JWT_ACCESS_SECRET"],
+  JWT_REFRESH_SECRET: process.env["JWT_REFRESH_SECRET"],
+  REDIS_URL: process.env["REDIS_URL"],
+  SLACK_WEBHOOK_URL: process.env["SLACK_WEBHOOK_URL"],
+  MASTER_ENCRYPTION_KEY: process.env["MASTER_ENCRYPTION_KEY"],
+  RESEND_API_KEY: process.env["RESEND_API_KEY"],
+  FROM_EMAIL: process.env["FROM_EMAIL"],
+  JUPITER_API_KEY: process.env["JUPITER_API_KEY"],
+  CLOUDFLARE_ZONE_ID: process.env["CLOUDFLARE_ZONE_ID"],
+  CLOUDFLARE_API_TOKEN: process.env["CLOUDFLARE_API_TOKEN"],
+  AWS_CLOUDFRONT_DISTRIBUTION_ID: process.env["AWS_CLOUDFRONT_DISTRIBUTION_ID"],
+  AWS_ACCESS_KEY_ID: process.env["AWS_ACCESS_KEY_ID"],
+  AWS_SECRET_ACCESS_KEY: process.env["AWS_SECRET_ACCESS_KEY"],
+  LOG_LEVEL: process.env["LOG_LEVEL"],
+  LOG_ENCRYPTION_ENABLED: process.env["LOG_ENCRYPTION_ENABLED"],
+  LOG_ENCRYPTION_KEY: process.env["LOG_ENCRYPTION_KEY"],
+  LOG_TAMPER_DETECTION: process.env["LOG_TAMPER_DETECTION"],
+  LOG_SIGNING_SECRET: process.env["LOG_SIGNING_SECRET"],
+  CRON_SECRET: process.env["CRON_SECRET"],
+  ADMIN_TOKEN: process.env["ADMIN_TOKEN"],
+  ALLOWED_ADMIN_IPS: process.env["ALLOWED_ADMIN_IPS"],
+  REDIS_CLUSTER_MODE: process.env["REDIS_CLUSTER_MODE"],
+
   // Client-side (MUST be literal strings for Next.js to bundle them)
-  NEXT_PUBLIC_SOLANA_RPC_URL: process.env['NEXT_PUBLIC_SOLANA_RPC_URL'],
-  NEXT_PUBLIC_RECAPTCHA_SITE_KEY: process.env['NEXT_PUBLIC_RECAPTCHA_SITE_KEY'],
-  NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS: process.env['NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS'],
-  NEXT_PUBLIC_ADMIN_WALLET_ADDRESS: process.env['NEXT_PUBLIC_ADMIN_WALLET_ADDRESS'],
-  NEXT_PUBLIC_FIREBASE_API_KEY: process.env['NEXT_PUBLIC_FIREBASE_API_KEY'],
-  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env['NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN'],
-  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env['NEXT_PUBLIC_FIREBASE_PROJECT_ID'],
-  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env['NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET'],
-  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env['NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID'],
-  NEXT_PUBLIC_FIREBASE_APP_ID: process.env['NEXT_PUBLIC_FIREBASE_APP_ID'],
-  NEXT_PUBLIC_CDN_BASE_URL: process.env['NEXT_PUBLIC_CDN_BASE_URL'],
-  NEXT_PUBLIC_APP_URL: process.env['NEXT_PUBLIC_APP_URL'],
-  NEXT_PUBLIC_VERCEL_ENV: process.env['NEXT_PUBLIC_VERCEL_ENV'],
-  NEXT_PUBLIC_VERCEL_URL: process.env['NEXT_PUBLIC_VERCEL_URL'],
+  NEXT_PUBLIC_SOLANA_RPC_URL: process.env["NEXT_PUBLIC_SOLANA_RPC_URL"],
+  NEXT_PUBLIC_RECAPTCHA_SITE_KEY: process.env["NEXT_PUBLIC_RECAPTCHA_SITE_KEY"],
+  NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS:
+    process.env["NEXT_PUBLIC_STORE_TREASURY_WALLET_ADDRESS"],
+  NEXT_PUBLIC_ADMIN_WALLET_ADDRESS: process.env["NEXT_PUBLIC_ADMIN_WALLET_ADDRESS"],
+  NEXT_PUBLIC_FIREBASE_API_KEY: process.env["NEXT_PUBLIC_FIREBASE_API_KEY"],
+  NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: process.env["NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN"],
+  NEXT_PUBLIC_FIREBASE_PROJECT_ID: process.env["NEXT_PUBLIC_FIREBASE_PROJECT_ID"],
+  NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: process.env["NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET"],
+  NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: process.env["NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID"],
+  NEXT_PUBLIC_FIREBASE_APP_ID: process.env["NEXT_PUBLIC_FIREBASE_APP_ID"],
+  NEXT_PUBLIC_CDN_BASE_URL: process.env["NEXT_PUBLIC_CDN_BASE_URL"],
+  NEXT_PUBLIC_APP_URL: process.env["NEXT_PUBLIC_APP_URL"],
+  NEXT_PUBLIC_VERCEL_ENV: process.env["NEXT_PUBLIC_VERCEL_ENV"],
+  NEXT_PUBLIC_VERCEL_URL: process.env["NEXT_PUBLIC_VERCEL_URL"],
 };
 
 const _env = envSchema.safeParse(clientEnvValues);
 
 if (!_env.success) {
   // eslint-disable-next-line no-console
-  console.error('❌ Invalid environment variables:', _env.error.format());
+  console.error("❌ Invalid environment variables:", _env.error.format());
   // In development, we might want to continue, but in production, this should probably fail the build or startup
-  if (process.env.NODE_ENV === 'production') {
-    throw new Error('Invalid environment variables for production.');
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Invalid environment variables for production.");
   }
 }
 
-export const env = _env.success ? _env.data : (clientEnvValues as unknown as z.infer<typeof envSchema>);
+export const env = _env.success
+  ? _env.data
+  : (clientEnvValues as unknown as z.infer<typeof envSchema>);
 
 /**
  * Smart environment detection
  */
 export const getAppEnv = (): AppEnv => {
   // 1. Explicit Vercel environment (preferred for Vercel deployments)
-  if (process.env['NEXT_PUBLIC_VERCEL_ENV']) {
-    return process.env['NEXT_PUBLIC_VERCEL_ENV'] as AppEnv;
+  if (process.env["NEXT_PUBLIC_VERCEL_ENV"]) {
+    return process.env["NEXT_PUBLIC_VERCEL_ENV"] as AppEnv;
   }
 
   // 2. Client-side host detection
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     const { host } = window.location;
-    if (host.includes('localhost') || host.includes('127.0.0.1')) return 'development';
-    if (host.includes('staging')) return 'staging';
-    return 'production';
+    if (host.includes("localhost") || host.includes("127.0.0.1")) return "development";
+    if (host.includes("staging")) return "staging";
+    return "production";
   }
-  
+
   // 3. Fallback to NODE_ENV
-  if (process.env.NODE_ENV === 'test') return 'test';
-  if (process.env.NODE_ENV === 'development') return 'development';
-  return 'production';
+  if (process.env.NODE_ENV === "test") return "test";
+  if (process.env.NODE_ENV === "development") return "development";
+  return "production";
 };
 
-export const isDev = getAppEnv() === 'development';
-export const isProd = getAppEnv() === 'production';
-export const isStaging = getAppEnv() === 'staging';
+export const isDev = getAppEnv() === "development";
+export const isProd = getAppEnv() === "production";
+export const isStaging = getAppEnv() === "staging";
 
 /**
  * Smart origin detection
  * Works on both client and server side
  */
 export const getAppOrigin = (requestHost?: string): string => {
-  if (typeof window !== 'undefined') {
+  if (typeof window !== "undefined") {
     return window.location.origin;
   }
 
   if (requestHost) {
-    const host = requestHost.split(':')[0] || requestHost;
-    const protocol = host.includes('localhost') || host.includes('127.0.0.1') ? 'http' : 'https';
+    const host = requestHost.split(":")[0] || requestHost;
+    const protocol = host.includes("localhost") || host.includes("127.0.0.1") ? "http" : "https";
     return `${protocol}://${requestHost}`;
   }
 
   // Fallback to environment variable or standard default
-  return env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  return env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 };
 
 /**
@@ -180,7 +192,7 @@ export const getAppDomain = (requestHost?: string): string => {
     const url = new URL(origin);
     return url.hostname;
   } catch {
-    return 'localhost';
+    return "localhost";
   }
 };
 
@@ -190,28 +202,28 @@ export const getAppDomain = (requestHost?: string): string => {
  */
 export const getAppBaseDomain = (requestHost?: string): string => {
   const domain = getAppDomain(requestHost);
-  
-  if (domain === 'localhost' || domain === '127.0.0.1') {
-    return 'localhost';
+
+  if (domain === "localhost" || domain === "127.0.0.1") {
+    return "localhost";
   }
 
   // Handle tunneling services
-  if (domain.includes('ngrok-free.app') || domain.includes('ngrok.io')) {
+  if (domain.includes("ngrok-free.app") || domain.includes("ngrok.io")) {
     return domain;
   }
 
   // Handle Vercel subdomains (e.g., something.vercel.app)
   // We MUST NOT use .vercel.app as a base domain because it's a public suffix
-  if (domain.endsWith('.vercel.app')) {
+  if (domain.endsWith(".vercel.app")) {
     return domain;
   }
 
-  const parts = domain.split('.');
+  const parts = domain.split(".");
   if (parts.length >= 2) {
     // Basic TLD check (simplified)
-    return parts.slice(-2).join('.');
+    return parts.slice(-2).join(".");
   }
-  
+
   return domain;
 };
 

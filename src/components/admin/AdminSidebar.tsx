@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 import {
   Sidebar,
@@ -10,10 +10,10 @@ import {
   SidebarHeader,
   SidebarMenu,
   SidebarMenuButton,
-  SidebarMenuItem
-} from '@/components/ui/sidebar';
-import { LogOut, PawPrint } from 'lucide-react';
-import React from 'react';
+  SidebarMenuItem,
+} from "@/components/ui/sidebar";
+import { LogOut, PawPrint } from "lucide-react";
+import React from "react";
 
 interface AdminSidebarProps {
   menuItems: { id: string; label: string; icon: React.ElementType }[];
@@ -22,7 +22,12 @@ interface AdminSidebarProps {
   onLogout: () => void;
 }
 
-export function AdminSidebar({ menuItems, activeSection, setActiveSection, onLogout }: AdminSidebarProps) {
+export function AdminSidebar({
+  menuItems,
+  activeSection,
+  setActiveSection,
+  onLogout,
+}: AdminSidebarProps) {
   return (
     <Sidebar collapsible="icon" variant="inset" className="border-r border-border/50">
       <AdminSidebarHeader />
@@ -31,7 +36,7 @@ export function AdminSidebar({ menuItems, activeSection, setActiveSection, onLog
           <SidebarGroupLabel>Navigation</SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {menuItems.map(item => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
                     onClick={() => setActiveSection(item.id)}

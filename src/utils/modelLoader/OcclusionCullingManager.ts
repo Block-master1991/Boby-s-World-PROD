@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import { type OcclusionObject } from './types';
+import * as THREE from "three";
+import { type OcclusionObject } from "./types";
 
 export class OcclusionCullingManager {
   private static instance: OcclusionCullingManager;
@@ -10,7 +10,7 @@ export class OcclusionCullingManager {
   private lastCheck = 0;
   private renderer: THREE.WebGLRenderer | null = null;
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): OcclusionCullingManager {
     if (!OcclusionCullingManager.instance) {
@@ -27,7 +27,7 @@ export class OcclusionCullingManager {
     this.occlusionMap = new THREE.WebGLRenderTarget(256, 256, {
       minFilter: THREE.NearestFilter,
       magFilter: THREE.NearestFilter,
-      format: THREE.RGBAFormat
+      format: THREE.RGBAFormat,
     });
   }
 
@@ -41,7 +41,7 @@ export class OcclusionCullingManager {
       boundingBox,
       boundingSphere,
       visible: true,
-      lastCheck: 0
+      lastCheck: 0,
     });
   }
 
@@ -62,7 +62,7 @@ export class OcclusionCullingManager {
     this.renderer.clear();
 
     // For now, we use simple visibility checks
-    this.objects.forEach((occlusionObject) => {
+    this.objects.forEach(occlusionObject => {
       const isVisible = this.checkVisibility(occlusionObject);
       if (isVisible !== occlusionObject.visible) {
         occlusionObject.visible = isVisible;
@@ -92,7 +92,8 @@ export class OcclusionCullingManager {
 
     // Distance culling
     const distance = this.camera.position.distanceTo(occlusionObject.boundingSphere.center);
-    if (distance > occlusionObject.boundingSphere.radius * 20) { // Increased distance threshold
+    if (distance > occlusionObject.boundingSphere.radius * 20) {
+      // Increased distance threshold
       return false;
     }
 
@@ -122,7 +123,7 @@ export class OcclusionCullingManager {
     return {
       total: this.objects.size,
       visible,
-      culled: this.objects.size - visible
+      culled: this.objects.size - visible,
     };
   }
 }

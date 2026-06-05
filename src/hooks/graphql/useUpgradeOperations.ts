@@ -1,10 +1,11 @@
-import { logger } from '@/utils/logger';
-import { useCallback } from 'react';
-import type { PurchaseUpgradeResponse, UpgradeItem } from './types';
-import { useBaseGraphQL, useBaseMutation } from './useBaseGraphQL';
+import { logger } from "@/utils/logger";
+import { useCallback } from "react";
+import type { PurchaseUpgradeResponse, UpgradeItem } from "./types";
+import { useBaseGraphQL, useBaseMutation } from "./useBaseGraphQL";
 
 export const useUpgrades = (userId: string) => {
-    return useBaseGraphQL<{ upgrades: UpgradeItem[] }>(`
+  return useBaseGraphQL<{ upgrades: UpgradeItem[] }>(
+    `
         query GetUpgrades($userId: ID!) {
             upgrades(userId: $userId) {
                 id
@@ -17,14 +18,20 @@ export const useUpgrades = (userId: string) => {
                 effectType
             }
         }
-    `, {
-        variables: { userId },
-        skip: !userId
-    });
+    `,
+    {
+      variables: { userId },
+      skip: !userId,
+    }
+  );
 };
 
 export const usePurchaseUpgrade = () => {
-    const { execute: mutate, loading, error } = useBaseMutation<{ purchaseUpgrade: PurchaseUpgradeResponse }>(`
+  const {
+    execute: mutate,
+    loading,
+    error,
+  } = useBaseMutation<{ purchaseUpgrade: PurchaseUpgradeResponse }>(`
         mutation PurchaseUpgrade($userId: ID!, $upgradeId: String!) {
             purchaseUpgrade(userId: $userId, upgradeId: $upgradeId) {
                 success
@@ -35,15 +42,18 @@ export const usePurchaseUpgrade = () => {
         }
     `);
 
-    const purchaseUpgrade = useCallback(async (userId: string, upgradeId: string) => {
-        try {
-            const result = await mutate({ userId, upgradeId });
-            return result?.purchaseUpgrade;
-        } catch (err) {
-            logger.error('[usePurchaseUpgrade] Error:', err);
-            return { success: false, error: 'Failed to purchase upgrade' };
-        }
-    }, [mutate]);
+  const purchaseUpgrade = useCallback(
+    async (userId: string, upgradeId: string) => {
+      try {
+        const result = await mutate({ userId, upgradeId });
+        return result?.purchaseUpgrade;
+      } catch (err) {
+        logger.error("[usePurchaseUpgrade] Error:", err);
+        return { success: false, error: "Failed to purchase upgrade" };
+      }
+    },
+    [mutate]
+  );
 
-    return { loading, error, purchaseUpgrade };
+  return { loading, error, purchaseUpgrade };
 };

@@ -1,13 +1,16 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 export const PurchaseItemSchema = z.object({
   itemId: z.string().min(1),
   quantity: z.number().int().positive().max(100),
   transactionSignature: z.string().min(32),
-  transactionAuthSignature: z.object({
-    payload: z.any(),
-    response: z.any(),
-  }).optional(),
+  transactionAuthSignature: z
+    .object({
+      payload: z.any(),
+      response: z.any(),
+    })
+    .optional(),
+  totpToken: z.string().optional(),
 });
 
 export type PurchaseItemInput = z.infer<typeof PurchaseItemSchema>;

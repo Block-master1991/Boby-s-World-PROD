@@ -1,10 +1,10 @@
-import type * as THREE from 'three';
+import type * as THREE from "three";
 
 export enum LoadPriority {
   CRITICAL = 0,
   HIGH = 1,
   MEDIUM = 2,
-  LOW = 3
+  LOW = 3,
 }
 
 export interface PriorityRequest {
@@ -46,15 +46,15 @@ export interface WorkerTask {
   reject: (reason?: unknown) => void;
 }
 
-export type TypedArray = 
-  | Int8Array 
-  | Uint8Array 
-  | Uint8ClampedArray 
-  | Int16Array 
-  | Uint16Array 
-  | Int32Array 
-  | Uint32Array 
-  | Float32Array 
+export type TypedArray =
+  | Int8Array
+  | Uint8Array
+  | Uint8ClampedArray
+  | Int16Array
+  | Uint16Array
+  | Int32Array
+  | Uint32Array
+  | Float32Array
   | Float64Array;
 
 export interface GeometryData {

@@ -1,6 +1,6 @@
-import type { DocumentData } from 'firebase-admin/firestore';
-import { AddCoinsSchema } from '../../validation/schemas';
-import { PlayerRepository } from './player.repository';
+import type { DocumentData } from "firebase-admin/firestore";
+import { AddCoinsSchema } from "../../validation/schemas";
+import { PlayerRepository } from "./player.repository";
 
 export interface PlayerData {
   id: string;
@@ -14,7 +14,7 @@ export interface PlayerData {
   lastProcessedBatchId?: string;
 }
 
-import type { GraphQLContext } from '../../context';
+import type { GraphQLContext } from "../../context";
 
 // ... imports
 
@@ -23,12 +23,12 @@ export class PlayerService {
 
   private static sanitizeInventory(inventory: unknown[]): unknown[] {
     return (inventory as Record<string, unknown>[]).map(item => ({
-      id: String(item['id'] || `item-${Math.random()}`),
-      itemType: item['type'] ? String(item['type']) : null,
-      name: String(item['name'] || 'Unknown Item'),
-      rarity: String(item['rarity'] || 'Common'),
-      image: item['image'] ? String(item['image']) : null,
-      quantity: Math.floor(Number(item['quantity']) || 1)
+      id: String(item["id"] || `item-${Math.random()}`),
+      itemType: item["type"] ? String(item["type"]) : null,
+      name: String(item["name"] || "Unknown Item"),
+      rarity: String(item["rarity"] || "Common"),
+      image: item["image"] ? String(item["image"]) : null,
+      quantity: Math.floor(Number(item["quantity"]) || 1),
     }));
   }
 
@@ -41,19 +41,19 @@ export class PlayerService {
   }
 
   private static formatPlayerData(player: DocumentData, userId: string): PlayerData {
-    const stats = player['gameStats'] || {};
+    const stats = player["gameStats"] || {};
     const { createdAt, lastLogin } = this.formatTimestamps(player);
 
     return {
-      id: player['id'] || userId,
-      publicKey: player['publicKey'] || userId,
-      level: Number(stats['level'] || 1),
-      coins: Number(player['gameUSDTBalance'] ?? player['coins'] ?? 0),
-      experience: Math.floor(stats['experience'] || player['experience'] || 0),
-      inventory: this.sanitizeInventory(player['inventory'] || []),
+      id: player["id"] || userId,
+      publicKey: player["publicKey"] || userId,
+      level: Number(stats["level"] || 1),
+      coins: Number(player["gameUSDTBalance"] ?? player["coins"] ?? 0),
+      experience: Math.floor(stats["experience"] || player["experience"] || 0),
+      inventory: this.sanitizeInventory(player["inventory"] || []),
       createdAt,
       lastLogin,
-      lastProcessedBatchId: player['lastProcessedBatchId'] || "",
+      lastProcessedBatchId: player["lastProcessedBatchId"] || "",
     };
   }
 
@@ -68,7 +68,7 @@ export class PlayerService {
     // Fallback to direct repository call (legacy behavior)
     const player = await PlayerRepository.findById(userId);
     if (!player) return null;
-    
+
     return this.formatPlayerData(player, userId);
   }
 
@@ -77,17 +77,17 @@ export class PlayerService {
     AddCoinsSchema.parse({ userId, amount });
 
     const player = await PlayerRepository.findById(userId);
-    if (!player) throw new Error('Player not found');
+    if (!player) throw new Error("Player not found");
 
-    const currentBalance = Number(player['gameUSDTBalance']) || 0;
+    const currentBalance = Number(player["gameUSDTBalance"]) || 0;
     const newBalance = currentBalance + amount;
 
     // Ensure we store reasonable values, but the resolver/formatter guarantees Int return
     await PlayerRepository.updateStats(userId, { gameUSDTBalance: newBalance });
-    
+
     // DataLoader is request-scoped, so no global cache invalidation is needed.
     // Real-time updates via PubSub handle the client-side freshness.
-    
+
     return newBalance;
   }
 }

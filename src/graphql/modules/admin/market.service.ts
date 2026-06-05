@@ -1,4 +1,4 @@
-import { logger } from '@/utils/logger';
+import { logger } from "@/utils/logger";
 
 interface MarketData {
   bobyPrice: number;
@@ -14,18 +14,18 @@ export class MarketService {
 
   static async getMarketData(requestHost?: string): Promise<MarketData> {
     const now = Date.now();
-    
+
     // Check cache
-    if (this.cache && (now - this.lastFetch < this.TTL)) {
+    if (this.cache && now - this.lastFetch < this.TTL) {
       return this.cache;
     }
 
     try {
-      const { getAppOrigin } = await import('@/lib/config/env');
+      const { getAppOrigin } = await import("@/lib/config/env");
       const baseUrl = getAppOrigin(requestHost);
-      const response = await fetch(`${baseUrl}/api/boby-price-jup`, { method: 'GET' });
-      
-      if (!response.ok) throw new Error('Jupiter API failure');
+      const response = await fetch(`${baseUrl}/api/boby-price-jup`, { method: "GET" });
+
+      if (!response.ok) throw new Error("Jupiter API failure");
       const data = await response.json();
 
       this.cache = {
@@ -38,8 +38,8 @@ export class MarketService {
 
       return this.cache;
     } catch (error) {
-      logger.error('[MarketService] Error:', error);
-      
+      logger.error("[MarketService] Error:", error);
+
       // Return stale cache if available, otherwise fallback
       if (this.cache) return this.cache;
 

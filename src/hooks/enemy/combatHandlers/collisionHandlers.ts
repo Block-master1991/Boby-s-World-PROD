@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import * as THREE from 'three';
-import { ENEMY_DEATH_TRIGGER_DISTANCE } from '../constants';
-import type { EnemyData } from '../types';
+import { useCallback } from "react";
+import * as THREE from "three";
+import { ENEMY_DEATH_TRIGGER_DISTANCE } from "../constants";
+import type { EnemyData } from "../types";
 
 interface CollisionHandlersParams {
   dogModelRef: React.MutableRefObject<THREE.Group | null>;
@@ -17,22 +17,25 @@ const enemyXZ = new THREE.Vector3();
 export const createCollisionHandlers = (params: CollisionHandlersParams) => {
   const { dogModelRef, handleEnemyDeath, handleCarnivoreAttack, handleHerbivoreAttack } = params;
 
-  const checkCollisions = useCallback((e: EnemyData) => {
-    if (e.isDying || !dogModelRef.current) return;
+  const checkCollisions = useCallback(
+    (e: EnemyData) => {
+      if (e.isDying || !dogModelRef.current) return;
 
-    dogXZ.set(dogModelRef.current.position.x, 0, dogModelRef.current.position.z);
-    enemyXZ.set(e.lod.position.x, 0, e.lod.position.z);
-    const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
+      dogXZ.set(dogModelRef.current.position.x, 0, dogModelRef.current.position.z);
+      enemyXZ.set(e.lod.position.x, 0, e.lod.position.z);
+      const distanceXZToDog = dogXZ.distanceTo(enemyXZ);
 
-    // التحقق من قتل العدو عند الاصطدام
-    if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !e.isDying) {
-      handleEnemyDeath(e);
-    }
+      // التحقق من قتل العدو عند الاصطدام
+      if (distanceXZToDog < ENEMY_DEATH_TRIGGER_DISTANCE && !e.isDying) {
+        handleEnemyDeath(e);
+      }
 
-    // التحقق من هجوم الأعداء
-    handleCarnivoreAttack(e);
-    handleHerbivoreAttack(e);
-  }, [dogModelRef, handleEnemyDeath, handleCarnivoreAttack, handleHerbivoreAttack]);
+      // التحقق من هجوم الأعداء
+      handleCarnivoreAttack(e);
+      handleHerbivoreAttack(e);
+    },
+    [dogModelRef, handleEnemyDeath, handleCarnivoreAttack, handleHerbivoreAttack]
+  );
 
   const updateDeathState = useCallback((e: EnemyData, dt: number) => {
     if (!e.isDying) return false;

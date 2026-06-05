@@ -1,5 +1,5 @@
-'use client';
-import { logger } from 'utils/logger';
+"use client";
+import { logger } from "utils/logger";
 
 /**
  * Client-safe functions for store items
@@ -7,7 +7,7 @@ import { logger } from 'utils/logger';
  * They use GraphQL or API routes instead of direct Firebase admin calls
  */
 
-import type { StoreItemDefinition } from './server-items';
+import type { StoreItemDefinition } from "./server-items";
 
 // ===== Client-safe functions for store items =====
 
@@ -15,23 +15,26 @@ import type { StoreItemDefinition } from './server-items';
  * Get all store items from database via GraphQL
  */
 export async function getStoreItems(): Promise<StoreItemDefinition[]> {
-    try {
-        // Get CSRF token from cookies
-        const csrfToken = document?.cookie?.split('; ')?.find(row => row.startsWith('csrfToken='))?.split('=')[1];
+  try {
+    // Get CSRF token from cookies
+    const csrfToken = document?.cookie
+      ?.split("; ")
+      ?.find(row => row.startsWith("csrfToken="))
+      ?.split("=")[1];
 
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
 
-        if (csrfToken) {
-            headers['X-CSRF-Token'] = csrfToken;
-        }
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
 
-        const response = await fetch('/api/graphql', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                query: `
+    const response = await fetch("/api/graphql", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query: `
                     query {
                         storeItems {
                             id
@@ -46,39 +49,42 @@ export async function getStoreItems(): Promise<StoreItemDefinition[]> {
                             updatedAt
                         }
                     }
-                `
-            })
-        });
+                `,
+      }),
+    });
 
-        const result = await response.json();
-        return result.data?.storeItems || [];
-    } catch (error) {
-        logger.error('Error fetching store items:', error);
-        return [];
-    }
+    const result = await response.json();
+    return result.data?.storeItems || [];
+  } catch (error) {
+    logger.error("Error fetching store items:", error);
+    return [];
+  }
 }
 
 /**
  * Get active store items only from database via GraphQL
  */
 export async function getStoreItemsActive(): Promise<StoreItemDefinition[]> {
-    try {
-        // Get CSRF token from cookies
-        const csrfToken = document?.cookie?.split('; ')?.find(row => row.startsWith('csrfToken='))?.split('=')[1];
+  try {
+    // Get CSRF token from cookies
+    const csrfToken = document?.cookie
+      ?.split("; ")
+      ?.find(row => row.startsWith("csrfToken="))
+      ?.split("=")[1];
 
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
 
-        if (csrfToken) {
-            headers['X-CSRF-Token'] = csrfToken;
-        }
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
 
-        const response = await fetch('/api/graphql', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                query: `
+    const response = await fetch("/api/graphql", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query: `
                     query {
                         activeStoreItems {
                             id
@@ -93,39 +99,42 @@ export async function getStoreItemsActive(): Promise<StoreItemDefinition[]> {
                             updatedAt
                         }
                     }
-                `
-            })
-        });
+                `,
+      }),
+    });
 
-        const result = await response.json();
-        return result.data?.activeStoreItems || [];
-    } catch (error) {
-        logger.error('Error fetching active store items:', error);
-        return [];
-    }
+    const result = await response.json();
+    return result.data?.activeStoreItems || [];
+  } catch (error) {
+    logger.error("Error fetching active store items:", error);
+    return [];
+  }
 }
 
 /**
  * Get a single store item by ID from database via GraphQL
  */
 export async function getStoreItem(id: string): Promise<StoreItemDefinition | null> {
-    try {
-        // Get CSRF token from cookies
-        const csrfToken = document?.cookie?.split('; ')?.find(row => row.startsWith('csrfToken='))?.split('=')[1];
+  try {
+    // Get CSRF token from cookies
+    const csrfToken = document?.cookie
+      ?.split("; ")
+      ?.find(row => row.startsWith("csrfToken="))
+      ?.split("=")[1];
 
-        const headers: Record<string, string> = {
-            'Content-Type': 'application/json',
-        };
+    const headers: Record<string, string> = {
+      "Content-Type": "application/json",
+    };
 
-        if (csrfToken) {
-            headers['X-CSRF-Token'] = csrfToken;
-        }
+    if (csrfToken) {
+      headers["X-CSRF-Token"] = csrfToken;
+    }
 
-        const response = await fetch('/api/graphql', {
-            method: 'POST',
-            headers,
-            body: JSON.stringify({
-                query: `
+    const response = await fetch("/api/graphql", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        query: `
                     query($id: ID!) {
                         storeItem(id: $id) {
                             id
@@ -141,16 +150,16 @@ export async function getStoreItem(id: string): Promise<StoreItemDefinition | nu
                         }
                     }
                 `,
-                variables: { id }
-            })
-        });
+        variables: { id },
+      }),
+    });
 
-        const result = await response.json();
-        return result.data?.storeItem || null;
-    } catch (error) {
-        logger.error('Error fetching store item:', error);
-        return null;
-    }
+    const result = await response.json();
+    return result.data?.storeItem || null;
+  } catch (error) {
+    logger.error("Error fetching store item:", error);
+    return null;
+  }
 }
 
 // ===== Re-export types =====

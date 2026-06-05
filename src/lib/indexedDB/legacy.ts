@@ -1,7 +1,7 @@
 // src/lib/indexedDB/legacy.ts - Legacy compatibility functions
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { clearAssets, getAsset, putAsset } from './operations';
-import type { AssetMetadata } from './types';
+import { clearAssets, getAsset, putAsset } from "./operations";
+import type { AssetMetadata } from "./types";
 
 /**
  * Legacy function for backward compatibility
@@ -10,12 +10,12 @@ export function putModel(name: string, data: ArrayBuffer): Promise<void> {
   const asset: AssetMetadata & { data: any } = {
     id: name,
     name,
-    type: 'arraybuffer',
+    type: "arraybuffer",
     size: data.byteLength,
     createdAt: Date.now(),
     accessedAt: Date.now(),
     priority: 5,
-    data
+    data,
   };
 
   return putAsset(asset);

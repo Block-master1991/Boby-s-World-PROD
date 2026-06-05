@@ -1,7 +1,7 @@
-import * as THREE from 'three';
-import { ENEMY_PROTECTION_RADIUS, ENEMY_SPEED } from '../constants';
-import type { EnemyData } from '../types';
-import { setAnim } from '../movementHelpers';
+import * as THREE from "three";
+import { ENEMY_PROTECTION_RADIUS, ENEMY_SPEED } from "../constants";
+import type { EnemyData } from "../types";
+import { setAnim } from "../movementHelpers";
 
 export const handlePatrol = (e: EnemyData, dt: number) => {
   if (e.isIdling) {
@@ -13,9 +13,9 @@ export const handlePatrol = (e: EnemyData, dt: number) => {
       const newPatrolX = e.patrolCenter.x + Math.cos(angle) * radius;
       const newPatrolZ = e.patrolTarget.z + Math.sin(angle) * radius;
       e.patrolTarget.set(newPatrolX, e.lod.position.y, newPatrolZ);
-      setAnim(e, 'WALK');
+      setAnim(e, "WALK");
     } else {
-      setAnim(e, 'IDLE');
+      setAnim(e, "IDLE");
     }
     return;
   }
@@ -28,12 +28,12 @@ export const handlePatrol = (e: EnemyData, dt: number) => {
     e.isIdling = true;
     e.idleDuration = Math.random() * 5 + 3;
     e.idleTimer = e.idleDuration;
-    setAnim(e, 'IDLE');
+    setAnim(e, "IDLE");
   } else {
     d.normalize();
     e.lod.position.addScaledVector(d, ENEMY_SPEED * dt);
     e.position.copy(e.lod.position);
     e.lookAt(e.patrolTarget);
-    setAnim(e, 'WALK');
+    setAnim(e, "WALK");
   }
 };

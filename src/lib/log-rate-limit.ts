@@ -1,4 +1,4 @@
-import { getFirestore } from 'firebase-admin/firestore';
+import { getFirestore } from "firebase-admin/firestore";
 
 export interface RateLimitLogData {
   ip: string;
@@ -11,7 +11,7 @@ export interface RateLimitLogData {
 export async function logRateLimitExceeded(data: RateLimitLogData) {
   const { ip, endpoint, userAgent, publicKey, timestamp } = data;
   const db = getFirestore();
-  await db.collection('rateLimitLogs').add({
+  await db.collection("rateLimitLogs").add({
     ip,
     endpoint,
     userAgent,

@@ -1,18 +1,18 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
-import { Textarea } from '@/components/ui/textarea';
-import type { StoreItemFormData } from '@/hooks/useAdminItems';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Textarea } from "@/components/ui/textarea";
+import type { StoreItemFormData } from "@/hooks/useAdminItems";
 
 interface FormProps {
   formData: StoreItemFormData;
@@ -28,7 +28,7 @@ function BasicInfoFields({ formData, setFormData, isEditing }: FormProps) {
         <Input
           id="id"
           value={formData.id}
-          onChange={(e) => setFormData({ ...formData, id: e.target.value })}
+          onChange={e => setFormData({ ...formData, id: e.target.value })}
           placeholder="unique-id"
           disabled={isEditing}
         />
@@ -39,7 +39,7 @@ function BasicInfoFields({ formData, setFormData, isEditing }: FormProps) {
         <Input
           id="name"
           value={formData.name}
-          onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+          onChange={e => setFormData({ ...formData, name: e.target.value })}
           placeholder="Item name"
         />
       </div>
@@ -49,7 +49,7 @@ function BasicInfoFields({ formData, setFormData, isEditing }: FormProps) {
         <Textarea
           id="description"
           value={formData.description}
-          onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+          onChange={e => setFormData({ ...formData, description: e.target.value })}
           placeholder="Item description"
           rows={3}
         />
@@ -58,7 +58,7 @@ function BasicInfoFields({ formData, setFormData, isEditing }: FormProps) {
   );
 }
 
-function PricingFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>) {
+function PricingFields({ formData, setFormData }: Omit<FormProps, "isEditing">) {
   return (
     <>
       <div className="space-y-2">
@@ -67,9 +67,7 @@ function PricingFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>) 
           id="price"
           type="number"
           value={formData.price}
-          onChange={(e) =>
-            setFormData({ ...formData, price: parseInt(e.target.value) || 0 })
-          }
+          onChange={e => setFormData({ ...formData, price: parseInt(e.target.value) || 0 })}
           placeholder="100"
         />
       </div>
@@ -81,9 +79,7 @@ function PricingFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>) 
           type="number"
           step="0.001"
           value={formData.usdPrice}
-          onChange={(e) =>
-            setFormData({ ...formData, usdPrice: parseFloat(e.target.value) || 0 })
-          }
+          onChange={e => setFormData({ ...formData, usdPrice: parseFloat(e.target.value) || 0 })}
           placeholder="0.001"
         />
       </div>
@@ -91,7 +87,7 @@ function PricingFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>) 
   );
 }
 
-function ItemMediaFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>) {
+function ItemMediaFields({ formData, setFormData }: Omit<FormProps, "isEditing">) {
   return (
     <>
       <div className="space-y-2">
@@ -99,7 +95,7 @@ function ItemMediaFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>
         <Input
           id="image"
           value={formData.image}
-          onChange={(e) => setFormData({ ...formData, image: e.target.value })}
+          onChange={e => setFormData({ ...formData, image: e.target.value })}
           placeholder="/image.png"
         />
       </div>
@@ -109,7 +105,7 @@ function ItemMediaFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>
         <Input
           id="dataAiHint"
           value={formData.dataAiHint}
-          onChange={(e) => setFormData({ ...formData, dataAiHint: e.target.value })}
+          onChange={e => setFormData({ ...formData, dataAiHint: e.target.value })}
           placeholder="AI description hint"
         />
       </div>
@@ -117,14 +113,14 @@ function ItemMediaFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>
   );
 }
 
-function ItemClassificationFields({ formData, setFormData }: Omit<FormProps, 'isEditing'>) {
+function ItemClassificationFields({ formData, setFormData }: Omit<FormProps, "isEditing">) {
   return (
     <>
       <div className="space-y-2">
         <Label htmlFor="type">Type</Label>
         <Select
           value={formData.type}
-          onValueChange={(value: 'consumable' | 'permanent') =>
+          onValueChange={(value: "consumable" | "permanent") =>
             setFormData({ ...formData, type: value })
           }
         >
@@ -142,7 +138,7 @@ function ItemClassificationFields({ formData, setFormData }: Omit<FormProps, 'is
         <Label htmlFor="rarity">Rarity</Label>
         <Select
           value={formData.rarity}
-          onValueChange={(value: 'common' | 'rare' | 'epic' | 'legendary') =>
+          onValueChange={(value: "common" | "rare" | "epic" | "legendary") =>
             setFormData({ ...formData, rarity: value })
           }
         >
@@ -161,15 +157,13 @@ function ItemClassificationFields({ formData, setFormData }: Omit<FormProps, 'is
   );
 }
 
-function ItemStatusField({ formData, setFormData }: Omit<FormProps, 'isEditing'>) {
+function ItemStatusField({ formData, setFormData }: Omit<FormProps, "isEditing">) {
   return (
     <div className="flex items-center space-x-2">
       <Switch
         id="isActive"
         checked={formData.isActive}
-        onCheckedChange={(checked) =>
-          setFormData({ ...formData, isActive: checked })
-        }
+        onCheckedChange={checked => setFormData({ ...formData, isActive: checked })}
       />
       <Label htmlFor="isActive">Active</Label>
     </div>
@@ -194,11 +188,7 @@ export function AdminItemForm({
   return (
     <>
       <div className="grid grid-cols-2 gap-4">
-        <BasicInfoFields
-          formData={formData}
-          setFormData={setFormData}
-          isEditing={isEditing}
-        />
+        <BasicInfoFields formData={formData} setFormData={setFormData} isEditing={isEditing} />
         <PricingFields formData={formData} setFormData={setFormData} />
         <ItemMediaFields formData={formData} setFormData={setFormData} />
         <ItemClassificationFields formData={formData} setFormData={setFormData} />
@@ -209,7 +199,7 @@ export function AdminItemForm({
         <Button variant="outline" onClick={onCancel}>
           Cancel
         </Button>
-        <Button onClick={onSave}>{isEditing ? 'Update' : 'Create'} Item</Button>
+        <Button onClick={onSave}>{isEditing ? "Update" : "Create"} Item</Button>
       </div>
     </>
   );

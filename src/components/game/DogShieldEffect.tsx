@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 interface DogShieldEffectOptions {
   scene: THREE.Scene;
@@ -16,7 +16,7 @@ class DogShieldEffect {
 
     const geometry = new THREE.SphereGeometry(1.2, 32, 32); // Radius, widthSegments, heightSegments (Increased radius to 1.2)
     const material = new THREE.MeshBasicMaterial({
-      color: 0x0000FF, // Blue color
+      color: 0x0000ff, // Blue color
       transparent: true,
       opacity: 0.3,
       side: THREE.DoubleSide,

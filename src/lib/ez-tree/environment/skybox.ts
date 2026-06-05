@@ -1,11 +1,11 @@
-import * as THREE from 'three';
-import { logger } from 'utils/logger';
-import { getModel, putModel } from '../../indexedDB';
-import { getDevicePerformanceConfig } from '../../utils';
+import * as THREE from "three";
+import { logger } from "utils/logger";
+import { getModel, putModel } from "../../indexedDB";
+import { getDevicePerformanceConfig } from "../../utils";
 
 export interface DevicePerformanceConfig {
   isMobile: boolean;
-  performanceLevel: 'low' | 'medium' | 'high';
+  performanceLevel: "low" | "medium" | "high";
   environmentDensity: {
     grassMultiplier: number;
     treeMultiplier: number;
@@ -34,9 +34,9 @@ export class Skybox extends THREE.Object3D {
   constructor(renderer?: THREE.WebGLRenderer) {
     super();
     this.renderer = renderer || null;
-    this.name = 'Skybox';
+    this.name = "Skybox";
 
-    this.loadingPromise = new Promise((resolve) => {
+    this.loadingPromise = new Promise(resolve => {
       this.resolveLoading = resolve;
     });
 
@@ -51,7 +51,10 @@ export class Skybox extends THREE.Object3D {
     this.sun.shadow.camera.bottom = -SHADOW_SIZE;
     this.sun.shadow.camera.far = 2500;
 
-    this.sun.shadow.mapSize.set(perfConfig.renderer.shadowMapSize, perfConfig.renderer.shadowMapSize);
+    this.sun.shadow.mapSize.set(
+      perfConfig.renderer.shadowMapSize,
+      perfConfig.renderer.shadowMapSize
+    );
     this.sun.shadow.bias = -0.0005;
     this.sun.shadow.normalBias = 0.05;
     this.add(this.sun);
@@ -68,31 +71,31 @@ export class Skybox extends THREE.Object3D {
 
   /* eslint-disable no-await-in-loop */
   private async loadHDR(maxAttempts: number = 10) {
-    const hdrUrl = '/textures/hdr/citrus_orchard_road_puresky_8k.hdr';
-    const modelName = 'hdr_data';
+    const hdrUrl = "/textures/hdr/citrus_orchard_road_puresky_8k.hdr";
+    const modelName = "hdr_data";
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         const hdrData = await this.fetchHDRData(hdrUrl, modelName);
-        const blob = new Blob([hdrData], { type: 'application/octet-stream' });
+        const blob = new Blob([hdrData], { type: "application/octet-stream" });
         const blobUrl = URL.createObjectURL(blob);
-        
-        const worker = new Worker(new URL('../../../workers/hdrWorker.ts', import.meta.url));
-        
+
+        const worker = new Worker(new URL("../../../workers/hdrWorker.ts", import.meta.url));
+
         // Wrap setup and execution in a promise to handle retries within this loop
         await new Promise<void>((resolve, reject) => {
           const workerTimeout = setTimeout(() => {
             worker.terminate();
             URL.revokeObjectURL(blobUrl);
-            reject(new Error('HDR Worker timeout'));
+            reject(new Error("HDR Worker timeout"));
           }, 45000); // Increased timeout for worker
 
-          worker.onmessage = (e) => {
+          worker.onmessage = e => {
             const { status, width, height, data, error } = e.data;
-            if (status === 'progress') return;
+            if (status === "progress") return;
 
             clearTimeout(workerTimeout);
-            if (status === 'success') {
+            if (status === "success") {
               this.processHDRResult(width, height, data, e.data.isHalf);
               worker.terminate();
               URL.revokeObjectURL(blobUrl);
@@ -100,11 +103,11 @@ export class Skybox extends THREE.Object3D {
             } else {
               worker.terminate();
               URL.revokeObjectURL(blobUrl);
-              reject(new Error(error || 'Worker failed'));
+              reject(new Error(error || "Worker failed"));
             }
           };
 
-          worker.onerror = (err) => {
+          worker.onerror = err => {
             clearTimeout(workerTimeout);
             worker.terminate();
             URL.revokeObjectURL(blobUrl);
@@ -120,7 +123,7 @@ export class Skybox extends THREE.Object3D {
       } catch (error) {
         logger.error(`[Skybox] ❌ HDR Loading attempt ${attempt} failed:`, error);
         if (attempt === maxAttempts) {
-          logger.error('[Skybox] 🚨 All HDR loading attempts failed. Using fallback.');
+          logger.error("[Skybox] 🚨 All HDR loading attempts failed. Using fallback.");
           this.applyFallbackSky();
           if (this.resolveLoading) this.resolveLoading();
         } else {
@@ -146,7 +149,12 @@ export class Skybox extends THREE.Object3D {
     return data;
   }
 
-  private processHDRResult(width: number, height: number, data: Float32Array | Uint16Array, isHalf: boolean) {
+  private processHDRResult(
+    width: number,
+    height: number,
+    data: Float32Array | Uint16Array,
+    isHalf: boolean
+  ) {
     const maxTextureSize = this.renderer?.capabilities?.maxTextureSize || 4096;
     let finalWidth = width;
     let finalHeight = height;
@@ -156,12 +164,23 @@ export class Skybox extends THREE.Object3D {
       const scaleFactor = Math.min(maxTextureSize / width, maxTextureSize / height);
       finalWidth = Math.floor(width * scaleFactor);
       finalHeight = Math.floor(height * scaleFactor);
-      const options = { srcWidth: width, srcHeight: height, dstWidth: finalWidth, dstHeight: finalHeight };
+      const options = {
+        srcWidth: width,
+        srcHeight: height,
+        dstWidth: finalWidth,
+        dstHeight: finalHeight,
+      };
       finalData = downscaleHDRData(data as Float32Array, options);
     }
 
     const type = isHalf ? THREE.HalfFloatType : THREE.FloatType;
-    const texture = new THREE.DataTexture(finalData, finalWidth, finalHeight, THREE.RGBAFormat, type);
+    const texture = new THREE.DataTexture(
+      finalData,
+      finalWidth,
+      finalHeight,
+      THREE.RGBAFormat,
+      type
+    );
     texture.mapping = THREE.EquirectangularReflectionMapping;
     texture.minFilter = THREE.LinearMipmapLinearFilter;
     texture.magFilter = THREE.LinearFilter;
@@ -174,8 +193,8 @@ export class Skybox extends THREE.Object3D {
 
   private setupSkyMesh(texture: THREE.Texture, perfConfig: DevicePerformanceConfig) {
     const isHighEndGPU = perfConfig.renderer.shadowMapSize >= 2048;
-    const segments = perfConfig.isMobile ? 96 : (isHighEndGPU ? 192 : 128);
-    const rings = perfConfig.isMobile ? 48 : (isHighEndGPU ? 96 : 64);
+    const segments = perfConfig.isMobile ? 96 : isHighEndGPU ? 192 : 128;
+    const rings = perfConfig.isMobile ? 48 : isHighEndGPU ? 96 : 64;
     const geometry = new THREE.SphereGeometry(200, segments, rings);
 
     const material = new THREE.MeshBasicMaterial({
@@ -183,7 +202,7 @@ export class Skybox extends THREE.Object3D {
       side: THREE.BackSide,
       transparent: false,
       depthWrite: false,
-      fog: false
+      fog: false,
     });
 
     if (this.skyMesh) {
@@ -193,18 +212,18 @@ export class Skybox extends THREE.Object3D {
     }
 
     this.skyMesh = new THREE.Mesh(geometry, material);
-    this.skyMesh.name = 'SkySphereMesh';
+    this.skyMesh.name = "SkySphereMesh";
     this.skyMesh.renderOrder = 1000;
     this.add(this.skyMesh);
   }
 
   private applyFallbackSky() {
-    logger.warn('[Skybox] Using fallback atmospheric sky');
+    logger.warn("[Skybox] Using fallback atmospheric sky");
     const geometry = new THREE.SphereGeometry(200, 64, 32);
     const material = new THREE.MeshBasicMaterial({
-      color: 0x87CEEB,
+      color: 0x87ceeb,
       side: THREE.BackSide,
-      fog: false
+      fog: false,
     });
     this.skyMesh = new THREE.Mesh(geometry, material);
     this.add(this.skyMesh);
@@ -213,7 +232,7 @@ export class Skybox extends THREE.Object3D {
   private applyToScene(texture: THREE.Texture) {
     const findAndApply = () => {
       let scene: THREE.Scene | null = null;
-      this.traverseAncestors((ancestor) => {
+      this.traverseAncestors(ancestor => {
         if (ancestor instanceof THREE.Scene) scene = ancestor;
       });
 
@@ -227,7 +246,7 @@ export class Skybox extends THREE.Object3D {
             (scene as THREE.Scene).background = null;
             (scene as THREE.Scene).environment = envMap.texture;
           } catch (error) {
-            logger.warn('[Skybox] PMREMGenerator failed:', error);
+            logger.warn("[Skybox] PMREMGenerator failed:", error);
             (scene as THREE.Scene).environment = texture;
           }
         } else {
@@ -247,14 +266,23 @@ export class Skybox extends THREE.Object3D {
     this.sun.target.updateMatrixWorld();
   }
 
-  public updateSky() { /* Deprecated */ }
-  get sunElevation() { return 20; }
-  set sunElevation(_v: number) { }
-  get sunAzimuth() { return 180; }
-  set sunAzimuth(_v: number) { }
+  public updateSky() {
+    /* Deprecated */
+  }
+  get sunElevation() {
+    return 20;
+  }
+  set sunElevation(_v: number) {}
+  get sunAzimuth() {
+    return 180;
+  }
+  set sunAzimuth(_v: number) {}
 }
 
-function downscaleHDRData(data: Float32Array, options: { srcWidth: number; srcHeight: number; dstWidth: number; dstHeight: number }): Float32Array {
+function downscaleHDRData(
+  data: Float32Array,
+  options: { srcWidth: number; srcHeight: number; dstWidth: number; dstHeight: number }
+): Float32Array {
   const { srcWidth, srcHeight, dstWidth, dstHeight } = options;
   const dstData = new Float32Array(dstWidth * dstHeight * 4);
   const scaleX = srcWidth / dstWidth;
@@ -276,7 +304,11 @@ function downscaleHDRData(data: Float32Array, options: { srcWidth: number; srcHe
         const val10 = data[(y0 * srcWidth + x1) * 4 + c] ?? 0;
         const val01 = data[(y1 * srcWidth + x0) * 4 + c] ?? 0;
         const val11 = data[(y1 * srcWidth + x1) * 4 + c] ?? 0;
-        dstData[(dstY * dstWidth + dstX) * 4 + c] = val00 * (1 - wx) * (1 - wy) + val10 * wx * (1 - wy) + val01 * (1 - wx) * wy + val11 * wx * wy;
+        dstData[(dstY * dstWidth + dstX) * 4 + c] =
+          val00 * (1 - wx) * (1 - wy) +
+          val10 * wx * (1 - wy) +
+          val01 * (1 - wx) * wy +
+          val11 * wx * wy;
       }
     }
   }

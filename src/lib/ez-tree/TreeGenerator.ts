@@ -1,11 +1,11 @@
-import * as THREE from 'three';
-import { Branch } from './branch';
-import { TreeType } from './enums';
-import { BranchGenerator } from './generators/BranchGenerator';
-import { LeafGenerator } from './generators/LeafGenerator';
-import type TreeOptions from './options';
-import RNG from './rng';
-import type { BranchGeometryData, LeafGeometryData, SectionData } from './types';
+import * as THREE from "three";
+import { Branch } from "./branch";
+import { TreeType } from "./enums";
+import { BranchGenerator } from "./generators/BranchGenerator";
+import { LeafGenerator } from "./generators/LeafGenerator";
+import type TreeOptions from "./options";
+import RNG from "./rng";
+import type { BranchGeometryData, LeafGeometryData, SectionData } from "./types";
 
 export class TreeGenerator {
   public rng!: RNG;
@@ -14,7 +14,7 @@ export class TreeGenerator {
     normals: [],
     indices: [],
     uvs: [],
-    windFactor: []
+    windFactor: [],
   };
 
   public leaves: LeafGeometryData = {
@@ -26,7 +26,7 @@ export class TreeGenerator {
 
   private branchQueue: Branch[] = [];
   private options: TreeOptions;
-  
+
   private branchGenerator!: BranchGenerator;
   private leafGenerator!: LeafGenerator;
 
@@ -46,7 +46,7 @@ export class TreeGenerator {
       normals: [],
       indices: [],
       uvs: [],
-      windFactor: []
+      windFactor: [],
     };
 
     this.leaves = {
@@ -58,7 +58,7 @@ export class TreeGenerator {
 
     this.rng = new RNG(this.options.seed);
     this.branchQueue = [];
-    
+
     // Initialize sub-generators
     this.branchGenerator = new BranchGenerator(this.options, this.rng, this.branches);
     this.leafGenerator = new LeafGenerator(this.options, this.rng, this.leaves);
@@ -74,7 +74,7 @@ export class TreeGenerator {
         level: 0,
         sectionCount: this.options.branch.sections[0] ?? 6,
         segmentCount: this.options.branch.segments[0] ?? 8,
-      }),
+      })
     );
   }
 
@@ -89,10 +89,10 @@ export class TreeGenerator {
 
   private processBranch(branch: Branch): void {
     const indexOffset = this.branches.verts.length / 3;
-    
+
     // Use BranchGenerator to generate sections and geometry
     const sections = this.branchGenerator.generateBranch(branch);
-    
+
     // Generate indices
     this.branchGenerator.generateBranchIndices(indexOffset, branch);
 
@@ -106,20 +106,20 @@ export class TreeGenerator {
 
       if (lastSection) {
         if (branch.level < this.options.branch.levels) {
-            const nextLength = this.options.branch.length[branch.level + 1] ?? 1;
-            this.branchQueue.push(
-              new Branch({
-                origin: lastSection.origin,
-                orientation: lastSection.orientation,
-                length: nextLength,
-                radius: lastSection.radius,
-                level: branch.level + 1,
-                sectionCount: branch.sectionCount,
-                segmentCount: branch.segmentCount,
-              }),
-            );
+          const nextLength = this.options.branch.length[branch.level + 1] ?? 1;
+          this.branchQueue.push(
+            new Branch({
+              origin: lastSection.origin,
+              orientation: lastSection.orientation,
+              length: nextLength,
+              radius: lastSection.radius,
+              level: branch.level + 1,
+              sectionCount: branch.sectionCount,
+              segmentCount: branch.segmentCount,
+            })
+          );
         } else {
-            this.leafGenerator.generateLeaf(lastSection.origin, lastSection.orientation);
+          this.leafGenerator.generateLeaf(lastSection.origin, lastSection.orientation);
         }
       }
     }
@@ -130,7 +130,8 @@ export class TreeGenerator {
       this.generateChildBranches(
         this.options.branch.children[branch.level] ?? 0,
         branch.level + 1,
-        sections);
+        sections
+      );
     }
   }
 
@@ -138,48 +139,54 @@ export class TreeGenerator {
     if (sections.length < 2 || count <= 0) return;
 
     for (let i = 0; i < count; i++) {
-        this.createChildBranch(i, count, level, sections);
+      this.createChildBranch(i, count, level, sections);
     }
   }
 
-  private createChildBranch(index: number, count: number, level: number, sections: SectionData[]): void {
-      const radialOffset = this.rng.random();
-      const startFactorLimit = this.options.branch.start[level] ?? 1;
-      const childBranchStart = this.rng.random(1.0, startFactorLimit);
+  private createChildBranch(
+    index: number,
+    count: number,
+    level: number,
+    sections: SectionData[]
+  ): void {
+    const radialOffset = this.rng.random();
+    const startFactorLimit = this.options.branch.start[level] ?? 1;
+    const childBranchStart = this.rng.random(1.0, startFactorLimit);
 
-      // Interpolate position on parent branch
-      const interpolation = this.interpolateSection(sections, childBranchStart);
-      if (!interpolation) return;
+    // Interpolate position on parent branch
+    const interpolation = this.interpolateSection(sections, childBranchStart);
+    if (!interpolation) return;
 
-      const { origin, radius, orientation: parentOrientation } = interpolation;
+    const { origin, radius, orientation: parentOrientation } = interpolation;
 
-      // Calculate new orientation
-      const radialAngle = 2.0 * Math.PI * (radialOffset + index / count);
-      const angle = (this.options.branch.angle[level] ?? 45) / (180 / Math.PI);
-      
-      const q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-      const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), radialAngle);
-      const q3 = new THREE.Quaternion().setFromEuler(parentOrientation);
+    // Calculate new orientation
+    const radialAngle = 2.0 * Math.PI * (radialOffset + index / count);
+    const angle = (this.options.branch.angle[level] ?? 45) / (180 / Math.PI);
 
-      const childBranchOrientation = new THREE.Euler().setFromQuaternion(
-        q3.multiply(q2.multiply(q1)),
-      );
+    const q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
+    const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), radialAngle);
+    const q3 = new THREE.Quaternion().setFromEuler(parentOrientation);
 
-      // Determine length
-      const lengthBase = this.options.branch.length[level] ?? 1;
-      const childBranchLength = lengthBase * (this.options.type === TreeType.Evergreen ? 1.0 - childBranchStart : 1.0);
-      
-      this.branchQueue.push(
-        new Branch({
-          origin,
-          orientation: childBranchOrientation,
-          length: childBranchLength,
-          radius,
-          level,
-          sectionCount: this.options.branch.sections[level] ?? 5,
-          segmentCount: this.options.branch.segments[level] ?? 6,
-        }),
-      );
+    const childBranchOrientation = new THREE.Euler().setFromQuaternion(
+      q3.multiply(q2.multiply(q1))
+    );
+
+    // Determine length
+    const lengthBase = this.options.branch.length[level] ?? 1;
+    const childBranchLength =
+      lengthBase * (this.options.type === TreeType.Evergreen ? 1.0 - childBranchStart : 1.0);
+
+    this.branchQueue.push(
+      new Branch({
+        origin,
+        orientation: childBranchOrientation,
+        length: childBranchLength,
+        radius,
+        level,
+        sectionCount: this.options.branch.sections[level] ?? 5,
+        segmentCount: this.options.branch.segments[level] ?? 6,
+      })
+    );
   }
 
   private generateLeavesFromSections(sections: SectionData[]): void {
@@ -187,54 +194,55 @@ export class TreeGenerator {
     const count = this.options.leaves.count ?? 0;
 
     for (let i = 0; i < count; i++) {
-        this.createLeafOnBranch(i, count, sections);
+      this.createLeafOnBranch(i, count, sections);
     }
   }
 
   private createLeafOnBranch(index: number, count: number, sections: SectionData[]): void {
-      const radialOffset = this.rng.random();
-      const startFactor = this.options.leaves.start ?? 0;
-      const leafStart = this.rng.random(1.0, startFactor);
+    const radialOffset = this.rng.random();
+    const startFactor = this.options.leaves.start ?? 0;
+    const leafStart = this.rng.random(1.0, startFactor);
 
-      const interpolation = this.interpolateSection(sections, leafStart);
-      if (!interpolation) return;
+    const interpolation = this.interpolateSection(sections, leafStart);
+    if (!interpolation) return;
 
-      const { origin, orientation: parentOrientation } = interpolation;
+    const { origin, orientation: parentOrientation } = interpolation;
 
-      const radialAngle = 2.0 * Math.PI * (radialOffset + index / count);
-      const angle = (this.options.leaves.angle ?? 0) / (180 / Math.PI);
-      
-      const q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
-      const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), radialAngle);
-      const q3 = new THREE.Quaternion().setFromEuler(parentOrientation);
+    const radialAngle = 2.0 * Math.PI * (radialOffset + index / count);
+    const angle = (this.options.leaves.angle ?? 0) / (180 / Math.PI);
 
-      const leafOrientation = new THREE.Euler().setFromQuaternion(
-        q3.multiply(q2.multiply(q1)),
-      );
+    const q1 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1, 0, 0), angle);
+    const q2 = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), radialAngle);
+    const q3 = new THREE.Quaternion().setFromEuler(parentOrientation);
 
-      this.leafGenerator.generateLeaf(origin, leafOrientation);
+    const leafOrientation = new THREE.Euler().setFromQuaternion(q3.multiply(q2.multiply(q1)));
+
+    this.leafGenerator.generateLeaf(origin, leafOrientation);
   }
 
-  private interpolateSection(sections: SectionData[], t: number): { origin: THREE.Vector3, radius: number, orientation: THREE.Euler } | null {
-      const maxIndex = sections.length - 1;
-      const virtualIndex = t * maxIndex;
-      const indexA = Math.floor(virtualIndex);
-      const indexB = Math.min(indexA + 1, maxIndex);
-      
-      const sectionA = sections[indexA];
-      const sectionB = sections[indexB];
+  private interpolateSection(
+    sections: SectionData[],
+    t: number
+  ): { origin: THREE.Vector3; radius: number; orientation: THREE.Euler } | null {
+    const maxIndex = sections.length - 1;
+    const virtualIndex = t * maxIndex;
+    const indexA = Math.floor(virtualIndex);
+    const indexB = Math.min(indexA + 1, maxIndex);
 
-      if (!sectionA || !sectionB) return null;
+    const sectionA = sections[indexA];
+    const sectionB = sections[indexB];
 
-      const alpha = virtualIndex - indexA;
+    if (!sectionA || !sectionB) return null;
 
-      const origin = new THREE.Vector3().lerpVectors(sectionA.origin, sectionB.origin, alpha);
-      const radius = THREE.MathUtils.lerp(sectionA.radius, sectionB.radius, alpha);
-      
-      const qA = new THREE.Quaternion().setFromEuler(sectionA.orientation);
-      const qB = new THREE.Quaternion().setFromEuler(sectionB.orientation);
-      const orientation = new THREE.Euler().setFromQuaternion(qB.slerp(qA, alpha));
+    const alpha = virtualIndex - indexA;
 
-      return { origin, radius, orientation };
+    const origin = new THREE.Vector3().lerpVectors(sectionA.origin, sectionB.origin, alpha);
+    const radius = THREE.MathUtils.lerp(sectionA.radius, sectionB.radius, alpha);
+
+    const qA = new THREE.Quaternion().setFromEuler(sectionA.orientation);
+    const qB = new THREE.Quaternion().setFromEuler(sectionB.orientation);
+    const orientation = new THREE.Euler().setFromQuaternion(qB.slerp(qA, alpha));
+
+    return { origin, radius, orientation };
   }
 }

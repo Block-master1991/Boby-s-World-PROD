@@ -34,6 +34,7 @@ Passkeys are stored as subcollections in Firestore (merged with player profiles)
 ```
 players/{userId}/passkeys/{credentialId}
 ```
+
 ├── credentialId: string
 ├── publicKey: string
 ├── counter: number
@@ -41,7 +42,8 @@ players/{userId}/passkeys/{credentialId}
 ├── description: string
 ├── createdAt: timestamp
 ├── lastUsedAt: timestamp
-```
+
+````
 
 #### Security Middleware
 
@@ -133,18 +135,18 @@ ALLOWED_ADMIN_IPS=192.168.1.1,10.0.0.1
 # Security Thresholds
 PASSKEY_FAILED_LOGIN_THRESHOLD=10
 PASSKEY_RECOVERY_ATTEMPT_THRESHOLD=5
-```
+````
 
 ### Security Monitor Configuration
 
 ```typescript
-import { passkeySecurityMonitor } from '@/lib/passkey-security-monitor';
+import { passkeySecurityMonitor } from "@/lib/passkey-security-monitor";
 
 // Update alert thresholds
 passkeySecurityMonitor.updateThresholds({
-    failedLoginsPerHour: 15,
-    recoveryAttemptsPerHour: 3,
-    suspiciousActivitiesPerHour: 5,
+  failedLoginsPerHour: 15,
+  recoveryAttemptsPerHour: 3,
+  suspiciousActivitiesPerHour: 5,
 });
 ```
 
@@ -271,10 +273,11 @@ npm run test:recovery
 ## Support
 
 For technical support or security concerns:
+
 - Create issue in project repository
 - Contact security team for urgent matters
 - Review audit logs for debugging information
 
 ---
 
-*This documentation is maintained alongside the codebase. Please update when making changes to the passkey system.*
+_This documentation is maintained alongside the codebase. Please update when making changes to the passkey system._

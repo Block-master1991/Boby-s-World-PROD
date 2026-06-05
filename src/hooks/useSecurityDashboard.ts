@@ -1,16 +1,21 @@
-'use client';
+"use client";
 
-import { useToast } from '@/hooks/use-toast';
-import type { SecurityStats } from '@/types/security';
-import { logger } from '@/utils/logger';
-import { useCallback, useEffect, useState } from 'react';
+import { useToast } from "@/hooks/use-toast";
+import type { SecurityStats } from "@/types/security";
+import { logger } from "@/utils/logger";
+import { useCallback, useEffect, useState } from "react";
 
 const MOCK_STATS: SecurityStats = {
-  redisStatus: 'disconnected', totalRequests: 0, blockedRequests: 0,
-  suspiciousActivity: [], blockedIps: [], systemHealth: 'critical', isPanicMode: false,
+  redisStatus: "disconnected",
+  totalRequests: 0,
+  blockedRequests: 0,
+  suspiciousActivity: [],
+  blockedIps: [],
+  systemHealth: "critical",
+  isPanicMode: false,
 };
 
-type ToastFunction = ReturnType<typeof useToast>['toast'];
+type ToastFunction = ReturnType<typeof useToast>["toast"];
 type SetState<T> = React.Dispatch<React.SetStateAction<T>>;
 
 async function fetchStatsApi(
@@ -20,14 +25,21 @@ async function fetchStatsApi(
   setLoading: SetState<boolean>
 ) {
   try {
-    const res = await fetch('/api/admin/security/stats');
-    if (!res.ok) throw new Error('Failed to fetch stats');
-    setStats(await res.json()); setError(null); setLastUpdated(new Date());
+    const res = await fetch("/api/admin/security/stats");
+    if (!res.ok) throw new Error("Failed to fetch stats");
+    setStats(await res.json());
+    setError(null);
+    setLastUpdated(new Date());
   } catch (err: unknown) {
-    logger.error('Security Dashboard Fetch Error:', err instanceof Error ? err.message : String(err));
-    setError('Failed to connect');
-    setStats((prev) => prev || MOCK_STATS);
-  } finally { setLoading(false); }
+    logger.error(
+      "Security Dashboard Fetch Error:",
+      err instanceof Error ? err.message : String(err)
+    );
+    setError("Failed to connect");
+    setStats(prev => prev || MOCK_STATS);
+  } finally {
+    setLoading(false);
+  }
 }
 
 async function performAction(
@@ -37,16 +49,17 @@ async function performAction(
   toast: ToastFunction
 ) {
   try {
-    const res = await fetch('/api/admin/security/actions', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action, ...payload as object }),
+    const res = await fetch("/api/admin/security/actions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action, ...(payload as object) }),
     });
-    if (!res.ok) throw new Error('Action failed');
-    toast({ title: 'Success', description: 'Action executed successfully' });
+    if (!res.ok) throw new Error("Action failed");
+    toast({ title: "Success", description: "Action executed successfully" });
     await fetchStats();
   } catch (err) {
-    logger.error('Security Action Error:', err instanceof Error ? err.message : String(err));
-    toast({ title: 'Error', description: 'Failed to execute action', variant: 'destructive' });
+    logger.error("Security Action Error:", err instanceof Error ? err.message : String(err));
+    toast({ title: "Error", description: "Failed to execute action", variant: "destructive" });
   }
 }
 
@@ -76,8 +89,13 @@ export function useSecurityDashboard() {
   }, [fetchStats]);
 
   return {
-    stats, loading, error, lastUpdated, processing, fetchStats,
-    togglePanicMode: () => handleAction('toggle_panic_mode', { enabled: !stats?.isPanicMode }),
-    unblockIp: (ip: string) => handleAction('unblock_ip', { ip }),
+    stats,
+    loading,
+    error,
+    lastUpdated,
+    processing,
+    fetchStats,
+    togglePanicMode: () => handleAction("toggle_panic_mode", { enabled: !stats?.isPanicMode }),
+    unblockIp: (ip: string) => handleAction("unblock_ip", { ip }),
   };
 }

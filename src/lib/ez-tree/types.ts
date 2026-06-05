@@ -1,4 +1,4 @@
-import type { Euler, Vector2, Vector3 } from 'three';
+import type { Euler, Vector2, Vector3 } from "three";
 
 export interface BranchGeometryData {
   verts: number[];
@@ -22,7 +22,7 @@ export interface SectionData {
 }
 
 export interface VertexData {
-    vertex: Vector3;
-    normal: Vector3;
-    uv: Vector2;
+  vertex: Vector3;
+  normal: Vector3;
+  uv: Vector2;
 }

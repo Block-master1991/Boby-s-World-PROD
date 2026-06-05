@@ -1,8 +1,8 @@
-'use client';
+"use client";
 
-import { Badge } from '@/components/ui/badge';
-import { SidebarTrigger } from '@/components/ui/sidebar';
-import { PawPrint } from 'lucide-react';
+import { Badge } from "@/components/ui/badge";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { PawPrint } from "lucide-react";
 
 interface AdminHeaderProps {
   label: string;
@@ -31,7 +31,10 @@ export function AdminHeader({ label, publicKey }: AdminHeaderProps) {
           Live System
         </div>
         <div className="flex items-center gap-2">
-          <Badge variant="secondary" className="px-2.5 py-1 text-xs font-mono bg-muted/50 border-border/50">
+          <Badge
+            variant="secondary"
+            className="px-2.5 py-1 text-xs font-mono bg-muted/50 border-border/50"
+          >
             {publicKey?.slice(0, 6)}...{publicKey?.slice(-4)}
           </Badge>
         </div>

@@ -27,7 +27,7 @@ export function generateQuickChecksum(data: any): string {
     return generateStringHash(sample);
   }
 
-  return generateStringHash(typeof data === 'string' ? data : JSON.stringify(data));
+  return generateStringHash(typeof data === "string" ? data : JSON.stringify(data));
 }
 
 /**
@@ -37,7 +37,7 @@ export function generateStringHash(str: string): string {
   let hash = 0;
   for (let i = 0; i < str.length; i++) {
     const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16);
@@ -47,9 +47,9 @@ export function generateStringHash(str: string): string {
  * Format bytes to human-readable string
  */
 export function formatBytes(bytes: number): string {
-  if (bytes === 0) return '0 Bytes';
+  if (bytes === 0) return "0 Bytes";
   const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const sizes = ["Bytes", "KB", "MB", "GB"];
   const i = Math.floor(Math.log(bytes) / Math.log(k));
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(2))} ${sizes[i]}`;
 }

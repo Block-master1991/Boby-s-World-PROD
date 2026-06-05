@@ -1,43 +1,95 @@
-'use client';
+"use client";
 
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { usePasskeyOnboarding } from '@/hooks/usePasskeyOnboarding';
-import { Shield } from 'lucide-react';
-import React from 'react';
-import { IntroStep, RegisterStep, SuccessStep } from './PasskeyOnboardingSteps';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { usePasskeyOnboarding } from "@/hooks/usePasskeyOnboarding";
+import { Shield } from "lucide-react";
+import React from "react";
+import { IntroStep, RegisterStep, SuccessStep } from "./PasskeyOnboardingSteps";
+import { useRouter } from "next/navigation";
 
 interface PasskeyOnboardingModalProps {
-    isOpen: boolean;
-    onClose: () => void;
-    onPasskeyRegistered?: () => void;
+  isOpen: boolean;
+  onClose: () => void;
+  onPasskeyRegistered?: () => void;
 }
 
 const getStepContent = (step: string) => {
-    switch (step) {
-        case 'intro': return { title: 'Secure Your Account with Passkey', desc: 'Add biometric authentication for faster, more secure logins.' };
-        case 'register': return { title: 'Registering Passkey...', desc: 'Follow the prompts on your device to complete registration.' };
-        case 'success': return { title: 'Passkey Registered!', desc: 'Your account is now more secure with passkey authentication.' };
-        default: return { title: '', desc: '' };
-    }
+  switch (step) {
+    case "intro":
+      return {
+        title: "Secure Your Account",
+        desc: "Choose a multi-factor authentication method to protect your account.",
+      };
+    case "register":
+      return {
+        title: "Registering Passkey...",
+        desc: "Follow the prompts on your device to complete registration.",
+      };
+    case "success":
+      return {
+        title: "Passkey Registered!",
+        desc: "Your account is now more secure with passkey authentication.",
+      };
+    default:
+      return { title: "", desc: "" };
+  }
 };
 
-export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({ isOpen, onClose, onPasskeyRegistered }) => {
-    const { step, description, setDescription, registerPasskey, handleClose } = usePasskeyOnboarding(isOpen, onClose, onPasskeyRegistered);
-    const { title, desc } = getStepContent(step);
+export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({
+  isOpen,
+  onClose,
+  onPasskeyRegistered,
+}) => {
+  const router = useRouter();
+  const { step, description, setDescription, registerPasskey, handleClose } = usePasskeyOnboarding(
+    isOpen,
+    onClose,
+    onPasskeyRegistered
+  );
+  const { title, desc } = getStepContent(step);
 
-    return (
-        <Dialog open={isOpen} onOpenChange={handleClose}>
-            <DialogContent className="sm:max-w-md">
-                <DialogHeader>
-                    <DialogTitle className="flex items-center gap-2"><Shield className="h-5 w-5 text-blue-500" /> {title}</DialogTitle>
-                    <DialogDescription>{desc}</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4">
-                    {step === 'intro' && <IntroStep description={description} setDescription={setDescription} onClose={handleClose} onRegister={registerPasskey} />}
-                    {step === 'register' && <RegisterStep />}
-                    {step === 'success' && <SuccessStep onClose={handleClose} />}
-                </div>
-            </DialogContent>
-        </Dialog>
-    );
+  const handleSetupTotp = () => {
+    handleClose();
+    // Redirect to security settings to set up TOTP
+    router.push("/settings?tab=security");
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="sm:max-w-md border-none shadow-2xl rounded-3xl overflow-hidden">
+        <DialogHeader className="space-y-3 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 bg-primary/10 rounded-2xl">
+              <Shield className="h-6 w-6 text-primary" />
+            </div>
+            <DialogTitle className="text-2xl font-black tracking-tight uppercase">
+              {title}
+            </DialogTitle>
+          </div>
+          <DialogDescription className="text-xs font-medium leading-relaxed">
+            {desc}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="pt-2">
+          {step === "intro" && (
+            <IntroStep
+              description={description}
+              setDescription={setDescription}
+              onClose={handleClose}
+              onRegister={registerPasskey}
+              onSetupTotp={handleSetupTotp}
+            />
+          )}
+          {step === "register" && <RegisterStep />}
+          {step === "success" && <SuccessStep onClose={handleClose} />}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
 };

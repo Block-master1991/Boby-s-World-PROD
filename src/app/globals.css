@@ -167,7 +167,9 @@ body {
     /* Glassmorphism blur effect */
     border: 1px solid hsla(var(--border), 0.3);
     /* Subtle border */
-    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 1px 3px rgba(0, 0, 0, 0.08);
+    box-shadow:
+      0 4px 6px rgba(0, 0, 0, 0.1),
+      0 1px 3px rgba(0, 0, 0, 0.08);
     /* Soft shadow */
   }
 

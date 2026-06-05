@@ -1,14 +1,14 @@
-'use client';
+"use client";
 
-import { type GameObject } from '@/types/game';
-import { useCallback, useEffect, type MutableRefObject } from 'react';
-import * as THREE from 'three';
-import { type Octree } from '../lib/Octree';
-import { type DynamicLoadableObject } from './dynamic-loader/constants';
-import { useModelLoaderCleanup } from './dynamic-loader/useModelCleanup';
-import { useModelLoaders } from './dynamic-loader/useModelLoaders';
-import { useModelOps } from './dynamic-loader/useModelOps';
-import { useModelPool } from './dynamic-loader/useModelPool';
+import { type GameObject } from "@/types/game";
+import { useCallback, useEffect, type MutableRefObject } from "react";
+import * as THREE from "three";
+import { type Octree } from "../lib/Octree";
+import { type DynamicLoadableObject } from "./dynamic-loader/constants";
+import { useModelLoaderCleanup } from "./dynamic-loader/useModelCleanup";
+import { useModelLoaders } from "./dynamic-loader/useModelLoaders";
+import { useModelOps } from "./dynamic-loader/useModelOps";
+import { useModelPool } from "./dynamic-loader/useModelPool";
 
 interface UseDynamicModelLoaderProps {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
@@ -20,12 +20,22 @@ interface UseDynamicModelLoaderProps {
 }
 
 export const useDynamicModelLoader = ({
-  cameraRef, sceneRef, octreeRef, objectsToManage, onModelLoaded, onModelUnloaded,
+  cameraRef,
+  sceneRef,
+  octreeRef,
+  objectsToManage,
+  onModelLoaded,
+  onModelUnloaded,
 }: UseDynamicModelLoaderProps) => {
   const { gltfLoaderRef } = useModelLoaders();
   const { modelPoolRef, cleanupModelPool } = useModelPool();
   const { loadAndInstantiateModel, unloadModel } = useModelOps({
-    sceneRef, octreeRef, modelPoolRef, gltfLoaderRef, onModelLoaded, onModelUnloaded
+    sceneRef,
+    octreeRef,
+    modelPoolRef,
+    gltfLoaderRef,
+    onModelLoaded,
+    onModelUnloaded,
   });
 
   useModelLoaderCleanup(modelPoolRef, objectsToManage, unloadModel);
@@ -37,7 +47,7 @@ export const useDynamicModelLoader = ({
     const mat = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     frustum.setFromProjectionMatrix(mat);
 
-    objectsToManage.forEach((object) => {
+    objectsToManage.forEach(object => {
       const pos = object.modelInstance ? object.modelInstance.position : object.logicalPosition;
       const inFrustum = frustum.intersectsSphere(new THREE.Sphere(pos, 1));
       if (inFrustum && !object.isModelInstantiated) loadAndInstantiateModel(object);

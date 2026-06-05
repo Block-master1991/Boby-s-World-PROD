@@ -1,14 +1,16 @@
-import type { CoinData } from '@/hooks/useCoinLogic';
-import { ENEMY_PROTECTION_RADIUS_VAL, WORLD_MAX_BOUND, WORLD_MIN_BOUND } from '@/lib/constants';
-import type { Octree } from '@/lib/Octree';
-import type { GameObject } from '@/types/game';
-import * as THREE from 'three';
+import type { CoinData } from "@/hooks/useCoinLogic";
+import { ENEMY_PROTECTION_RADIUS_VAL, WORLD_MAX_BOUND, WORLD_MIN_BOUND } from "@/lib/constants";
+import type { Octree } from "@/lib/Octree";
+import type { GameObject } from "@/types/game";
+import * as THREE from "three";
 
 interface ChunkManager {
-  getGameplaySpawns: (key: string) => {
-    coinSpawns: Array<{ position: number[] }>;
-    enemySpawns: Array<{ coinIndex: number; position: number[] }>;
-  } | undefined;
+  getGameplaySpawns: (key: string) =>
+    | {
+        coinSpawns: Array<{ position: number[] }>;
+        enemySpawns: Array<{ coinIndex: number; position: number[] }>;
+      }
+    | undefined;
 }
 
 // دالة مساعدة للبحث عن فهرس العملة
@@ -33,12 +35,15 @@ const findCoinIndex = (
 
 // دالة مساعدة للحصول على موقع العدو من بيانات اللعبة
 const getSpawnPositionFromGameplayData = (
-  gameplayData: { coinSpawns: Array<{ position: number[] }>; enemySpawns: Array<{ coinIndex: number; position: number[] }> },
+  gameplayData: {
+    coinSpawns: Array<{ position: number[] }>;
+    enemySpawns: Array<{ coinIndex: number; position: number[] }>;
+  },
   coinIndex: number,
   coinY: number
 ): THREE.Vector3 | null => {
   if (coinIndex === -1) return null;
-  const enemySpawn = gameplayData.enemySpawns.find((e) => e.coinIndex === coinIndex);
+  const enemySpawn = gameplayData.enemySpawns.find(e => e.coinIndex === coinIndex);
   if (!enemySpawn?.position) return null;
   return new THREE.Vector3(enemySpawn.position[0], coinY, enemySpawn.position[2]);
 };
@@ -71,7 +76,15 @@ interface SafePositionParams {
 
 // دالة مساعدة للتحقق من أن الموقع ليس قريباً من الكلب
 const findSafePositionFromDog = (params: SafePositionParams): THREE.Vector3 => {
-  const { position, dogPosition, coinPosition, minDistanceFromDog, minRadius, maxRadius, maxAttempts } = params;
+  const {
+    position,
+    dogPosition,
+    coinPosition,
+    minDistanceFromDog,
+    minRadius,
+    maxRadius,
+    maxAttempts,
+  } = params;
   let newPosition = position.clone();
   let attempts = 0;
 
@@ -88,7 +101,7 @@ export const getEnemySpawnPosition = (
   chunkKey: string,
   scene: THREE.Scene | null
 ): THREE.Vector3 => {
-  const chunkManager = scene?.getObjectByName('ChunkManager') as unknown as ChunkManager;
+  const chunkManager = scene?.getObjectByName("ChunkManager") as unknown as ChunkManager;
   if (chunkManager) {
     const gameplayData = chunkManager.getGameplaySpawns(chunkKey);
     if (gameplayData) {
@@ -109,7 +122,7 @@ export const getEnemySpawnPosition = (
   const newPosition = generateRandomPosition(c.position, minRadius, maxRadius);
 
   // التحقق من أن الموقع الجديد ليس قريباً جداً من موقع الكلب (إذا كان متوفراً)
-  const dogPosition = scene?.getObjectByName('Dog')?.position;
+  const dogPosition = scene?.getObjectByName("Dog")?.position;
   if (dogPosition) {
     const minDistanceFromDog = 15; // مسافة آمنة من موقع الكلب
     const maxAttempts = 10;
@@ -120,7 +133,7 @@ export const getEnemySpawnPosition = (
       minDistanceFromDog,
       minRadius,
       maxRadius,
-      maxAttempts
+      maxAttempts,
     });
   }
 

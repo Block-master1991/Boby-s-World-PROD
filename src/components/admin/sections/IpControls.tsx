@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { Button } from '@/components/ui/button';
-import { Search } from 'lucide-react';
+import { Button } from "@/components/ui/button";
+import { Search } from "lucide-react";
 
 interface IpControlsProps {
   search: string;
   setSearch: (s: string) => void;
   newIp: string;
   setNewIp: (s: string) => void;
-  targetList: 'whitelist' | 'blacklist';
-  setTargetList: (l: 'whitelist' | 'blacklist') => void;
+  targetList: "whitelist" | "blacklist";
+  setTargetList: (l: "whitelist" | "blacklist") => void;
   loading: boolean;
   onAddIp: () => void;
   resetPagination: () => void;
@@ -59,7 +59,7 @@ function IpSearchControl({
           type="text"
           placeholder="Search for IP..."
           value={search}
-          onChange={(e) => {
+          onChange={e => {
             setSearch(e.target.value);
             resetPagination();
           }}
@@ -80,8 +80,8 @@ function IpAddControl({
 }: {
   newIp: string;
   setNewIp: (s: string) => void;
-  targetList: 'whitelist' | 'blacklist';
-  setTargetList: (l: 'whitelist' | 'blacklist') => void;
+  targetList: "whitelist" | "blacklist";
+  setTargetList: (l: "whitelist" | "blacklist") => void;
   loading: boolean;
   onAddIp: () => void;
 }) {
@@ -93,13 +93,13 @@ function IpAddControl({
           type="text"
           placeholder="192.168.1.1"
           value={newIp}
-          onChange={(e) => setNewIp(e.target.value)}
+          onChange={e => setNewIp(e.target.value)}
           className="flex-1 px-3 py-2 border border-input rounded-lg bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-ring"
           disabled={loading}
         />
         <select
           value={targetList}
-          onChange={(e) => setTargetList(e.target.value as 'whitelist' | 'blacklist')}
+          onChange={e => setTargetList(e.target.value as "whitelist" | "blacklist")}
           className="px-3 py-2 border border-input rounded-lg bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           disabled={loading}
         >

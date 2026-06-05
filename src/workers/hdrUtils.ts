@@ -3,9 +3,17 @@
  */
 
 export type HDRWorkerMessage =
-  | { status: 'progress'; progress: number }
-  | { status: 'success'; width: number; height: number; data: Float32Array; isHalf: boolean; quality: string; format: string }
-  | { status: 'error'; error: string };
+  | { status: "progress"; progress: number }
+  | {
+      status: "success";
+      width: number;
+      height: number;
+      data: Float32Array;
+      isHalf: boolean;
+      quality: string;
+      format: string;
+    }
+  | { status: "error"; error: string };
 
 export interface DownscaleOptions {
   data: Float32Array;
@@ -16,22 +24,22 @@ export interface DownscaleOptions {
 }
 
 export interface DecodeChannelOptions {
-    scanline: Uint8Array;
-    bytes: Uint8Array;
-    startPos: number;
-    width: number;
-    channelIndex: number;
+  scanline: Uint8Array;
+  bytes: Uint8Array;
+  startPos: number;
+  width: number;
+  channelIndex: number;
 }
 
 export interface ProcessBatchOptions {
-    bytes: Uint8Array; 
-    scanline: Uint8Array; 
-    rgbaFloat: Float32Array; 
-    startOffset: number;
-    startY: number; 
-    endY: number; 
-    width: number; 
-    startPos: number;
+  bytes: Uint8Array;
+  scanline: Uint8Array;
+  rgbaFloat: Float32Array;
+  startOffset: number;
+  startY: number;
+  endY: number;
+  width: number;
+  startPos: number;
 }
 
 // Precompute exponent table for RGBE (2^(e - 128 - 8))
@@ -58,13 +66,15 @@ export function toHalf(val: number): number {
 
   if (e < 103) return bits; // Flush to zero or handle subnormals
 
-  if (e > 142) { // Infinity/NaN
+  if (e > 142) {
+    // Infinity/NaN
     bits |= 0x7c00;
     bits |= e === 255 && (x & 0x007fffff) !== 0 ? 0x0200 : 0;
     return bits;
   }
 
-  if (e < 113) { // Subnormal
+  if (e < 113) {
+    // Subnormal
     m |= 0x0800;
     bits |= (m >> (114 - e)) + ((m >> (113 - e)) & 1);
     return bits;
@@ -78,12 +88,14 @@ export function toHalf(val: number): number {
 /**
  * Parses the RGBE header to extract dimensions.
  */
-export function parseHeader(bytes: Uint8Array): { width: number; height: number; endPos: number } | null {
+export function parseHeader(
+  bytes: Uint8Array
+): { width: number; height: number; endPos: number } | null {
   let pos = 0;
-  let header = '';
+  let header = "";
 
   while (pos < bytes.length) {
-    let line = '';
+    let line = "";
     while (pos < bytes.length && bytes[pos] !== 10) {
       const charCode = bytes[pos++];
       if (charCode !== undefined) line += String.fromCharCode(charCode);
@@ -91,10 +103,10 @@ export function parseHeader(bytes: Uint8Array): { width: number; height: number;
     }
     pos++;
     header += `${line}\n`;
-    if (line === '' || header.length > 8192) break;
+    if (line === "" || header.length > 8192) break;
   }
 
-  let dimensions = '';
+  let dimensions = "";
   while (pos < bytes.length && bytes[pos] !== 10) {
     const charCode = bytes[pos++];
     if (charCode !== undefined) dimensions += String.fromCharCode(charCode);
@@ -104,10 +116,10 @@ export function parseHeader(bytes: Uint8Array): { width: number; height: number;
   const match = dimensions.match(/-Y (\d+) \+X (\d+)/);
   if (!match || !match[1] || !match[2]) return null;
 
-  return { 
-    height: parseInt(match[1], 10), 
-    width: parseInt(match[2], 10), 
-    endPos: pos 
+  return {
+    height: parseInt(match[1], 10),
+    width: parseInt(match[2], 10),
+    endPos: pos,
   };
 }
 
@@ -118,26 +130,28 @@ export function decodeChannel(options: DecodeChannelOptions): { newPos: number; 
   const { scanline, bytes, startPos, width, channelIndex } = options;
   let pos = startPos;
   let j = 0;
-  
+
   while (j < width) {
     if (pos >= bytes.length) return { newPos: pos, success: false };
-    
+
     const code = bytes[pos++];
     if (code === undefined) continue;
 
-    if (code > 128) { // Run
+    if (code > 128) {
+      // Run
       const count = code - 128;
       if (j + count > width || pos >= bytes.length) return { newPos: pos, success: false };
       const val = bytes[pos++];
       if (val !== undefined) {
-           for (let k = 0; k < count; k++) scanline[j++ * 4 + channelIndex] = val;
+        for (let k = 0; k < count; k++) scanline[j++ * 4 + channelIndex] = val;
       }
-    } else { // Dump
+    } else {
+      // Dump
       const count = code;
       if (j + count > width || pos + count > bytes.length) return { newPos: pos, success: false };
       for (let k = 0; k < count; k++) {
-          const val = bytes[pos++];
-          if (val !== undefined) scanline[j++ * 4 + channelIndex] = val;
+        const val = bytes[pos++];
+        if (val !== undefined) scanline[j++ * 4 + channelIndex] = val;
       }
     }
   }
@@ -147,18 +161,23 @@ export function decodeChannel(options: DecodeChannelOptions): { newPos: number; 
 /**
  * Decodes a single RLE scanline from the byte stream.
  */
-export function decodeScanline(scanline: Uint8Array, bytes: Uint8Array, startPos: number, width: number): { newPos: number; success: boolean } {
+export function decodeScanline(
+  scanline: Uint8Array,
+  bytes: Uint8Array,
+  startPos: number,
+  width: number
+): { newPos: number; success: boolean } {
   let pos = startPos;
-  
+
   if (pos + 4 > bytes.length) return { newPos: pos, success: false };
-  
+
   const r_hdr = bytes[pos];
   const g_hdr = bytes[pos + 1];
   const b_hdr = bytes[pos + 2];
-  pos += 4; 
+  pos += 4;
 
-  if (r_hdr !== 2 || g_hdr !== 2 || (b_hdr !== undefined && (b_hdr & 128))) {
-    return { newPos: pos, success: false }; 
+  if (r_hdr !== 2 || g_hdr !== 2 || (b_hdr !== undefined && b_hdr & 128)) {
+    return { newPos: pos, success: false };
   }
 
   for (let i = 0; i < 4; i++) {
@@ -173,7 +192,11 @@ export function decodeScanline(scanline: Uint8Array, bytes: Uint8Array, startPos
 /**
  * Converts an RGBE scanline to Float32 RGBA.
  */
-export function rgbeToFloat32(scanline: Uint8Array, srcRgbaLine: Float32Array, width: number): void {
+export function rgbeToFloat32(
+  scanline: Uint8Array,
+  srcRgbaLine: Float32Array,
+  width: number
+): void {
   for (let x = 0; x < width; x++) {
     const r = scanline[x * 4];
     const g = scanline[x * 4 + 1];
@@ -232,7 +255,10 @@ export function processDownscaling(options: ProcessDownscalingOptions): void {
 /**
  * Calculates downscaled dimensions based on available memory heuristics.
  */
-export function calculateDownscaleTarget(width: number, height: number): { targetWidth: number, targetHeight: number } {
+export function calculateDownscaleTarget(
+  width: number,
+  height: number
+): { targetWidth: number; targetHeight: number } {
   const shouldDownscale = width > 4096 || height > 4096;
   let targetWidth = width;
   let targetHeight = height;

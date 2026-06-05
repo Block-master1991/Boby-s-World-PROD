@@ -1,8 +1,8 @@
-import { logger } from '@/utils/logger';
-import { useCallback, useRef } from 'react';
-import type * as THREE from 'three';
-import type { ModelPool } from './constants';
-import { disposeModelResources } from './utils';
+import { logger } from "@/utils/logger";
+import { useCallback, useRef } from "react";
+import type * as THREE from "three";
+import type { ModelPool } from "./constants";
+import { disposeModelResources } from "./utils";
 
 export type PooledInstance = THREE.Group & { lastPooledTime?: number };
 
@@ -19,7 +19,7 @@ export const useModelPool = () => {
       const disposeList: PooledInstance[] = [];
 
       entry.instances.forEach(inst => {
-        const isIdle = inst.lastPooledTime && (now - inst.lastPooledTime > idleTimeThresholdMs);
+        const isIdle = inst.lastPooledTime && now - inst.lastPooledTime > idleTimeThresholdMs;
         if (isIdle) disposeList.push(inst);
         else keep.push(inst);
       });
@@ -31,7 +31,7 @@ export const useModelPool = () => {
 
       disposeList.forEach(inst => {
         disposeModelResources(inst);
-        logger.log(`[useDynamicModelLoader] Disposed model: ${path.split('/').pop()}`);
+        logger.log(`[useDynamicModelLoader] Disposed model: ${path.split("/").pop()}`);
       });
       entry.instances = keep;
     }

@@ -1,12 +1,12 @@
-import { makeExecutableSchema } from '@graphql-tools/schema';
-import { adminResolvers } from '../modules/admin/admin.resolvers';
-import { adminTypeDefs } from '../modules/admin/admin.typeDefs';
-import { inventoryResolvers } from '../modules/inventory/inventory.resolvers';
-import { inventoryTypeDefs } from '../modules/inventory/inventory.typeDefs';
-import { playerResolvers } from '../modules/player/player.resolvers';
-import { playerTypeDefs } from '../modules/player/player.typeDefs';
-import { authDirectiveTransformer } from './directives/auth';
-import { DateTime } from './scalars/DateTime';
+import { makeExecutableSchema } from "@graphql-tools/schema";
+import { adminResolvers } from "../modules/admin/admin.resolvers";
+import { adminTypeDefs } from "../modules/admin/admin.typeDefs";
+import { inventoryResolvers } from "../modules/inventory/inventory.resolvers";
+import { inventoryTypeDefs } from "../modules/inventory/inventory.typeDefs";
+import { playerResolvers } from "../modules/player/player.resolvers";
+import { playerTypeDefs } from "../modules/player/player.typeDefs";
+import { authDirectiveTransformer } from "./directives/auth";
+import { DateTime } from "./scalars/DateTime";
 
 const rootTypeDefs = `
   scalar DateTime
@@ -29,10 +29,10 @@ const rootTypeDefs = `
 const rootResolvers = {
   DateTime,
   Query: {
-    health: () => 'OK',
+    health: () => "OK",
   },
   Mutation: {
-    ping: () => 'pong',
+    ping: () => "pong",
   },
   Subscription: {},
 };
@@ -43,6 +43,6 @@ let schema = makeExecutableSchema({
 });
 
 // Apply directives
-schema = authDirectiveTransformer(schema, 'auth');
+schema = authDirectiveTransformer(schema, "auth");
 
 export { schema };

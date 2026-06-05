@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Shield } from 'lucide-react';
+import { CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Shield } from "lucide-react";
 
 export function SecurityHeader() {
   return (

@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import type * as THREE from "three";
 
 export interface DynamicLoadableObject {
   id: number | string;
@@ -12,7 +12,7 @@ export interface DynamicLoadableObject {
   mixer?: THREE.AnimationMixer | null;
   currentAction?: THREE.AnimationAction | null;
   actions?: { [key: string]: THREE.AnimationAction };
-  enemyType?: 'carnivore' | 'herbivore';
+  enemyType?: "carnivore" | "herbivore";
   isPooled?: boolean;
   lastPooledTime?: number;
 }
@@ -26,21 +26,21 @@ export type ModelPool = {
   };
 };
 
-export const DRACO_DECODER_PATH = '/libs/draco/gltf/';
+export const DRACO_DECODER_PATH = "/libs/draco/gltf/";
 
 export const ENEMY_ANIMATION_NAMES = {
-  CARNIVORE: { 
-    IDLE: ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'], 
-    WALK: 'Walk', 
-    GALLOP: 'Gallop', 
-    ATTACK: 'Attack', 
-    DEATH: 'Death' 
+  CARNIVORE: {
+    IDLE: ["Idle", "Idle_2", "Idle_2_HeadLow", "Eating"],
+    WALK: "Walk",
+    GALLOP: "Gallop",
+    ATTACK: "Attack",
+    DEATH: "Death",
   },
-  HERBIVORE: { 
-    IDLE: ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'], 
-    WALK: 'Walk', 
-    GALLOP: 'Gallop', 
-    ATTACK: 'Attack_Kick', 
-    DEATH: 'Death' 
+  HERBIVORE: {
+    IDLE: ["Idle", "Idle_2", "Idle_HeadLow", "Eating"],
+    WALK: "Walk",
+    GALLOP: "Gallop",
+    ATTACK: "Attack_Kick",
+    DEATH: "Death",
   },
 } as const;

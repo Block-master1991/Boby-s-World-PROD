@@ -1,14 +1,14 @@
-import { logger } from '@/utils/logger';
-import { getFirestore } from 'firebase-admin/firestore';
-import { initializeAdminApp } from './firebase-admin';
-import redis from './redis';
+import { logger } from "@/utils/logger";
+import { getFirestore } from "firebase-admin/firestore";
+import { initializeAdminApp } from "./firebase-admin";
+import redis from "./redis";
 
 // Get IP status from Redis cache or Firestore
-export async function isIpInList(list: 'whitelist' | 'blacklist', ip: string): Promise<boolean> {
+export async function isIpInList(list: "whitelist" | "blacklist", ip: string): Promise<boolean> {
   // Always permit localhost in whitelist and prevent it from being in blacklist
-  const isLocalhost = ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1';
+  const isLocalhost = ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1";
   if (isLocalhost) {
-    return list === 'whitelist';
+    return list === "whitelist";
   }
 
   const redisKey = `ratelimit:${list}:${ip}`;
@@ -17,7 +17,7 @@ export async function isIpInList(list: 'whitelist' | 'blacklist', ip: string): P
     if (redis) {
       try {
         const cached = await redis.get(redisKey);
-        if (cached !== null) return cached === '1';
+        if (cached !== null) return cached === "1";
       } catch (e) {
         logger.warn(`[IP List] Redis error for ${list}:`, e);
         // Continue to Firestore
@@ -28,13 +28,15 @@ export async function isIpInList(list: 'whitelist' | 'blacklist', ip: string): P
     await initializeAdminApp();
     const db = getFirestore();
     const doc = await db.collection(`ratelimit_${list}`).doc(ip).get();
-    const {exists} = doc;
+    const { exists } = doc;
 
     // Cache the result in Redis (e.g., 10 minutes)
     if (redis) {
       try {
-        await redis.set(redisKey, exists ? '1' : '0', 'EX', 600);
-      } catch { /* ignore redis set error */ }
+        await redis.set(redisKey, exists ? "1" : "0", "EX", 600);
+      } catch {
+        /* ignore redis set error */
+      }
     }
     return exists;
   } catch (error) {
@@ -46,7 +48,7 @@ export async function isIpInList(list: 'whitelist' | 'blacklist', ip: string): P
 // Add IP to blacklist permanently
 export async function blockIp(ip: string, reason: string): Promise<void> {
   // Never block localhost
-  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') {
+  if (ip === "127.0.0.1" || ip === "::1" || ip === "::ffff:127.0.0.1") {
     logger.warn(`[IP Block] Ignored block request for localhost IP: ${ip}`);
     return;
   }
@@ -54,16 +56,16 @@ export async function blockIp(ip: string, reason: string): Promise<void> {
   const redisKey = `ratelimit:blacklist:${ip}`;
 
   // 1. Immediate block in Redis (for 24 hours as start)
-  await redis.set(redisKey, '1', 'EX', 86400);
+  await redis.set(redisKey, "1", "EX", 86400);
 
   // 2. Permanent block in Firestore
   try {
     await initializeAdminApp();
     const db = getFirestore();
-    await db.collection('ratelimit_blacklist').doc(ip).set({
+    await db.collection("ratelimit_blacklist").doc(ip).set({
       reason,
       blockedAt: new Date().toISOString(),
-      source: 'AdvancedRateLimiter'
+      source: "AdvancedRateLimiter",
     });
     logger.log(`[IP Block] IP permanently blocked in Firestore: ${ip}`);
   } catch (error) {

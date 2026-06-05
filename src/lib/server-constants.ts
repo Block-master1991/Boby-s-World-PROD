@@ -1,6 +1,6 @@
 // Server-side only constants - DO NOT import into client-side components!
 
-import { env } from './config/env';
+import { env } from "./config/env";
 
 export const {
   RECAPTCHA_SECRET_KEY,
@@ -13,5 +13,5 @@ export const {
   SLACK_WEBHOOK_URL,
   MASTER_ENCRYPTION_KEY,
   RESEND_API_KEY,
-  FROM_EMAIL
+  FROM_EMAIL,
 } = env;

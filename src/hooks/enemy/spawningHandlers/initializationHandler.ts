@@ -1,9 +1,9 @@
-import type { Octree } from '@/lib/Octree';
-import type { GameObject } from '@/types/game';
-import { useCallback } from 'react';
-import * as THREE from 'three';
-import type { EnemyData } from '../types';
-import { getNearKeys, parseKey } from './chunkManager';
+import type { Octree } from "@/lib/Octree";
+import type { GameObject } from "@/types/game";
+import { useCallback } from "react";
+import * as THREE from "three";
+import type { EnemyData } from "../types";
+import { getNearKeys, parseKey } from "./chunkManager";
 
 interface InitializationHandlerParams {
   sceneRef: React.MutableRefObject<THREE.Scene | null>;
@@ -17,7 +17,16 @@ interface InitializationHandlerParams {
 }
 
 export const createInitializationHandler = (params: InitializationHandlerParams) => {
-  const { sceneRef, octreeRef, enemyMeshesRef, dogModelRef, preloadModels, disposeModel, loadChunk, loaded } = params;
+  const {
+    sceneRef,
+    octreeRef,
+    enemyMeshesRef,
+    dogModelRef,
+    preloadModels,
+    disposeModel,
+    loadChunk,
+    loaded,
+  } = params;
 
   const clearEnemies = useCallback(() => {
     enemyMeshesRef.current.forEach(e => {
@@ -32,7 +41,7 @@ export const createInitializationHandler = (params: InitializationHandlerParams)
         octreeRef.current.remove({
           id: `enemy_${e.uuid}`,
           bounds: enemyBox,
-          data: e as unknown as GameObject
+          data: e as unknown as GameObject,
         });
       }
       e.mixer.stopAllAction();
@@ -50,7 +59,10 @@ export const createInitializationHandler = (params: InitializationHandlerParams)
     await preloadModels();
     clearEnemies();
 
-    const { chunkX, chunkZ } = getChunkCoordinates(dogModelRef.current.position.x, dogModelRef.current.position.z);
+    const { chunkX, chunkZ } = getChunkCoordinates(
+      dogModelRef.current.position.x,
+      dogModelRef.current.position.z
+    );
     const keys = getNearKeys(chunkX, chunkZ);
 
     // تحميل الأجزاء بالتوازي لتحسين الأداء
@@ -63,7 +75,7 @@ export const createInitializationHandler = (params: InitializationHandlerParams)
 
   return {
     initializeEnemies,
-    clearEnemies
+    clearEnemies,
   };
 };
 
@@ -71,6 +83,6 @@ const getChunkCoordinates = (x: number, z: number) => {
   const chunkSize = 100;
   return {
     chunkX: Math.floor(x / chunkSize),
-    chunkZ: Math.floor(z / chunkSize)
+    chunkZ: Math.floor(z / chunkSize),
   };
 };

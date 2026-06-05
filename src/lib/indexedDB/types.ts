@@ -4,7 +4,7 @@
 /**
  * Data types supported by IndexedDB storage
  */
-export type DataType = 'arraybuffer' | 'blob' | 'json' | 'text' | 'uint8array';
+export type DataType = "arraybuffer" | "blob" | "json" | "text" | "uint8array";
 
 /**
  * Asset metadata interface
@@ -44,8 +44,12 @@ export interface CacheStats {
  * Custom error class for IndexedDB operations
  */
 export class IndexedDBError extends Error {
-  constructor(message: string, public code: string, public originalError?: any) {
+  constructor(
+    message: string,
+    public code: string,
+    public originalError?: any
+  ) {
     super(message);
-    this.name = 'IndexedDBError';
+    this.name = "IndexedDBError";
   }
 }

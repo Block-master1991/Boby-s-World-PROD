@@ -1,9 +1,9 @@
-import type { Octree } from '@/lib/Octree';
-import type { GameObject } from '@/types/game';
-import * as THREE from 'three';
-import { ENEMY_ATTACK_DISTANCE, ENEMY_CHASE_RADIUS } from '../constants';
-import { setAnim } from '../movementHelpers';
-import type { EnemyData } from '../types';
+import type { Octree } from "@/lib/Octree";
+import type { GameObject } from "@/types/game";
+import * as THREE from "three";
+import { ENEMY_ATTACK_DISTANCE, ENEMY_CHASE_RADIUS } from "../constants";
+import { setAnim } from "../movementHelpers";
+import type { EnemyData } from "../types";
 
 export const handleIdleState = (e: EnemyData, dt: number, currentAnimation: string) => {
   if (e.isIdling) {
@@ -17,9 +17,9 @@ export const handleIdleState = (e: EnemyData, dt: number, currentAnimation: stri
       // تصحيح الخطأ: كان يستخدم e.patrolTarget.z بدلاً من e.patrolCenter.z
       const newPatrolZ = e.patrolCenter.z + Math.sin(angle) * radius;
       e.patrolTarget.set(newPatrolX, e.lod.position.y, newPatrolZ);
-      return 'Walk';
+      return "Walk";
     }
-    return e.currentAction?.getClip().name || 'Idle';
+    return e.currentAction?.getClip().name || "Idle";
   }
   return currentAnimation;
 };
@@ -29,7 +29,7 @@ export const handlePatrolMovement = (e: EnemyData, targetPosition: THREE.Vector3
     e.isIdling = true;
     e.idleDuration = Math.random() * 5 + 3;
     e.idleTimer = e.idleDuration;
-    setAnim(e, 'IDLE');
+    setAnim(e, "IDLE");
     return false;
   }
   targetPosition.copy(e.patrolTarget);
@@ -42,7 +42,11 @@ const rayDirection = new THREE.Vector3(0, -1, 0);
 const raycaster = new THREE.Raycaster();
 let landscapeCache: THREE.Object3D[] | null = null;
 
-export const clampGround = (enemy: EnemyData, scene: THREE.Scene | null, octree?: Octree<GameObject> | null) => {
+export const clampGround = (
+  enemy: EnemyData,
+  scene: THREE.Scene | null,
+  octree?: Octree<GameObject> | null
+) => {
   if (!scene) return;
 
   // Option 1: Fast path using Octree (preferred)
@@ -60,12 +64,13 @@ export const clampGround = (enemy: EnemyData, scene: THREE.Scene | null, octree?
   if (!enemy.lod || !enemy.lod.children || enemy.lod.children.length === 0) return;
 
   // Optimized Cache: Find landscape objects only once or periodically
-  if (!landscapeCache || Math.random() < 0.01) { // 1% chance to refresh cache
-     const targets: THREE.Object3D[] = [];
-     scene.traverse((object) => {
-        if (object.name.includes('Landscape') || object.name === 'Ground') targets.push(object);
-     });
-     landscapeCache = targets;
+  if (!landscapeCache || Math.random() < 0.01) {
+    // 1% chance to refresh cache
+    const targets: THREE.Object3D[] = [];
+    scene.traverse(object => {
+      if (object.name.includes("Landscape") || object.name === "Ground") targets.push(object);
+    });
+    landscapeCache = targets;
   }
 
   if (!landscapeCache || !landscapeCache.length) return;
@@ -85,22 +90,22 @@ interface MovementParams {
 
 export const determineMovement = (params: MovementParams) => {
   const { enemy: e, distance: dist, deltaTime: dt, targetPosition, dogPosition } = params;
-  let currentAnimation = '';
+  let currentAnimation = "";
   let isMoving = false;
 
   if (dist < ENEMY_ATTACK_DISTANCE) {
     targetPosition.copy(e.lod.position);
-    currentAnimation = e.enemyType === 'carnivore' ? 'Attack' : 'Attack_Kick';
+    currentAnimation = e.enemyType === "carnivore" ? "Attack" : "Attack_Kick";
   } else if (dist < ENEMY_CHASE_RADIUS) {
     targetPosition.copy(dogPosition);
     isMoving = true;
-    currentAnimation = 'Gallop';
+    currentAnimation = "Gallop";
     e.isIdling = false;
   } else {
     currentAnimation = handleIdleState(e, dt, currentAnimation);
     if (!e.isIdling) {
       isMoving = handlePatrolMovement(e, targetPosition);
-      if (isMoving) currentAnimation = 'Walk';
+      if (isMoving) currentAnimation = "Walk";
     }
   }
   return { currentAnimation, isMoving };

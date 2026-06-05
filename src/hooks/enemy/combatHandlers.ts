@@ -1,10 +1,10 @@
-import type * as THREE from 'three';
-import type { FloatingEffectOptions } from '../coin/useCoinInteraction';
-import { createAttackHandlers } from './combatHandlers/attackHandlers';
-import { createCollisionHandlers } from './combatHandlers/collisionHandlers';
-import { createDeathHandlers } from './combatHandlers/deathHandlers';
-import { createPenaltyHandlers } from './combatHandlers/penaltyHandlers';
-import type { EnemyData } from './types';
+import type * as THREE from "three";
+import type { FloatingEffectOptions } from "../coin/useCoinInteraction";
+import { createAttackHandlers } from "./combatHandlers/attackHandlers";
+import { createCollisionHandlers } from "./combatHandlers/collisionHandlers";
+import { createDeathHandlers } from "./combatHandlers/deathHandlers";
+import { createPenaltyHandlers } from "./combatHandlers/penaltyHandlers";
+import type { EnemyData } from "./types";
 
 interface CombatRefs {
   dogModelRef: React.MutableRefObject<THREE.Group | null>;
@@ -32,7 +32,7 @@ export const createCombatHandlers = (refs: CombatRefs, callbacks: CombatCallback
     protectionBottleCountRef,
     onConsumeProtectionBottle,
     onEnemyCollisionPenalty,
-    addFloatingEffect
+    addFloatingEffect,
   });
 
   // إنشاء معالج موت العدو
@@ -45,7 +45,7 @@ export const createCombatHandlers = (refs: CombatRefs, callbacks: CombatCallback
   const { handleAttack, handleCarnivoreAttack, handleHerbivoreAttack } = createAttackHandlers({
     dogModelRef,
     handleDeath,
-    penalty
+    penalty,
   });
 
   // إنشاء معالجات التصادم
@@ -53,7 +53,7 @@ export const createCombatHandlers = (refs: CombatRefs, callbacks: CombatCallback
     dogModelRef,
     handleEnemyDeath,
     handleCarnivoreAttack,
-    handleHerbivoreAttack
+    handleHerbivoreAttack,
   });
 
   return { checkCollisions, handleDeath, handleAttack, updateDeathState };

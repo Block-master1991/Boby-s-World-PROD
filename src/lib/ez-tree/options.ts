@@ -1,4 +1,4 @@
-import { BarkType, Billboard, LeafType, TreeType } from './enums';
+import { BarkType, Billboard, LeafType, TreeType } from "./enums";
 
 interface BarkOptions {
   type: BarkType;
@@ -53,9 +53,16 @@ export default class TreeOptions {
   public windStrength!: { x: number; y: number; z: number };
   public windFrequency!: number;
   public windScale!: number;
-  
+
   // Index signature to allow string indexing
-  [key: string]: number | TreeType | BarkOptions | BranchOptions | LeavesOptions | object | { x: number; y: number; z: number };
+  [key: string]:
+    | number
+    | TreeType
+    | BarkOptions
+    | BranchOptions
+    | LeavesOptions
+    | object
+    | { x: number; y: number; z: number };
 
   constructor() {
     this.initializeBasicProperties();
@@ -126,8 +133,10 @@ export default class TreeOptions {
    */
   copy(source: TreeOptions): void {
     for (const key in source) {
-      if (!Object.prototype.hasOwnProperty.call(source, key) ||
-          !Object.prototype.hasOwnProperty.call(this, key)) {
+      if (
+        !Object.prototype.hasOwnProperty.call(source, key) ||
+        !Object.prototype.hasOwnProperty.call(this, key)
+      ) {
         continue;
       }
 
@@ -152,6 +161,6 @@ export default class TreeOptions {
   }
 
   private isPlainObject(value: unknown): value is Record<string, unknown> {
-    return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return typeof value === "object" && value !== null && !Array.isArray(value);
   }
 }

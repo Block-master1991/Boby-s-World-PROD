@@ -1,14 +1,14 @@
-import { initializeAdminApp } from './firebase-admin';
-import { logger } from 'utils/logger';
-import type { Transaction, Firestore } from 'firebase-admin/firestore';
-import { getFirestore, FieldValue } from 'firebase-admin/firestore';
-import { randomBytes } from 'crypto';
+import { initializeAdminApp } from "./firebase-admin";
+import { logger } from "utils/logger";
+import type { Transaction, Firestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { randomBytes } from "crypto";
 
 const CSRF_TOKEN_EXPIRY_MINUTES = 30; // CSRF token expiry time
 
 export class CSRFManager {
   private static getCsrfCollection(db: Firestore) {
-    return db.collection('csrfTokens');
+    return db.collection("csrfTokens");
   }
 
   /**
@@ -19,7 +19,7 @@ export class CSRFManager {
   static async generateToken(sessionId: string): Promise<string> {
     await initializeAdminApp();
     const db = getFirestore();
-    const token = randomBytes(32).toString('hex');
+    const token = randomBytes(32).toString("hex");
     const expiry = Date.now() + CSRF_TOKEN_EXPIRY_MINUTES * 60 * 1000; // Convert minutes to milliseconds
 
     const docRef = this.getCsrfCollection(db).doc(sessionId);
@@ -30,7 +30,9 @@ export class CSRFManager {
       createdAt: FieldValue.serverTimestamp(),
     });
 
-    logger.log(`[CSRFManager] Generated CSRF token for session ${sessionId}. Token: ${token.substring(0, 5)}... Expiry: ${new Date(expiry).toISOString()}`);
+    logger.log(
+      `[CSRFManager] Generated CSRF token for session ${sessionId}. Token: ${token.substring(0, 5)}... Expiry: ${new Date(expiry).toISOString()}`
+    );
     return token;
   }
 
@@ -51,7 +53,7 @@ export class CSRFManager {
 
       if (!docSnap.exists) {
         logger.warn(`[CSRFManager] No CSRF token found for session ${sessionId}.`);
-        return { success: false, reason: 'not_found' };
+        return { success: false, reason: "not_found" };
       }
 
       const storedData = docSnap.data() as { token: string; expiry: number };
@@ -59,14 +61,16 @@ export class CSRFManager {
       if (storedData.expiry < Date.now()) {
         logger.warn(`[CSRFManager] CSRF token expired for session ${sessionId}. Deleting.`);
         transaction.delete(docRef);
-        return { success: false, reason: 'expired' };
+        return { success: false, reason: "expired" };
       }
 
       if (storedData.token !== clientToken) {
-        logger.warn(`[CSRFManager] CSRF token mismatch for session ${sessionId}. Expected: ${storedData.token.substring(0, 5)}..., Got: ${clientToken.substring(0, 5)}...`);
+        logger.warn(
+          `[CSRFManager] CSRF token mismatch for session ${sessionId}. Expected: ${storedData.token.substring(0, 5)}..., Got: ${clientToken.substring(0, 5)}...`
+        );
         // For security, delete the token on mismatch to prevent brute-force attempts
         transaction.delete(docRef);
-        return { success: false, reason: 'mismatch' };
+        return { success: false, reason: "mismatch" };
       }
 
       // Token is valid. Instead of consuming (deleting) it, update its expiry to extend its validity.
@@ -74,8 +78,10 @@ export class CSRFManager {
       // which is necessary for optimistic updates where multiple requests might use the same token.
       const newExpiry = Date.now() + CSRF_TOKEN_EXPIRY_MINUTES * 60 * 1000;
       transaction.update(docRef, { expiry: newExpiry });
-      logger.log(`[CSRFManager] CSRF token for session ${sessionId} verified and expiry updated. New Expiry: ${new Date(newExpiry).toISOString()}`);
-      return { success: true, reason: 'valid' };
+      logger.log(
+        `[CSRFManager] CSRF token for session ${sessionId} verified and expiry updated. New Expiry: ${new Date(newExpiry).toISOString()}`
+      );
+      return { success: true, reason: "valid" };
     });
 
     return result.success;
@@ -96,13 +102,16 @@ export class CSRFManager {
     if (docSnap.exists) {
       const storedData = docSnap.data() as { token: string; expiry: number };
       if (storedData.expiry > Date.now()) {
-        logger.log(`[CSRFManager] Reusing existing valid CSRF token for session ${sessionId}. Token: ${storedData.token.substring(0, 5)}...`);
+        logger.log(
+          `[CSRFManager] Reusing existing valid CSRF token for session ${sessionId}. Token: ${storedData.token.substring(0, 5)}...`
+        );
         return storedData.token;
-      } 
-        logger.log(`[CSRFManager] Existing CSRF token for session ${sessionId} expired. Generating new one.`);
-        // Delete expired token before generating a new one to clean up
-        await docRef.delete();
-      
+      }
+      logger.log(
+        `[CSRFManager] Existing CSRF token for session ${sessionId} expired. Generating new one.`
+      );
+      // Delete expired token before generating a new one to clean up
+      await docRef.delete();
     }
 
     // No valid token found, generate a new one

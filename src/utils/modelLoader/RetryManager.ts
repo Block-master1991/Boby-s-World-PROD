@@ -1,12 +1,12 @@
-import { isDev } from '@/lib/config/env';
-import type * as THREE from 'three';
-import type { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader';
-import { GLTFLoader, type GLTF } from 'three/examples/jsm/loaders/GLTFLoader';
-import { getModel, putModel } from '../../lib/indexedDB';
-import { logger } from '../logger';
-import { compressionManager } from './CompressionManager';
-import { memoryManager } from './MemoryManager';
-import { type LoadOptions } from './types';
+import { isDev } from "@/lib/config/env";
+import type * as THREE from "three";
+import type { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
+import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader";
+import { getModel, putModel } from "../../lib/indexedDB";
+import { logger } from "../logger";
+import { compressionManager } from "./CompressionManager";
+import { memoryManager } from "./MemoryManager";
+import { type LoadOptions } from "./types";
 
 export class RetryManager {
   private static instance: RetryManager;
@@ -14,7 +14,7 @@ export class RetryManager {
   private readonly RETRY_DELAY = 1000;
   private _dracoLoader: DRACOLoader | null = null;
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): RetryManager {
     if (!RetryManager.instance) {
@@ -29,12 +29,12 @@ export class RetryManager {
 
   public async loadWithRetry(options: LoadOptions): Promise<THREE.Group> {
     const { path, priority, abortController } = options;
-    
+
     const cachedModel = memoryManager.getModel(path);
     if (cachedModel) return cachedModel;
 
     for (let i = 0; i < this.MAX_RETRIES; i++) {
-      if (abortController.signal.aborted) throw new Error('Load cancelled');
+      if (abortController.signal.aborted) throw new Error("Load cancelled");
       try {
         // eslint-disable-next-line no-await-in-loop
         const model = await this.loadModelInternal(options);
@@ -51,11 +51,11 @@ export class RetryManager {
 
   private async loadModelInternal(options: LoadOptions): Promise<THREE.Group> {
     const { path, compress, abortController } = options;
-    const {signal} = abortController;
+    const { signal } = abortController;
 
     // OFFLINE-FIRST: Always try IndexedDB first
     let arrayBuffer: ArrayBuffer | undefined | null = await getModel(path);
-    
+
     if (arrayBuffer) {
       logger.log(`[RetryManager] ✓ Loading model from IndexedDB (offline-first): ${path}`);
     } else if (isDev) {
@@ -78,7 +78,9 @@ export class RetryManager {
   }
 
   private async emergencyNetworkLoad(path: string): Promise<ArrayBuffer | null> {
-    logger.warn(`[RetryManager] ⚠️ Asset not found in IndexedDB, attempting emergency network load: ${path}`);
+    logger.warn(
+      `[RetryManager] ⚠️ Asset not found in IndexedDB, attempting emergency network load: ${path}`
+    );
     try {
       const response = await fetch(path);
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);

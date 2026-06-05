@@ -1,7 +1,7 @@
-import { logger } from '@/utils/logger';
-import type { MutableRefObject } from 'react';
-import { useCallback, useMemo, useRef } from 'react';
-import * as THREE from 'three';
+import { logger } from "@/utils/logger";
+import type { MutableRefObject } from "react";
+import { useCallback, useMemo, useRef } from "react";
+import * as THREE from "three";
 
 interface ModelBatch {
   modelPath: string;
@@ -46,7 +46,7 @@ const useBatchRegistry = () => {
     batch.instances.push({
       position: position.clone(),
       rotation: rotation.clone(),
-      scale: scale.clone()
+      scale: scale.clone(),
     });
 
     return batch;
@@ -60,48 +60,57 @@ const useBatchRegistry = () => {
 /**
  * Handles the creation and updates of InstancedMesh objects.
  */
-const useBatchExecution = (dummy: THREE.Object3D, batchesRef: MutableRefObject<Map<string, ModelBatch>>) => {
-  const createMeshFromBatch = useCallback((batch: ModelBatch, model: THREE.Group) => {
-    if (batch.mesh) return batch.mesh;
+const useBatchExecution = (
+  dummy: THREE.Object3D,
+  batchesRef: MutableRefObject<Map<string, ModelBatch>>
+) => {
+  const createMeshFromBatch = useCallback(
+    (batch: ModelBatch, model: THREE.Group) => {
+      if (batch.mesh) return batch.mesh;
 
-    const sourceMesh = model.children?.[0];
-    if (!(sourceMesh instanceof THREE.Mesh)) {
+      const sourceMesh = model.children?.[0];
+      if (!(sourceMesh instanceof THREE.Mesh)) {
         logger.error("Model format is not as expected for batching.", model);
         return null;
-    }
+      }
 
-    const { geometry, material } = sourceMesh;
-    const mesh = new THREE.InstancedMesh(geometry.clone(), material, batch.instances.length);
+      const { geometry, material } = sourceMesh;
+      const mesh = new THREE.InstancedMesh(geometry.clone(), material, batch.instances.length);
 
-    mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
-    mesh.frustumCulled = true;
+      mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+      mesh.frustumCulled = true;
 
-    batch.instances.forEach((instance, index) => {
-      dummy.position.copy(instance.position);
-      dummy.rotation.copy(instance.rotation);
-      dummy.scale.copy(instance.scale);
+      batch.instances.forEach((instance, index) => {
+        dummy.position.copy(instance.position);
+        dummy.rotation.copy(instance.rotation);
+        dummy.scale.copy(instance.scale);
+        dummy.updateMatrix();
+        mesh.setMatrixAt(index, dummy.matrix);
+      });
+
+      mesh.instanceMatrix.needsUpdate = true;
+      batch.mesh = mesh;
+      return mesh;
+    },
+    [dummy]
+  );
+
+  const updateBatch = useCallback(
+    (options: UpdateBatchOptions) => {
+      const { modelPath, instanceIndex, position, rotation, scale } = options;
+      const batch = batchesRef.current.get(modelPath);
+      if (!batch?.mesh) return;
+
+      dummy.position.copy(position);
+      dummy.rotation.copy(rotation);
+      dummy.scale.copy(scale);
       dummy.updateMatrix();
-      mesh.setMatrixAt(index, dummy.matrix);
-    });
 
-    mesh.instanceMatrix.needsUpdate = true;
-    batch.mesh = mesh;
-    return mesh;
-  }, [dummy]);
-
-  const updateBatch = useCallback((options: UpdateBatchOptions) => {
-    const { modelPath, instanceIndex, position, rotation, scale } = options;
-    const batch = batchesRef.current.get(modelPath);
-    if (!batch?.mesh) return;
-
-    dummy.position.copy(position);
-    dummy.rotation.copy(rotation);
-    dummy.scale.copy(scale);
-    dummy.updateMatrix();
-
-    batch.mesh.setMatrixAt(instanceIndex, dummy.matrix);
-    batch.mesh.instanceMatrix.needsUpdate = true;
-  }, [dummy, batchesRef]);
+      batch.mesh.setMatrixAt(instanceIndex, dummy.matrix);
+      batch.mesh.instanceMatrix.needsUpdate = true;
+    },
+    [dummy, batchesRef]
+  );
 
   return { createMeshFromBatch, updateBatch };
 };
@@ -111,22 +120,25 @@ export const useModelBatching = () => {
   const dummy = useMemo(() => new THREE.Object3D(), []);
   const { createMeshFromBatch, updateBatch } = useBatchExecution(dummy, batchesRef);
 
-  const removeInstance = useCallback((modelPath: string, instanceIndex: number) => {
-    const batch = batchesRef.current.get(modelPath);
-    if (!batch?.mesh) return;
+  const removeInstance = useCallback(
+    (modelPath: string, instanceIndex: number) => {
+      const batch = batchesRef.current.get(modelPath);
+      if (!batch?.mesh) return;
 
-    dummy.position.set(10000, 10000, 10000);
-    dummy.updateMatrix();
+      dummy.position.set(10000, 10000, 10000);
+      dummy.updateMatrix();
 
-    batch.mesh.setMatrixAt(instanceIndex, dummy.matrix);
-    batch.mesh.instanceMatrix.needsUpdate = true;
-  }, [dummy, batchesRef]);
+      batch.mesh.setMatrixAt(instanceIndex, dummy.matrix);
+      batch.mesh.instanceMatrix.needsUpdate = true;
+    },
+    [dummy, batchesRef]
+  );
 
   return {
     addToBatch,
     createMeshFromBatch,
     updateBatch,
     removeInstance,
-    getBatches
+    getBatches,
   };
 };

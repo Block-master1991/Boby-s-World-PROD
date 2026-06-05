@@ -1,11 +1,11 @@
-'use client';
+"use client";
 
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import dynamic from 'next/dynamic';
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
+import dynamic from "next/dynamic";
 
 // Dynamic import for ChartWrapper
-const ChartUIWrapper = dynamic(() => import('@/components/admin/ChartUIWrapper'), {
+const ChartUIWrapper = dynamic(() => import("@/components/admin/ChartUIWrapper"), {
   ssr: false,
   loading: () => <Skeleton className="h-[300px] w-full" />,
 });
@@ -17,17 +17,17 @@ interface AnalyticsChartsProps {
 export function AnalyticsCharts({ userStats }: AnalyticsChartsProps) {
   // Chart data for analytics
   const userChartData = [
-    { name: 'Online', value: userStats?.onlineUsers || 0, color: '#22c55e' },
-    { name: 'Offline', value: userStats?.offlineUsers || 0, color: '#64748b' },
+    { name: "Online", value: userStats?.onlineUsers || 0, color: "#22c55e" },
+    { name: "Offline", value: userStats?.offlineUsers || 0, color: "#64748b" },
   ];
 
   const activityData = [
-    { month: 'Jan', users: 120 },
-    { month: 'Feb', users: 150 },
-    { month: 'Mar', users: 180 },
-    { month: 'Apr', users: 200 },
-    { month: 'May', users: 220 },
-    { month: 'Jun', users: 250 },
+    { month: "Jan", users: 120 },
+    { month: "Feb", users: 150 },
+    { month: "Mar", users: 180 },
+    { month: "Apr", users: 200 },
+    { month: "May", users: 220 },
+    { month: "Jun", users: 250 },
   ];
 
   return (
@@ -50,7 +50,7 @@ export function AnalyticsCharts({ userStats }: AnalyticsChartsProps) {
         <CardContent>
           <ChartUIWrapper
             type="line"
-            data={activityData.map((d) => ({ name: d.month, value: d.users }))}
+            data={activityData.map(d => ({ name: d.month, value: d.users }))}
           />
         </CardContent>
       </Card>

@@ -1,7 +1,7 @@
-import { useCallback } from 'react';
-import type * as THREE from 'three';
-import type { EnemyData } from '../types';
-import { getChunkManager } from './chunkManager';
+import { useCallback } from "react";
+import type * as THREE from "three";
+import type { EnemyData } from "../types";
+import { getChunkManager } from "./chunkManager";
 
 interface ChunkManagerHandlerParams {
   sceneRef: React.MutableRefObject<THREE.Scene | null>;
@@ -11,7 +11,7 @@ interface ChunkManagerHandlerParams {
 
 // تعريف واجهة مخصصة للأحداث المستخدمة في ChunkManager
 interface ChunkManagerEventMap {
-  'chunk-loaded': { checkChunkKey?: string };
+  "chunk-loaded": { checkChunkKey?: string };
 }
 
 // تعريف واجهة ChunkManager مع تجنب التوسيع المباشر لـ Object3D
@@ -46,47 +46,58 @@ export const createChunkManagerHandler = (params: ChunkManagerHandlerParams) => 
   const { sceneRef, enemyMeshesRef, disposeModel } = params;
   const loaded = new Set<string>();
 
-  const unload = useCallback((near: Set<string>) => {
-    for (const k of loaded) {
-      if (!near.has(k)) {
-        enemyMeshesRef.current.filter(e => e.chunkKey === k).forEach(e => {
-          sceneRef.current?.remove(e.lod);
-          disposeModel(e.lod);
-        });
-        enemyMeshesRef.current = enemyMeshesRef.current.filter(e => e.chunkKey !== k);
-        loaded.delete(k);
+  const unload = useCallback(
+    (near: Set<string>) => {
+      for (const k of loaded) {
+        if (!near.has(k)) {
+          enemyMeshesRef.current
+            .filter(e => e.chunkKey === k)
+            .forEach(e => {
+              sceneRef.current?.remove(e.lod);
+              disposeModel(e.lod);
+            });
+          enemyMeshesRef.current = enemyMeshesRef.current.filter(e => e.chunkKey !== k);
+          loaded.delete(k);
+        }
       }
-    }
-  }, [sceneRef, disposeModel, enemyMeshesRef]);
+    },
+    [sceneRef, disposeModel, enemyMeshesRef]
+  );
 
-  const loadChunkHandler = useCallback((cx: number, cz: number) => {
-    const k = `${cx},${cz}`;
-    if (loaded.has(k)) return;
-    loaded.add(k);
-  }, [loaded]);
+  const loadChunkHandler = useCallback(
+    (cx: number, cz: number) => {
+      const k = `${cx},${cz}`;
+      if (loaded.has(k)) return;
+      loaded.add(k);
+    },
+    [loaded]
+  );
 
-  const setupChunkListeners = useCallback((onChunkLoad: (chunkKey: string) => void) => {
-    const mgr = getChunkManager(sceneRef.current);
-    if (!mgr) return;
+  const setupChunkListeners = useCallback(
+    (onChunkLoad: (chunkKey: string) => void) => {
+      const mgr = getChunkManager(sceneRef.current);
+      if (!mgr) return;
 
-    const onLoad = (event: { checkChunkKey?: string } & Event) => {
-      if (event.checkChunkKey) {
-        onChunkLoad(event.checkChunkKey);
-      }
-    };
+      const onLoad = (event: { checkChunkKey?: string } & Event) => {
+        if (event.checkChunkKey) {
+          onChunkLoad(event.checkChunkKey);
+        }
+      };
 
-    const chunkManager = mgr as unknown as ChunkManagerWithEvents;
-    chunkManager.addEventListener('chunk-loaded', onLoad);
+      const chunkManager = mgr as unknown as ChunkManagerWithEvents;
+      chunkManager.addEventListener("chunk-loaded", onLoad);
 
-    return () => {
-      chunkManager.removeEventListener('chunk-loaded', onLoad);
-    };
-  }, [sceneRef]);
+      return () => {
+        chunkManager.removeEventListener("chunk-loaded", onLoad);
+      };
+    },
+    [sceneRef]
+  );
 
   return {
     loaded,
     unload,
     loadChunkHandler,
-    setupChunkListeners
+    setupChunkListeners,
   };
 };

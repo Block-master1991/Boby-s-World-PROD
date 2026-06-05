@@ -3,15 +3,15 @@
  * GET /api/game/fetchPlayerData
  */
 
-import type { AuthenticatedRequest } from '@/lib/auth-middleware';
-import { withAuth } from '@/lib/auth-middleware';
-import { initializeAdminApp } from '@/lib/firebase-admin';
-import type { PlayerDocument } from '@/types/database';
-import { COLLECTIONS } from '@/types/database';
-import { FieldValue, getFirestore } from 'firebase-admin/firestore';
-import { NextResponse } from 'next/server';
-import { logger } from 'utils/logger';
-import { createInitialPlayerData, handleFetchError } from './fetchHelpers';
+import type { AuthenticatedRequest } from "@/lib/auth-middleware";
+import { withAuth } from "@/lib/auth-middleware";
+import { initializeAdminApp } from "@/lib/firebase-admin";
+import type { PlayerDocument } from "@/types/database";
+import { COLLECTIONS } from "@/types/database";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { NextResponse } from "next/server";
+import { logger } from "utils/logger";
+import { createInitialPlayerData, handleFetchError } from "./fetchHelpers";
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   try {
@@ -29,20 +29,22 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
     }
 
     // Record login/interaction
-    await playerDocRef.update({ 
+    await playerDocRef.update({
       lastLogin: FieldValue.serverTimestamp(),
-      lastInteraction: FieldValue.serverTimestamp()
+      lastInteraction: FieldValue.serverTimestamp(),
     });
 
     const data = docSnap.data() as PlayerDocument;
-    
-    return NextResponse.json({
-      gameUSDTBalance: data['gameUSDTBalance'] || 0,
-      inventory: data['inventory'] || [],
-    });
 
+    return NextResponse.json({
+      gameUSDTBalance: data["gameUSDTBalance"] || 0,
+      inventory: data["inventory"] || [],
+    });
   } catch (error) {
-    logger.error('[Fetch Player Data] Error:', error instanceof Error ? error.message : String(error));
+    logger.error(
+      "[Fetch Player Data] Error:",
+      error instanceof Error ? error.message : String(error)
+    );
     return handleFetchError(error);
   }
 });

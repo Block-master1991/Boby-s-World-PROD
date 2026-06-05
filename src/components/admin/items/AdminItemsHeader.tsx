@@ -1,20 +1,26 @@
-'use client';
+"use client";
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Plus, RefreshCw } from 'lucide-react';
-import type { ReactNode } from 'react';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Plus, RefreshCw } from "lucide-react";
+import type { ReactNode } from "react";
 
 interface MigrationDialogProps {
   isOpen: boolean;
@@ -28,7 +34,7 @@ function MigrationDialog({ isOpen, onOpenChange, isMigrating, onMigrate }: Migra
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
       <AlertDialogTrigger asChild>
         <Button disabled={isMigrating} variant="destructive">
-          <RefreshCw className={`h-4 w-4 mr-2 ${isMigrating ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 mr-2 ${isMigrating ? "animate-spin" : ""}`} />
           Migrate Inventory
         </Button>
       </AlertDialogTrigger>
@@ -71,7 +77,7 @@ function ItemDialog({ isOpen, onOpenChange, isEditing, onResetForm, children }: 
       </DialogTrigger>
       <DialogContent className="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Edit Item' : 'Add New Item'}</DialogTitle>
+          <DialogTitle>{isEditing ? "Edit Item" : "Add New Item"}</DialogTitle>
         </DialogHeader>
         {children}
       </DialogContent>
@@ -105,14 +111,12 @@ export function AdminItemsHeader(props: AdminItemsHeaderProps) {
 
       <div className="flex gap-2">
         <Button onClick={props.onInitialize} disabled={props.initializing} variant="outline">
-          <RefreshCw
-            className={`h-4 w-4 mr-2 ${props.initializing ? 'animate-spin' : ''}`}
-          />
+          <RefreshCw className={`h-4 w-4 mr-2 ${props.initializing ? "animate-spin" : ""}`} />
           Initialize Items
         </Button>
 
         <Button onClick={props.onRefresh} disabled={props.loading} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${props.loading ? 'animate-spin' : ''}`} />
+          <RefreshCw className={`h-4 w-4 mr-2 ${props.loading ? "animate-spin" : ""}`} />
           Refresh
         </Button>
 

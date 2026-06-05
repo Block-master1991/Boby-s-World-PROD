@@ -1,12 +1,13 @@
-import type * as THREE from 'three';
-import { logger } from '../logger';
-import { memoryManager } from './MemoryManager';
+import type * as THREE from "three";
+import { logger } from "../logger";
+import { memoryManager } from "./MemoryManager";
 
 export class ModelGrouper {
   private static instance: ModelGrouper;
-  private modelGroups: Map<string, { model: THREE.Group; instances: Map<string, THREE.Group> }> = new Map();
+  private modelGroups: Map<string, { model: THREE.Group; instances: Map<string, THREE.Group> }> =
+    new Map();
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): ModelGrouper {
     if (!ModelGrouper.instance) {
@@ -37,10 +38,10 @@ export class ModelGrouper {
   public removeInstance(path: string, instanceId: string): void {
     const group = this.modelGroups.get(path);
     if (group) {
-        group.instances.delete(instanceId);
-        if (group.instances.size === 0) {
-            this.modelGroups.delete(path);
-        }
+      group.instances.delete(instanceId);
+      if (group.instances.size === 0) {
+        this.modelGroups.delete(path);
+      }
     }
   }
 

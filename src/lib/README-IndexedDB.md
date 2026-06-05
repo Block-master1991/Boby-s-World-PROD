@@ -5,23 +5,27 @@ An advanced IndexedDB management system designed to efficiently and professional
 ## Key Features
 
 ### 🗄️ Database Management
+
 - **Automatic Versioning**: Automatic database upgrade while preserving data
 - **Migration**: Data transfer from old versions
 - **Multiple Stores**: Separate partitions for data, statistics, and metadata
 
 ### 📊 Advanced Statistics
+
 - **Hit/Miss Rate**: Tracking hit and miss rates
 - **Cache Size Management**: Automatic cache size management
 - **LRU Eviction**: Removing least-used data when needed
 - **TTL Support**: Automatic data expiration
 
 ### 🔧 Advanced Operations
+
 - **Batch Operations**: Batched operations for improved performance
 - **Data Integrity**: Data integrity checking using checksum
 - **Retry Logic**: Automatic retry on operation failure
 - **Error Handling**: Comprehensive error handling with specific codes
 
 ### 📱 Device Support
+
 - **Mobile/Desktop**: Different limits for mobile and desktop devices
 - **Performance**: Special optimizations for devices with limited resources
 - **Availability Check**: IndexedDB availability check
@@ -29,32 +33,36 @@ An advanced IndexedDB management system designed to efficiently and professional
 ## Application Programming Interface (API)
 
 ### Supported Data Types
+
 ```typescript
-type DataType = 'arraybuffer' | 'blob' | 'json' | 'text' | 'uint8array';
+type DataType = "arraybuffer" | "blob" | "json" | "text" | "uint8array";
 ```
 
 ### Store Resource
+
 ```typescript
 await putAsset({
-  id: 'my-texture',
-  name: 'Grass Texture',
-  type: 'arraybuffer',
+  id: "my-texture",
+  name: "Grass Texture",
+  type: "arraybuffer",
   size: 1024000, // bytes
   priority: 7,
   data: textureData,
-  ttl: 24 * 60 * 60 * 1000 // 24 hours
+  ttl: 24 * 60 * 60 * 1000, // 24 hours
 });
 ```
 
 ### Retrieve Resource
+
 ```typescript
-const asset = await getAsset('my-texture');
+const asset = await getAsset("my-texture");
 if (asset) {
   // Use asset.data
 }
 ```
 
 ### Cache Statistics
+
 ```typescript
 const stats = await getCacheStats();
 console.log(`Cache size: ${formatBytes(stats.totalSize)}`);
@@ -67,8 +75,8 @@ The system maintains compatibility with existing code:
 
 ```typescript
 // Old methods still work
-await putModel('model-name', arrayBuffer);
-const data = await getModel('model-name');
+await putModel("model-name", arrayBuffer);
+const data = await getModel("model-name");
 ```
 
 ## Limits and Constraints
@@ -81,6 +89,7 @@ const data = await getModel('model-name');
 ## Developer Tools
 
 ### Data Export/Import
+
 ```typescript
 // Export all data for backup
 const backup = await exportData();
@@ -90,12 +99,13 @@ await importData(backup);
 ```
 
 ### Manual Cleanup
+
 ```typescript
 // Clean expired data
 const cleaned = await cleanExpiredAssets();
 
 // Delete specific resource
-await deleteAsset('asset-id');
+await deleteAsset("asset-id");
 
 // Clear all resources
 await clearAssets();
@@ -129,3 +139,4 @@ Settings can be customized through environment variables:
 // INDEXEDDB_MAX_SIZE
 // INDEXEDDB_MAX_ITEMS
 // INDEXEDDB_CLEANUP_INTERVAL
+```

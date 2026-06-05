@@ -1,10 +1,10 @@
-import { useAuthContext } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
-import { initializeConnectionPooling } from '@/lib/connection-pool';
-import { swrBackgroundSync } from '@/lib/swr-config';
-import { fetchWithCsrf } from '@/lib/utils';
-import { logger } from '@/utils/logger';
-import { useCallback, useEffect } from 'react';
+import { useAuthContext } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
+import { initializeConnectionPooling } from "@/lib/connection-pool";
+import { swrBackgroundSync } from "@/lib/swr-config";
+import { fetchWithCsrf } from "@/lib/utils";
+import { logger } from "@/utils/logger";
+import { useCallback, useEffect } from "react";
 
 // --- Type Definitions ---
 
@@ -13,7 +13,7 @@ type FetchFunction = (input: RequestInfo | URL, init?: RequestInit) => Promise<R
 // --- Constants & Global State ---
 
 let globalTriggerSessionRefresh: (() => Promise<boolean>) | null = null;
-let globalToast: ReturnType<typeof useToast>['toast'] | null = null;
+let globalToast: ReturnType<typeof useToast>["toast"] | null = null;
 
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
@@ -28,8 +28,8 @@ export const setGlobalTriggerSessionRefresh = (func: () => Promise<boolean>) => 
   globalTriggerSessionRefresh = func;
 };
 
-export const setGlobalToast = (func: ReturnType<typeof useToast>['toast']) => {
-  if (typeof func === 'function') {
+export const setGlobalToast = (func: ReturnType<typeof useToast>["toast"]) => {
+  if (typeof func === "function") {
     globalToast = func;
   }
 };
@@ -44,8 +44,8 @@ const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 function generateRequestKey(input: RequestInfo | URL, init?: RequestInit): string {
   const url = typeof input === "string" ? input : input.toString();
-  const method = init?.method || 'GET';
-  const body = init?.body ? JSON.stringify(init.body) : '';
+  const method = init?.method || "GET";
+  const body = init?.body ? JSON.stringify(init.body) : "";
   return `${method}:${url}:${body}`.slice(0, 200);
 }
 
@@ -109,79 +109,85 @@ const handle403Error = async (): Promise<boolean> => {
 // --- Status & Error Processing ---
 
 const handleResponseStatus = async (
-    response: Response, 
-    input: RequestInfo | URL, 
-    init: RequestInit | undefined, 
-    retryState: { count: number; attemptFetch: () => Promise<Response> }
+  response: Response,
+  input: RequestInfo | URL,
+  init: RequestInit | undefined,
+  retryState: { count: number; attemptFetch: () => Promise<Response> }
 ): Promise<Response | null> => {
-    const url = typeof input === "string" ? input : input.toString();
+  const url = typeof input === "string" ? input : input.toString();
 
-    if (response.status === 401) {
-        logger.warn(`Received 401 for: ${url}`);
-        if (await handle401Error()) {
-            logger.log(`Retrying after session refresh: ${url}`);
-            return retryState.attemptFetch();
-        }
-        return response;
+  if (response.status === 401) {
+    logger.warn(`Received 401 for: ${url}`);
+    if (await handle401Error()) {
+      logger.log(`Retrying after session refresh: ${url}`);
+      return retryState.attemptFetch();
     }
+    return response;
+  }
 
-    if (response.status === 403) {
-        logger.warn(`Received 403 for: ${url}`);
-        const headers = (init?.headers || {}) as Record<string, string>;
-        if (!headers['X-CSRF-Retry']) {
-            if (await handle403Error()) {
-                logger.log(`Retrying after CSRF refresh: ${url}`);
-                const newHeaders = { ...headers, 'X-CSRF-Retry': '1' };
-                return apiFetch(input, { ...init, headers: newHeaders });
-            }
-        }
-        return response;
+  if (response.status === 403) {
+    logger.warn(`Received 403 for: ${url}`);
+    const headers = (init?.headers || {}) as Record<string, string>;
+    if (!headers["X-CSRF-Retry"]) {
+      if (await handle403Error()) {
+        logger.log(`Retrying after CSRF refresh: ${url}`);
+        const newHeaders = { ...headers, "X-CSRF-Retry": "1" };
+        return apiFetch(input, { ...init, headers: newHeaders });
+      }
     }
+    return response;
+  }
 
-    if (response.status >= 500 && response.status < 600) {
-        if (retryState.count < MAX_RETRIES) {
-            logger.warn(`Server error ${response.status} for: ${url}. Retry ${retryState.count + 1}/${MAX_RETRIES}`);
-            retryState.count++;
-            await delay(RETRY_DELAY_MS);
-            return retryState.attemptFetch();
-        }
-        logger.error(`Max retries reached for server error: ${url}`);
-        swrBackgroundSync.addToSyncQueue(url);
+  if (response.status >= 500 && response.status < 600) {
+    if (retryState.count < MAX_RETRIES) {
+      logger.warn(
+        `Server error ${response.status} for: ${url}. Retry ${retryState.count + 1}/${MAX_RETRIES}`
+      );
+      retryState.count++;
+      await delay(RETRY_DELAY_MS);
+      return retryState.attemptFetch();
     }
+    logger.error(`Max retries reached for server error: ${url}`);
+    swrBackgroundSync.addToSyncQueue(url);
+  }
 
-    return null;
+  return null;
 };
 
 const handleFetchError = async (
-    error: unknown, 
-    url: string, 
-    retryState: { count: number; attemptFetch: () => Promise<Response> }
+  error: unknown,
+  url: string,
+  retryState: { count: number; attemptFetch: () => Promise<Response> }
 ): Promise<Response> => {
-    if (error instanceof Error) {
-        if (error.name === "AbortError") {
-            logger.error(`Request aborted due to timeout: ${url}`);
-            showErrorToast("Request Timeout", "The request took too long. Please try again.");
-            throw new Error("Request timeout");
-        }
-
-        const isNetworkError = error.message?.includes('NetworkError') || 
-                              error.message?.includes('Failed to fetch') || 
-                              error.message?.includes('fetch resource');
-
-        if (isNetworkError && retryState.count < MAX_RETRIES) {
-            logger.warn(`Network error for ${url}. Retry ${retryState.count + 1}/${MAX_RETRIES}: ${error.message}`);
-            retryState.count++;
-            await delay(RETRY_DELAY_MS);
-            return retryState.attemptFetch();
-        }
-
-        if (isNetworkError) logger.error(`Max retries reached for network error: ${url}`, error.message);
-        else logger.error(`Fetch error for ${url}:`, error.message);
-        
-        throw error;
+  if (error instanceof Error) {
+    if (error.name === "AbortError") {
+      logger.error(`Request aborted due to timeout: ${url}`);
+      showErrorToast("Request Timeout", "The request took too long. Please try again.");
+      throw new Error("Request timeout");
     }
-    logger.error(`Unknown error for ${url}:`, error);
-    throw new Error("An unknown error occurred");
+
+    const isNetworkError =
+      error.message?.includes("NetworkError") ||
+      error.message?.includes("Failed to fetch") ||
+      error.message?.includes("fetch resource");
+
+    if (isNetworkError && retryState.count < MAX_RETRIES) {
+      logger.warn(
+        `Network error for ${url}. Retry ${retryState.count + 1}/${MAX_RETRIES}: ${error.message}`
+      );
+      retryState.count++;
+      await delay(RETRY_DELAY_MS);
+      return retryState.attemptFetch();
+    }
+
+    if (isNetworkError)
+      logger.error(`Max retries reached for network error: ${url}`, error.message);
+    else logger.error(`Fetch error for ${url}:`, error.message);
+
+    throw error;
+  }
+  logger.error(`Unknown error for ${url}:`, error);
+  throw new Error("An unknown error occurred");
 };
 
 // --- Execution Logic ---
@@ -190,7 +196,7 @@ export const apiFetch: FetchFunction = async (input, init) => {
   const url = typeof input === "string" ? input : input.toString();
   const requestKey = generateRequestKey(input, init);
 
-  const isHighFreq = url.includes('/api/game/addCoin');
+  const isHighFreq = url.includes("/api/game/addCoin");
   const existingRequest = isHighFreq ? null : activeRequests.get(requestKey);
 
   if (existingRequest) {
@@ -221,7 +227,9 @@ export const apiFetch: FetchFunction = async (input, init) => {
     try {
       return await attemptFetch();
     } catch (e) {
-      const isNet = e instanceof Error && (e.message?.includes('NetworkError') || e.message?.includes('Failed to fetch'));
+      const isNet =
+        e instanceof Error &&
+        (e.message?.includes("NetworkError") || e.message?.includes("Failed to fetch"));
       if (!isNet) showErrorToast("Request Error", "An error occurred. Please try again.");
       throw e;
     } finally {

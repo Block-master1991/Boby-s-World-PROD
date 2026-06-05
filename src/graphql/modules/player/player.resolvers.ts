@@ -1,8 +1,8 @@
-import { checkGraphQLMutationRateLimit } from '@/lib/graphql-rate-limiter';
-import { GraphQLError } from 'graphql';
-import type { GraphQLContext } from '../../context';
-import { EVENTS } from '../../pubsub';
-import { PlayerService } from './player.service';
+import { checkGraphQLMutationRateLimit } from "@/lib/graphql-rate-limiter";
+import { GraphQLError } from "graphql";
+import type { GraphQLContext } from "../../context";
+import { EVENTS } from "../../pubsub";
+import { PlayerService } from "./player.service";
 
 export const playerResolvers = {
   Query: {
@@ -17,24 +17,27 @@ export const playerResolvers = {
         const data = await PlayerService.getPlayerData(userId, context);
         return { success: true, playerData: data };
       } catch (error) {
-        return { success: false, error: error instanceof Error ? error.message : 'Failed to fetch player data' };
+        return {
+          success: false,
+          error: error instanceof Error ? error.message : "Failed to fetch player data",
+        };
       }
     },
   },
   Mutation: {
     addCoins: async (_: unknown, { amount }: { amount: number }, context: GraphQLContext) => {
       try {
-        if (!context.user) throw new GraphQLError('Authentication required');
+        if (!context.user) throw new GraphQLError("Authentication required");
 
         // Rate Limit Check
-        const clientIp = context.request.headers.get('x-forwarded-for') || 'unknown';
-        await checkGraphQLMutationRateLimit(clientIp, 'addCoins', context.user.id);
+        const clientIp = context.request.headers.get("x-forwarded-for") || "unknown";
+        await checkGraphQLMutationRateLimit(clientIp, "addCoins", context.user.id);
 
         const newBalance = await PlayerService.addCoins(context.user.id, amount);
-        
+
         // Broadcast update
-        // We can reuse the loader via getPlayerData(..., context), 
-        // but since we just wrote, we might want fresh data. 
+        // We can reuse the loader via getPlayerData(..., context),
+        // but since we just wrote, we might want fresh data.
         // DataLoader by default caches for the request.
         // However, addCoins logic is separate from getter.
         const playerData = await PlayerService.getPlayerData(context.user.id, context);
@@ -45,7 +48,7 @@ export const playerResolvers = {
         return { success: true, newBalance };
       } catch (error) {
         // preserve error message
-        const message = error instanceof Error ? error.message : 'Failed to add coins';
+        const message = error instanceof Error ? error.message : "Failed to add coins";
         return { success: false, newBalance: 0, error: message };
       }
     },

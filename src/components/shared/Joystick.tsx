@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { Gamepad2 } from 'lucide-react';
-import React, { useMemo } from 'react';
+import { Gamepad2 } from "lucide-react";
+import React, { useMemo } from "react";
 
 interface JoystickProps {
   baseScreenPosition: { x: number; y: number };
@@ -24,20 +24,20 @@ const useJoystickStyles = (
       height: size,
       left: `${baseScreenPosition.x - size / 2}px`,
       top: `${baseScreenPosition.y - size / 2}px`,
-      position: 'fixed' as const,
+      position: "fixed" as const,
     };
 
     const knob: React.CSSProperties = {
       width: knobSize,
       height: knobSize,
       transform: `translate(${knobScreenOffset.x}px, ${knobScreenOffset.y}px)`,
-      position: 'absolute' as const,
-      left: '50%',
-      top: '50%',
+      position: "absolute" as const,
+      left: "50%",
+      top: "50%",
       marginLeft: `-${knobSize / 2}px`,
       marginTop: `-${knobSize / 2}px`,
-      transition: 'none',
-      cursor: 'grab',
+      transition: "none",
+      cursor: "grab",
     };
 
     return { base, knob };
@@ -55,7 +55,13 @@ const JoystickKnob = ({ style }: { style: React.CSSProperties }) => (
   </div>
 );
 
-const JoystickBase = ({ children, style }: { children: React.ReactNode; style: React.CSSProperties }) => (
+const JoystickBase = ({
+  children,
+  style,
+}: {
+  children: React.ReactNode;
+  style: React.CSSProperties;
+}) => (
   <div
     className="z-50 select-none touch-none"
     style={style}

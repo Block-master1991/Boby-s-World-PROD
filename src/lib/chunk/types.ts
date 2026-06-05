@@ -1,4 +1,4 @@
-import type * as THREE from 'three';
+import type * as THREE from "three";
 
 export interface ChunkContent {
   id: string; // Unique identifier for the chunk
@@ -47,11 +47,11 @@ export interface ChunkData {
 }
 
 export interface ChunkLoadedEvent extends THREE.BaseEvent {
-  type: 'chunk-loaded';
+  type: "chunk-loaded";
   chunkKey: string;
   chunk: ChunkContent;
 }
 
 export interface ChunkManagerEventMap extends THREE.Object3DEventMap {
-  'chunk-loaded': ChunkLoadedEvent;
+  "chunk-loaded": ChunkLoadedEvent;
 }

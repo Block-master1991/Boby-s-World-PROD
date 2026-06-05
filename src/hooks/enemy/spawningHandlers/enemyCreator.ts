@@ -1,7 +1,7 @@
-import type { CoinData } from '@/hooks/useCoinLogic';
-import * as THREE from 'three';
-import { ENEMY_ANIMATION_NAMES } from '../constants';
-import type { EnemyData } from '../types';
+import type { CoinData } from "@/hooks/useCoinLogic";
+import * as THREE from "three";
+import { ENEMY_ANIMATION_NAMES } from "../constants";
+import type { EnemyData } from "../types";
 
 interface EnemyParams {
   coin: CoinData;
@@ -10,7 +10,7 @@ interface EnemyParams {
   mixer: THREE.AnimationMixer;
   actions: Record<string, THREE.AnimationAction>;
   action: THREE.AnimationAction | null;
-  type: 'carnivore' | 'herbivore';
+  type: "carnivore" | "herbivore";
   chunk: string;
 }
 
@@ -26,14 +26,17 @@ export const createMixer = (m: THREE.Group, a: THREE.AnimationClip[]) => {
   a.forEach(c => {
     const action = mx.clipAction(c);
     ac[c.name] = action;
-    const isIdleAnimation = ENEMY_ANIMATION_NAMES.CARNIVORE.IDLE.includes(c.name) ||
-                           ENEMY_ANIMATION_NAMES.HERBIVORE.IDLE.includes(c.name);
+    const isIdleAnimation =
+      ENEMY_ANIMATION_NAMES.CARNIVORE.IDLE.includes(c.name) ||
+      ENEMY_ANIMATION_NAMES.HERBIVORE.IDLE.includes(c.name);
 
-    if (c.name === ENEMY_ANIMATION_NAMES.CARNIVORE.WALK ||
-        c.name === ENEMY_ANIMATION_NAMES.CARNIVORE.GALLOP ||
-        c.name === ENEMY_ANIMATION_NAMES.HERBIVORE.WALK ||
-        c.name === ENEMY_ANIMATION_NAMES.HERBIVORE.GALLOP ||
-        isIdleAnimation) {
+    if (
+      c.name === ENEMY_ANIMATION_NAMES.CARNIVORE.WALK ||
+      c.name === ENEMY_ANIMATION_NAMES.CARNIVORE.GALLOP ||
+      c.name === ENEMY_ANIMATION_NAMES.HERBIVORE.WALK ||
+      c.name === ENEMY_ANIMATION_NAMES.HERBIVORE.GALLOP ||
+      isIdleAnimation
+    ) {
       action.setLoop(THREE.LoopRepeat, Infinity);
     } else {
       action.setLoop(THREE.LoopOnce, 1);
@@ -52,12 +55,14 @@ export const createEnemy = (p: EnemyParams): EnemyData => ({
   rotation: p.lod.rotation,
   scale: p.lod.scale,
   visible: true,
-  type: 'enemy',
+  type: "enemy",
   targetCoinId: p.coin.uuid,
   targetCoinPosition: p.coin.position.clone(),
   // تحسين مركز الدورية ليكون قريباً من موقع العملة التي يجب حمايتها
   patrolCenter: p.coin.position.clone(),
-  patrolTarget: p.coin.position.clone().add(new THREE.Vector3((Math.random() - 0.5) * 10, 0, (Math.random() - 0.5) * 10)),
+  patrolTarget: p.coin.position
+    .clone()
+    .add(new THREE.Vector3((Math.random() - 0.5) * 10, 0, (Math.random() - 0.5) * 10)),
   isIdling: false,
   idleTimer: 0,
   idleDuration: 0,
@@ -78,5 +83,5 @@ export const createEnemy = (p: EnemyParams): EnemyData => ({
   lod: p.lod,
   lookAt: (t: THREE.Vector3) => p.lod.lookAt(t),
   isPooled: false,
-  isModelInstantiated: true
+  isModelInstantiated: true,
 });

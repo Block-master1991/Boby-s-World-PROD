@@ -1,7 +1,7 @@
-import { logger } from '@/utils/logger';
-import { deleteAsset, getAllAssets, getAsset, putAsset } from './indexedDB';
+import { logger } from "@/utils/logger";
+import { deleteAsset, getAllAssets, getAsset, putAsset } from "./indexedDB";
 
-const SWR_STORE_PREFIX = 'swr_';
+const SWR_STORE_PREFIX = "swr_";
 
 export const swrPersistence = {
   async getItem(key: string) {
@@ -9,7 +9,7 @@ export const swrPersistence = {
       const asset = await getAsset(SWR_STORE_PREFIX + key);
       return asset ? asset.data : null;
     } catch (error) {
-      logger.error('[SWR-Persistence] Failed to get item:', error);
+      logger.error("[SWR-Persistence] Failed to get item:", error);
       return null;
     }
   },
@@ -21,7 +21,7 @@ export const swrPersistence = {
       await putAsset({
         id: SWR_STORE_PREFIX + key,
         name: key,
-        type: 'json',
+        type: "json",
         size: JSON.stringify(data).length,
         createdAt: Date.now(),
         accessedAt: Date.now(),
@@ -30,7 +30,7 @@ export const swrPersistence = {
         ttl: 24 * 60 * 60 * 1000, // 24 hours TTL for persistence
       });
     } catch (error) {
-      logger.error('[SWR-Persistence] Failed to set item:', error);
+      logger.error("[SWR-Persistence] Failed to set item:", error);
     }
   },
 
@@ -38,18 +38,18 @@ export const swrPersistence = {
     try {
       await deleteAsset(SWR_STORE_PREFIX + key);
     } catch (error) {
-      logger.error('[SWR-Persistence] Failed to remove item:', error);
+      logger.error("[SWR-Persistence] Failed to remove item:", error);
     }
   },
 
   async getAllKeys() {
-     try {
-       const assets = await getAllAssets();
-       return assets
-         .filter(a => a.id.startsWith(SWR_STORE_PREFIX))
-         .map(a => a.id.replace(SWR_STORE_PREFIX, ''));
-     } catch {
-       return [];
-     }
-  }
+    try {
+      const assets = await getAllAssets();
+      return assets
+        .filter(a => a.id.startsWith(SWR_STORE_PREFIX))
+        .map(a => a.id.replace(SWR_STORE_PREFIX, ""));
+    } catch {
+      return [];
+    }
+  },
 };

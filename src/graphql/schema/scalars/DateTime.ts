@@ -1,3 +1,3 @@
-import { DateTimeResolver } from 'graphql-scalars';
+import { DateTimeResolver } from "graphql-scalars";
 
 export const DateTime = DateTimeResolver;

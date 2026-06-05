@@ -1,5 +1,4 @@
-
-version: '3.8'
+version: "3.8"
 
 services:
   app:
@@ -26,7 +25,7 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '1.0'
+          cpus: "1.0"
           memory: 1G
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/api/graphql?query={health}"]

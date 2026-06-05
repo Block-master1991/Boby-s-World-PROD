@@ -1,7 +1,7 @@
-'use client';
+"use client";
 
-import { AnalyticsCharts } from '@/components/admin/sections/AnalyticsCharts';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { AnalyticsCharts } from "@/components/admin/sections/AnalyticsCharts";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 interface AnalyticsSectionProps {
   userStats: { totalUsers: number; onlineUsers: number; offlineUsers: number } | null;

@@ -3,149 +3,145 @@
  * Automatically manages correlation IDs for request tracking
  */
 
-import { contextManager, type LogContext } from '../core/LogContext';
+import { contextManager, type LogContext } from "../core/LogContext";
 
 export interface CorrelationConfig {
-    enabled: boolean;
-    headerName?: string;
-    generateIfMissing?: boolean;
-    propagateToResponse?: boolean;
+  enabled: boolean;
+  headerName?: string;
+  generateIfMissing?: boolean;
+  propagateToResponse?: boolean;
 }
 
 const DEFAULT_CONFIG: CorrelationConfig = {
-    enabled: true,
-    headerName: 'x-correlation-id',
-    generateIfMissing: true,
-    propagateToResponse: true
+  enabled: true,
+  headerName: "x-correlation-id",
+  generateIfMissing: true,
+  propagateToResponse: true,
 };
 
 /**
  * Correlation Middleware Class
  */
 export class CorrelationMiddleware {
-    private config: CorrelationConfig;
+  private config: CorrelationConfig;
 
-    constructor(config: Partial<CorrelationConfig> = {}) {
-        this.config = { ...DEFAULT_CONFIG, ...config };
+  constructor(config: Partial<CorrelationConfig> = {}) {
+    this.config = { ...DEFAULT_CONFIG, ...config };
+  }
+
+  /**
+   * Extract or generate correlation ID from request
+   */
+  extractCorrelationId(headers: Headers | Record<string, string>): string | undefined {
+    if (!this.config.enabled) {
+      return undefined;
     }
 
-    /**
-     * Extract or generate correlation ID from request
-     */
-    extractCorrelationId(headers: Headers | Record<string, string>): string | undefined {
-        if (!this.config.enabled) {
-            return undefined;
-        }
+    const getHeader = (key: string): string | null => {
+      if (headers instanceof Headers) {
+        return headers.get(key);
+      }
+      return headers[key] || headers[key.toLowerCase()] || null;
+    };
 
-        const getHeader = (key: string): string | null => {
-            if (headers instanceof Headers) {
-                return headers.get(key);
-            }
-            return headers[key] || headers[key.toLowerCase()] || null;
-        };
+    // Try to get from configured header
+    let correlationId = getHeader(this.config.headerName!);
 
-        // Try to get from configured header
-        let correlationId = getHeader(this.config.headerName!);
-
-        // Fallback headers
-        if (!correlationId) {
-            correlationId = getHeader('x-request-id') ||
-                getHeader('request-id') ||
-                getHeader('x-trace-id');
-        }
-
-        // Generate if missing and configured to do so
-        if (!correlationId && this.config.generateIfMissing) {
-            correlationId = this.generateCorrelationId();
-        }
-
-        return correlationId || undefined;
+    // Fallback headers
+    if (!correlationId) {
+      correlationId =
+        getHeader("x-request-id") || getHeader("request-id") || getHeader("x-trace-id");
     }
 
-    /**
-     * Create context from request headers
-     */
-    createContextFromRequest(
-        headers: Headers | Record<string, string>,
-        additionalContext?: Partial<LogContext>
-    ): LogContext {
-        const extractedContext = contextManager.extractFromHeaders(headers);
-        const correlationId = this.extractCorrelationId(headers);
-
-        const contextData: Partial<LogContext> = {
-            ...extractedContext,
-            ...additionalContext
-        };
-
-        // Only set correlationId if we have one (let createContext generate if needed)
-        if (correlationId) {
-            contextData.correlationId = correlationId;
-        }
-
-        return contextManager.createContext(contextData);
+    // Generate if missing and configured to do so
+    if (!correlationId && this.config.generateIfMissing) {
+      correlationId = this.generateCorrelationId();
     }
 
-    /**
-     * Middleware for Next.js API routes
-     */
-    async handleRequest<T>(
-        request: Request,
-        handler: (context: LogContext) => Promise<T>,
-        additionalContext?: Partial<LogContext>
-    ): Promise<{ result: T; context: LogContext }> {
-        const context = this.createContextFromRequest(request.headers, additionalContext);
+    return correlationId || undefined;
+  }
 
-        const result = await contextManager.runWithContext(context, () => {
-            return handler(context);
-        });
+  /**
+   * Create context from request headers
+   */
+  createContextFromRequest(
+    headers: Headers | Record<string, string>,
+    additionalContext?: Partial<LogContext>
+  ): LogContext {
+    const extractedContext = contextManager.extractFromHeaders(headers);
+    const correlationId = this.extractCorrelationId(headers);
 
-        return { result, context };
+    const contextData: Partial<LogContext> = {
+      ...extractedContext,
+      ...additionalContext,
+    };
+
+    // Only set correlationId if we have one (let createContext generate if needed)
+    if (correlationId) {
+      contextData.correlationId = correlationId;
     }
 
-    /**
-     * Add correlation headers to response
-     */
-    addCorrelationHeaders(
-        headers: Headers,
-        context?: LogContext
-    ): void {
-        if (!this.config.propagateToResponse) {
-            return;
-        }
+    return contextManager.createContext(contextData);
+  }
 
-        const ctx = context || contextManager.getCurrentContext();
-        if (!ctx) {
-            return;
-        }
+  /**
+   * Middleware for Next.js API routes
+   */
+  async handleRequest<T>(
+    request: Request,
+    handler: (context: LogContext) => Promise<T>,
+    additionalContext?: Partial<LogContext>
+  ): Promise<{ result: T; context: LogContext }> {
+    const context = this.createContextFromRequest(request.headers, additionalContext);
 
-        if (ctx.correlationId) {
-            headers.set(this.config.headerName!, ctx.correlationId);
-            headers.set('x-request-id', ctx.correlationId);
-        }
+    const result = await contextManager.runWithContext(context, () => {
+      return handler(context);
+    });
 
-        if (ctx.traceId) {
-            headers.set('x-trace-id', ctx.traceId);
-        }
+    return { result, context };
+  }
+
+  /**
+   * Add correlation headers to response
+   */
+  addCorrelationHeaders(headers: Headers, context?: LogContext): void {
+    if (!this.config.propagateToResponse) {
+      return;
     }
 
-    /**
-     * Generate a unique correlation ID
-     */
-    private generateCorrelationId(): string {
-        if (typeof crypto !== 'undefined' && crypto.randomUUID) {
-            return crypto.randomUUID();
-        }
-
-        // Fallback: timestamp + random
-        return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+    const ctx = context || contextManager.getCurrentContext();
+    if (!ctx) {
+      return;
     }
 
-    /**
-     * Update configuration
-     */
-    updateConfig(config: Partial<CorrelationConfig>): void {
-        this.config = { ...this.config, ...config };
+    if (ctx.correlationId) {
+      headers.set(this.config.headerName!, ctx.correlationId);
+      headers.set("x-request-id", ctx.correlationId);
     }
+
+    if (ctx.traceId) {
+      headers.set("x-trace-id", ctx.traceId);
+    }
+  }
+
+  /**
+   * Generate a unique correlation ID
+   */
+  private generateCorrelationId(): string {
+    if (typeof crypto !== "undefined" && crypto.randomUUID) {
+      return crypto.randomUUID();
+    }
+
+    // Fallback: timestamp + random
+    return `${Date.now()}-${Math.random().toString(36).substring(2, 15)}`;
+  }
+
+  /**
+   * Update configuration
+   */
+  updateConfig(config: Partial<CorrelationConfig>): void {
+    this.config = { ...this.config, ...config };
+  }
 }
 
 /**
@@ -157,30 +153,29 @@ export const correlationMiddleware = new CorrelationMiddleware();
  * Helper: Wrap Next.js API route with correlation
  */
 export function withCorrelation<T = unknown>(
-    handler: (request: Request, context: LogContext) => Promise<T>
+  handler: (request: Request, context: LogContext) => Promise<T>
 ) {
-    return async (request: Request): Promise<Response> => {
-        const { result, context } = await correlationMiddleware.handleRequest(
-            request,
-            (ctx) => handler(request, ctx)
-        );
+  return async (request: Request): Promise<Response> => {
+    const { result, context } = await correlationMiddleware.handleRequest(request, ctx =>
+      handler(request, ctx)
+    );
 
-        // If result is already a Response, add headers
-        if (result instanceof Response) {
-            correlationMiddleware.addCorrelationHeaders(result.headers, context);
-            return result;
-        }
+    // If result is already a Response, add headers
+    if (result instanceof Response) {
+      correlationMiddleware.addCorrelationHeaders(result.headers, context);
+      return result;
+    }
 
-        // Otherwise, create response with correlation headers
-        const response = Response.json(result);
-        correlationMiddleware.addCorrelationHeaders(response.headers, context);
-        return response;
-    };
+    // Otherwise, create response with correlation headers
+    const response = Response.json(result);
+    correlationMiddleware.addCorrelationHeaders(response.headers, context);
+    return response;
+  };
 }
 
 /**
  * Helper: Get current correlation ID
  */
 export function getCurrentCorrelationId(): string | undefined {
-    return contextManager.getCurrentContext()?.correlationId;
+  return contextManager.getCurrentContext()?.correlationId;
 }

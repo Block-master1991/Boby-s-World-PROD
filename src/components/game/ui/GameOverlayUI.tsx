@@ -1,15 +1,13 @@
+"use client";
 
-'use client';
+import React from "react";
 
-import React from 'react';
-
-
-import Joystick from '@/components/shared/Joystick';
-import type { StoreItemDefinition } from '@/lib/items';
-import { ActiveEffects } from './ActiveEffects';
-import { ConsumablesToolbar } from './ConsumablesToolbar';
-import { StatsOverlay } from './StatsOverlay';
-import { WalletMismatchBanner } from './WalletMismatchBanner';
+import Joystick from "@/components/shared/Joystick";
+import type { StoreItemDefinition } from "@/lib/items";
+import { ActiveEffects } from "./ActiveEffects";
+import { ConsumablesToolbar } from "./ConsumablesToolbar";
+import { StatsOverlay } from "./StatsOverlay";
+import { WalletMismatchBanner } from "./WalletMismatchBanner";
 
 interface GameOverlayUIProps {
   sessionCollectedUSDT: number;
@@ -44,8 +42,15 @@ interface GameOverlayUIProps {
   JOYSTICK_KNOB_SIZE: number;
 }
 
-const GameOverlayUI: React.FC<GameOverlayUIProps> = (props) => {
-  const { isWalletMismatch, isMobile, isGameEffectivelyPaused, dynamicJoystickState, JOYSTICK_BASE_SIZE, JOYSTICK_KNOB_SIZE } = props;
+const GameOverlayUI: React.FC<GameOverlayUIProps> = props => {
+  const {
+    isWalletMismatch,
+    isMobile,
+    isGameEffectivelyPaused,
+    dynamicJoystickState,
+    JOYSTICK_BASE_SIZE,
+    JOYSTICK_KNOB_SIZE,
+  } = props;
 
   return (
     <>
@@ -83,14 +88,23 @@ const GameOverlayUI: React.FC<GameOverlayUIProps> = (props) => {
         onUseConsumableItem={props.onUseConsumableItem}
       />
 
-      {isMobile && !isGameEffectivelyPaused && !isWalletMismatch && dynamicJoystickState.visible && (
-        <Joystick
-          baseScreenPosition={{ x: dynamicJoystickState.baseScreenX, y: dynamicJoystickState.baseScreenY }}
-          knobScreenOffset={{ x: dynamicJoystickState.knobOffsetX, y: dynamicJoystickState.knobOffsetY }}
-          size={JOYSTICK_BASE_SIZE}
-          knobSize={JOYSTICK_KNOB_SIZE}
-        />
-      )}
+      {isMobile &&
+        !isGameEffectivelyPaused &&
+        !isWalletMismatch &&
+        dynamicJoystickState.visible && (
+          <Joystick
+            baseScreenPosition={{
+              x: dynamicJoystickState.baseScreenX,
+              y: dynamicJoystickState.baseScreenY,
+            }}
+            knobScreenOffset={{
+              x: dynamicJoystickState.knobOffsetX,
+              y: dynamicJoystickState.knobOffsetY,
+            }}
+            size={JOYSTICK_BASE_SIZE}
+            knobSize={JOYSTICK_KNOB_SIZE}
+          />
+        )}
     </>
   );
 };

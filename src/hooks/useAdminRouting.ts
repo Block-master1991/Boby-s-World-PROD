@@ -1,9 +1,9 @@
-'use client';
+"use client";
 
-import { useAuth } from '@/hooks/useAuth';
-import { ADMIN_WALLET_ADDRESS } from '@/lib/constants';
-import { usePathname, useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useAuth } from "@/hooks/useAuth";
+import { ADMIN_WALLET_ADDRESS } from "@/lib/constants";
+import { usePathname, useRouter } from "next/navigation";
+import { useEffect } from "react";
 
 export function useAdminRouting() {
   const { isAuthenticated, isLoading: isAuthHookLoading, user, logout: logoutAuthHook } = useAuth();
@@ -12,11 +12,11 @@ export function useAdminRouting() {
 
   useEffect(() => {
     if (isAuthHookLoading) return;
-    
+
     // Redirect if not authenticated or not admin
     if (!isAuthenticated || user?.publicKey !== ADMIN_WALLET_ADDRESS) {
-      if (pathname === '/admin') {
-          router.replace('/');
+      if (pathname === "/admin") {
+        router.replace("/");
       }
     }
   }, [isAuthenticated, isAuthHookLoading, user, pathname, router]);
@@ -26,6 +26,6 @@ export function useAdminRouting() {
     isAuthHookLoading,
     user,
     logoutAuthHook,
-    isAdmin: user?.publicKey === ADMIN_WALLET_ADDRESS
+    isAdmin: user?.publicKey === ADMIN_WALLET_ADDRESS,
   };
 }

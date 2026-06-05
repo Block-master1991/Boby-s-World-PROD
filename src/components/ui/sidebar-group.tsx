@@ -1,16 +1,26 @@
-"use client"
+"use client";
 
-import { cn } from "@/lib/utils"
-import { Slot } from "@radix-ui/react-slot"
-import * as React from "react"
+import { cn } from "@/lib/utils";
+import { Slot } from "@radix-ui/react-slot";
+import * as React from "react";
 
-export const SidebarGroup = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(({ className, ...props }, ref) => (
-  <div ref={ref} data-sidebar="group" className={cn("relative flex w-full min-w-0 flex-col p-2", className)} {...props} />
-))
-SidebarGroup.displayName = "SidebarGroup"
+export const SidebarGroup = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      data-sidebar="group"
+      className={cn("relative flex w-full min-w-0 flex-col p-2", className)}
+      {...props}
+    />
+  )
+);
+SidebarGroup.displayName = "SidebarGroup";
 
-export const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.ComponentProps<"div"> & { asChild?: boolean }>(({ className, asChild = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "div"
+export const SidebarGroupLabel = React.forwardRef<
+  HTMLDivElement,
+  React.ComponentProps<"div"> & { asChild?: boolean }
+>(({ className, asChild = false, ...props }, ref) => {
+  const Comp = asChild ? Slot : "div";
   return (
     <Comp
       ref={ref}
@@ -21,12 +31,15 @@ export const SidebarGroupLabel = React.forwardRef<HTMLDivElement, React.Componen
       )}
       {...props}
     />
-  )
-})
-SidebarGroupLabel.displayName = "SidebarGroupLabel"
+  );
+});
+SidebarGroupLabel.displayName = "SidebarGroupLabel";
 
-export const SidebarGroupAction = React.forwardRef<HTMLButtonElement, React.ComponentProps<"button"> & { asChild?: boolean }>(({ className, asChild = false, ...props }, ref) => {
-  const Comp = asChild ? Slot : "button"
+export const SidebarGroupAction = React.forwardRef<
+  HTMLButtonElement,
+  React.ComponentProps<"button"> & { asChild?: boolean }
+>(({ className, asChild = false, ...props }, ref) => {
+  const Comp = asChild ? Slot : "button";
   return (
     <Comp
       ref={ref}
@@ -37,11 +50,18 @@ export const SidebarGroupAction = React.forwardRef<HTMLButtonElement, React.Comp
       )}
       {...props}
     />
-  )
-})
-SidebarGroupAction.displayName = "SidebarGroupAction"
+  );
+});
+SidebarGroupAction.displayName = "SidebarGroupAction";
 
-export const SidebarGroupContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(({ className, ...props }, ref) => (
-  <div ref={ref} data-sidebar="group-content" className={cn("w-full text-sm", className)} {...props} />
-))
-SidebarGroupContent.displayName = "SidebarGroupContent"
+export const SidebarGroupContent = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
+  ({ className, ...props }, ref) => (
+    <div
+      ref={ref}
+      data-sidebar="group-content"
+      className={cn("w-full text-sm", className)}
+      {...props}
+    />
+  )
+);
+SidebarGroupContent.displayName = "SidebarGroupContent";

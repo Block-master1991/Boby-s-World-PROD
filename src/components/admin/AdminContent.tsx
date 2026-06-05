@@ -1,15 +1,15 @@
-'use client';
+"use client";
 
-import { LoggerDashboard } from '@/components/admin/LoggerDashboard';
-import { AdminSettingsPlaceholder } from '@/components/admin/sections/AdminSettingsPlaceholder';
-import { AdminUsersPlaceholder } from '@/components/admin/sections/AdminUsersPlaceholder';
-import { AnalyticsSection } from '@/components/admin/sections/AnalyticsSection';
-import type { LiveActivityPayload } from '@/components/admin/sections/OverviewLiveActivity';
-import { OverviewSection } from '@/components/admin/sections/OverviewSection';
-import type { UserStatsPayload } from '@/components/admin/sections/OverviewUserStats';
-import { SecuritySection } from '@/components/admin/sections/SecuritySection';
-import { StoreItemsManagement } from '@/components/admin/StoreItemsManagement';
-import type { UserStatsState } from '@/hooks/useAdminDashboardData';
+import { LoggerDashboard } from "@/components/admin/LoggerDashboard";
+import { AdminSettingsPlaceholder } from "@/components/admin/sections/AdminSettingsPlaceholder";
+import { AdminUsersPlaceholder } from "@/components/admin/sections/AdminUsersPlaceholder";
+import { AnalyticsSection } from "@/components/admin/sections/AnalyticsSection";
+import type { LiveActivityPayload } from "@/components/admin/sections/OverviewLiveActivity";
+import { OverviewSection } from "@/components/admin/sections/OverviewSection";
+import type { UserStatsPayload } from "@/components/admin/sections/OverviewUserStats";
+import { SecuritySection } from "@/components/admin/sections/SecuritySection";
+import { StoreItemsManagement } from "@/components/admin/StoreItemsManagement";
+import type { UserStatsState } from "@/hooks/useAdminDashboardData";
 
 interface DashboardData {
   userStats: UserStatsState | null;
@@ -41,7 +41,7 @@ export function AdminContent({
   } = dashboardData;
 
   switch (activeSection) {
-    case 'overview':
+    case "overview":
       return (
         <OverviewSection
           graphqlLoading={graphqlLoading}
@@ -52,17 +52,17 @@ export function AdminContent({
           setActiveSection={setActiveSection}
         />
       );
-    case 'security':
+    case "security":
       return <SecuritySection />;
-    case 'logs':
+    case "logs":
       return <LoggerDashboard />;
-    case 'analytics':
+    case "analytics":
       return <AnalyticsSection userStats={userStats} />;
-    case 'items':
+    case "items":
       return <StoreItemsManagement />;
-    case 'users':
+    case "users":
       return <AdminUsersPlaceholder />;
-    case 'settings':
+    case "settings":
       return <AdminSettingsPlaceholder />;
     default:
       return null;

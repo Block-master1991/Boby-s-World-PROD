@@ -4,62 +4,63 @@
  * Uses centralized Firebase initialization and professional logging.
  */
 
-import 'dotenv/config';
-import { constants as fsConstants } from 'fs';
-import fs from 'fs/promises';
-import path from 'path';
-import { professionalLogger } from '../src/lib/logging';
+import "dotenv/config";
+import { constants as fsConstants } from "fs";
+import fs from "fs/promises";
+import path from "path";
+import { professionalLogger } from "../src/lib/logging";
 
-const MEASURED_DATA_PATH = path.join(process.cwd(), 'scripts', 'measured-assets.json');
-const MANIFEST_PATH = path.join(process.cwd(), 'src', 'lib', 'gameAssetManifest.ts');
-const BACKUP_PATH = path.join(process.cwd(), 'src', 'lib', 'gameAssetManifest.ts.backup');
+const MEASURED_DATA_PATH = path.join(process.cwd(), "scripts", "measured-assets.json");
+const MANIFEST_PATH = path.join(process.cwd(), "src", "lib", "gameAssetManifest.ts");
+const BACKUP_PATH = path.join(process.cwd(), "src", "lib", "gameAssetManifest.ts.backup");
 
 interface MeasuredAsset {
-    path: string;
-    type: string;
-    priority: 'critical' | 'high' | 'medium' | 'low';
-    estimatedSizeMB: number;
-    description: string;
-    exists: boolean;
-    version?: string;
-    sha256?: string;
-    actualSizeMB?: number;
-    lastModified?: string;
+  path: string;
+  type: string;
+  priority: "critical" | "high" | "medium" | "low";
+  estimatedSizeMB: number;
+  description: string;
+  exists: boolean;
+  version?: string;
+  sha256?: string;
+  actualSizeMB?: number;
+  lastModified?: string;
 }
 
 interface MeasuredData {
-    measuredAt: string;
-    summary: {
-        accuracy: number;
-        foundAssets: number;
-    };
-    assets: MeasuredAsset[];
+  measuredAt: string;
+  summary: {
+    accuracy: number;
+    foundAssets: number;
+  };
+  assets: MeasuredAsset[];
 }
 
 /**
  * Format asset object for TypeScript file generation
  */
-function formatAsset(asset: MeasuredAsset, indent = '    ') {
-    const lines = [
-        `{`,
-        `        path: '${asset.path}',`,
-        `        type: '${asset.type}',`,
-        `        priority: '${asset.priority}',`,
-        `        estimatedSizeMB: ${asset.estimatedSizeMB},`,
-        `        description: '${asset.description}'`,
-    ];
+function formatAsset(asset: MeasuredAsset, indent = "    ") {
+  const lines = [
+    `{`,
+    `        path: '${asset.path}',`,
+    `        type: '${asset.type}',`,
+    `        priority: '${asset.priority}',`,
+    `        estimatedSizeMB: ${asset.estimatedSizeMB},`,
+    `        description: '${asset.description}'`,
+  ];
 
-    if (asset.version) lines.splice(5, 0, `        version: '${asset.version}',`);
-    if (asset.sha256) lines.splice(5, 0, `        sha256: '${asset.sha256}',`);
-    if (asset.actualSizeMB !== undefined) lines.splice(5, 0, `        actualSizeMB: ${asset.actualSizeMB},`);
-    if (asset.lastModified) lines.splice(5, 0, `        lastModified: '${asset.lastModified}',`);
+  if (asset.version) lines.splice(5, 0, `        version: '${asset.version}',`);
+  if (asset.sha256) lines.splice(5, 0, `        sha256: '${asset.sha256}',`);
+  if (asset.actualSizeMB !== undefined)
+    lines.splice(5, 0, `        actualSizeMB: ${asset.actualSizeMB},`);
+  if (asset.lastModified) lines.splice(5, 0, `        lastModified: '${asset.lastModified}',`);
 
-    lines.push(`    }`);
-    return lines.map(line => indent + line).join('\n');
+  lines.push(`    }`);
+  return lines.map(line => indent + line).join("\n");
 }
 
 function getManifestHeader(measuredAt: string): string {
-    return `// Game Asset Manifest - Comprehensive list of all game resources
+  return `// Game Asset Manifest - Comprehensive list of all game resources
 // Used for initial preload into IndexedDB to enable offline gameplay
 // 🔄 Auto-updated with actual measurements on ${new Date(measuredAt).toLocaleString()}
 
@@ -81,7 +82,7 @@ export const GAME_ASSET_MANIFEST: AssetInfo[] = [`;
 }
 
 function getManifestFooter(measuredData: MeasuredData): string {
-    return `
+  return `
 ];
 
 // Helper functions
@@ -114,7 +115,7 @@ ${getStatsSection(measuredData)}
 }
 
 function getStatsSection(measuredData: MeasuredData): string {
-    return `// Statistics
+  return `// Statistics
 export const MANIFEST_STATS = {
     totalAssets: GAME_ASSET_MANIFEST.length,
     totalEstimatedSizeMB: getTotalEstimatedSize(),
@@ -140,83 +141,88 @@ export const MANIFEST_STATS = {
  * Generate the final TypeScript content
  */
 function generateManifestContent(measuredData: MeasuredData): string {
-    const header = getManifestHeader(measuredData.measuredAt);
-    const assetsContent = buildAssetsContent(measuredData.assets);
-    const footer = getManifestFooter(measuredData);
-    
-    return `${header + assetsContent  }\n${  footer}`;
+  const header = getManifestHeader(measuredData.measuredAt);
+  const assetsContent = buildAssetsContent(measuredData.assets);
+  const footer = getManifestFooter(measuredData);
+
+  return `${header + assetsContent}\n${footer}`;
 }
 
 function buildAssetsContent(assets: MeasuredAsset[]): string {
-    const priorityGroups: Record<string, MeasuredAsset[]> = { critical: [], high: [], medium: [], low: [] };
+  const priorityGroups: Record<string, MeasuredAsset[]> = {
+    critical: [],
+    high: [],
+    medium: [],
+    low: [],
+  };
 
-    assets.forEach((asset) => {
-        const group = priorityGroups[asset.priority];
-        // Strict safe check: verify existence and group availability
-        if (asset.exists && group) {
-            group.push({
-                ...asset,
-                version: asset.version || 'v1.0.0'
-            });
-        }
-    });
+  assets.forEach(asset => {
+    const group = priorityGroups[asset.priority];
+    // Strict safe check: verify existence and group availability
+    if (asset.exists && group) {
+      group.push({
+        ...asset,
+        version: asset.version || "v1.0.0",
+      });
+    }
+  });
 
-    let content = '';
-    const priorities = ['critical', 'high', 'medium', 'low'] as const;
+  let content = "";
+  const priorities = ["critical", "high", "medium", "low"] as const;
 
-    priorities.forEach((priority, index) => {
-        const group = priorityGroups[priority];
-        if (group && group.length > 0) {
-            const prefix = index > 0 ? ',\n\n' : '\n';
-            content += `${prefix}    // === ${priority.toUpperCase()} ASSETS ===\n`;
-            content += group.map(a => formatAsset(a)).join(',\n');
-        }
-    });
+  priorities.forEach((priority, index) => {
+    const group = priorityGroups[priority];
+    if (group && group.length > 0) {
+      const prefix = index > 0 ? ",\n\n" : "\n";
+      content += `${prefix}    // === ${priority.toUpperCase()} ASSETS ===\n`;
+      content += group.map(a => formatAsset(a)).join(",\n");
+    }
+  });
 
-    return content;
+  return content;
 }
 
 async function updateManifest() {
-    const correlationId = `manifest-update-${Date.now()}`;
-    professionalLogger.info('🔨 Starting Manifest Update Process', { correlationId });
+  const correlationId = `manifest-update-${Date.now()}`;
+  professionalLogger.info("🔨 Starting Manifest Update Process", { correlationId });
 
+  try {
     try {
-        try {
-            await fs.access(MEASURED_DATA_PATH, fsConstants.F_OK);
-        } catch {
-            throw new Error(`Measured data not found at ${MEASURED_DATA_PATH}. Run measureAssets first.`);
-        }
-
-        const rawData = await fs.readFile(MEASURED_DATA_PATH, 'utf8');
-        const measuredData = JSON.parse(rawData) as MeasuredData;
-        
-        // Backup
-        try {
-            await fs.access(MANIFEST_PATH, fsConstants.F_OK);
-            await fs.copyFile(MANIFEST_PATH, BACKUP_PATH);
-            professionalLogger.debug('💾 Backup created for gameAssetManifest.ts', { correlationId });
-        } catch {
-            // Manifest might not exist yet, skip backup
-        }
-
-        const newContent = generateManifestContent(measuredData);
-        await fs.writeFile(MANIFEST_PATH, newContent, 'utf8');
-
-        professionalLogger.info('✨ Manifest synchronization completed!', { 
-            correlationId,
-            accuracy: `${measuredData.summary.accuracy  }%`,
-            found: measuredData.summary.foundAssets
-        });
-
-        process.exit(0);
-    } catch (error: unknown) {
-        const err = error as Error;
-        professionalLogger.fatal('Manifest Update failed', { 
-            correlationId, 
-            error: err.message 
-        });
-        process.exit(1);
+      await fs.access(MEASURED_DATA_PATH, fsConstants.F_OK);
+    } catch {
+      throw new Error(`Measured data not found at ${MEASURED_DATA_PATH}. Run measureAssets first.`);
     }
+
+    const rawData = await fs.readFile(MEASURED_DATA_PATH, "utf8");
+    const measuredData = JSON.parse(rawData) as MeasuredData;
+
+    // Backup
+    try {
+      await fs.access(MANIFEST_PATH, fsConstants.F_OK);
+      await fs.copyFile(MANIFEST_PATH, BACKUP_PATH);
+      professionalLogger.debug("💾 Backup created for gameAssetManifest.ts", { correlationId });
+    } catch {
+      // Manifest might not exist yet, skip backup
+    }
+
+    const newContent = generateManifestContent(measuredData);
+    await fs.writeFile(MANIFEST_PATH, newContent, "utf8");
+
+    professionalLogger.info("✨ Manifest synchronization completed!", {
+      correlationId,
+      accuracy: `${measuredData.summary.accuracy}%`,
+      found: measuredData.summary.foundAssets,
+    });
+
+    process.exit(0);
+  } catch (error: unknown) {
+    const err = error as Error;
+    professionalLogger.fatal("Manifest Update failed", {
+      correlationId,
+      error: err.message,
+    });
+    process.exit(1);
+  }
 }
 
 updateManifest();

@@ -1,22 +1,22 @@
-'use client';
+"use client";
 
 import {
-    AlertDialog,
-    AlertDialogAction,
-    AlertDialogCancel,
-    AlertDialogContent,
-    AlertDialogDescription,
-    AlertDialogFooter,
-    AlertDialogHeader,
-    AlertDialogTitle,
-    AlertDialogTrigger,
-} from '@/components/ui/alert-dialog';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import type { StoreItemDocument } from '@/types/database';
-import { Edit, Trash2 } from 'lucide-react';
-import Image from 'next/image';
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import type { StoreItemDocument } from "@/types/database";
+import { Edit, Trash2 } from "lucide-react";
+import Image from "next/image";
 
 interface DeleteItemDialogProps {
   itemName: string;
@@ -86,18 +86,16 @@ function ItemDetails({ item }: { item: StoreItemDocument }) {
           <p className="text-sm text-muted-foreground">${item.usdPrice}</p>
         </div>
         <div className="flex gap-2">
-          <Badge variant={item.type === 'consumable' ? 'default' : 'secondary'}>
-            {item.type}
-          </Badge>
+          <Badge variant={item.type === "consumable" ? "default" : "secondary"}>{item.type}</Badge>
           <Badge
             variant={
-              item.rarity === 'common'
-                ? 'outline'
-                : item.rarity === 'rare'
-                ? 'default'
-                : item.rarity === 'epic'
-                ? 'destructive'
-                : 'default'
+              item.rarity === "common"
+                ? "outline"
+                : item.rarity === "rare"
+                  ? "default"
+                  : item.rarity === "epic"
+                    ? "destructive"
+                    : "default"
             }
           >
             {item.rarity}
@@ -123,8 +121,8 @@ export function AdminItemCard({ item, onEdit, onDelete }: AdminItemCardProps) {
       <CardContent>
         <ItemDetails item={item} />
         <div className="flex items-center justify-between">
-          <Badge variant={item.isActive ? 'default' : 'secondary'}>
-            {item.isActive ? 'Active' : 'Inactive'}
+          <Badge variant={item.isActive ? "default" : "secondary"}>
+            {item.isActive ? "Active" : "Inactive"}
           </Badge>
           <p className="text-xs text-muted-foreground">
             Updated: {new Date(item.updatedAt).toLocaleDateString()}

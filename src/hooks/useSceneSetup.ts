@@ -1,12 +1,12 @@
-'use client';
+"use client";
 
-import { getDevicePerformanceConfig } from '@/lib/utils';
-import type { GameObject } from '@/types/game';
-import { logger } from '@/utils/logger';
-import type { MutableRefObject } from 'react';
-import * as React from 'react';
-import * as THREE from 'three';
-import { Octree } from '../lib/Octree';
+import { getDevicePerformanceConfig } from "@/lib/utils";
+import type { GameObject } from "@/types/game";
+import { logger } from "@/utils/logger";
+import type { MutableRefObject } from "react";
+import * as React from "react";
+import * as THREE from "three";
+import { Octree } from "../lib/Octree";
 
 interface UseSceneSetupProps {
   mountRef: MutableRefObject<HTMLDivElement | null>;
@@ -18,7 +18,10 @@ interface UseSceneSetupProps {
   isJoystickInteractionActiveRef: MutableRefObject<boolean>;
 }
 
-const configureRenderer = (renderer: THREE.WebGLRenderer, perfConfig: ReturnType<typeof getDevicePerformanceConfig>) => {
+const configureRenderer = (
+  renderer: THREE.WebGLRenderer,
+  perfConfig: ReturnType<typeof getDevicePerformanceConfig>
+) => {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.setPixelRatio(perfConfig.renderer.pixelRatio);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -46,7 +49,9 @@ const disposeObject = (object: THREE.Object3D) => {
 /**
  * Internal hook to handle scene initialization.
  */
-const useInternalInitialization = (props: Omit<UseSceneSetupProps, 'isPausedRef' | 'isJoystickInteractionActiveRef'>) => {
+const useInternalInitialization = (
+  props: Omit<UseSceneSetupProps, "isPausedRef" | "isJoystickInteractionActiveRef">
+) => {
   const { mountRef, sceneRef, cameraRef, rendererRef, octreeRef } = props;
 
   return React.useCallback(() => {
@@ -59,21 +64,27 @@ const useInternalInitialization = (props: Omit<UseSceneSetupProps, 'isPausedRef'
     const scene = new THREE.Scene();
     sceneRef.current = scene;
 
-    const isLowPerf = perfConfig.performanceLevel === 'low';
+    const isLowPerf = perfConfig.performanceLevel === "low";
     const renderer = new THREE.WebGLRenderer({
       antialias: perfConfig.renderer.antialias,
-      powerPreference: 'high-performance',
+      powerPreference: "high-performance",
       logarithmicDepthBuffer: !isLowPerf, // Disable on low-end to save GPU
-      precision: isLowPerf ? 'mediump' : 'highp'
+      precision: isLowPerf ? "mediump" : "highp",
     });
 
     configureRenderer(renderer, perfConfig);
     const mount = mountRef.current;
-    renderer.setSize(mount.clientWidth || window.innerWidth, mount.clientHeight || window.innerHeight);
+    renderer.setSize(
+      mount.clientWidth || window.innerWidth,
+      mount.clientHeight || window.innerHeight
+    );
     mount.appendChild(renderer.domElement);
     rendererRef.current = renderer;
 
-    const worldBounds = new THREE.Box3(new THREE.Vector3(-50000, -10, -50000), new THREE.Vector3(50000, 300, 50000));
+    const worldBounds = new THREE.Box3(
+      new THREE.Vector3(-50000, -10, -50000),
+      new THREE.Vector3(50000, 300, 50000)
+    );
     octreeRef.current = new Octree<GameObject>(worldBounds);
 
     logger.log(`[useSceneSetup] Renderer configured (${perfConfig.performanceLevel})`);
@@ -84,7 +95,9 @@ const useInternalInitialization = (props: Omit<UseSceneSetupProps, 'isPausedRef'
 /**
  * Internal hook to handle scene cleanup.
  */
-const useInternalCleanup = (props: Omit<UseSceneSetupProps, 'isPausedRef' | 'isJoystickInteractionActiveRef'>) => {
+const useInternalCleanup = (
+  props: Omit<UseSceneSetupProps, "isPausedRef" | "isJoystickInteractionActiveRef">
+) => {
   const { mountRef, sceneRef, rendererRef, octreeRef } = props;
 
   return React.useCallback(() => {
@@ -93,9 +106,13 @@ const useInternalCleanup = (props: Omit<UseSceneSetupProps, 'isPausedRef' | 'isJ
     const scene = sceneRef.current;
 
     if (renderer && mount && mount.contains(renderer.domElement)) {
-      try { mount.removeChild(renderer.domElement); } catch (e) { logger.warn("Error removing renderer:", e); }
+      try {
+        mount.removeChild(renderer.domElement);
+      } catch (e) {
+        logger.warn("Error removing renderer:", e);
+      }
     }
-    
+
     if (renderer) {
       renderer.dispose();
       rendererRef.current = null;

@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import { useAdminIpManagement } from '@/hooks/useAdminIpManagement';
-import { useEffect, useState } from 'react';
+import { useAdminIpManagement } from "@/hooks/useAdminIpManagement";
+import { useEffect, useState } from "react";
 
 export function useSecuritySectionLogic() {
   const adminIp = useAdminIpManagement();
-  
-  const [search, setSearch] = useState('');
-  const [newIp, setNewIp] = useState('');
-  const [targetList, setTargetList] = useState<'whitelist' | 'blacklist'>('blacklist');
+
+  const [search, setSearch] = useState("");
+  const [newIp, setNewIp] = useState("");
+  const [targetList, setTargetList] = useState<"whitelist" | "blacklist">("blacklist");
   const [confirmDelete, setConfirmDelete] = useState<{
     ip: string;
-    list: 'whitelist' | 'blacklist';
+    list: "whitelist" | "blacklist";
   } | null>(null);
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export function useSecuritySectionLogic() {
   }, [adminIp.message, adminIp.setMessage]);
 
   const handleAddIp = async () => {
-    await adminIp.addIp(newIp, targetList, () => setNewIp(''));
+    await adminIp.addIp(newIp, targetList, () => setNewIp(""));
   };
 
   const handleConfirmDelete = async () => {
@@ -44,12 +44,16 @@ export function useSecuritySectionLogic() {
 
   return {
     ...adminIp,
-    search, setSearch,
-    newIp, setNewIp,
-    targetList, setTargetList,
-    confirmDelete, setConfirmDelete,
+    search,
+    setSearch,
+    newIp,
+    setNewIp,
+    targetList,
+    setTargetList,
+    confirmDelete,
+    setConfirmDelete,
     handleAddIp,
     handleConfirmDelete,
-    resetPagination
+    resetPagination,
   };
 }

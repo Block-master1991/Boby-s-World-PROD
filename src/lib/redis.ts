@@ -1,137 +1,181 @@
-import type { Cluster, ClusterOptions, RedisOptions } from 'ioredis';
-import Redis from 'ioredis';
-import { logger } from 'utils/logger';
-import { env, isDev } from './config/env';
+import type { Cluster, ClusterOptions, RedisOptions } from "ioredis";
+import Redis from "ioredis";
+import { logger } from "utils/logger";
+import { env, isDev } from "./config/env";
 
 let redisInstance: Redis | Cluster | null = null;
 
 // Define a recursive dummy interface to satisfy typing
 interface DummyRedis {
-    then: (resolve: (value: null) => void) => void;
-    catch: () => DummyRedis;
-    [key: string]: unknown;
+  then: (resolve: (value: null) => void) => void;
+  catch: () => DummyRedis;
+  [key: string]: unknown;
 }
 
 const createDummyRedisHandler = (): unknown => {
-    // Return a chainable proxy for dummy calls (supports multi().setex().exec())
-    const dummy = (() => dummy) as unknown as DummyRedis;
-    
-    // Add then/catch methods to make it awaitable and chainable
-    dummy.then = (resolve) => resolve(null);
-    dummy.catch = () => dummy;
-    
-    // Allow property access to return the dummy function itself
-    return new Proxy(dummy, {
-        get: (_target, prop) => {
-             // Treat then/catch specially for Promise compatibility
-            if (prop === 'then') return (resolve: (value: null) => void) => resolve(null);
-            if (prop === 'catch') return () => dummy;
-            return dummy;
-        }
-    });
+  // Return a chainable proxy for dummy calls (supports multi().setex().exec())
+  const dummy = (() => dummy) as unknown as DummyRedis;
+
+  // Add then/catch methods to make it awaitable and chainable
+  dummy.then = resolve => resolve(null);
+  dummy.catch = () => dummy;
+
+  // Allow property access to return the dummy function itself
+  return new Proxy(dummy, {
+    get: (_target, prop) => {
+      // Treat then/catch specially for Promise compatibility
+      if (prop === "then") return (resolve: (value: null) => void) => resolve(null);
+      if (prop === "catch") return () => dummy;
+      return dummy;
+    },
+  });
 };
 
 const sanitizeRedisUrl = (url: string): string => {
-    let sanitized = url
-        .replace(/^redis-cli\s+/, '')
-        .replace(/--tls\s+/, '')
-        .replace(/-u\s+/, '')
-        .trim();
+  let sanitized = url
+    .replace(/^redis-cli\s+/, "")
+    .replace(/--tls\s+/, "")
+    .replace(/-u\s+/, "")
+    .trim();
 
-    // Auto-fix Protocol for Upstash (requires TLS 'rediss://')
-    if (sanitized.includes('upstash') && sanitized.startsWith('redis://')) {
-        sanitized = sanitized.replace('redis://', 'rediss://');
-        if (isDev) {
-            logger.log('[Redis] Auto-converted Upstash URL to rediss:// (TLS)');
-        }
+  // Auto-fix Protocol for Upstash (requires TLS 'rediss://')
+  if (sanitized.includes("upstash") && sanitized.startsWith("redis://")) {
+    sanitized = sanitized.replace("redis://", "rediss://");
+    if (isDev) {
+      logger.log("[Redis] Auto-converted Upstash URL to rediss:// (TLS)");
     }
-    return sanitized;
+  }
+  return sanitized;
 };
 
 const getClusterOptions = (tlsOptions: object): ClusterOptions => ({
-    redisOptions: {
-        ...tlsOptions,
-        maxRetriesPerRequest: 1,
-        connectTimeout: 5000,
-    },
-    scaleReads: 'slave'
+  redisOptions: {
+    ...tlsOptions,
+    maxRetriesPerRequest: 1,
+    connectTimeout: 5000,
+  },
+  scaleReads: "slave",
 });
 
 const getStandardOptions = (tlsOptions: object): RedisOptions => ({
-    maxRetriesPerRequest: 3,
-    connectTimeout: 5000,
-    // Explicitly enable TLS options if protocol is rediss://
-    ...tlsOptions,
-    retryStrategy: (times: number) => {
-        if (times > 5) return null; // Stop after 5 retries
-        return Math.min(times * 100, 2000); // Backoff
-    }
+  maxRetriesPerRequest: 3,
+  connectTimeout: 5000,
+  // Explicitly enable TLS options if protocol is rediss://
+  ...tlsOptions,
+  retryStrategy: (times: number) => {
+    if (times > 5) return null; // Stop after 5 retries
+    return Math.min(times * 100, 2000); // Backoff
+  },
 });
 
 const getRedis = (): Redis | Cluster => {
-    if (!redisInstance && env.REDIS_URL) {
-        try {
-            const connectionUrl = sanitizeRedisUrl(env.REDIS_URL);
-            const isCluster = env.REDIS_CLUSTER_MODE;
-            const isTls = connectionUrl.startsWith('rediss://');
+  if (!redisInstance && env.REDIS_URL) {
+    try {
+      const connectionUrl = sanitizeRedisUrl(env.REDIS_URL);
+      const isCluster = env.REDIS_CLUSTER_MODE;
+      const isTls = connectionUrl.startsWith("rediss://");
 
-            // Common TLS options
-            const tlsOptions = isTls ? { tls: { rejectUnauthorized: false } } : {};
+      // Common TLS options
+      const tlsOptions = isTls ? { tls: { rejectUnauthorized: false } } : {};
 
-            if (isCluster) {
-                // Initialize Cluster
-                const nodes = connectionUrl.split(',').map(url => url.trim());
-                logger.log('[Redis] Initializing in CLUSTER mode');
-                redisInstance = new Redis.Cluster(nodes, getClusterOptions(tlsOptions));
-            } else {
-                // Initialize Standard Client
-                redisInstance = new Redis(connectionUrl, getStandardOptions(tlsOptions));
+      if (isCluster) {
+        // Initialize Cluster
+        const nodes = connectionUrl.split(",").map(url => url.trim());
+        logger.log("[Redis] Initializing in CLUSTER mode");
+        redisInstance = new Redis.Cluster(nodes, getClusterOptions(tlsOptions));
+      } else {
+        // Initialize Standard Client
+        redisInstance = new Redis(connectionUrl, getStandardOptions(tlsOptions));
+      }
+
+      if (redisInstance) {
+        redisInstance.on("connect", () => {
+          if (isDev) {
+            logger.log("[Redis] Connected successfully.");
+          }
+        });
+
+        redisInstance.on("error", (err: Error & { code?: string }) => {
+          // Suppress noise during build, but log real runtime errors
+          // Silent error during build or if it's a known connection issue
+          if (
+            process.env["NEXT_PHASE"] === "phase-production-build" ||
+            err.code === "ENOTFOUND" ||
+            err.code === "ETIMEDOUT"
+          ) {
+            // Log as warning only in dev
+            if (isDev) {
+              logger.warn("[Redis] Connection failed (silent fallback enabled):", err.message);
             }
-
-            if (redisInstance) {
-                redisInstance.on('connect', () => {
-                    if (isDev) {
-                        logger.log('[Redis] Connected successfully.');
-                    }
-                });
-
-                redisInstance.on('error', (err: Error & { code?: string }) => {
-                    // Suppress noise during build, but log real runtime errors
-                    // Silent error during build or if it's a known connection issue
-                    if (process.env['NEXT_PHASE'] === 'phase-production-build' || err.code === 'ENOTFOUND' || err.code === 'ETIMEDOUT') {
-                        // Log as warning only in dev
-                        if (isDev) {
-                            logger.warn('[Redis] Connection failed (silent fallback enabled):', err.message);
-                        }
-                    } else {
-                        logger.error('[Redis] Connection Error:', err.message);
-                    }
-                });
-            }
-        } catch (e) {
-            logger.error('[Redis] Critical initialization failure:', e);
-            redisInstance = null;
-        }
+          } else {
+            logger.error("[Redis] Connection Error:", err.message);
+          }
+        });
+      }
+    } catch (e) {
+      logger.error("[Redis] Critical initialization failure:", e);
+      redisInstance = null;
     }
-    // We cast to Redis because the proxy interface expects it, 
-    // even though it might be a Cluster or null (which returns types from proxy).
-    return redisInstance as Redis;
+  }
+  // We cast to Redis because the proxy interface expects it,
+  // even though it might be a Cluster or null (which returns types from proxy).
+  return redisInstance as Redis;
 };
+
+let isHealthy = true;
 
 // Export a proxy to maintain backward compatibility with 'import redis from ...'
 const redisProxy = new Proxy({} as Redis, {
-    get: (_target, prop) => {
-        const instance = getRedis();
+  get: (_target, prop) => {
+    const instance = getRedis();
 
-        // If no instance, return dummy functions to prevent crashes
-        if (!instance) {
-            return createDummyRedisHandler();
-        }
-
-        // We use 'unknown' cast first to safely access arbitrary properties
-        const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
-        return typeof val === 'function' ? val.bind(instance) : val;
+    // If no instance or known unhealthy, return dummy functions to prevent crashes
+    if (!instance || !isHealthy) {
+      return createDummyRedisHandler();
     }
+
+    // Add health monitoring to the instance
+    if (instance && instance.listenerCount("error") === 1) {
+      // Only our handler is there
+      instance.on("error", (err: Error & { code?: string }) => {
+        if (err.message.includes("max retries") || err.code === "ENOTFOUND") {
+          isHealthy = false;
+          setTimeout(() => {
+            isHealthy = true;
+          }, 30000); // Try again after 30s
+        }
+      });
+    }
+
+    const val = (instance as unknown as Record<string | symbol, unknown>)[prop];
+
+    if (typeof val === "function") {
+      const bound = val.bind(instance);
+      return (...args: unknown[]) => {
+        try {
+          const result = bound(...args);
+          // If it's a promise, catch it
+          if (result && typeof result.catch === "function") {
+            return result.catch((err: Error) => {
+              logger.warn(`[Redis] Async command failed (${String(prop)}):`, err.message);
+              if (
+                err.message.includes("Connection is closed") ||
+                err.message.includes("max retries")
+              ) {
+                isHealthy = false;
+              }
+              return null;
+            });
+          }
+          return result;
+        } catch (err) {
+          logger.warn(`[Redis] Sync command failed (${String(prop)}):`, (err as Error).message);
+          return null;
+        }
+      };
+    }
+    return val;
+  },
 });
 
 export default redisProxy;

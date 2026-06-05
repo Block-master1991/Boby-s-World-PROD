@@ -1,12 +1,18 @@
 // src/lib/indexedDB/operations.ts - CRUD operations for assets
 /* eslint-disable max-lines */
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { logger } from 'utils/logger';
-import { DB_CONFIG } from './config';
-import { getDatabase } from './core';
-import { getCacheStatsSync, incrementAccessCount, incrementHitCount, saveStatsToDb, updateCacheStatsInternal } from './state';
-import { IndexedDBError, type AssetMetadata } from './types';
-import { formatBytes, generateQuickChecksum } from './utils';
+import { logger } from "utils/logger";
+import { DB_CONFIG } from "./config";
+import { getDatabase } from "./core";
+import {
+  getCacheStatsSync,
+  incrementAccessCount,
+  incrementHitCount,
+  saveStatsToDb,
+  updateCacheStatsInternal,
+} from "./state";
+import { IndexedDBError, type AssetMetadata } from "./types";
+import { formatBytes, generateQuickChecksum } from "./utils";
 
 /**
  * Store asset in IndexedDB with metadata
@@ -25,14 +31,14 @@ export async function putAsset(asset: AssetMetadata & { data: any }): Promise<vo
   // }
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readwrite");
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
 
     // Prepare asset data - USE PROVIDED CHECKSUM IF AVAILABLE
     const assetData = {
       ...asset,
       checksum: asset.checksum || generateQuickChecksum(asset.data),
-      accessedAt: Date.now()
+      accessedAt: Date.now(),
     };
 
     const request = store.put(assetData);
@@ -41,13 +47,13 @@ export async function putAsset(asset: AssetMetadata & { data: any }): Promise<vo
       const stats = getCacheStatsSync();
       await updateCacheStatsInternal({
         totalItems: stats.totalItems + 1,
-        totalSize: stats.totalSize + asset.size
+        totalSize: stats.totalSize + asset.size,
       });
       resolve();
     };
 
-    request.onerror = (event) => {
-      reject(new IndexedDBError('Failed to store asset', 'PUT_FAILED', event.target));
+    request.onerror = event => {
+      reject(new IndexedDBError("Failed to store asset", "PUT_FAILED", event.target));
     };
 
     transaction.oncomplete = () => {
@@ -66,12 +72,12 @@ export async function getAsset(id: string): Promise<(AssetMetadata & { data: any
 
   return new Promise((resolve, reject) => {
     // Use readonly transaction for reading to avoid blocking other readers
-    const readTransaction = db.transaction([DB_CONFIG.stores.assets], 'readonly');
+    const readTransaction = db.transaction([DB_CONFIG.stores.assets], "readonly");
     const readStore = readTransaction.objectStore(DB_CONFIG.stores.assets);
     const readRequest = readStore.get(id);
 
-    readRequest.onsuccess = (event) => {
-      const {result} = (event.target as IDBRequest);
+    readRequest.onsuccess = event => {
+      const { result } = event.target as IDBRequest;
 
       if (result) {
         incrementHitCount();
@@ -81,20 +87,20 @@ export async function getAsset(id: string): Promise<(AssetMetadata & { data: any
           // Asset expired, schedule deletion in separate transaction
           setTimeout(() => {
             deleteAsset(id).catch(err =>
-              logger.warn('[IndexedDB] Failed to delete expired asset:', id, err)
+              logger.warn("[IndexedDB] Failed to delete expired asset:", id, err)
             );
           }, 0);
           const stats = getCacheStatsSync();
           updateCacheStatsInternal({
             totalItems: stats.totalItems - 1,
-            totalSize: stats.totalSize - result.size
-          }).catch(err => logger.warn('[IndexedDB] Failed to update stats:', err));
+            totalSize: stats.totalSize - result.size,
+          }).catch(err => logger.warn("[IndexedDB] Failed to update stats:", err));
           resolve(null);
         } else {
           // Update access time in separate transaction to avoid blocking
           setTimeout(() => {
             updateAssetAccessTime(id).catch(err =>
-              logger.warn('[IndexedDB] Failed to update access time:', id, err)
+              logger.warn("[IndexedDB] Failed to update access time:", id, err)
             );
           }, 0);
           resolve(result);
@@ -104,8 +110,8 @@ export async function getAsset(id: string): Promise<(AssetMetadata & { data: any
       }
     };
 
-    readRequest.onerror = (event) => {
-      reject(new IndexedDBError('Failed to retrieve asset', 'GET_FAILED', event.target));
+    readRequest.onerror = event => {
+      reject(new IndexedDBError("Failed to retrieve asset", "GET_FAILED", event.target));
     };
   });
 }
@@ -117,11 +123,11 @@ async function updateAssetAccessTime(id: string): Promise<void> {
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readwrite");
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
     const request = store.get(id);
 
-    request.onsuccess = (event) => {
+    request.onsuccess = event => {
       const asset = (event.target as IDBRequest).result;
       if (asset) {
         asset.accessedAt = Date.now();
@@ -130,8 +136,10 @@ async function updateAssetAccessTime(id: string): Promise<void> {
       resolve();
     };
 
-    request.onerror = (event) => {
-      reject(new IndexedDBError('Failed to update access time', 'UPDATE_ACCESS_FAILED', event.target));
+    request.onerror = event => {
+      reject(
+        new IndexedDBError("Failed to update access time", "UPDATE_ACCESS_FAILED", event.target)
+      );
     };
   });
 }
@@ -143,7 +151,7 @@ export async function deleteAsset(id: string): Promise<boolean> {
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readwrite");
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
 
     // Get asset size before deletion
@@ -158,19 +166,19 @@ export async function deleteAsset(id: string): Promise<boolean> {
           const stats = getCacheStatsSync();
           await updateCacheStatsInternal({
             totalItems: stats.totalItems - 1,
-            totalSize: stats.totalSize - asset.size
+            totalSize: stats.totalSize - asset.size,
           });
         }
         resolve(true);
       };
 
-      deleteRequest.onerror = (event) => {
-        reject(new IndexedDBError('Failed to delete asset', 'DELETE_FAILED', event.target));
+      deleteRequest.onerror = event => {
+        reject(new IndexedDBError("Failed to delete asset", "DELETE_FAILED", event.target));
       };
     };
 
-    getRequest.onerror = (event) => {
-      reject(new IndexedDBError('Failed to get asset for deletion', 'GET_FAILED', event.target));
+    getRequest.onerror = event => {
+      reject(new IndexedDBError("Failed to get asset for deletion", "GET_FAILED", event.target));
     };
   });
 }
@@ -182,7 +190,7 @@ export async function clearAssets(): Promise<void> {
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readwrite");
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
     const request = store.clear();
 
@@ -190,13 +198,13 @@ export async function clearAssets(): Promise<void> {
       await updateCacheStatsInternal({
         totalItems: 0,
         totalSize: 0,
-        evictions: 0
+        evictions: 0,
       });
       resolve();
     };
 
-    request.onerror = (event) => {
-      reject(new IndexedDBError('Failed to clear assets', 'CLEAR_FAILED', event.target));
+    request.onerror = event => {
+      reject(new IndexedDBError("Failed to clear assets", "CLEAR_FAILED", event.target));
     };
   });
 }
@@ -208,7 +216,7 @@ export async function getAllAssets(): Promise<AssetMetadata[]> {
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readonly');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readonly");
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
     const request = store.getAll();
 
@@ -226,13 +234,13 @@ export async function getAllAssets(): Promise<AssetMetadata[]> {
         tags: asset.tags,
         priority: asset.priority,
         compressed: asset.compressed,
-        dependencies: asset.dependencies
+        dependencies: asset.dependencies,
       }));
       resolve(assets);
     };
 
-    request.onerror = (event) => {
-      reject(new IndexedDBError('Failed to get all assets', 'GET_ALL_FAILED', event.target));
+    request.onerror = event => {
+      reject(new IndexedDBError("Failed to get all assets", "GET_ALL_FAILED", event.target));
     };
   });
 }
@@ -244,7 +252,7 @@ export async function batchPut(assets: (AssetMetadata & { data: any })[]): Promi
   const db = await getDatabase();
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readwrite");
 
     let completed = 0;
     const total = assets.length;
@@ -255,7 +263,7 @@ export async function batchPut(assets: (AssetMetadata & { data: any })[]): Promi
       const assetData = {
         ...asset,
         checksum: asset.checksum || generateQuickChecksum(asset.data),
-        accessedAt: Date.now()
+        accessedAt: Date.now(),
       };
 
       const request = transaction.objectStore(DB_CONFIG.stores.assets).put(assetData);
@@ -268,13 +276,21 @@ export async function batchPut(assets: (AssetMetadata & { data: any })[]): Promi
           const stats = getCacheStatsSync();
           updateCacheStatsInternal({
             totalItems: stats.totalItems + totalAddedItems,
-            totalSize: stats.totalSize + totalAddedSize
-          }).then(resolve).catch(reject);
+            totalSize: stats.totalSize + totalAddedSize,
+          })
+            .then(resolve)
+            .catch(reject);
         }
       };
 
-      request.onerror = (event) => {
-        reject(new IndexedDBError(`Failed to batch put asset ${asset.name}`, 'BATCH_PUT_FAILED', event.target));
+      request.onerror = event => {
+        reject(
+          new IndexedDBError(
+            `Failed to batch put asset ${asset.name}`,
+            "BATCH_PUT_FAILED",
+            event.target
+          )
+        );
       };
     });
   });
@@ -288,13 +304,13 @@ export async function cleanExpiredAssets(): Promise<number> {
   let cleaned = 0;
 
   return new Promise((resolve, reject) => {
-    const transaction = db.transaction([DB_CONFIG.stores.assets], 'readwrite');
+    const transaction = db.transaction([DB_CONFIG.stores.assets], "readwrite");
     const store = transaction.objectStore(DB_CONFIG.stores.assets);
-    const index = store.index('ttl');
+    const index = store.index("ttl");
 
     const request = index.openCursor();
 
-    request.onsuccess = (event) => {
+    request.onsuccess = event => {
       const cursor = (event.target as IDBRequest).result;
 
       if (cursor) {
@@ -304,19 +320,21 @@ export async function cleanExpiredAssets(): Promise<number> {
           updateCacheStatsInternal({
             totalItems: stats.totalItems - 1,
             totalSize: stats.totalSize - asset.size,
-            lastCleanup: Date.now()
-          }).catch(err => logger.warn('[IndexedDB] Failed to update stats:', err));
+            lastCleanup: Date.now(),
+          }).catch(err => logger.warn("[IndexedDB] Failed to update stats:", err));
           cleaned++;
           cursor.delete();
         }
         cursor.continue();
       } else {
-        saveStatsToDb(db).then(() => resolve(cleaned)).catch(reject);
+        saveStatsToDb(db)
+          .then(() => resolve(cleaned))
+          .catch(reject);
       }
     };
 
-    request.onerror = (event) => {
-      reject(new IndexedDBError('Failed to clean expired assets', 'CLEAN_FAILED', event.target));
+    request.onerror = event => {
+      reject(new IndexedDBError("Failed to clean expired assets", "CLEAN_FAILED", event.target));
     };
   });
 }

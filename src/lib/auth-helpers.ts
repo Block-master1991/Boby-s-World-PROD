@@ -1,7 +1,7 @@
-import { getClientIp } from '@/lib/request-utils';
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
-import { JWTManager } from './jwt-utils';
+import { getClientIp } from "@/lib/request-utils";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
+import { JWTManager } from "./jwt-utils";
 
 export interface AuthMetadata {
   accessToken: string | null;
@@ -24,13 +24,13 @@ export function extractAuthRequestMetadata(request: NextRequest | Request): Auth
   const cookieHeader = "headers" in request ? request.headers.get("cookie") : null;
 
   const accessToken = isEdge
-    ? (request as NextRequest).cookies.get("accessToken")?.value ?? null
+    ? ((request as NextRequest).cookies.get("accessToken")?.value ?? null)
     : cookieHeader
       ? JWTManager.extractTokenFromCookies(cookieHeader, "accessToken")
       : null;
 
   const refreshToken = isEdge
-    ? (request as NextRequest).cookies.get("refreshToken")?.value ?? null
+    ? ((request as NextRequest).cookies.get("refreshToken")?.value ?? null)
     : cookieHeader
       ? JWTManager.extractTokenFromCookies(cookieHeader, "refreshToken")
       : null;
@@ -43,15 +43,25 @@ export function extractAuthRequestMetadata(request: NextRequest | Request): Auth
 
 export function createAuthErrorResponse(options: AuthErrorOptions) {
   const { message, code, status = 401, details, clearCookies = false } = options;
-  const response = NextResponse.json({
-    authenticated: false,
-    error: message,
-    code,
-    details
-  }, { status });
+  const response = NextResponse.json(
+    {
+      authenticated: false,
+      error: message,
+      code,
+      details,
+    },
+    { status }
+  );
 
   if (clearCookies) {
-    const securityCookies = ["accessToken", "refreshToken", "nonce", "csrfToken", "secure_session", "session_seed"];
+    const securityCookies = [
+      "accessToken",
+      "refreshToken",
+      "nonce",
+      "csrfToken",
+      "secure_session",
+      "session_seed",
+    ];
     securityCookies.forEach(name => {
       response.cookies.delete(name);
     });

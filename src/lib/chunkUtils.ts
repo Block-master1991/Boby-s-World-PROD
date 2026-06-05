@@ -1,7 +1,7 @@
 // src/lib/chunkUtils.ts
 
 export const CHUNK_SIZE = 50; // Each chunk is 50x50 units
-export const RENDER_DISTANCE_CHUNKS = 2; // Render current chunk + 2 chunks in each direction (total 5x5 chunks)
+export const RENDER_DISTANCE_CHUNKS = 3; // Render current chunk + 3 chunks in each direction (total 7x7 chunks)
 
 /**
  * Converts world coordinates to chunk coordinates.
@@ -21,7 +21,7 @@ export function getChunkCoordinates(worldX: number, worldZ: number) {
  * @param chunkZ The chunk Z coordinate.
  * @returns A THREE.Vector3 representing the center world position of the chunk.
  */
-import * as THREE from 'three'; // Import THREE for Vector3
+import * as THREE from "three"; // Import THREE for Vector3
 export function getChunkWorldPosition(chunkX: number, chunkZ: number) {
   const worldX = chunkX * CHUNK_SIZE + CHUNK_SIZE / 2;
   const worldZ = chunkZ * CHUNK_SIZE + CHUNK_SIZE / 2;

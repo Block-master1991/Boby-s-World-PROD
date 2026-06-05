@@ -1,30 +1,33 @@
-import type { CoinData } from '@/hooks/useCoinLogic';
-import type { Octree } from '@/lib/Octree';
-import type { GameObject } from '@/types/game';
-import { useCallback } from 'react';
-import * as THREE from 'three';
-import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils';
-import { positionModel } from '../spawningHelpers';
-import type { EnemyData } from '../types';
-import { createEnemy, createMixer } from './enemyCreator';
+import type { CoinData } from "@/hooks/useCoinLogic";
+import type { Octree } from "@/lib/Octree";
+import type { GameObject } from "@/types/game";
+import { useCallback } from "react";
+import * as THREE from "three";
+import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils";
+import { positionModel } from "../spawningHelpers";
+import type { EnemyData } from "../types";
+import { createEnemy, createMixer } from "./enemyCreator";
 
 interface SpawnHandlerParams {
   sceneRef: React.MutableRefObject<THREE.Scene | null>;
   octreeRef: React.MutableRefObject<Octree<GameObject> | null>;
   enemyMeshesRef: React.MutableRefObject<EnemyData[]>;
-  loadEnemyModel: (t: 'carnivore' | 'herbivore', f?: string) => Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] }>;
+  loadEnemyModel: (
+    t: "carnivore" | "herbivore",
+    f?: string
+  ) => Promise<{ model: THREE.Group; animations: THREE.AnimationClip[] }>;
 }
 
 // دالة مساعدة لتحديد نوع العدو
-const getEnemyType = (): 'carnivore' | 'herbivore' => {
-  return Math.random() < 0.5 ? 'carnivore' : 'herbivore';
+const getEnemyType = (): "carnivore" | "herbivore" => {
+  return Math.random() < 0.5 ? "carnivore" : "herbivore";
 };
 
 // دالة مساعدة للحصول على قائمة أنيمات الخمول
-const getIdleAnimations = (enemyType: 'carnivore' | 'herbivore'): string[] => {
-  return enemyType === 'carnivore' 
-    ? ['Idle', 'Idle_2', 'Idle_2_HeadLow', 'Eating'] 
-    : ['Idle', 'Idle_2', 'Idle_HeadLow', 'Eating'];
+const getIdleAnimations = (enemyType: "carnivore" | "herbivore"): string[] => {
+  return enemyType === "carnivore"
+    ? ["Idle", "Idle_2", "Idle_2_HeadLow", "Eating"]
+    : ["Idle", "Idle_2", "Idle_HeadLow", "Eating"];
 };
 
 // دالة مساعدة لتحديد موقع آمن من الكلب
@@ -49,7 +52,7 @@ interface CreateAndAddEnemyParams {
   chunk: string;
   scene: THREE.Scene;
   octree: Octree<GameObject> | null;
-  enemyType: 'carnivore' | 'herbivore';
+  enemyType: "carnivore" | "herbivore";
   animations: THREE.AnimationClip[];
   enemyMeshesRef: React.MutableRefObject<EnemyData[]>;
 }
@@ -62,7 +65,7 @@ const createAndAddEnemy = (params: CreateAndAddEnemyParams): void => {
   const enemyPosition = positionModel({ model, coin, chunkKey: chunk, scene, octree });
 
   // التأكد من أن العدو يبدأ بالقرب من العملة التي يجب حمايتها
-  const dogPosition = scene?.getObjectByName('Dog')?.position;
+  const dogPosition = scene?.getObjectByName("Dog")?.position;
   const safePosition = getSafePositionFromDog(enemyPosition, dogPosition);
   model.position.copy(safePosition);
 
@@ -79,7 +82,9 @@ const createAndAddEnemy = (params: CreateAndAddEnemyParams): void => {
 
   // التأكد من أن النموذج جاهز قبل إضافته إلى القائمة
   if (model.children && model.children.length > 0) {
-    enemyMeshesRef.current.push(createEnemy({ coin, model, lod, mixer, actions, action, type: enemyType, chunk }));
+    enemyMeshesRef.current.push(
+      createEnemy({ coin, model, lod, mixer, actions, action, type: enemyType, chunk })
+    );
   }
 };
 
@@ -87,32 +92,35 @@ export const createSpawnHandler = (params: SpawnHandlerParams) => {
   const { sceneRef, octreeRef, enemyMeshesRef, loadEnemyModel } = params;
   const pending = new Set<string>();
 
-  const spawn = useCallback(async (coin: CoinData, chunk: string) => {
-    if (coin.collected || pending.has(coin.uuid)) return;
-    pending.add(coin.uuid);
+  const spawn = useCallback(
+    async (coin: CoinData, chunk: string) => {
+      if (coin.collected || pending.has(coin.uuid)) return;
+      pending.add(coin.uuid);
 
-    const t = getEnemyType();
-    const { model: raw, animations } = await loadEnemyModel(t);
+      const t = getEnemyType();
+      const { model: raw, animations } = await loadEnemyModel(t);
 
-    if (!sceneRef.current || coin.collected) {
+      if (!sceneRef.current || coin.collected) {
+        pending.delete(coin.uuid);
+        return;
+      }
+
+      const model = SkeletonUtils.clone(raw) as THREE.Group;
+      createAndAddEnemy({
+        model,
+        coin,
+        chunk,
+        scene: sceneRef.current,
+        octree: octreeRef.current,
+        enemyType: t,
+        animations,
+        enemyMeshesRef,
+      });
+
       pending.delete(coin.uuid);
-      return;
-    }
-
-    const model = SkeletonUtils.clone(raw) as THREE.Group;
-    createAndAddEnemy({
-      model,
-      coin,
-      chunk,
-      scene: sceneRef.current,
-      octree: octreeRef.current,
-      enemyType: t,
-      animations,
-      enemyMeshesRef
-    });
-
-    pending.delete(coin.uuid);
-  }, [loadEnemyModel, sceneRef, enemyMeshesRef, octreeRef]);
+    },
+    [loadEnemyModel, sceneRef, enemyMeshesRef, octreeRef]
+  );
 
   return { spawn, pending };
 };

@@ -8,7 +8,7 @@ import { getFirestore } from "firebase/firestore";
 // IMPORTANT: Replace this with your actual Firebase project configuration!
 // Go to your Firebase project settings, find "Your apps", and copy the config object.
 
-import { env } from './config/env';
+import { env } from "./config/env";
 
 const firebaseConfig = {
   apiKey: env.NEXT_PUBLIC_FIREBASE_API_KEY!,
@@ -16,7 +16,7 @@ const firebaseConfig = {
   projectId: env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
   storageBucket: env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
   messagingSenderId: env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
-  appId: env.NEXT_PUBLIC_FIREBASE_APP_ID!
+  appId: env.NEXT_PUBLIC_FIREBASE_APP_ID!,
 };
 
 // Initialize Firebase

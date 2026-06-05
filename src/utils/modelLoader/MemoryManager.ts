@@ -1,13 +1,13 @@
-import type * as THREE from 'three';
-import type { LoadPriority } from './types';
-import { type MemoryInfo } from './types';
+import type * as THREE from "three";
+import type { LoadPriority } from "./types";
+import { type MemoryInfo } from "./types";
 
 export class MemoryManager {
   private static instance: MemoryManager;
   private modelCache: Map<string, { model: THREE.Group; info: MemoryInfo }> = new Map();
   private readonly MAX_MEMORY_USAGE = 500 * 1024 * 1024; // 500MB
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): MemoryManager {
     if (!MemoryManager.instance) {
@@ -18,7 +18,7 @@ export class MemoryManager {
 
   public cacheModel(path: string, model: THREE.Group, priority: LoadPriority): void {
     const size = this.calculateModelSize(model);
-    
+
     // Cleanup if we're over memory limit
     if (this.getMemoryUsage() + size > this.MAX_MEMORY_USAGE) {
       this.cleanup();
@@ -30,8 +30,8 @@ export class MemoryManager {
         size,
         lastAccessed: Date.now(),
         accessCount: 1,
-        priority
-      }
+        priority,
+      },
     });
   }
 
@@ -47,11 +47,11 @@ export class MemoryManager {
 
   public calculateModelSize(model: THREE.Group): number {
     let totalSize = 0;
-    model.traverse((object) => {
+    model.traverse(object => {
       if ((object as THREE.Mesh).isMesh) {
         const mesh = object as THREE.Mesh;
         const geometry = mesh.geometry as THREE.BufferGeometry;
-        
+
         // Vertices, Normals, UVs, etc.
         for (const name in geometry.attributes) {
           const attribute = geometry.getAttribute(name);
@@ -68,10 +68,14 @@ export class MemoryManager {
         // Texture size
         if (Array.isArray(mesh.material)) {
           mesh.material.forEach(mat => {
-            this.processMaterial(mat, (size) => { totalSize += size; });
+            this.processMaterial(mat, size => {
+              totalSize += size;
+            });
           });
         } else {
-          this.processMaterial(mesh.material, (size) => { totalSize += size; });
+          this.processMaterial(mesh.material, size => {
+            totalSize += size;
+          });
         }
       }
     });
@@ -80,9 +84,18 @@ export class MemoryManager {
 
   private processMaterial(material: THREE.Material, addSize: (s: number) => void): void {
     // Check common texture slots
-    const textureSlots: (keyof THREE.MeshStandardMaterial)[] = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'];
+    const textureSlots: (keyof THREE.MeshStandardMaterial)[] = [
+      "map",
+      "normalMap",
+      "roughnessMap",
+      "metalnessMap",
+      "emissiveMap",
+      "aoMap",
+    ];
     for (const slot of textureSlots) {
-      const texture = (material as unknown as Record<string, unknown>)[slot] as THREE.Texture | null;
+      const texture = (material as unknown as Record<string, unknown>)[
+        slot
+      ] as THREE.Texture | null;
       if (texture && texture.isTexture) {
         addSize(this.calculateTextureSize(texture));
       }
@@ -98,17 +111,16 @@ export class MemoryManager {
   }
 
   public cleanup(): void {
-    const sortedCache = Array.from(this.modelCache.entries())
-      .sort((a, b) => {
-        // First priority, then access count, then last accessed
-        if (a[1].info.priority !== b[1].info.priority) {
-          return b[1].info.priority - a[1].info.priority; // Lower priority (higher number) first
-        }
-        if (a[1].info.accessCount !== b[1].info.accessCount) {
-          return a[1].info.accessCount - b[1].info.accessCount;
-        }
-        return a[1].info.lastAccessed - b[1].info.lastAccessed;
-      });
+    const sortedCache = Array.from(this.modelCache.entries()).sort((a, b) => {
+      // First priority, then access count, then last accessed
+      if (a[1].info.priority !== b[1].info.priority) {
+        return b[1].info.priority - a[1].info.priority; // Lower priority (higher number) first
+      }
+      if (a[1].info.accessCount !== b[1].info.accessCount) {
+        return a[1].info.accessCount - b[1].info.accessCount;
+      }
+      return a[1].info.lastAccessed - b[1].info.lastAccessed;
+    });
 
     // Remove 20% of the cache or enough to get under the limit
     const targetSize = this.MAX_MEMORY_USAGE * 0.8;
@@ -116,7 +128,7 @@ export class MemoryManager {
 
     for (const [path, entry] of sortedCache) {
       if (currentUsage <= targetSize) break;
-      
+
       this.removeFromCache(path);
       currentUsage -= entry.info.size;
     }
@@ -125,7 +137,7 @@ export class MemoryManager {
   public removeFromCache(path: string): void {
     const entry = this.modelCache.get(path);
     if (entry) {
-      entry.model.traverse((obj) => {
+      entry.model.traverse(obj => {
         if ((obj as THREE.Mesh).isMesh) {
           (obj as THREE.Mesh).geometry.dispose();
           const mat = (obj as THREE.Mesh).material;
@@ -139,7 +151,9 @@ export class MemoryManager {
 
   public getMemoryUsage(): number {
     let usage = 0;
-    this.modelCache.forEach(entry => { usage += entry.info.size; });
+    this.modelCache.forEach(entry => {
+      usage += entry.info.size;
+    });
     return usage;
   }
 }

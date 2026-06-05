@@ -1,13 +1,12 @@
-import * as THREE from 'three';
-import { logger } from 'utils/logger';
-import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
-import { GrassOptions } from './grass'; // Import GrassOptions for type reference
+import * as THREE from "three";
+import { logger } from "utils/logger";
+import { getModel, putModel } from "../../indexedDB"; // Import IndexedDB utilities
+import { GrassOptions } from "./grass"; // Import GrassOptions for type reference
 
 let loaded = false;
 let _grassTexture: THREE.Texture | null = null;
 let _dirtTexture: THREE.Texture | null = null;
 let _dirtNormal: THREE.Texture | null = null;
-
 
 export class Ground extends THREE.Mesh {
   public options: GrassOptions;
@@ -21,7 +20,7 @@ export class Ground extends THREE.Mesh {
         try {
           const cached = await getModel(name);
           if (cached) {
-            const blobUrl = URL.createObjectURL(new Blob([cached], { type: 'image/jpeg' }));
+            const blobUrl = URL.createObjectURL(new Blob([cached], { type: "image/jpeg" }));
             const tex = await loader.loadAsync(blobUrl);
             URL.revokeObjectURL(blobUrl);
             return tex;
@@ -31,7 +30,7 @@ export class Ground extends THREE.Mesh {
           if (!response.ok) throw new Error(`HTTP error ${response.status}`);
           const buffer = await response.arrayBuffer();
           await putModel(name, buffer);
-          const blobUrl = URL.createObjectURL(new Blob([buffer], { type: 'image/jpeg' }));
+          const blobUrl = URL.createObjectURL(new Blob([buffer], { type: "image/jpeg" }));
           const tex = await loader.loadAsync(blobUrl);
           URL.revokeObjectURL(blobUrl);
           return tex;
@@ -48,9 +47,9 @@ export class Ground extends THREE.Mesh {
       throw new Error(`Failed to load ground texture ${name}`);
     };
 
-    _grassTexture = await loadTex('/textures/ground/grass.jpg', 'grass_texture');
-    _dirtTexture = await loadTex('/textures/ground/dirt_color.jpg', 'dirt_color_texture');
-    _dirtNormal = await loadTex('/textures/ground/dirt_normal.jpg', 'dirt_normal_texture');
+    _grassTexture = await loadTex("/textures/ground/grass.jpg", "grass_texture");
+    _dirtTexture = await loadTex("/textures/ground/dirt_color.jpg", "dirt_color_texture");
+    _dirtNormal = await loadTex("/textures/ground/dirt_normal.jpg", "dirt_normal_texture");
 
     [_grassTexture, _dirtTexture, _dirtNormal].forEach(tex => {
       tex.wrapS = THREE.RepeatWrapping;
@@ -61,7 +60,11 @@ export class Ground extends THREE.Mesh {
     loaded = true;
   }
 
-  constructor(options: GrassOptions = new GrassOptions(), width: number = 10000, height: number = 10000) {
+  constructor(
+    options: GrassOptions = new GrassOptions(),
+    width: number = 10000,
+    height: number = 10000
+  ) {
     super();
     this.options = options;
     this.geometry = new THREE.PlaneGeometry(width, height);
@@ -76,24 +79,24 @@ export class Ground extends THREE.Mesh {
         emissive: new THREE.Color(0xffffff),
         emissiveIntensity: 0.01,
         normalMap: _dirtNormal,
-        shininess: 0.1
+        shininess: 0.1,
       });
 
-      (this.material as THREE.MeshPhongMaterial).onBeforeCompile = (shader) => {
+      (this.material as THREE.MeshPhongMaterial).onBeforeCompile = shader => {
         this.setupShaderUniforms(shader);
         this.injectShaderVaryings(shader);
         this.injectShaderFunctions(shader);
         this.injectShaderLogic(shader);
-        (this.material as THREE.MeshPhongMaterial).userData['shader'] = shader;
+        (this.material as THREE.MeshPhongMaterial).userData["shader"] = shader;
       };
     });
   }
 
   private setupShaderUniforms(shader: { uniforms: { [uniform: string]: THREE.IUniform } }): void {
-    shader.uniforms['uNoiseScale'] = { value: this.options.scale };
-    shader.uniforms['uPatchiness'] = { value: this.options.patchiness };
-    shader.uniforms['uGrassTexture'] = { value: _grassTexture };
-    shader.uniforms['uDirtTexture'] = { value: _dirtTexture };
+    shader.uniforms["uNoiseScale"] = { value: this.options.scale };
+    shader.uniforms["uPatchiness"] = { value: this.options.patchiness };
+    shader.uniforms["uGrassTexture"] = { value: _grassTexture };
+    shader.uniforms["uDirtTexture"] = { value: _dirtTexture };
   }
 
   private injectShaderVaryings(shader: { vertexShader: string; fragmentShader: string }): void {
@@ -112,7 +115,7 @@ export class Ground extends THREE.Mesh {
 
   private injectShaderFunctions(shader: { vertexShader: string; fragmentShader: string }): void {
     shader.vertexShader = shader.vertexShader.replace(
-      '#include <worldpos_vertex>',
+      "#include <worldpos_vertex>",
       `#include <worldpos_vertex>
         vec4 groundWorldPosition = modelMatrix * vec4( transformed, 1.0 );
         vWorldPosition = groundWorldPosition.xyz;
@@ -146,12 +149,15 @@ export class Ground extends THREE.Mesh {
       }
     `;
 
-    shader.fragmentShader = shader.fragmentShader.replace('void main() {', `${simplexFunctions}\nvoid main() {`);
+    shader.fragmentShader = shader.fragmentShader.replace(
+      "void main() {",
+      `${simplexFunctions}\nvoid main() {`
+    );
   }
 
   private injectShaderLogic(shader: { fragmentShader: string }): void {
     shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <map_fragment>',
+      "#include <map_fragment>",
       `
       vec2 uv = vec2(vWorldPosition.x, vWorldPosition.z);
       vec3 grassColor = texture2D(uGrassTexture, uv / 10.0).rgb;
@@ -164,7 +170,7 @@ export class Ground extends THREE.Mesh {
     );
 
     shader.fragmentShader = shader.fragmentShader.replace(
-      '#include <normal_fragment_maps>',
+      "#include <normal_fragment_maps>",
       `
       vec2 normalUv = vec2(vWorldPosition.x, vWorldPosition.z);
       vec3 mapN = texture2D( normalMap, normalUv / 30.0 ).xyz * 2.0 - 1.0;

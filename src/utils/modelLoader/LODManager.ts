@@ -1,12 +1,12 @@
-import type * as THREE from 'three';
+import type * as THREE from "three";
 
-import { getLODManager } from '@/lib/lod-manager';
+import { getLODManager } from "@/lib/lod-manager";
 
 export class LODManager {
   private static instance: LODManager;
   private _camera: THREE.Camera | null = null;
 
-  private constructor() { }
+  private constructor() {}
 
   public static getInstance(): LODManager {
     if (!LODManager.instance) {
@@ -28,7 +28,7 @@ export class LODManager {
     // This scales the LOD switching distances based on performance quality level
     const activeLODManager = getLODManager();
     if (activeLODManager) {
-        activeLODManager.setQualityScale(qualityLevel);
+      activeLODManager.setQualityScale(qualityLevel);
     }
   }
 }

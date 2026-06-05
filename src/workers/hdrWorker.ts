@@ -14,14 +14,14 @@ import {
   processDownscaling,
   rgbeToFloat32,
   toHalf,
-  type HDRWorkerMessage
-} from './hdrUtils';
+  type HDRWorkerMessage,
+} from "./hdrUtils";
 
 const logger = {
   // eslint-disable-next-line no-console
-    log: (msg: string) => console.log(msg),
-    // eslint-disable-next-line no-console
-    error: (msg: string, err?: unknown) => console.error(msg, err)
+  log: (msg: string) => console.log(msg),
+  // eslint-disable-next-line no-console
+  error: (msg: string, err?: unknown) => console.error(msg, err),
 };
 
 /**
@@ -85,31 +85,30 @@ self.onmessage = async (e: MessageEvent) => {
     const buffer = await response.arrayBuffer();
 
     // Use the function to prevent unused variable warning
-    const unusedToHalf = toHalf(1.0); 
+    const unusedToHalf = toHalf(1.0);
     // eslint-disable-next-line no-void
     void unusedToHalf;
 
-    const result = await parseRGBEAsync(buffer, (progress) => {
-      const msg: HDRWorkerMessage = { status: 'progress', progress };
+    const result = await parseRGBEAsync(buffer, progress => {
+      const msg: HDRWorkerMessage = { status: "progress", progress };
       self.postMessage(msg);
     });
 
     if (!result) throw new Error("Failed to parse RGBE");
 
     const msg: HDRWorkerMessage = {
-      status: 'success',
+      status: "success",
       width: result.width,
       height: result.height,
       data: result.data,
       isHalf: false,
-      quality: 'full',
-      format: 'float32'
+      quality: "full",
+      format: "float32",
     };
     self.postMessage(msg, [result.data.buffer]);
-
   } catch (error) {
     logger.error(`[HDRWorker] Error:`, error as Error);
-    const msg: HDRWorkerMessage = { status: 'error', error: (error as Error).message };
+    const msg: HDRWorkerMessage = { status: "error", error: (error as Error).message };
     self.postMessage(msg);
   }
 };

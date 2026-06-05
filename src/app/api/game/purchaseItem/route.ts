@@ -11,8 +11,14 @@ import { WebAuthnUtils } from "@/lib/webauthn-utils";
 import type { TransactionPayload } from "@/lib/WebAuthnTransactionSigner";
 import { WebAuthnTransactionSigner } from "@/lib/WebAuthnTransactionSigner";
 import { logger } from "@/utils/logger";
-import { Connection, PublicKey, clusterApiUrl, type ParsedTransactionWithMeta } from "@solana/web3.js";
+import {
+  Connection,
+  PublicKey,
+  clusterApiUrl,
+  type ParsedTransactionWithMeta,
+} from "@solana/web3.js";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { TOTPService } from "@/lib/totp-service";
 import { NextResponse } from "next/server";
 
 interface ItemDefinition {
@@ -58,7 +64,7 @@ function analyzeBalances(transaction: ParsedTransactionWithMeta): { amount: numb
   if (postBalances && preBalances) {
     for (const post of postBalances) {
       const { accountIndex, owner, mint, uiTokenAmount: postAmount } = post;
-      const pre = preBalances.find((pb) => pb.accountIndex === accountIndex);
+      const pre = preBalances.find(pb => pb.accountIndex === accountIndex);
       const preAmount = pre?.uiTokenAmount;
 
       if (postAmount?.uiAmount !== undefined && preAmount?.uiAmount !== undefined) {
@@ -80,7 +86,10 @@ async function verifySolanaTransaction(
   userPublicKey: string,
   expectedAmount: number
 ): Promise<{ success: boolean; error?: string; code: number }> {
-  const connection = new Connection(DEDICATED_RPC_ENDPOINT || clusterApiUrl("mainnet-beta"), "confirmed");
+  const connection = new Connection(
+    DEDICATED_RPC_ENDPOINT || clusterApiUrl("mainnet-beta"),
+    "confirmed"
+  );
   let transaction: ParsedTransactionWithMeta | null = null;
 
   for (let i = 0; i < 6; i++) {
@@ -88,7 +97,7 @@ async function verifySolanaTransaction(
       /* eslint-disable-next-line no-await-in-loop */
       transaction = await connection.getParsedTransaction(signature, {
         maxSupportedTransactionVersion: 0,
-        commitment: "confirmed"
+        commitment: "confirmed",
       });
       if (transaction) break;
     } catch (err) {
@@ -99,13 +108,15 @@ async function verifySolanaTransaction(
   }
 
   if (!transaction) return { success: false, error: "Transaction not found.", code: 404 };
-  if (transaction.meta?.err) return { success: false, error: "Blockchain transaction failed.", code: 400 };
+  if (transaction.meta?.err)
+    return { success: false, error: "Blockchain transaction failed.", code: 400 };
 
   const sender = transaction.transaction.message.accountKeys[0]?.pubkey.toBase58();
   if (sender !== userPublicKey) return { success: false, error: "Sender mismatch.", code: 400 };
 
   const { amount, mint } = analyzeBalances(transaction);
-  if (mint !== BOBY_TOKEN_MINT_ADDRESS) return { success: false, error: "Invalid token.", code: 400 };
+  if (mint !== BOBY_TOKEN_MINT_ADDRESS)
+    return { success: false, error: "Invalid token.", code: 400 };
   if (amount < expectedAmount) return { success: false, error: "Insufficient payment.", code: 400 };
 
   return { success: true, code: 200 };
@@ -114,11 +125,13 @@ async function verifySolanaTransaction(
 /**
  * Handles WebAuthn signature verification for high-value purchases.
  */
-async function verifyStepUpAuth(params: StepUpParams): Promise<{ success: boolean; error?: string }> {
+async function verifyStepUpAuth(
+  params: StepUpParams
+): Promise<{ success: boolean; error?: string }> {
   const { userPublicKey, authData, requestedItemId, requestedQuantity, origin } = params;
   const db = getFirestore();
   const passkeys = await db.collection("players").doc(userPublicKey).collection("passkeys").get();
-  
+
   if (passkeys.empty) return { success: false, error: "Passkey required." };
 
   const { payload, response } = authData;
@@ -142,19 +155,94 @@ async function verifyStepUpAuth(params: StepUpParams): Promise<{ success: boolea
 }
 
 /**
+ * Checks for signature reuse.
+ */
+async function checkSignatureReuse(
+  db: FirebaseFirestore.Firestore,
+  signature: string
+): Promise<boolean> {
+  const usedRef = db.collection("usedTransactionSignatures").doc(signature);
+  return (await usedRef.get()).exists;
+}
+
+/**
+ * Validates MFA requirements (TOTP or WebAuthn).
+ */
+async function validateMFARequirements(params: {
+  userPublicKey: string;
+  userData: FirebaseFirestore.DocumentData | undefined;
+  data: {
+    itemId: string;
+    quantity: number;
+    totpToken?: string | undefined;
+    transactionAuthSignature?: WebAuthnAuthData | undefined;
+  };
+  expectedAmount: number;
+  origin: string;
+}): Promise<{ success: boolean; error?: string | undefined; status?: number | undefined }> {
+  const { userPublicKey, userData, data, expectedAmount, origin } = params;
+  const db = getFirestore();
+  const totpEnabled = !!userData?.["totpEnabled"];
+  const passkeys = await db.collection("players").doc(userPublicKey).collection("passkeys").get();
+  const hasRegisteredPasskeys = !passkeys.empty;
+
+  const mfaRequired = expectedAmount > 50000 || hasRegisteredPasskeys || totpEnabled;
+  if (!mfaRequired && !data.transactionAuthSignature && !data.totpToken)
+    return { success: true, error: undefined, status: 200 };
+
+  if (!data.transactionAuthSignature && !data.totpToken) {
+    if (hasRegisteredPasskeys)
+      return { success: false, error: "Passkey verification required", status: 403 };
+    if (totpEnabled) return { success: false, error: "TOTP verification required", status: 403 };
+    return { success: false, error: "Step-up auth required", status: 403 };
+  }
+
+  if (data.totpToken) {
+    const isValid = await TOTPService.verifyToken(data.totpToken, userData?.["totpSecret"] || "");
+    const isBackup =
+      !isValid &&
+      data.totpToken.length === 8 &&
+      (await TOTPService.verifyBackupCode(userPublicKey, data.totpToken));
+    return isValid || isBackup
+      ? { success: true, error: undefined, status: 200 }
+      : { success: false, error: "Invalid TOTP code", status: 401 };
+  }
+
+  const stepUp = await verifyStepUpAuth({
+    userPublicKey,
+    authData: data.transactionAuthSignature!,
+    requestedItemId: data.itemId,
+    requestedQuantity: data.quantity,
+    origin,
+  });
+  return stepUp.success
+    ? { success: true, error: undefined, status: 200 }
+    : { success: false, error: stepUp.error ?? "Security check failed", status: 401 };
+}
+
+/**
  * Updates player inventory with new items.
  */
-async function addItemsToPlayer(userPublicKey: string, item: ItemDefinition, quantity: number): Promise<AuthenticatedItem[]> {
+async function addItemsToPlayer(
+  userPublicKey: string,
+  item: ItemDefinition,
+  quantity: number
+): Promise<AuthenticatedItem[]> {
   const db = getFirestore();
-  const newItems: AuthenticatedItem[] = Array(quantity).fill(null).map(() => ({
-    ...item,
-    instanceId: `item-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`
-  }));
+  const newItems: AuthenticatedItem[] = Array(quantity)
+    .fill(null)
+    .map(() => ({
+      ...item,
+      instanceId: `item-${Date.now()}-${Math.random().toString(36).substring(2, 11)}`,
+    }));
 
-  await db.collection("players").doc(userPublicKey).update({ 
-    inventory: FieldValue.arrayUnion(...newItems), 
-    updatedAt: FieldValue.serverTimestamp() 
-  });
+  await db
+    .collection("players")
+    .doc(userPublicKey)
+    .update({
+      inventory: FieldValue.arrayUnion(...newItems),
+      updatedAt: FieldValue.serverTimestamp(),
+    });
 
   return newItems;
 }
@@ -164,75 +252,102 @@ async function addItemsToPlayer(userPublicKey: string, item: ItemDefinition, qua
  */
 async function processPurchase(
   userPublicKey: string,
-  data: { itemId: string; quantity: number; transactionSignature: string; transactionAuthSignature?: WebAuthnAuthData },
+  data: {
+    itemId: string;
+    quantity: number;
+    transactionSignature: string;
+    transactionAuthSignature?: WebAuthnAuthData | undefined;
+    totpToken?: string | undefined;
+  },
   origin: string
-): Promise<{ error?: string; status?: number; newItems?: AuthenticatedItem[] }> {
-  const { itemId, quantity, transactionSignature, transactionAuthSignature } = data;
+): Promise<{
+  error?: string | undefined;
+  status?: number | undefined;
+  newItems?: AuthenticatedItem[] | undefined;
+}> {
+  const { itemId, quantity, transactionSignature } = data;
   const allItems = (await getActiveStoreItems()) as ItemDefinition[];
-  const item = allItems.find((i) => i.id === itemId);
+  const item = allItems.find(i => i.id === itemId);
   if (!item) return { error: "Invalid item", status: 400 };
 
   const db = getFirestore();
-  const usedRef = db.collection("usedTransactionSignatures").doc(transactionSignature);
-  if ((await usedRef.get()).exists) return { error: "Signature reused", status: 409 };
+  if (await checkSignatureReuse(db, transactionSignature))
+    return { error: "Signature reused", status: 409 };
 
   const expectedAmount = item.price * quantity;
   const verify = await verifySolanaTransaction(transactionSignature, userPublicKey, expectedAmount);
   if (!verify.success) return { error: verify.error ?? "Verification failed", status: verify.code };
 
-  if (expectedAmount > 50000 || transactionAuthSignature) {
-    if (!transactionAuthSignature) return { error: "Step-up auth required", status: 403 };
-    const stepUp = await verifyStepUpAuth({
-      userPublicKey,
-      authData: transactionAuthSignature,
-      requestedItemId: itemId,
-      requestedQuantity: quantity,
-      origin,
-    });
-    if (!stepUp.success) return { error: stepUp.error ?? "Security check failed", status: 401 };
-  }
+  const userDoc = await db.collection("players").doc(userPublicKey).get();
+  const mfa = await validateMFARequirements({
+    userPublicKey,
+    userData: userDoc.data(),
+    data,
+    expectedAmount,
+    origin,
+  });
+  if (!mfa.success) return { error: mfa.error || "Security check failed", status: mfa.status };
 
-  await usedRef.set({ userId: userPublicKey, timestamp: FieldValue.serverTimestamp(), itemId, quantity });
+  await db.collection("usedTransactionSignatures").doc(transactionSignature).set({
+    userId: userPublicKey,
+    timestamp: FieldValue.serverTimestamp(),
+    itemId,
+    quantity,
+  });
+
   const newItems = await addItemsToPlayer(userPublicKey, item, quantity);
   return { newItems };
 }
 
-export const POST = withAuth(withCsrfProtection(async (request: AuthenticatedRequest) => {
-  logger.log("[API] /api/game/purchaseItem called");
-  const userPublicKey = request.user?.sub;
-  if (!userPublicKey) return NextResponse.json({ error: "Auth required" }, { status: 401 });
+export const POST = withAuth(
+  withCsrfProtection(async (request: AuthenticatedRequest) => {
+    logger.log("[API] /api/game/purchaseItem called");
+    const userPublicKey = request.user?.sub;
+    if (!userPublicKey) return NextResponse.json({ error: "Auth required" }, { status: 401 });
 
-  try {
     try {
-      new PublicKey(userPublicKey);
-    } catch {
-      return NextResponse.json({ error: "Invalid address format" }, { status: 400 });
+      try {
+        new PublicKey(userPublicKey);
+      } catch {
+        return NextResponse.json({ error: "Invalid address format" }, { status: 400 });
+      }
+
+      if (!STORE_TREASURY_WALLET_ADDRESS || !BOBY_TOKEN_MINT_ADDRESS) {
+        return NextResponse.json({ error: "Server config error" }, { status: 500 });
+      }
+
+      const parse = PurchaseItemSchema.safeParse(await request.json());
+      if (!parse.success) return NextResponse.json({ error: "Invalid params" }, { status: 400 });
+
+      const purchaseData = {
+        itemId: parse.data.itemId,
+        quantity: parse.data.quantity,
+        transactionSignature: parse.data.transactionSignature,
+        ...(parse.data.transactionAuthSignature && {
+          transactionAuthSignature: parse.data.transactionAuthSignature as WebAuthnAuthData,
+        }),
+        totpToken: parse.data.totpToken,
+      };
+
+      await initializeAdminApp();
+      const result = await processPurchase(
+        userPublicKey,
+        purchaseData,
+        request.headers.get("origin") || ""
+      );
+      if (result.error) {
+        return NextResponse.json({ error: result.error }, { status: result.status as number });
+      }
+
+      const res = NextResponse.json({ message: "Purchase successful", newItems: result.newItems });
+      return await setCsrfTokenResponse(
+        res,
+        userPublicKey,
+        request.headers.get("host") || undefined
+      );
+    } catch (error) {
+      logger.error("Purchase error:", error as Error);
+      return NextResponse.json({ error: "Internal server error" }, { status: 500 });
     }
-
-    if (!STORE_TREASURY_WALLET_ADDRESS || !BOBY_TOKEN_MINT_ADDRESS) {
-      return NextResponse.json({ error: "Server config error" }, { status: 500 });
-    }
-
-    const parse = PurchaseItemSchema.safeParse(await request.json());
-    if (!parse.success) return NextResponse.json({ error: "Invalid params" }, { status: 400 });
-
-    const purchaseData = {
-      itemId: parse.data.itemId,
-      quantity: parse.data.quantity,
-      transactionSignature: parse.data.transactionSignature,
-      ...(parse.data.transactionAuthSignature && { transactionAuthSignature: parse.data.transactionAuthSignature as WebAuthnAuthData })
-    };
-
-    await initializeAdminApp();
-    const result = await processPurchase(userPublicKey, purchaseData, request.headers.get("origin") || "");
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: result.status as number });
-    }
-
-    const res = NextResponse.json({ message: "Purchase successful", newItems: result.newItems });
-    return await setCsrfTokenResponse(res, userPublicKey, request.headers.get("host") || undefined);
-  } catch (error) {
-    logger.error("Purchase error:", error as Error);
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
-  }
-}));
+  })
+);

@@ -1,11 +1,11 @@
-import * as THREE from 'three';
-import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { logger } from 'utils/logger';
-import { CHUNK_SIZE } from '../../chunkUtils';
-import { getModel, putModel } from '../../indexedDB'; // Import IndexedDB utilities
-import { updateFlowerWindShaderUniforms } from '../shaders/windShaderUpdater';
-import { appendWindShader } from '../shaders/windShaderUtils'; // Import the new utility and WindOptions
-import { simplex2d } from './noise';
+import * as THREE from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { logger } from "utils/logger";
+import { CHUNK_SIZE } from "../../chunkUtils";
+import { getModel, putModel } from "../../indexedDB"; // Import IndexedDB utilities
+import { updateFlowerWindShaderUniforms } from "../shaders/windShaderUpdater";
+import { appendWindShader } from "../shaders/windShaderUtils"; // Import the new utility and WindOptions
+import { simplex2d } from "./noise";
 
 let loaded = false;
 let _grassMesh: THREE.Mesh | null = null;
@@ -28,7 +28,7 @@ export class Grass extends THREE.Object3D {
   constructor(options: GrassOptions = new GrassOptions()) {
     super();
     this.options = options;
-    this.name = 'Grass';
+    this.name = "Grass";
   }
 
   /**
@@ -55,30 +55,35 @@ export class Grass extends THREE.Object3D {
   }
 
   /* eslint-disable no-await-in-loop */
-  private static async loadGrassMesh(loader: GLTFLoader, maxAttempts: number = 20): Promise<THREE.Mesh> {
-    const modelPath = '/models/grass.glb';
-    const modelName = 'grass_model';
+  private static async loadGrassMesh(
+    loader: GLTFLoader,
+    maxAttempts: number = 20
+  ): Promise<THREE.Mesh> {
+    const modelPath = "/models/grass.glb";
+    const modelName = "grass_model";
 
     for (let i = 1; i <= maxAttempts; i++) {
       try {
         const cachedData = await getModel(modelName);
         if (cachedData) {
           logger.log(`[Grass] Loading grass model from IndexedDB: ${modelName}`);
-          const gltf = await loader.parseAsync(cachedData, '');
+          const gltf = await loader.parseAsync(cachedData, "");
           return this.findFirstMesh(gltf.scene);
         }
-        
+
         logger.log(`[Grass] Fetching grass model from network (attempt ${i}): ${modelPath}`);
         const response = await fetch(modelPath);
         if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
         const arrayBuffer = await response.arrayBuffer();
         await putModel(modelName, arrayBuffer);
-        const gltf = await loader.parseAsync(arrayBuffer, '');
+        const gltf = await loader.parseAsync(arrayBuffer, "");
         return this.findFirstMesh(gltf.scene);
       } catch (error) {
         logger.warn(`[Grass] Attempt ${i} failed:`, error);
         if (i === maxAttempts) {
-          logger.error(`[Grass] Persistent failure after ${maxAttempts} attempts. Falling back to direct load.`);
+          logger.error(
+            `[Grass] Persistent failure after ${maxAttempts} attempts. Falling back to direct load.`
+          );
           const gltf = await loader.loadAsync(modelPath);
           return this.findFirstMesh(gltf.scene);
         }
@@ -92,7 +97,7 @@ export class Grass extends THREE.Object3D {
 
   private static findFirstMesh(scene: THREE.Group): THREE.Mesh {
     let mesh: THREE.Mesh | null = null;
-    scene.traverse((child) => {
+    scene.traverse(child => {
       if (!mesh && child instanceof THREE.Mesh) {
         mesh = child;
       }
@@ -102,12 +107,14 @@ export class Grass extends THREE.Object3D {
   }
 
   public update(elapsedTime: number): void {
-    this.traverse((o) => {
+    this.traverse(o => {
       if ((o as THREE.Mesh).isMesh && (o as THREE.Mesh).material) {
-        const {material} = (o as THREE.Mesh);
+        const { material } = o as THREE.Mesh;
         const materials = Array.isArray(material) ? material : [material];
         materials.forEach((mat: THREE.Material) => {
-          const shader = mat.userData['shader'] as { uniforms: { uTime: { value: number } } } | undefined;
+          const shader = mat.userData["shader"] as
+            | { uniforms: { uTime: { value: number } } }
+            | undefined;
           if (shader) {
             shader.uniforms.uTime.value = elapsedTime;
           }
@@ -131,7 +138,7 @@ export class Grass extends THREE.Object3D {
       this.options.instanceCountPerChunk
     );
 
-    instancedGrass.name = 'grass';
+    instancedGrass.name = "grass";
     const count = this.populateInstancedMesh(instancedGrass, chunkX, chunkZ);
 
     instancedGrass.count = count;
@@ -146,7 +153,9 @@ export class Grass extends THREE.Object3D {
   }
 
   private createGrassMaterial(sourceMesh: THREE.Mesh): THREE.MeshPhongMaterial {
-    const baseMat = Array.isArray(sourceMesh.material) ? sourceMesh.material[0] : sourceMesh.material;
+    const baseMat = Array.isArray(sourceMesh.material)
+      ? sourceMesh.material[0]
+      : sourceMesh.material;
     const standardMat = baseMat as THREE.MeshStandardMaterial;
 
     const grassMaterial = new THREE.MeshPhongMaterial({
@@ -157,7 +166,7 @@ export class Grass extends THREE.Object3D {
       alphaTest: 0.5,
       depthTest: true,
       depthWrite: true,
-      side: THREE.DoubleSide
+      side: THREE.DoubleSide,
     });
 
     appendWindShader(grassMaterial, { ...this.options, instanced: true });
@@ -177,7 +186,10 @@ export class Grass extends THREE.Object3D {
       const worldX = chunkStartX + Math.random() * CHUNK_SIZE;
       const worldZ = chunkStartZ + Math.random() * CHUNK_SIZE;
 
-      const n = 0.5 + 0.5 * simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
+      const n =
+        0.5 +
+        0.5 *
+          simplex2d(new THREE.Vector2(worldX / this.options.scale, worldZ / this.options.scale));
       if (n > this.options.patchiness && Math.random() + 0.4 > this.options.patchiness) continue;
 
       dummy.position.set(worldX, 0, worldZ);
@@ -197,7 +209,12 @@ export class Grass extends THREE.Object3D {
     return count;
   }
 
-  public generateGrassFromData(data: { positions: number[]; scales: number[]; quaternions: number[]; colors: number[] }): THREE.InstancedMesh | null {
+  public generateGrassFromData(data: {
+    positions: number[];
+    scales: number[];
+    quaternions: number[];
+    colors: number[];
+  }): THREE.InstancedMesh | null {
     if (!_grassMesh || !data) return null;
 
     const { positions, scales, quaternions, colors } = data;
@@ -216,7 +233,7 @@ export class Grass extends THREE.Object3D {
       dummy.quaternion.fromArray(quaternions, i * 4);
       dummy.updateMatrix();
       instancedGrass.setMatrixAt(i, dummy.matrix);
-      
+
       color.fromArray(colors, i * 3);
       instancedGrass.setColorAt(i, color);
     }

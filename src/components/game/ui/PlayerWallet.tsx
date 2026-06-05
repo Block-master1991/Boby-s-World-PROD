@@ -1,17 +1,17 @@
-'use client';
+"use client";
 
-import BobyPriceDisplay from '@/components/game/BobyPriceDisplay';
-import TokenBalance from '@/components/game/TokenBalance';
-import DisconnectButton from '@/components/shared/DisconnectButton';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
-import { SheetFooter, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import type { PublicKey } from '@solana/web3.js';
-import Image from 'next/image';
-import React from 'react';
-import { AuthenticatedWalletInfo } from './AuthenticatedWalletInfo';
-import { MenuBanners } from './MenuBanners';
-import { USDTBalanceCard } from './USDTBalanceCard';
+import BobyPriceDisplay from "@/components/game/BobyPriceDisplay";
+import TokenBalance from "@/components/game/TokenBalance";
+import DisconnectButton from "@/components/shared/DisconnectButton";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Separator } from "@/components/ui/separator";
+import { SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import type { PublicKey } from "@solana/web3.js";
+import Image from "next/image";
+import React from "react";
+import { AuthenticatedWalletInfo } from "./AuthenticatedWalletInfo";
+import { MenuBanners } from "./MenuBanners";
+import { USDTBalanceCard } from "./USDTBalanceCard";
 
 interface PlayerWalletProps {
   isWalletMismatch: boolean;
@@ -27,14 +27,16 @@ interface PlayerWalletProps {
   dbAppOptionsProjectId?: string | null;
 }
 
-const PlayerWallet: React.FC<PlayerWalletProps> = (props) => {
-  const firebaseNotConfigured = !props.dbAppOptionsProjectId || props.dbAppOptionsProjectId.includes("YOUR_PROJECT_ID");
+const PlayerWallet: React.FC<PlayerWalletProps> = props => {
+  const firebaseNotConfigured =
+    !props.dbAppOptionsProjectId || props.dbAppOptionsProjectId.includes("YOUR_PROJECT_ID");
 
   return (
     <>
       <SheetHeader className="p-4 pb-2 border-b">
         <SheetTitle className="text-2xl font-headline flex items-center gap-2">
-            <Image src="/wallet.png" alt="Wallet Icon" width={28} height={28} className="h-7 w-7" /> Wallet
+          <Image src="/wallet.png" alt="Wallet Icon" width={28} height={28} className="h-7 w-7" />{" "}
+          Wallet
         </SheetTitle>
         <BobyPriceDisplay />
         <MenuBanners

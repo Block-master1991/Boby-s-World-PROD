@@ -1,16 +1,16 @@
-import * as THREE from 'three';
-import { logger } from 'utils/logger';
-import { ChunkManager } from '../../chunk/ChunkManager';
-import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS } from '../../chunkUtils';
-import type { LODManager } from '../../lod-manager';
-import { initializeLODManager } from '../../lod-manager';
-import { getDevicePerformanceConfig } from '../../utils';
-import { FlowerOptions, Flowers } from './flowers';
-import { Grass, GrassOptions } from './grass';
-import { Ground } from './ground';
-import { RockOptions, Rocks } from './rocks';
-import { Skybox } from './skybox';
-import { Trees, TreesOptions } from './trees';
+import * as THREE from "three";
+import { logger } from "utils/logger";
+import { ChunkManager } from "../../chunk/ChunkManager";
+import { CHUNK_SIZE, RENDER_DISTANCE_CHUNKS } from "../../chunkUtils";
+import type { LODManager } from "../../lod-manager";
+import { initializeLODManager } from "../../lod-manager";
+import { getDevicePerformanceConfig } from "../../utils";
+import { FlowerOptions, Flowers } from "./flowers";
+import { Grass, GrassOptions } from "./grass";
+import { Ground } from "./ground";
+import { RockOptions, Rocks } from "./rocks";
+import { Skybox } from "./skybox";
+import { Trees, TreesOptions } from "./trees";
 
 export class Environment extends THREE.Object3D {
   public ground: Ground;
@@ -32,7 +32,7 @@ export class Environment extends THREE.Object3D {
     // Initialize LOD Manager
     this.lodManager = initializeLODManager();
 
-    this.loadingPromise = new Promise((resolve) => {
+    this.loadingPromise = new Promise(resolve => {
       this.resolveLoading = resolve;
     });
 
@@ -78,30 +78,40 @@ export class Environment extends THREE.Object3D {
 
     const grassOpts = new GrassOptions();
     // Reduce grass density significantly for performance (from ~2000 to ~500-600 per chunk)
-    grassOpts.instanceCountPerChunk = Math.floor(grassOpts.instanceCountPerChunk * perfConfig.environmentDensity.grassMultiplier * 0.3);
+    grassOpts.instanceCountPerChunk = Math.floor(
+      grassOpts.instanceCountPerChunk * perfConfig.environmentDensity.grassMultiplier * 0.3
+    );
 
     const rockOpts = new RockOptions();
-    rockOpts.rockCountPerChunk = Math.floor(rockOpts.rockCountPerChunk * perfConfig.environmentDensity.rocksMultiplier);
+    rockOpts.rockCountPerChunk = Math.floor(
+      rockOpts.rockCountPerChunk * perfConfig.environmentDensity.rocksMultiplier
+    );
 
     const treeOpts = new TreesOptions();
-    treeOpts.treeCountPerChunk = Math.floor(treeOpts.treeCountPerChunk * perfConfig.environmentDensity.treeMultiplier);
+    treeOpts.treeCountPerChunk = Math.floor(
+      treeOpts.treeCountPerChunk * perfConfig.environmentDensity.treeMultiplier
+    );
 
     const flowerOpts = new FlowerOptions();
-    flowerOpts.flowersCountPerChunk = Math.floor(flowerOpts.flowersCountPerChunk * perfConfig.environmentDensity.flowersMultiplier);
+    flowerOpts.flowersCountPerChunk = Math.floor(
+      flowerOpts.flowersCountPerChunk * perfConfig.environmentDensity.flowersMultiplier
+    );
 
     const grass = new Grass(grassOpts);
     const rocks = new Rocks(rockOpts);
     const trees = new Trees(treeOpts);
     const flowers = new Flowers(flowerOpts);
 
-    logger.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? 'mobile' : 'desktop'}`);
+    logger.log(`[Environment] Adjusted density for ${perfConfig.isMobile ? "mobile" : "desktop"}`);
 
     return { grass, rocks, trees, flowers };
   }
 
   private async loadAssetsWithRetry(maxAttempts: number = 30): Promise<void> {
-    logger.log(`[Environment] Starting mandatory asset loading sequence (max attempts: ${maxAttempts})`);
-    
+    logger.log(
+      `[Environment] Starting mandatory asset loading sequence (max attempts: ${maxAttempts})`
+    );
+
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
         // Enforce sequential or parallel loading with high priority
@@ -111,23 +121,28 @@ export class Environment extends THREE.Object3D {
           Rocks.fetchAssets(),
           this.treesInstance.fetchAssets(),
           Flowers.fetchAssets(),
-          Ground.fetchAssets() // Added Ground assets verification
+          Ground.fetchAssets(), // Added Ground assets verification
         ]);
         /* eslint-enable no-await-in-loop */
 
-        logger.log(`[Environment] ✅ All assets loaded and verified in IndexedDB on attempt ${attempt}`);
+        logger.log(
+          `[Environment] ✅ All assets loaded and verified in IndexedDB on attempt ${attempt}`
+        );
         this.chunkManager.setGeneratorsReady();
-        
+
         // Wait for initial chunks to load before signaling ready
-        logger.log('[Environment] Waiting for initial 25 chunks to load...');
+        logger.log("[Environment] Waiting for initial 25 chunks to load...");
         // eslint-disable-next-line no-await-in-loop -- Intentional: must wait for chunks before signaling ready
         await this.chunkManager.waitForInitialChunks(25);
-        logger.log('[Environment] ✅ Initial chunks loaded. World is ready!');
-        
+        logger.log("[Environment] ✅ Initial chunks loaded. World is ready!");
+
         if (this.resolveLoading) this.resolveLoading();
         return;
       } catch (error) {
-        logger.error(`[Environment] ❌ Asset loading failed (attempt ${attempt}/${maxAttempts}):`, error);
+        logger.error(
+          `[Environment] ❌ Asset loading failed (attempt ${attempt}/${maxAttempts}):`,
+          error
+        );
 
         if (attempt < maxAttempts) {
           const delay = Math.min(1000 * Math.pow(1.5, attempt - 1), 10000);
@@ -135,7 +150,9 @@ export class Environment extends THREE.Object3D {
           await new Promise(resolve => setTimeout(resolve, delay));
           /* eslint-enable no-await-in-loop */
         } else {
-          logger.error("[Environment] 🚨 FATAL: All asset loading attempts exhausted. The world may be incomplete.");
+          logger.error(
+            "[Environment] 🚨 FATAL: All asset loading attempts exhausted. The world may be incomplete."
+          );
           // Still set ready but it's a critical failure state
           this.chunkManager.setGeneratorsReady();
           if (this.resolveLoading) this.resolveLoading();
@@ -154,20 +171,20 @@ export class Environment extends THREE.Object3D {
       this.skybox.position.copy(cameraPosition);
       this.ground.position.set(cameraPosition.x, 0, cameraPosition.z);
       this.chunkManager.updatePlayerPosition(cameraPosition);
-      
+
       // Update LOD manager with camera position
       this.lodManager?.updateCameraPosition(cameraPosition);
     }
     this.skybox.update(elapsedTime);
     this.chunkManager.updateModern(elapsedTime, camera);
-    
+
     // Update LOD state with deltaTime
     this.lodManager?.update(deltaTime);
   }
 
   // Optimization: Track last preloaded position to avoid redundant checks
   private lastPreloadPos = new THREE.Vector3(Infinity, Infinity, Infinity);
-  
+
   public async preloadInitialScene(centerPosition: THREE.Vector3): Promise<void> {
     // Only preload if moved significantly (> 16m ~ one chunk width approx is 16, but let's say 8m)
     if (centerPosition.distanceTo(this.lastPreloadPos) < 8) return;
@@ -196,9 +213,9 @@ export class Environment extends THREE.Object3D {
 
     for (let dx = -RENDER_DISTANCE_CHUNKS; dx <= RENDER_DISTANCE_CHUNKS; dx++) {
       for (let dz = -RENDER_DISTANCE_CHUNKS; dz <= RENDER_DISTANCE_CHUNKS; dz++) {
-        chunks.push({ 
-          x: Math.floor((pos.x + dx * size) / size), 
-          z: Math.floor((pos.z + dz * size) / size) 
+        chunks.push({
+          x: Math.floor((pos.x + dx * size) / size),
+          z: Math.floor((pos.z + dz * size) / size),
         });
       }
     }

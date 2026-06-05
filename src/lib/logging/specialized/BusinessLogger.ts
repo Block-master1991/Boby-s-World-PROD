@@ -3,86 +3,86 @@
  * Tracks key business metrics, user journeys, and funnel conversion
  */
 
-import { professionalLogger } from '../index';
+import { professionalLogger } from "../index";
 import type {
-    BusinessEvent,
-    LogBusinessEventParams,
-    LogFunnelParams
-} from '../types/BusinessTypes';
+  BusinessEvent,
+  LogBusinessEventParams,
+  LogFunnelParams,
+} from "../types/BusinessTypes";
 
 /**
  * Business Logger Class
  */
 export class BusinessLogger {
-    private static instance: BusinessLogger;
+  private static instance: BusinessLogger;
 
-    private constructor() { }
+  private constructor() {}
 
-    public static getInstance(): BusinessLogger {
-        if (!BusinessLogger.instance) {
-            BusinessLogger.instance = new BusinessLogger();
-        }
-        return BusinessLogger.instance;
+  public static getInstance(): BusinessLogger {
+    if (!BusinessLogger.instance) {
+      BusinessLogger.instance = new BusinessLogger();
     }
+    return BusinessLogger.instance;
+  }
 
-    /**
-     * Log a business event (KPI)
-     */
-    logEvent(params: LogBusinessEventParams): void {
-        const { type, properties = {}, value, currency = 'USD' } = params;
-        
-        const event: BusinessEvent = {
-            type,
-            userId: properties.userId,
-            value,
-            currency: value ? currency : undefined,
-            properties,
-            timestamp: Date.now()
-        };
+  /**
+   * Log a business event (KPI)
+   */
+  logEvent(params: LogBusinessEventParams): void {
+    const { type, properties = {}, value, currency = "USD" } = params;
 
-        professionalLogger.info(`[BUSINESS] ${type}`, {
-            business: true,
-            event
-        });
-    }
+    const event: BusinessEvent = {
+      type,
+      userId: properties.userId,
+      value,
+      currency: value ? currency : undefined,
+      properties,
+      timestamp: Date.now(),
+    };
 
-    /**
-     * Track Funnel Step
-     */
-    logFunnelStep(params: LogFunnelParams): void {
-        const { funnelName, stepName, stepNumber, correlationId, properties = {} } = params;
+    professionalLogger.info(`[BUSINESS] ${type}`, {
+      business: true,
+      event,
+    });
+  }
 
-        professionalLogger.info(`[FUNNEL] ${funnelName} - Step ${stepNumber}: ${stepName}`, {
-            business: true,
-            funnel: {
-                name: funnelName,
-                step: stepName,
-                number: stepNumber,
-                correlationId,
-                ...properties
-            }
-        });
-    }
+  /**
+   * Track Funnel Step
+   */
+  logFunnelStep(params: LogFunnelParams): void {
+    const { funnelName, stepName, stepNumber, correlationId, properties = {} } = params;
 
-    /**
-     * Log A/B Test Exposure/Conversion
-     */
-    logExperiment(
-        experimentId: string,
-        variantId: string,
-        action: 'EXPOSURE' | 'CONVERSION',
-        userId: string
-    ): void {
-        this.logEvent({
-            type: 'A_B_TEST_EVENT',
-            properties: {
-                experimentId,
-                variantId,
-                action,
-                userId
-            }
-        });
-    }
+    professionalLogger.info(`[FUNNEL] ${funnelName} - Step ${stepNumber}: ${stepName}`, {
+      business: true,
+      funnel: {
+        name: funnelName,
+        step: stepName,
+        number: stepNumber,
+        correlationId,
+        ...properties,
+      },
+    });
+  }
+
+  /**
+   * Log A/B Test Exposure/Conversion
+   */
+  logExperiment(
+    experimentId: string,
+    variantId: string,
+    action: "EXPOSURE" | "CONVERSION",
+    userId: string
+  ): void {
+    this.logEvent({
+      type: "A_B_TEST_EVENT",
+      properties: {
+        experimentId,
+        variantId,
+        action,
+        userId,
+      },
+    });
+  }
 }
 
 export const businessLogger = BusinessLogger.getInstance();
