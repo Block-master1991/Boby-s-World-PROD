@@ -17,6 +17,7 @@ const fetchTotp = async (url: string, options?: RequestInit) => {
   return data;
 };
 
+// eslint-disable-next-line max-lines-per-function
 export const useTOTPManagement = () => {
   const { isAuthenticated, totpEnabled, triggerSessionRefresh, markTOTPEnabled } = useAuthContext();
   const [loading, setLoading] = useState(false);
