@@ -131,6 +131,7 @@ interface IssueTokensParams {
   ip: string;
   userAgent: string;
   nonce: string;
+  totpEnabled?: boolean;
 }
 
 /**
@@ -143,6 +144,7 @@ export function issueTokensAndCookies({
   ip,
   userAgent,
   nonce,
+  totpEnabled,
 }: IssueTokensParams): void {
   const ipHash = createHash("sha256").update(ip).digest("base64");
   const userAgentHash = createHash("sha256").update(userAgent).digest("base64");
@@ -152,6 +154,7 @@ export function issueTokensAndCookies({
     nonce,
     ipHash,
     userAgentHash,
+    totpEnabled,
   });
 
   const refreshToken = JWTManager.createRefreshToken({
@@ -159,6 +162,7 @@ export function issueTokensAndCookies({
     nonce,
     ipHash,
     userAgentHash,
+    totpEnabled,
   });
 
   const secureCookieOptions = JWTManager.createSecureCookieOptions(15 * 60, requestHost);

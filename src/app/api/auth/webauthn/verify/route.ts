@@ -10,6 +10,7 @@ import { db, initializeAdminApp } from "@/lib/firebase-admin";
 import { getClientIp } from "@/lib/request-utils";
 import redis from "@/lib/redis";
 import { securityIntegration } from "@/lib/securityIntegration";
+import { TOTPService } from "@/lib/totp-service";
 import { validateRequestBody, WebAuthnVerifySchema } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";
 import type { NextRequest } from "next/server";
@@ -68,6 +69,8 @@ export async function POST(request: NextRequest) {
     const userAgent = request.headers.get("user-agent") || "unknown";
     const resp = NextResponse.json({ success: true, message: "Login successful", publicKey: fuid });
 
+    const totpEnabled = await TOTPService.isTOTPEnabled(fuid);
+
     issueTokensAndCookies({
       publicKey: fuid,
       requestHost: rhost,
@@ -75,6 +78,7 @@ export async function POST(request: NextRequest) {
       ip,
       userAgent,
       nonce: challenge, // Use the verified challenge as the session nonce
+      totpEnabled,
     });
 
     const sess = await sessionManager.createSecureSession(

@@ -58,6 +58,7 @@ export async function POST(request: Request) {
       userAgentHash,
       ipHash,
       authMethod: "totp",
+      totpEnabled: true,
     });
     const refreshToken = JWTManager.createRefreshToken({
       publicKey: userId,
@@ -65,6 +66,7 @@ export async function POST(request: Request) {
       userAgentHash,
       ipHash,
       authMethod: "totp",
+      totpEnabled: true,
     });
 
     const cookieOptions = JWTManager.createSecureCookieOptions(15 * 60, rhost);

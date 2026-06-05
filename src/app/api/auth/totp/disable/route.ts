@@ -15,7 +15,41 @@ export const POST = withAuth(async request => {
       userAgent,
     });
 
-    return NextResponse.json(result);
+    const { JWTManager } = await import("@/lib/jwt-utils");
+    const requestHost = request.headers.get("host") || undefined;
+
+    const newAccessToken = JWTManager.createAccessToken({
+      publicKey: userId,
+      nonce: request.user.nonce,
+      userAgentHash: request.user.userAgentHash,
+      ipHash: request.user.ipHash,
+      authMethod: request.user.authMethod === "totp" ? undefined : request.user.authMethod,
+      totpEnabled: false,
+    });
+
+    const newRefreshToken = JWTManager.createRefreshToken({
+      publicKey: userId,
+      nonce: request.user.nonce,
+      userAgentHash: request.user.userAgentHash,
+      ipHash: request.user.ipHash,
+      authMethod: request.user.authMethod === "totp" ? undefined : request.user.authMethod,
+      totpEnabled: false,
+    });
+
+    const response = NextResponse.json(result);
+
+    response.cookies.set(
+      "accessToken",
+      newAccessToken,
+      JWTManager.createSecureCookieOptions(15 * 60, requestHost)
+    );
+    response.cookies.set(
+      "refreshToken",
+      newRefreshToken,
+      JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
+    );
+
+    return response;
   } catch (error) {
     logger.error("[TOTP Disable] Error:", error instanceof Error ? error.message : String(error));
     return NextResponse.json({ error: "Failed to disable TOTP" }, { status: 500 });

@@ -48,7 +48,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         iat: jwtPayload.iat,
         exp: jwtPayload.exp,
         authMethod: jwtPayload.authMethod,
-        totpEnabled: await TOTPService.isTOTPEnabled(jwtPayload.sub),
+        totpEnabled: jwtPayload.totpEnabled ?? await TOTPService.isTOTPEnabled(jwtPayload.sub),
       },
     });
 

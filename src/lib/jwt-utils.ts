@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 import { logger } from "@/utils/logger";
 import { createHash, randomBytes } from "crypto";
 import jwt from "jsonwebtoken";
@@ -15,6 +16,7 @@ export interface JWTPayload {
   userAgentHash?: string | undefined;
   ipHash?: string | undefined; // Optional (can be undefined)
   authMethod?: string | undefined;
+  totpEnabled?: boolean | undefined;
 }
 
 interface CreateTokenParams {
@@ -23,6 +25,7 @@ interface CreateTokenParams {
   userAgentHash?: string | undefined;
   ipHash?: string | undefined;
   authMethod?: string | undefined;
+  totpEnabled?: boolean | undefined;
 }
 
 interface CookieOptions {
@@ -79,6 +82,7 @@ export class JWTManager {
       userAgentHash,
       ipHash,
       authMethod: params.authMethod,
+      totpEnabled: params.totpEnabled,
     };
     logger.log(
       `[JWTManager] Creating access token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`
@@ -99,6 +103,7 @@ export class JWTManager {
       userAgentHash,
       ipHash,
       authMethod: params.authMethod,
+      totpEnabled: params.totpEnabled,
     };
     logger.log(
       `[JWTManager] Creating refresh token for ${publicKey}. JTI: ${payload.jti}, Nonce: ${nonce}, UA Hash: ${userAgentHash}, IP Hash: ${ipHash}`
@@ -269,6 +274,7 @@ export class JWTManager {
       userAgentHash,
       ipHash,
       authMethod: decodedRefreshToken.authMethod,
+      totpEnabled: decodedRefreshToken.totpEnabled,
     });
 
     const newRefreshToken = this.createRefreshToken({
@@ -277,6 +283,7 @@ export class JWTManager {
       userAgentHash,
       ipHash,
       authMethod: decodedRefreshToken.authMethod,
+      totpEnabled: decodedRefreshToken.totpEnabled,
     });
 
     const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;

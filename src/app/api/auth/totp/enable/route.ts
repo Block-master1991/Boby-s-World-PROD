@@ -33,6 +33,7 @@ export const POST = withAuth(async request => {
       userAgentHash: request.user.userAgentHash,
       ipHash: request.user.ipHash,
       authMethod: "totp",
+      totpEnabled: true,
     });
 
     const newRefreshToken = JWTManager.createRefreshToken({
@@ -41,6 +42,7 @@ export const POST = withAuth(async request => {
       userAgentHash: request.user.userAgentHash,
       ipHash: request.user.ipHash,
       authMethod: "totp",
+      totpEnabled: true,
     });
 
     response.cookies.set(

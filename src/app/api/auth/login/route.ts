@@ -11,6 +11,7 @@ import { PublicKey } from "@solana/web3.js";
 import { getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import nacl from "tweetnacl";
+import { TOTPService } from "@/lib/totp-service";
 import {
   createOrUpdatePlayerDoc,
   ensureFirestoreConnectivity,
@@ -122,17 +123,22 @@ async function issueTokensAndSession(
 ): Promise<NextResponse> {
   const { publicKey, clientNonce, ipHash, userAgentHash } = params;
   const requestHost = request.headers.get("host") || "";
+  
+  const totpEnabled = await TOTPService.isTOTPEnabled(publicKey);
+
   const accessToken = JWTManager.createAccessToken({
     publicKey,
     nonce: clientNonce,
     userAgentHash,
     ipHash,
+    totpEnabled,
   });
   const refreshToken = JWTManager.createRefreshToken({
     publicKey,
     nonce: clientNonce,
     userAgentHash,
     ipHash,
+    totpEnabled,
   });
 
   const response = NextResponse.json({
