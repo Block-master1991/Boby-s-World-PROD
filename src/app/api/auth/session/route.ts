@@ -6,6 +6,8 @@ import { setCsrfTokenResponse } from "@/lib/csrf-helper";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 
+export const dynamic = 'force-dynamic';
+
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   logger.log("[SESSION CHECK] Secured session check request");
   try {
@@ -48,7 +50,7 @@ export const GET = withAuth(async (request: AuthenticatedRequest) => {
         iat: jwtPayload.iat,
         exp: jwtPayload.exp,
         authMethod: jwtPayload.authMethod,
-        totpEnabled: jwtPayload.totpEnabled ?? await TOTPService.isTOTPEnabled(jwtPayload.sub),
+        totpEnabled: await TOTPService.isTOTPEnabled(jwtPayload.sub),
       },
     });
 

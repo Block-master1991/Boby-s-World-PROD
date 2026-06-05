@@ -5,13 +5,13 @@ import { setCsrfTokenResponse } from "@/lib/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/securityIntegration";
+import { TOTPService } from "@/lib/totp-service";
 import { LoginRequestSchema, validateRequestBody } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";
 import { PublicKey } from "@solana/web3.js";
 import { getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import nacl from "tweetnacl";
-import { TOTPService } from "@/lib/totp-service";
 import {
   createOrUpdatePlayerDoc,
   ensureFirestoreConnectivity,
@@ -132,6 +132,7 @@ async function issueTokensAndSession(
     userAgentHash,
     ipHash,
     totpEnabled,
+    authMethod: "wallet",
   });
   const refreshToken = JWTManager.createRefreshToken({
     publicKey,
@@ -139,6 +140,7 @@ async function issueTokensAndSession(
     userAgentHash,
     ipHash,
     totpEnabled,
+    authMethod: "wallet",
   });
 
   const response = NextResponse.json({
