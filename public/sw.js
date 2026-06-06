@@ -56,7 +56,7 @@ const ASSETS_TO_CACHE = [
     '/audio/Coins fly_Shield up_Speed burst.mp3',
     '/audio/Coins fly_Shield up.mp3',
     '/audio/Coins fly_Speed burst.mp3',
-    '/audio/Run_Bobby_start__to_main_menu.mp3',
+    '/audio/Run_Bobby_start _to_main_menu.mp3',
     '/audio/Shield up_Speed burst.mp3',
 ];
 

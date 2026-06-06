@@ -27,8 +27,9 @@ export function proxy(request: NextRequest) {
   } else {
     // Production: Strict CSP with nonce
     cspHeader = `
-      default-src 'self'; script-src 'self' 'nonce-${nonce}' 'strict-dynamic' https:;
-      style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com;
+      default-src 'self';
+      script-src 'self' 'unsafe-eval' 'unsafe-inline' https:;
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;      style-src 'self' 'nonce-${nonce}' 'unsafe-inline' https://fonts.googleapis.com;
       img-src 'self' https: data: blob:; font-src 'self' https://fonts.gstatic.com data:;
       media-src 'self' blob: data:; object-src 'none'; base-uri 'self';
       form-action 'self'; frame-ancestors 'self';
