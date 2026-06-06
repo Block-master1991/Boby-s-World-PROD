@@ -70,68 +70,134 @@ export class Skybox extends THREE.Object3D {
   }
 
   /* eslint-disable no-await-in-loop */
-  private async loadHDR(maxAttempts: number = 10) {
+  private async loadHDR(maxAttempts: number = 3) {
     const hdrUrl = "/textures/hdr/citrus_orchard_road_puresky_8k.hdr";
     const modelName = "hdr_data";
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
       try {
+        // Always fetch fresh data - previous attempts may have detached the buffer via Transferable
         const hdrData = await this.fetchHDRData(hdrUrl, modelName);
-        const blob = new Blob([hdrData], { type: "application/octet-stream" });
-        const blobUrl = URL.createObjectURL(blob);
 
-        const worker = new Worker(new URL("../../../workers/hdrWorker.ts", import.meta.url));
+        if (!hdrData || hdrData.byteLength === 0) {
+          throw new Error(`HDR data is empty or detached (byteLength: ${hdrData?.byteLength ?? 0})`);
+        }
 
-        // Wrap setup and execution in a promise to handle retries within this loop
-        await new Promise<void>((resolve, reject) => {
-          const workerTimeout = setTimeout(() => {
-            worker.terminate();
-            URL.revokeObjectURL(blobUrl);
-            reject(new Error("HDR Worker timeout"));
-          }, 45000); // Increased timeout for worker
+        logger.log(`[Skybox] HDR data fetched: ${(hdrData.byteLength / 1048576).toFixed(2)}MB, attempt ${attempt}`);
 
-          worker.onmessage = e => {
-            const { status, width, height, data, error } = e.data;
-            if (status === "progress") return;
+        // Try Worker-based parsing first, fall back to main thread
+        const useWorker = attempt <= 1;
+        if (useWorker) {
+          await this.loadHDRViaWorker(hdrData);
+        } else {
+          await this.loadHDRMainThread(hdrData);
+        }
 
-            clearTimeout(workerTimeout);
-            if (status === "success") {
-              this.processHDRResult(width, height, data, e.data.isHalf);
-              worker.terminate();
-              URL.revokeObjectURL(blobUrl);
-              resolve();
-            } else {
-              worker.terminate();
-              URL.revokeObjectURL(blobUrl);
-              reject(new Error(error || "Worker failed"));
-            }
-          };
-
-          worker.onerror = err => {
-            clearTimeout(workerTimeout);
-            worker.terminate();
-            URL.revokeObjectURL(blobUrl);
-            reject(err);
-          };
-
-          worker.postMessage({ url: blobUrl });
-        });
-
-        logger.log(`[Skybox] ✅ HDR Load successful on attempt ${attempt}`);
+        logger.log(`[Skybox] ✅ HDR Load successful on attempt ${attempt} (${useWorker ? "worker" : "main-thread"})`);
         if (this.resolveLoading) this.resolveLoading();
         return; // Success!
       } catch (error) {
-        logger.error(`[Skybox] ❌ HDR Loading attempt ${attempt} failed:`, error);
+        const errMsg = error instanceof Error ? error.message : String(error);
+        logger.error(`[Skybox] ❌ HDR Loading attempt ${attempt} failed: ${errMsg}`);
         if (attempt === maxAttempts) {
           logger.error("[Skybox] 🚨 All HDR loading attempts failed. Using fallback.");
           this.applyFallbackSky();
           if (this.resolveLoading) this.resolveLoading();
         } else {
-          const delay = Math.min(1000 * Math.pow(2, attempt - 1), 10000);
+          const delay = Math.min(500 * attempt, 2000);
           await new Promise(r => setTimeout(r, delay));
         }
       }
     }
+  }
+
+  private async loadHDRViaWorker(hdrData: ArrayBuffer): Promise<void> {
+    const worker = new Worker(new URL("../../../workers/hdrWorker.ts", import.meta.url));
+
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const workerTimeout = setTimeout(() => {
+          worker.terminate();
+          reject(new Error("HDR Worker timeout"));
+        }, 60000);
+
+        worker.onmessage = e => {
+          const { status, width, height, data, error } = e.data;
+          if (status === "progress") return;
+
+          clearTimeout(workerTimeout);
+          if (status === "success") {
+            this.processHDRResult(width, height, data, e.data.isHalf);
+            worker.terminate();
+            resolve();
+          } else {
+            worker.terminate();
+            reject(new Error(error || "Worker failed"));
+          }
+        };
+
+        worker.onerror = err => {
+          clearTimeout(workerTimeout);
+          worker.terminate();
+          const errMsg = err instanceof ErrorEvent
+            ? `Worker load error: ${err.message} (${err.filename}:${err.lineno}:${err.colno})`
+            : `Worker error: ${String(err)}`;
+          reject(new Error(errMsg));
+        };
+
+        // Transfer the buffer (zero-copy) to the worker
+        worker.postMessage({ buffer: hdrData }, [hdrData]);
+      });
+    } catch (workerError) {
+      logger.warn(`[Skybox] Worker failed, will retry on main thread: ${workerError instanceof Error ? workerError.message : String(workerError)}`);
+      throw workerError;
+    }
+  }
+
+  private async loadHDRMainThread(hdrData: ArrayBuffer): Promise<void> {
+    logger.log("[Skybox] Processing HDR on main thread (fallback)...");
+    const { parseHeader, decodeScanline, rgbeToFloat32, calculateDownscaleTarget, processDownscaling } = await import("../../../workers/hdrUtils");
+
+    const bytes = new Uint8Array(hdrData);
+    const dims = parseHeader(bytes);
+    if (!dims || dims.width <= 0 || dims.height <= 0) {
+      throw new Error("Invalid HDR dimensions from main thread parser");
+    }
+
+    const { width: srcWidth, height: srcHeight, endPos } = dims;
+    const { targetWidth, targetHeight } = calculateDownscaleTarget(srcWidth, srcHeight);
+    const isDownscaling = targetWidth !== srcWidth || targetHeight !== srcHeight;
+    const scaleX = srcWidth / targetWidth;
+    const scaleY = srcHeight / targetHeight;
+
+    logger.log(`[Skybox] Main thread HDR: ${srcWidth}x${srcHeight} -> ${targetWidth}x${targetHeight}`);
+
+    const finalData = new Float32Array(targetWidth * targetHeight * 4);
+    const scanline = new Uint8Array(4 * srcWidth);
+    const srcRgbaLine = new Float32Array(srcWidth * 4);
+    let pos = endPos;
+
+    for (let y = 0; y < srcHeight; y++) {
+      const { newPos, success } = decodeScanline(scanline, bytes, pos, srcWidth);
+      if (!success) throw new Error(`HDR decode failed at scanline ${y}`);
+      pos = newPos;
+
+      rgbeToFloat32(scanline, srcRgbaLine, srcWidth);
+
+      if (!isDownscaling) {
+        finalData.set(srcRgbaLine, y * srcWidth * 4);
+      } else {
+        processDownscaling({ y, targetWidth, targetHeight, scaleX, scaleY, srcRgbaLine, finalData });
+      }
+
+      // Yield to main thread every 64 scanlines to avoid blocking
+      if (y % 64 === 0) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise(resolve => setTimeout(resolve, 0));
+      }
+    }
+
+    this.processHDRResult(targetWidth, targetHeight, finalData, false);
   }
   /* eslint-enable no-await-in-loop */
 

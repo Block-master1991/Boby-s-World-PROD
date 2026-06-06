@@ -46,10 +46,19 @@ export async function verifyAssetIntegrity(
 
 function validateSize(check: IntegrityCheck, actualSize: number): void {
   if (!check.expectedSize) return;
-  const diffMB = Math.abs(actualSize - check.expectedSize) / (1024 * 1024);
-  if (diffMB > 0.001) {
+  const diffBytes = Math.abs(actualSize - check.expectedSize);
+  const diffMB = diffBytes / (1024 * 1024);
+
+  // Dual tolerance: percentage-based for large files, absolute for small files
+  // - 10% tolerance accounts for compression differences (gzip/brotli) across environments
+  // - 0.05MB (~50KB) absolute floor ensures small files aren't falsely flagged
+  const percentageTolerance = check.expectedSize * 0.1;
+  const absoluteTolerance = 0.05 * 1024 * 1024; // 50KB
+  const allowedTolerance = Math.max(percentageTolerance, absoluteTolerance);
+
+  if (diffBytes > allowedTolerance) {
     check.isValid = false;
-    check.error = `Size mismatch: expected ${check.expectedSize} bytes, got ${actualSize} bytes (diff: ${diffMB.toFixed(3)}MB)`;
+    check.error = `Size mismatch: expected ${check.expectedSize} bytes, got ${actualSize} bytes (diff: ${diffMB.toFixed(3)}MB, tolerance: ${(allowedTolerance / (1024 * 1024)).toFixed(3)}MB)`;
     logger.warn(`[AssetIntegrity] ${check.error}`, check.path);
   }
 }

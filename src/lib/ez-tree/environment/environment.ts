@@ -130,7 +130,13 @@ export class Environment extends THREE.Object3D {
         );
         this.chunkManager.setGeneratorsReady();
 
-        // Wait for initial chunks to load before signaling ready
+        // Trigger initial chunk loading from origin (0,0,0)
+        // This is necessary because updatePlayerPosition() won't be called until
+        // the render loop starts, which is blocked by loadingPromise - a deadlock.
+        // By seeding the initial position here, chunks begin loading immediately.
+        this.chunkManager.updatePlayerPosition(new THREE.Vector3(0, 0, 0));
+
+        // Wait for initial chunks to load before signaling ready (with timeout safety)
         logger.log("[Environment] Waiting for initial 25 chunks to load...");
         // eslint-disable-next-line no-await-in-loop -- Intentional: must wait for chunks before signaling ready
         await this.chunkManager.waitForInitialChunks(25);

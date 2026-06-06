@@ -1,5 +1,12 @@
 /**
  * Security and Caching Headers for next.config.ts
+ *
+ * NOTE: CSP is now managed dynamically via middleware (proxy.ts + csp.ts)
+ * This file only handles caching headers and non-CSP security headers
+ * that apply globally at the Next.js config level.
+ *
+ * The CSP in SECURITY_HEADERS is a FALLBACK only - it will be overridden
+ * by the middleware's route-aware CSP on dynamic pages.
  */
 
 export const CACHE_HEADERS = [
@@ -44,39 +51,32 @@ export const CACHE_HEADERS = [
   },
 ];
 
+/**
+ * Global security headers applied at the Next.js config level.
+ * These serve as a baseline and are overridden by middleware where applicable.
+ *
+ * CSP is intentionally EXCLUDED here because it is managed dynamically
+ * by the middleware (proxy.ts) using route-aware policies from csp.ts.
+ */
 export const SECURITY_HEADERS = [
   {
-    // Global Security Headers
     source: "/:path*",
     headers: [
       {
         key: "X-DNS-Prefetch-Control",
         value: "on",
       },
-      // Slowloris Protection: Connect Timeout
-      {
-        key: "Keep-Alive",
-        value: "timeout=5, max=1000",
-      },
-      {
-        key: "Connection",
-        value: "keep-alive",
-      },
-      {
-        key: "Strict-Transport-Security",
-        value: "max-age=63072000; includeSubDomains; preload",
-      },
-      {
-        key: "X-XSS-Protection",
-        value: "1; mode=block",
-      },
-      {
-        key: "X-Frame-Options",
-        value: "SAMEORIGIN",
-      },
       {
         key: "X-Content-Type-Options",
         value: "nosniff",
+      },
+      {
+        key: "X-XSS-Protection",
+        value: "0", // Modern approach: rely on CSP instead
+      },
+      {
+        key: "X-Frame-Options",
+        value: "DENY", // Overridden by middleware for game routes
       },
       {
         key: "Referrer-Policy",
@@ -85,16 +85,15 @@ export const SECURITY_HEADERS = [
       {
         key: "Permissions-Policy",
         value:
-          "camera=(), microphone=(), geolocation=(self), payment=(self), usb=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=(self)",
+          "camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), magnetometer=(), gyroscope=(), accelerometer=()",
       },
       {
         key: "Cross-Origin-Opener-Policy",
-        value: "same-origin-allow-popups",
+        value: "same-origin",
       },
       {
-        key: "Content-Security-Policy",
-        value:
-          "default-src 'self'; script-src 'self' https: 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' https: data: blob:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https: wss: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';",
+        key: "Cross-Origin-Resource-Policy",
+        value: "same-origin",
       },
     ],
   },

@@ -30,6 +30,7 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   private pendingTreeGroups = new Map<string, { group: THREE.Group; timeoutId: number }>();
   private frustum = new THREE.Frustum();
   private projScreenMatrix = new THREE.Matrix4();
+  private _workerFailed = false;
 
   constructor(
     private grassGenerator: Grass,
@@ -47,6 +48,12 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
     );
     this.worker = new Worker(new URL("../../workers/chunkWorker.ts", import.meta.url));
     this.worker.onmessage = e => this.handleWorkerMessage(e);
+    this.worker.onerror = e => {
+      if (!this._workerFailed) {
+        this._workerFailed = true;
+        logger.warn(`[ChunkManager] Worker failed, switching to main-thread generation: ${e.message || e.type || "unknown error"}`);
+      }
+    };
   }
 
   private handleWorkerMessage(e: MessageEvent) {
@@ -252,6 +259,11 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       gameplayData: { coinSpawns: [], enemySpawns: [] },
     };
 
+    // If worker already failed, use main-thread fallback directly
+    if (this._workerFailed) {
+      return this.loadChunkMainThread(x, z, key, chunk);
+    }
+
     return new Promise(resolve => {
       this.pendingResolves.set(key, data => {
         this.contentManager.populateChunk(chunk, data);
@@ -273,10 +285,37 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       setTimeout(() => {
         if (this.pendingResolves.has(key)) {
           this.pendingResolves.delete(key);
-          resolve(this.createFallbackChunk(key));
+          // Worker didn't respond - try main thread fallback
+          this._workerFailed = true;
+          this.loadChunkMainThread(x, z, key, chunk).then(resolve);
         }
-      }, 10000);
+      }, 5000);
     });
+  }
+
+  private async loadChunkMainThread(
+    x: number,
+    z: number,
+    key: string,
+    chunk: ChunkContent
+  ): Promise<ChunkContent> {
+    try {
+      const { generateChunkDataMainThread } = await import("./chunkGeneratorMainThread");
+      const data = generateChunkDataMainThread(
+        x, z,
+        this.grassGenerator.options,
+        this.rocksGenerator.options,
+        this.treesGenerator.options,
+        this.flowersGenerator.options,
+      );
+      this.contentManager.populateChunk(chunk, data);
+      chunk.isLoaded = true;
+      this.dispatchEvent({ type: "chunk-loaded", chunkKey: key, chunk });
+    } catch (e) {
+      logger.warn(`[ChunkManager] Main-thread chunk generation failed for ${key}:`, e);
+      return this.createFallbackChunk(key);
+    }
+    return chunk;
   }
 
   public updateModern(elapsedTime: number, camera?: THREE.Camera): void {
@@ -313,17 +352,39 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   public getLoadedChunkCount(): number {
     return this.loadedChunks.size;
   }
-  public waitForInitialChunks(requiredCount = 25): Promise<void> {
+  public waitForInitialChunks(requiredCount = 25, timeoutMs = 15000): Promise<void> {
     return new Promise(resolve => {
+      const startTime = Date.now();
+      let resolved = false;
+
+      const done = (reason: string) => {
+        if (resolved) return;
+        resolved = true;
+        logger.log(`[ChunkManager] Initial chunks ready: ${this.loadedChunks.size}/${requiredCount} (${reason})`);
+        resolve();
+      };
+
       const check = () => {
         if (this.loadedChunks.size >= requiredCount) {
-          logger.log(`[ChunkManager] Initial ${this.loadedChunks.size} chunks loaded. Ready!`);
-          resolve();
-        } else {
-          requestAnimationFrame(check);
+          done("all loaded");
+          return;
         }
+        if (Date.now() - startTime > timeoutMs) {
+          logger.warn(`[ChunkManager] ⏰ Timeout waiting for ${requiredCount} chunks. Have ${this.loadedChunks.size}, proceeding anyway.`);
+          done("timeout");
+          return;
+        }
+        requestAnimationFrame(check);
       };
       check();
+
+      // Safety: resolve even if no chunks load (render loop may not have started yet)
+      setTimeout(() => {
+        if (!resolved) {
+          logger.warn(`[ChunkManager] ⏰ Safety timeout - proceeding with ${this.loadedChunks.size} chunks`);
+          done("safety-timeout");
+        }
+      }, timeoutMs + 5000);
     });
   }
   private parseChunkKey(key: string): { chunkX: number; chunkZ: number } {

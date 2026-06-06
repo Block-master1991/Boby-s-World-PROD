@@ -77,12 +77,14 @@ async function parseRGBEAsync(buffer: ArrayBuffer, onProgress: (progress: number
 // --- Message Handler ---
 
 self.onmessage = async (e: MessageEvent) => {
-  const { url } = e.data;
+  const { buffer } = e.data;
 
   try {
-    const response = await fetch(url);
-    if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-    const buffer = await response.arrayBuffer();
+    // Buffer is received directly via Transferable (zero-copy from main thread)
+    // No fetch needed - eliminates CORS, Service Worker interference, and blob URL issues
+    if (!buffer || !(buffer instanceof ArrayBuffer)) {
+      throw new Error("No ArrayBuffer received in worker message");
+    }
 
     // Use the function to prevent unused variable warning
     const unusedToHalf = toHalf(1.0);
