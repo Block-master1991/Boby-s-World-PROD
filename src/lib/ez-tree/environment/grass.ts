@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { logger } from "utils/logger";
 import { CHUNK_SIZE } from "../../chunkUtils";
 import { getModel, putModel } from "../../indexedDB"; // Import IndexedDB utilities

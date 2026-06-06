@@ -62,21 +62,18 @@ const ASSETS_TO_CACHE = [
 
 // Install event - cache all critical assets
 self.addEventListener('install', event => {
-  event.waitUntil(
-    (async () => {
-      const cache = await caches.open(CACHE_NAME);
-
-      for (const asset of ASSETS_TO_CACHE) {
-        try {
-          await cache.add(asset);
-        } catch (err) {
-          console.error('[SW] Failed to cache:', asset, err);
-        }
-      }
-
-      await self.skipWaiting();
-    })()
-  );
+      console.log('[SW] Installing Service Worker');
+    event.waitUntil(
+        caches.open(CACHE_NAME).then(cache => {
+            console.log('[SW] Caching assets:', ASSETS_TO_CACHE.length);
+            return cache.addAll(ASSETS_TO_CACHE);
+        }).then(() => {
+            console.log('[SW] Assets cached successfully');
+            return self.skipWaiting();
+        }).catch(error => {
+            console.error('[SW] Asset caching failed:', error);
+        })
+    );
 });
 
 // Activate event - clean old caches

@@ -3,83 +3,25 @@ import * as THREE from "three";
 export { THREE };
 
 // Core Three.js components used throughout the app
-export {
-  Scene,
-  PerspectiveCamera,
-  WebGLRenderer,
-  Clock,
-  Vector3,
-  Vector2,
-  Quaternion,
-  Matrix4,
-  Euler,
-  Color,
-  Fog,
-  TextureLoader,
-  LoadingManager,
-  AnimationMixer,
-  AnimationClip,
-  KeyframeTrack,
-  InterpolateLinear,
-  InterpolateDiscrete,
-  LoopRepeat,
-  Bone,
-  Skeleton,
-  SkinnedMesh,
-  MeshStandardMaterial,
-  MeshBasicMaterial,
-  MeshLambertMaterial,
-  Material,
-  BufferGeometry as Geometry,
-  BoxGeometry,
-  PlaneGeometry,
-  SphereGeometry,
-  CylinderGeometry,
-  Group,
-  Object3D,
-  Mesh,
-  Points,
-  PointsMaterial,
-  InstancedMesh,
-  BufferGeometry,
-  BufferAttribute,
-  Float32BufferAttribute,
-  Uint16BufferAttribute,
-  Uint32BufferAttribute,
-  Raycaster,
-  Box3,
-  Sphere,
-  Frustum,
-  Camera,
-  PerspectiveCamera as ThreePerspectiveCamera,
-  OrthographicCamera,
-  AxesHelper,
-  GridHelper,
-  AmbientLight,
-  DirectionalLight,
-  PointLight,
-  SpotLight,
-  HemisphereLight,
-  PCFSoftShadowMap,
-  SRGBColorSpace,
-  LinearSRGBColorSpace,
-  ACESFilmicToneMapping,
-  CineonToneMapping,
-  ReinhardToneMapping,
-  LinearToneMapping,
-} from "three";
+  export {
+    ACESFilmicToneMapping, AmbientLight, AnimationClip, AnimationMixer, AxesHelper, Bone, Box3, BoxGeometry, BufferAttribute, BufferGeometry, Camera, CineonToneMapping, Clock, Color, CylinderGeometry, DirectionalLight, Euler, Float32BufferAttribute, Fog, Frustum, BufferGeometry as Geometry, GridHelper, Group, HemisphereLight, InstancedMesh, InterpolateDiscrete, InterpolateLinear, KeyframeTrack, LinearSRGBColorSpace, LinearToneMapping, LoadingManager, LoopRepeat, Material, Matrix4, Mesh, MeshBasicMaterial,
+    MeshLambertMaterial, MeshStandardMaterial, Object3D, OrthographicCamera, PCFSoftShadowMap, PerspectiveCamera, PlaneGeometry, PointLight, Points,
+    PointsMaterial, Quaternion, Raycaster, ReinhardToneMapping, Scene, Skeleton,
+    SkinnedMesh, Sphere, SphereGeometry, SpotLight, SRGBColorSpace, TextureLoader, PerspectiveCamera as ThreePerspectiveCamera, Uint16BufferAttribute,
+    Uint32BufferAttribute, Vector2, Vector3, WebGLRenderer
+  } from "three";
 
 // Type exports
 export type { Intersection } from "three";
 
 // Loaders and utilities
-export { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
-export { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-export { KTX2Loader } from "three/examples/jsm/loaders/KTX2Loader.js";
-export { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+export { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+export { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
+export { KTX2Loader } from "three/addons/loaders/KTX2Loader.js";
+export { RGBELoader } from "three/addons/loaders/RGBELoader.js";
 
 // Controls (only import what's actually used)
-export { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
+export { OrbitControls } from "three/addons/controls/OrbitControls.js";
 
 // Post-processing (lazy loaded when needed)
 export const loadPostProcessing = async () => {
@@ -90,11 +32,11 @@ export const loadPostProcessing = async () => {
     { FXAAShader },
     { GammaCorrectionShader },
   ] = await Promise.all([
-    import("three/examples/jsm/postprocessing/EffectComposer.js"),
-    import("three/examples/jsm/postprocessing/RenderPass.js"),
-    import("three/examples/jsm/postprocessing/OutlinePass.js"),
-    import("three/examples/jsm/shaders/FXAAShader.js"),
-    import("three/examples/jsm/shaders/GammaCorrectionShader.js"),
+    import("three/addons/postprocessing/EffectComposer.js"),
+    import("three/addons/postprocessing/RenderPass.js"),
+    import("three/addons/postprocessing/OutlinePass.js"),
+    import("three/addons/shaders/FXAAShader.js"),
+    import("three/addons/shaders/GammaCorrectionShader.js"),
   ]);
 
   return {
@@ -108,7 +50,7 @@ export const loadPostProcessing = async () => {
 
 // Physics utilities (lazy loaded)
 export const loadPhysics = async () => {
-  const { OctreeHelper } = await import("three/examples/jsm/helpers/OctreeHelper.js");
+  const { OctreeHelper } = await import("three/addons/helpers/OctreeHelper.js");
   return { OctreeHelper };
 };
 

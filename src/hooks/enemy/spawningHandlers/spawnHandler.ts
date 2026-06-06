@@ -3,7 +3,7 @@ import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";
 import { useCallback } from "react";
 import * as THREE from "three";
-import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 import { positionModel } from "../spawningHelpers";
 import type { EnemyData } from "../types";
 import { createEnemy, createMixer } from "./enemyCreator";

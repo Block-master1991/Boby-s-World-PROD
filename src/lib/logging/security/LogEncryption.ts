@@ -2,6 +2,7 @@ import type { EncryptedData, EncryptionConfig, ILogEncryption } from "./Encrypti
 
 import { professionalLogger } from "../logger-instance";
 
+export const runtime = "nodejs";
 // Lazy logger accessor not strictly needed with ESM live bindings,
 // but we keep a helper if we want to ensure it's available or mock it.
 const getLogger = () => professionalLogger;

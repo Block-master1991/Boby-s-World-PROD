@@ -1,5 +1,5 @@
 import type { BufferGeometry, Material } from "@/lib/three-chunk";
-import { SimplifyModifier } from "three/examples/jsm/modifiers/SimplifyModifier.js";
+import { SimplifyModifier } from "three/addons/modifiers/SimplifyModifier.js";
 import { logger } from "utils/logger";
 
 export interface LODLevel {

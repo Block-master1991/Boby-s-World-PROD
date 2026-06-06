@@ -94,7 +94,7 @@ export const SECURITY_HEADERS = [
       {
         key: "Content-Security-Policy",
         value:
-          "default-src 'self'; script-src 'self' https: 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' https: data: blob:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https: wss: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';",
+          "default-src 'self'; script-src 'self' https: 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com; img-src 'self' https: data: blob:; font-src 'self' https://fonts.gstatic.com data:; connect-src 'self' https: wss: blob: data:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self';",
       },
     ],
   },

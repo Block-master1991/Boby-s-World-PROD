@@ -1,4 +1,3 @@
-import "@solana/wallet-adapter-react-ui/styles.css"; // Added Solana wallet UI styles
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";

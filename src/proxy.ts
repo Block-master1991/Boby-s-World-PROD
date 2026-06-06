@@ -2,39 +2,79 @@ import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 
 /**
- * ✅ Balanced CSP for Next.js 16 + Web3 apps
- * - No nonce dependency (prevents hydration break)
- * - Safe for App Router
- * - Compatible with WebSockets + GraphQL + Wallets
+ * 🧠 Enterprise Proxy Security Layer
+ * - Route-based CSP (Admin / Game / API)
+ * - Next.js 16 compatible
+ * - Web3 + GraphQL + WebSockets safe
  */
-function buildCSP(isDev: boolean): string {
-  if (isDev) {
+
+function isAdmin(pathname: string): boolean {
+  return pathname.startsWith("/admin");
+}
+
+function isAPI(pathname: string): boolean {
+  return pathname.startsWith("/api");
+}
+
+/**
+ * 🔐 CSP Builder (Route-aware)
+ */
+function buildCSP(mode: "admin" | "game" | "api"): string {
+  // 🔴 ADMIN (Strict Security Mode)
+  if (mode === "admin") {
     return `
       default-src 'self';
-      script-src 'self' 'unsafe-eval' 'unsafe-inline';
-      style-src 'self' 'unsafe-inline';
+
+      script-src 'self' 'unsafe-eval';
+
+      style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.gstatic.com;
+
+      font-src 'self' https://fonts.gstatic.com data:;
+
       img-src 'self' https: data: blob:;
-      font-src 'self' https://fonts.gstatic.com;
-      connect-src 'self' https: ws: wss:;
-      frame-src 'self' https://www.google.com/recaptcha/ https://challenges.cloudflare.com;
-      worker-src 'self' blob:;
+
+      connect-src 'self' https: wss:;
+
+      frame-src 'self' https://challenges.cloudflare.com;
+
       object-src 'none';
+
+      base-uri 'self';
+
+      form-action 'self';
+
+      frame-ancestors 'none';
+
+      upgrade-insecure-requests;
     `
       .replace(/\s{2,}/g, " ")
       .trim();
   }
 
+  // 🟡 GAME (Balanced Production Mode)
+if (mode === "game") {
   return `
     default-src 'self';
 
     script-src 
       'self' 
+      'unsafe-inline' 
       'unsafe-eval' 
-      'unsafe-inline';
+      https://www.google.com
+      https://www.gstatic.com
+      https://recaptcha.google.com
+      https://challenges.cloudflare.com;
 
     style-src 
       'self' 
-      'unsafe-inline';
+      'unsafe-inline'
+      https://fonts.googleapis.com
+      https://fonts.gstatic.com;
+
+    font-src
+      'self'
+      https://fonts.gstatic.com
+      data:;
 
     img-src 
       'self' 
@@ -42,22 +82,27 @@ function buildCSP(isDev: boolean): string {
       data: 
       blob:;
 
-    font-src 
-      'self' 
-      https://fonts.gstatic.com;
-
-    connect-src 
+    connect-src includes
       'self' 
       https: 
       wss: 
-      ws:;
+      ws: 
+      data: 
+      blob:
+      https://www.google.com
+      https://www.gstatic.com
+      https://recaptcha.google.com
+      https://challenges.cloudflare.com;
 
     frame-src 
       'self' 
-      https://www.google.com/recaptcha/ 
+      https://www.google.com
+      https://www.gstatic.com
+      https://recaptcha.google.com
       https://challenges.cloudflare.com;
 
-    worker-src 'self' blob:;
+    worker-src 'self' data: 
+      blob:;
 
     media-src 'self' blob: data:;
 
@@ -68,50 +113,61 @@ function buildCSP(isDev: boolean): string {
     form-action 'self';
 
     frame-ancestors 'none';
-
-    upgrade-insecure-requests;
   `
     .replace(/\s{2,}/g, " ")
     .trim();
 }
 
+  // 🔵 API (No browser execution context)
+  return `
+    default-src 'none';
+    connect-src 'self';
+    object-src 'none';
+  `
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
+ * 🚀 Main Proxy Middleware
+ */
 export function proxy(request: NextRequest) {
-  const isDev = process.env.NODE_ENV === "development";
+  const { pathname } = request.nextUrl;
 
-  const csp = buildCSP(isDev);
+  // 🔍 Detect route type
+  const mode: "admin" | "game" | "api" = isAdmin(pathname)
+    ? "admin"
+    : isAPI(pathname)
+      ? "api"
+      : "game";
 
-  const requestHeaders = new Headers(request.headers);
+  const csp = buildCSP(mode);
 
-  const response = NextResponse.next({
-    request: {
-      headers: requestHeaders,
-    },
-  });
+  const response = NextResponse.next();
 
-  // 🔐 Security headers (safe set)
+  // 🔐 Security Headers (All Routes)
   response.headers.set("Content-Security-Policy", csp);
-
+response.headers.set("X-DNS-Prefetch-Control", "off");
+response.headers.set("X-XSS-Protection", "0");
   response.headers.set("X-Content-Type-Options", "nosniff");
   response.headers.set("X-Frame-Options", "DENY");
-  response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+  response.headers.set(
+    "Referrer-Policy",
+    "strict-origin-when-cross-origin"
+  );
 
   response.headers.set(
     "Permissions-Policy",
     "camera=(), microphone=(), geolocation=()"
   );
 
-  response.headers.set(
-    "Cross-Origin-Opener-Policy",
-    "same-origin"
-  );
+  response.headers.set("Cross-Origin-Opener-Policy", "same-origin");
+  response.headers.set("Cross-Origin-Resource-Policy", "same-origin");
 
-  response.headers.set(
-    "Cross-Origin-Resource-Policy",
-    "same-origin"
-  );
+  response.headers.set("X-DNS-Prefetch-Control", "off");
 
-  // HSTS only production
-  if (!isDev) {
+  // 🌐 HSTS only in production
+  if (process.env.NODE_ENV === "production") {
     response.headers.set(
       "Strict-Transport-Security",
       "max-age=31536000; includeSubDomains; preload"
@@ -121,8 +177,11 @@ export function proxy(request: NextRequest) {
   return response;
 }
 
+/**
+ * 🎯 Route matcher (exclude static assets)
+ */
 export const config = {
   matcher: [
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.xml|manifest.json).*)",
   ],
 };

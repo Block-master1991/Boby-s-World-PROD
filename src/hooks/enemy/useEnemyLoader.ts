@@ -2,10 +2,10 @@ import { getModel, putModel } from "@/lib/indexedDB";
 import { logger } from "@/utils/logger";
 import { useCallback, useEffect, useRef } from "react";
 import * as THREE from "three";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 
-import * as SkeletonUtils from "three/examples/jsm/utils/SkeletonUtils.js";
+import * as SkeletonUtils from "three/addons/utils/SkeletonUtils.js";
 
 type R = { model: THREE.Group; animations: THREE.AnimationClip[] };
 const cache: Record<string, R> = {};

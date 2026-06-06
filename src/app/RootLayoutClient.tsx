@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect } from "react";
+import "@solana/wallet-adapter-react-ui/styles.css";
 import { SWRConfig } from "swr";
 import { Toaster } from "@/components/ui/toaster";
 import WalletContextProvider from "@/components/wallet/WalletContextProvider";

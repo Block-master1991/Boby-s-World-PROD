@@ -3,7 +3,7 @@ import { logger } from "@/utils/logger";
 import type { MutableRefObject } from "react";
 import { useCallback } from "react";
 import type * as THREE from "three";
-import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import type { Octree } from "../../lib/Octree";
 import type { DynamicLoadableObject, ModelPool } from "./constants";
 import { useModelAnimations } from "./useModelLifecycle";

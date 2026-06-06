@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/addons/loaders/GLTFLoader.js";
 import { DRACO_DECODER_PATH } from "./constants";
 
 export const useModelLoaders = () => {

@@ -1,7 +1,7 @@
 import { isDev } from "@/lib/config/env";
 import type * as THREE from "three";
-import type { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
-import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import type { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
+import { GLTFLoader, type GLTF } from "three/addons/loaders/GLTFLoader.js";
 import { getModel, putModel } from "../../lib/indexedDB";
 import { logger } from "../logger";
 import { compressionManager } from "./CompressionManager";

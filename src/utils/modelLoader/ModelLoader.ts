@@ -1,5 +1,5 @@
 import type * as THREE from "three";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { DRACOLoader } from "three/addons/loaders/DRACOLoader.js";
 import { logger } from "../logger";
 import { lodManager } from "./LODManager";
 import { memoryManager } from "./MemoryManager";
