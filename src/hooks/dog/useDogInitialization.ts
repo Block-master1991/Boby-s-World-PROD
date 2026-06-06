@@ -2,7 +2,7 @@ import { logger } from "@/utils/logger";
 import type { MutableRefObject } from "react";
 import { useCallback } from "react";
 import * as THREE from "three";
-import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import type { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DOG_MODEL_SCALE, type DogTransform } from "./constants";
 import { loadDogData } from "./utils";
 

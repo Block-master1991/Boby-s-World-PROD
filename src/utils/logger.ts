@@ -11,7 +11,7 @@ import { isProd } from "../lib/config/env";
 import { professionalLogger, type LogContext } from "../lib/logging";
 
 // Determine if we're in browser or Node.js environment
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const isBrowser =
   typeof window !== "undefined" ||
   (typeof self !== "undefined" && typeof (self as any).postMessage === "function");

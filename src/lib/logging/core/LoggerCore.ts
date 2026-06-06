@@ -7,7 +7,7 @@ import type { ILoggerCore, LoggerCoreConfig } from "./LoggerTypes";
 import { getLogLevelFromEnv, LogLevel, toPinoLevel } from "./LogLevel";
 
 const isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined";
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 const isWorker =
   typeof self !== "undefined" && typeof (self as any).postMessage === "function" && !isBrowser;
 

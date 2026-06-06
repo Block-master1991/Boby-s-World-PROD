@@ -2,7 +2,7 @@ import { logger } from "@/utils/logger";
 import type { MutableRefObject } from "react";
 import { useCallback, useRef } from "react";
 import type * as THREE from "three";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { getModel, putModel } from "../../lib/indexedDB";
 import { COIN_MODEL_PATH } from "./constants";
 

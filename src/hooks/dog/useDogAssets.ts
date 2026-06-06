@@ -1,8 +1,8 @@
 import type { MutableRefObject } from "react";
 import { useCallback, useEffect, useRef } from "react";
 import type * as THREE from "three";
-import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader";
-import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { DOG_MODEL_SCALE } from "./constants";
 
 export const useDogAssets = (sceneRef: MutableRefObject<THREE.Scene | null>) => {
