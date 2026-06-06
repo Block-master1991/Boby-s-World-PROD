@@ -147,6 +147,8 @@ async function issueTokensAndSession(
     success: true,
     message: "Signature verified successfully. JWTs issued.",
     publicKey,
+    authMethod: "wallet",
+    totpEnabled,
   });
   response.cookies.set(
     "accessToken",

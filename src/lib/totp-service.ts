@@ -34,14 +34,58 @@ export class TOTPService {
   /**
    * Verifies a TOTP token against a secret
    */
-  public static async verifyToken(token: string, secret: string): Promise<boolean> {
+  public static async verifyToken(
+    token: string,
+    secret: string,
+    epochTolerance = 1
+  ): Promise<boolean> {
     try {
-      const result = await verify({ token, secret });
+      const result = await verify({ token, secret, epochTolerance });
       return result.valid;
     } catch (error) {
       logger.error("[TOTP Service] Verification error:", error);
       return false;
     }
+  }
+
+  public static async verifyTokenWithReason(
+    token: string,
+    secret: string,
+    epochTolerance = 2
+  ): Promise<"valid" | "expired" | "invalid"> {
+    const isValid = await this.verifyToken(token, secret, 1);
+    if (isValid) return "valid";
+
+    const isExpired = await this.verifyToken(token, secret, epochTolerance);
+    return isExpired ? "expired" : "invalid";
+  }
+
+  /**
+   * Checks a TOTP code or backup code without consuming the backup code.
+   */
+  public static async checkToken(userId: string, token: string): Promise<boolean> {
+    await initializeAdminApp();
+    const secret = await this.getUserSecret(userId);
+    if (!secret) return false;
+
+    const validTOTP = await this.verifyToken(token, secret);
+    if (validTOTP) return true;
+
+    const userDoc = await db.collection("players").doc(userId).get();
+    const encryptedCodes: string[] = userDoc.data()?.["totpBackupCodes"] || [];
+    const targetCode = token.toUpperCase();
+
+    for (const encryptedCode of encryptedCodes) {
+      try {
+        if (EncryptionUtils.decrypt(encryptedCode) === targetCode) {
+          return true;
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -61,11 +105,14 @@ export class TOTPService {
     await initializeAdminApp();
     const encryptedSecret = EncryptionUtils.encrypt(secret);
 
-    await db.collection("players").doc(userId).update({
-      totpSecret: encryptedSecret,
-      totpEnabled: true,
-      updatedAt: new Date().toISOString(),
-    });
+    await db.collection("players").doc(userId).set(
+      {
+        totpSecret: encryptedSecret,
+        totpEnabled: true,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
 
     await auditLogger.logEvent(
       "TOTP_ENABLED",

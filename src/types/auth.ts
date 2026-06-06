@@ -17,6 +17,8 @@ export interface AuthState {
 export interface LoginResponse {
   success?: boolean;
   publicKey?: string;
+  authMethod?: string;
+  totpEnabled?: boolean;
   error?: string;
   nonce?: string;
 }

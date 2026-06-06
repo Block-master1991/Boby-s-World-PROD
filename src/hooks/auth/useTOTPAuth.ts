@@ -31,7 +31,7 @@ export const useTOTPAuth = ({ setAuthState }: Omit<UseTOTPAuthProps, "authState"
           isAuthenticated: true,
           isLoading: false,
           isLocked: false, // Unlock session
-          user: p.user ? { ...p.user, authMethod: data.authMethod } : null,
+          user: p.user ? { ...p.user, authMethod: data.authMethod, totpEnabled: true } : null,
           authMethod: data.authMethod,
         }));
 

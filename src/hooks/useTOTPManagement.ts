@@ -67,12 +67,6 @@ export const useTOTPManagement = () => {
       logger.log("[useTOTPManagement] Calling markTOTPEnabled() to update auth state directly.");
       markTOTPEnabled();
 
-      // Refresh auth session state from the server after enabling TOTP,
-      // so the new TTL/authMethod is synchronized and reload preserves the linked state.
-      if (triggerSessionRefresh) {
-        await triggerSessionRefresh();
-      }
-
       logger.log("[useTOTPManagement] Fetching backup codes...");
       const bcData = await fetchTotp("/api/auth/totp/backup-codes", { method: "POST" });
       logger.log("[useTOTPManagement] Backup codes fetched successfully.");

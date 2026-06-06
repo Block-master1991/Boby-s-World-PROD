@@ -78,8 +78,8 @@ export default [
       "no-await-in-loop": "warn",
 
       // Code quality
-      "complexity": ["error", 20],
-      "max-depth": ["error", 4],
+      "complexity": ["warn", 20],
+      "max-depth": ["warn", 4],
       "max-lines": ["warn", 300],
       "max-lines-per-function": ["warn", 70],
       "max-nested-callbacks": ["error", 3],

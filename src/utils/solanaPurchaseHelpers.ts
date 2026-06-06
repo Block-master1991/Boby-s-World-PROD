@@ -134,7 +134,7 @@ export interface VerificationPayload {
   quantity: number;
   transactionSignature: string;
   transactionAuthSignature: AuthSig | undefined;
-  totpToken?: string | undefined;
+  purchaseVerificationToken?: string | undefined;
 }
 
 interface VerifyResponse {

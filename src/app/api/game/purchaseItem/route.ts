@@ -4,6 +4,7 @@ import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from "@/lib/co
 import { setCsrfTokenResponse } from "@/lib/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf-middleware";
 import { initializeAdminApp } from "@/lib/firebase-admin";
+import redis from "@/lib/redis";
 import { DEDICATED_RPC_ENDPOINT } from "@/lib/server-constants";
 import { getActiveStoreItems } from "@/lib/server-items";
 import { PurchaseItemSchema } from "@/lib/validations/game";
@@ -18,7 +19,6 @@ import {
   type ParsedTransactionWithMeta,
 } from "@solana/web3.js";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { TOTPService } from "@/lib/totp-service";
 import { NextResponse } from "next/server";
 
 interface ItemDefinition {
@@ -33,6 +33,18 @@ interface ItemDefinition {
 interface AuthenticatedItem extends ItemDefinition {
   instanceId: string;
 }
+
+const PURCHASE_VERIFICATION_PREFIX = "purchase_auth_token:";
+
+const verifyAndConsumePurchaseVerificationToken = async (
+  userPublicKey: string,
+  token: string
+): Promise<boolean> => {
+  const storedUser = await redis.get(`${PURCHASE_VERIFICATION_PREFIX}${token}`);
+  if (!storedUser || storedUser !== userPublicKey) return false;
+  await redis.del(`${PURCHASE_VERIFICATION_PREFIX}${token}`);
+  return true;
+};
 
 interface WebAuthnResponse {
   authenticatorData: string;
@@ -174,7 +186,7 @@ async function validateMFARequirements(params: {
   data: {
     itemId: string;
     quantity: number;
-    totpToken?: string | undefined;
+    purchaseVerificationToken?: string | undefined;
     transactionAuthSignature?: WebAuthnAuthData | undefined;
   };
   expectedAmount: number;
@@ -187,25 +199,30 @@ async function validateMFARequirements(params: {
   const hasRegisteredPasskeys = !passkeys.empty;
 
   const mfaRequired = expectedAmount > 50000 || hasRegisteredPasskeys || totpEnabled;
-  if (!mfaRequired && !data.transactionAuthSignature && !data.totpToken)
+  if (!mfaRequired && !data.transactionAuthSignature && !data.purchaseVerificationToken)
     return { success: true, error: undefined, status: 200 };
 
-  if (!data.transactionAuthSignature && !data.totpToken) {
+  if (data.purchaseVerificationToken) {
+    const isValid = await verifyAndConsumePurchaseVerificationToken(
+      userPublicKey,
+      data.purchaseVerificationToken
+    );
+    if (isValid) {
+      return { success: true, error: undefined, status: 200 };
+    }
+
+    return {
+      success: false,
+      error: "Purchase verification token is invalid or expired.",
+      status: 401,
+    };
+  }
+
+  if (!data.transactionAuthSignature) {
     if (hasRegisteredPasskeys)
       return { success: false, error: "Passkey verification required", status: 403 };
     if (totpEnabled) return { success: false, error: "TOTP verification required", status: 403 };
     return { success: false, error: "Step-up auth required", status: 403 };
-  }
-
-  if (data.totpToken) {
-    const isValid = await TOTPService.verifyToken(data.totpToken, userData?.["totpSecret"] || "");
-    const isBackup =
-      !isValid &&
-      data.totpToken.length === 8 &&
-      (await TOTPService.verifyBackupCode(userPublicKey, data.totpToken));
-    return isValid || isBackup
-      ? { success: true, error: undefined, status: 200 }
-      : { success: false, error: "Invalid TOTP code", status: 401 };
   }
 
   const stepUp = await verifyStepUpAuth({
@@ -257,7 +274,7 @@ async function processPurchase(
     quantity: number;
     transactionSignature: string;
     transactionAuthSignature?: WebAuthnAuthData | undefined;
-    totpToken?: string | undefined;
+    purchaseVerificationToken?: string | undefined;
   },
   origin: string
 ): Promise<{
@@ -326,7 +343,7 @@ export const POST = withAuth(
         ...(parse.data.transactionAuthSignature && {
           transactionAuthSignature: parse.data.transactionAuthSignature as WebAuthnAuthData,
         }),
-        totpToken: parse.data.totpToken,
+        purchaseVerificationToken: parse.data.purchaseVerificationToken,
       };
 
       await initializeAdminApp();

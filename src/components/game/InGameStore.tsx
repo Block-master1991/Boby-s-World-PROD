@@ -1,15 +1,17 @@
 "use client";
 
+import { TOTPVerificationDialog } from "@/components/auth/TOTPVerificationDialog";
 import { PurchaseStatusOverlay } from "@/components/game/PurchaseStatusOverlay";
 import StoreItemSkeleton from "@/components/shared/StoreItemSkeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useSessionWallet } from "@/hooks/useSessionWallet";
-import { useAuthContext } from "@/contexts/AuthContext";
 import { useActiveStoreItems } from "@/hooks/useStoreItems";
 import { useStorePurchase } from "@/hooks/useStorePurchase";
 import { useStoreState } from "@/hooks/useStoreState";
@@ -18,7 +20,6 @@ import { useConnection } from "@solana/wallet-adapter-react";
 import type { PublicKey } from "@solana/web3.js";
 import { AlertCircle, Minus, PawPrint, Plus, RefreshCw, Send } from "lucide-react";
 import Image from "next/image";
-import { TOTPVerificationDialog } from "@/components/auth/TOTPVerificationDialog";
 import React from "react";
 
 interface InGameStoreProps {
@@ -160,9 +161,10 @@ const StoreGrid: React.FC<{
   items: StoreItemDefinition[];
   state: ReturnType<typeof useStoreState>;
   purchase: ReturnType<typeof useStorePurchase>;
+  onBuy: (item: StoreItemDefinition, qty: number) => Promise<void>;
   auth: boolean;
   wall: boolean;
-}> = ({ items, state, purchase, auth, wall }) => {
+}> = ({ items, state, purchase, onBuy, auth, wall }) => {
   if (!auth || !wall)
     return (
       <div className="text-center py-10 text-xs text-muted-foreground">
@@ -192,7 +194,7 @@ const StoreGrid: React.FC<{
           price={state.bobyUsdPrice}
           loading={purchase.isLoading === it.id}
           disabled={disabled}
-          onBuy={purchase.handlePurchase}
+          onBuy={onBuy}
           onInc={state.handleIncrement}
           onDec={state.handleDecrement}
           onChg={state.handleQuantityChange}
@@ -213,10 +215,34 @@ const InGameStore: React.FC<InGameStoreProps> = ({
   const isMobile = useIsMobile();
   const { items, loading } = useActiveStoreItems();
   const state = useStoreState(items, loading);
-  const { hasPasskey, totpEnabled } = useAuthContext();
+  const { hasPasskey, totpEnabled, authMethod } = useAuthContext();
+  const [passkeySupported, setPasskeySupported] = React.useState(false);
   const [totpResolver, setTotpResolver] = React.useState<{
     resolve: (v: string | null) => void;
   } | null>(null);
+  const [pendingPurchase, setPendingPurchase] = React.useState<{
+    item: StoreItemDefinition;
+    qty: number;
+  } | null>(null);
+  const [isAuthChoiceOpen, setIsAuthChoiceOpen] = React.useState(false);
+
+  React.useEffect(() => {
+    const checkPasskeySupport = async () => {
+      if (typeof window === "undefined" || !("PublicKeyCredential" in window)) {
+        setPasskeySupported(false);
+        return;
+      }
+
+      const isAvailable =
+        typeof PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable === "function"
+          ? await PublicKeyCredential.isUserVerifyingPlatformAuthenticatorAvailable()
+          : true;
+
+      setPasskeySupported(isAvailable);
+    };
+
+    checkPasskeySupport().catch(() => {});
+  }, []);
 
   const purchase = useStorePurchase({
     isAuthenticated,
@@ -232,11 +258,40 @@ const InGameStore: React.FC<InGameStoreProps> = ({
     onPurchaseSuccess,
     hasPasskey,
     totpEnabled,
+    authMethod,
     onTOTPRequired: () =>
       new Promise<string | null>(resolve => {
         setTotpResolver({ resolve });
       }),
   });
+
+  const requestPurchase = async (item: StoreItemDefinition, qty: number) => {
+    const sessionPreferredMethod =
+      authMethod === "biometric"
+        ? "passkey"
+        : authMethod === "totp" || authMethod === "mfa"
+        ? "totp"
+        : totpEnabled
+        ? "totp"
+        : undefined;
+
+    if (!sessionPreferredMethod && isMobile && hasPasskey && totpEnabled && passkeySupported) {
+      setPendingPurchase({ item, qty });
+      setIsAuthChoiceOpen(true);
+      return;
+    }
+
+    await purchase.handlePurchase(item, qty, sessionPreferredMethod);
+  };
+
+  const handleAuthMethodSelection = async (method: "passkey" | "totp") => {
+    if (!pendingPurchase) return;
+    setIsAuthChoiceOpen(false);
+    const { item, qty } = pendingPurchase;
+    setPendingPurchase(null);
+    await purchase.handlePurchase(item, qty, method);
+  };
+
   return (
     <>
       <SheetHeader className="p-4 pb-2 border-b">
@@ -259,6 +314,7 @@ const InGameStore: React.FC<InGameStoreProps> = ({
             items={items}
             state={state}
             purchase={purchase}
+            onBuy={requestPurchase}
             auth={isAuthenticated}
             wall={isWalletConnectedAndMatching}
           />
@@ -271,6 +327,41 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         progress={purchase.purchaseProgress}
         onClose={() => purchase.setPurchaseProgress({ phase: "idle", message: "" })}
       />
+
+      <Dialog open={isAuthChoiceOpen} onOpenChange={open => {
+        if (!open) {
+          setIsAuthChoiceOpen(false);
+          setPendingPurchase(null);
+        }
+      }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose verification method</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Please choose a verification method to proceed with your purchase.
+            </p>
+            <div className="space-y-2">
+              <Button
+                className="w-full"
+                onClick={() => handleAuthMethodSelection("passkey")}
+                disabled={purchase.isLoading !== null}
+              >
+                Use device passkey
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => handleAuthMethodSelection("totp")}
+                disabled={purchase.isLoading !== null}
+              >
+                Use authenticator app
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <TOTPVerificationDialog
         isOpen={!!totpResolver}

@@ -21,22 +21,35 @@ import React, { useState } from "react";
 
 interface TOTPSetupDialogProps {
   qrCodeUrl: string;
+  secret: string;
   onVerify: (token: string) => Promise<void>;
   loading: boolean;
 }
 
 export const TOTPSetupDialog: React.FC<TOTPSetupDialogProps> = ({
   qrCodeUrl,
+  secret,
   onVerify,
   loading,
 }) => {
   const [token, setToken] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   const handleVerify = async () => {
     await onVerify(token);
     setToken("");
     setIsOpen(false);
+  };
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(secret);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
   };
 
   return (
@@ -57,6 +70,20 @@ export const TOTPSetupDialog: React.FC<TOTPSetupDialogProps> = ({
           <div className="bg-white p-2 rounded-lg">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />
+          </div>
+          <div className="w-full rounded-xl border border-neutral-200 bg-surface p-4">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <div>
+                <p className="text-sm font-semibold">Setup Key</p>
+                <p className="text-xs text-muted-foreground">Use this key if you can’t scan the QR code.</p>
+              </div>
+              <Button variant="secondary" size="sm" onClick={handleCopy}>
+                {copied ? "Copied" : "Copy"}
+              </Button>
+            </div>
+            <div className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-mono tracking-widest break-all text-center">
+              {secret}
+            </div>
           </div>
           <div className="w-full flex flex-col items-center gap-2">
             <Label htmlFor="token">Verification Code</Label>

@@ -7,12 +7,12 @@ import { WebAuthnTransactionSigner } from "@/lib/WebAuthnTransactionSigner";
 import { useApiFetch } from "@/utils/api";
 import { uint8ArrayToBase64url } from "@/utils/base64";
 import { logger } from "@/utils/logger";
+import type { AuthSig, VerificationPayload } from "@/utils/solanaPurchaseHelpers";
 import {
   buildBobyPurchaseTransaction,
   pollTransactionConfirmation,
   verifyPurchaseWithBackend,
 } from "@/utils/solanaPurchaseHelpers";
-import type { AuthSig, VerificationPayload } from "@/utils/solanaPurchaseHelpers";
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { useCallback, useState } from "react";
 
@@ -25,6 +25,8 @@ interface StepUpAuthResult {
     userHandle?: ArrayBuffer | null;
   };
 }
+
+export type AuthMethodChoice = "passkey" | "totp";
 
 interface UseStorePurchaseProps {
   isAuthenticated: boolean;
@@ -40,6 +42,7 @@ interface UseStorePurchaseProps {
   onPurchaseSuccess: (() => Promise<void>) | undefined;
   hasPasskey?: boolean;
   totpEnabled?: boolean;
+  authMethod?: string | undefined;
   onTOTPRequired?: () => Promise<string | null>;
 }
 
@@ -58,7 +61,7 @@ interface FlowOps {
   auth: AuthSig | undefined;
   r: number;
   signature?: string | undefined;
-  totpToken?: string | undefined;
+  purchaseVerificationToken?: string | undefined;
 }
 
 /**
@@ -87,7 +90,25 @@ const performStepUpAuth = async (
       nonce: Math.random().toString(36).substring(2),
     };
 
-    const res = (await WebAuthnTransactionSigner.signTransaction(pl)) as StepUpAuthResult | null;
+    const passkeyListResponse = await ctx.apiFetch("/api/auth/webauthn/manage", {
+      credentials: "include",
+    });
+    if (!passkeyListResponse.ok) {
+      throw new Error("Unable to load registered Passkeys.");
+    }
+
+    const passkeyData = await passkeyListResponse.json();
+    const credentialIds: string[] = (passkeyData.passkeys || []).map(
+      (passkey: { credentialId: string }) => passkey.credentialId
+    );
+
+    if (credentialIds.length === 0) {
+      throw new Error("No registered Passkeys available for this account.");
+    }
+
+    const res = (await WebAuthnTransactionSigner.signTransaction(pl, credentialIds)) as
+      | StepUpAuthResult
+      | null;
     if (!res) return undefined;
 
     return {
@@ -104,9 +125,16 @@ const performStepUpAuth = async (
     };
   } catch (error) {
     logger.error("Step-up auth error:", error);
+    if (
+      error instanceof DOMException &&
+      (error.name === "NotAllowedError" || error.name === "AbortError")
+    ) {
+      return undefined;
+    }
     ctx.toast({
-      title: "Verification Cancelled",
-      description: "Security check is required for this transaction.",
+      title: "Passkey Error",
+      description:
+        "Unable to complete Passkey verification. Please try again or select another verification method.",
       variant: "destructive",
     });
     return undefined;
@@ -134,6 +162,28 @@ const handleFailure = (
   }
   ctx.setProgress(state);
   ctx.toast({ title: "Error", description: msg, variant: "destructive" });
+};
+
+const verifyTOTPBeforePurchase = async (
+  apiFetch: (url: string, options: RequestInit) => Promise<Response>,
+  token: string
+): Promise<string> => {
+  const response = await apiFetch("/api/auth/totp/check", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.error || "Invalid TOTP code");
+  }
+
+  const data = await response.json();
+  if (!data.purchaseVerificationToken) {
+    throw new Error("Purchase verification failed");
+  }
+  return data.purchaseVerificationToken;
 };
 
 const runFlow = async (ctx: PurchaseContext, ops: FlowOps): Promise<void> => {
@@ -176,7 +226,7 @@ const runFlow = async (ctx: PurchaseContext, ops: FlowOps): Promise<void> => {
         quantity: qty,
         transactionSignature: sig,
         transactionAuthSignature: auth,
-        totpToken: ops.totpToken,
+        purchaseVerificationToken: ops.purchaseVerificationToken,
       } as VerificationPayload,
       ctx.isMobile
     );
@@ -197,11 +247,12 @@ const runFlow = async (ctx: PurchaseContext, ops: FlowOps): Promise<void> => {
       } else {
         throw new Error(data.error);
       }
-    } else if (data.error?.includes("TOTP verification required") && !ops.totpToken) {
+    } else if (data.error?.includes("TOTP verification required") && !ops.purchaseVerificationToken) {
       if (ctx.onTOTPRequired) {
         const token = await ctx.onTOTPRequired();
         if (token) {
-          await runFlow(ctx, { ...ops, totpToken: token, signature: sig });
+          const purchaseVerificationToken = await verifyTOTPBeforePurchase(ctx.apiFetch, token);
+          await runFlow(ctx, { ...ops, purchaseVerificationToken, signature: sig });
         } else {
           throw new Error("TOTP verification cancelled.");
         }
@@ -229,7 +280,11 @@ export const useStorePurchase = (props: UseStorePurchaseProps) => {
   const { apiFetch } = useApiFetch();
 
   const handlePurchase = useCallback(
-    async (it: StoreItemDefinition, qty: number): Promise<void> => {
+    async (
+      it: StoreItemDefinition,
+      qty: number,
+      preferredMethod?: AuthMethodChoice
+    ): Promise<void> => {
       const ctx: PurchaseContext = {
         ...props,
         toast,
@@ -252,26 +307,101 @@ export const useStorePurchase = (props: UseStorePurchaseProps) => {
       const amt = (it.price * qty) / ctx.bobyUsdPrice;
       setIsLoading(it.id);
       try {
-        // Priority 1: AuthContext state, Priority 2: localStorage fallback
+        // Priority 1: explicit method, Priority 2: session auth method, Priority 3: TOTP fallback if enabled
+        const defaultMethod = ctx.authMethod === "biometric"
+          ? "passkey"
+          : ctx.authMethod === "totp" || ctx.authMethod === "mfa"
+          ? "totp"
+          : ctx.totpEnabled
+          ? "totp"
+          : undefined;
+        const effectiveMethod = preferredMethod ?? defaultMethod;
+
         const userHasPasskey =
           ctx.hasPasskey ||
           (typeof window !== "undefined" &&
             localStorage.getItem("boby_world_passkey_registered") === "true");
+        const canUseTOTP = ctx.totpEnabled && !!ctx.onTOTPRequired;
+
+        const tryPasskey =
+          effectiveMethod === "passkey" ? userHasPasskey : effectiveMethod === "totp" ? false : userHasPasskey;
+        const tryTOTP =
+          effectiveMethod === "totp"
+            ? canUseTOTP
+            : effectiveMethod === "passkey"
+            ? false
+            : !userHasPasskey && canUseTOTP;
 
         let auth: AuthSig | undefined = undefined;
-        if (userHasPasskey) {
+        if (tryPasskey) {
           auth = await performStepUpAuth(ctx, it, qty, amt);
           if (!auth) {
+            if (preferredMethod === "passkey") {
+              toast({
+                title: "Passkey verification required",
+                description:
+                  "Passkey verification did not complete. Please try again or choose the authenticator app option.",
+                variant: "destructive",
+              });
+              setIsLoading(null);
+              return;
+            }
+
+            if (canUseTOTP) {
+              const token = await ctx.onTOTPRequired!();
+              if (!token) {
+                setIsLoading(null);
+                return;
+              }
+
+              try {
+                const purchaseVerificationToken = await verifyTOTPBeforePurchase(
+                  ctx.apiFetch,
+                  token
+                );
+                await runFlow(ctx, {
+                  it,
+                  qty,
+                  amt,
+                  auth: undefined,
+                  purchaseVerificationToken,
+                  r: 0,
+                });
+              } catch (error) {
+                const message = error instanceof Error ? error.message : "Invalid TOTP code.";
+                toast({ title: "TOTP Error", description: message, variant: "destructive" });
+                setIsLoading(null);
+                return;
+              }
+              return;
+            }
+
             setIsLoading(null);
             return;
           }
-        } else if (ctx.totpEnabled && ctx.onTOTPRequired) {
-          const token = await ctx.onTOTPRequired();
+        } else if (tryTOTP) {
+          const token = await ctx.onTOTPRequired!();
           if (!token) {
             setIsLoading(null);
             return;
           }
-          await runFlow(ctx, { it, qty, amt, auth: undefined, totpToken: token, r: 0 });
+
+          try {
+            const purchaseVerificationToken = await verifyTOTPBeforePurchase(ctx.apiFetch, token);
+            await runFlow(ctx, {
+              it,
+              qty,
+              amt,
+              auth: undefined,
+              purchaseVerificationToken,
+              r: 0,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Invalid TOTP code.";
+            toast({ title: "TOTP Error", description: message, variant: "destructive" });
+            setIsLoading(null);
+            return;
+          }
           return;
         }
 

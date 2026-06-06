@@ -2,7 +2,7 @@ import { useToast } from "@/hooks/use-toast";
 import { performanceMonitor } from "@/lib/advanced-service-worker";
 import type { AuthState, LoginResponse } from "@/types/auth";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { useCallback, useRef } from "react";
+import { useCallback, useRef, type MutableRefObject } from "react";
 
 interface UseSolanaAuthProps {
   authState: AuthState;
@@ -10,61 +10,130 @@ interface UseSolanaAuthProps {
   logoutAndRedirect: (path?: string) => Promise<void>;
 }
 
-export const useSolanaAuth = ({ setAuthState, logoutAndRedirect }: UseSolanaAuthProps) => {
-  const { publicKey, signMessage, connected, wallet } = useWallet();
-  const { toast } = useToast();
-  const loginInProgressRef = useRef(false);
+interface SignMessageAdapter {
+  signMessage: (message: Uint8Array) => Promise<Uint8Array>;
+}
 
-  const login = useCallback(async (): Promise<boolean> => {
+const isSignMessageAdapter = (adapter: unknown): adapter is SignMessageAdapter => {
+  return (
+    typeof adapter === "object" &&
+    adapter !== null &&
+    "signMessage" in adapter &&
+    typeof (adapter as SignMessageAdapter).signMessage === "function"
+  );
+};
+
+const isUserCancel = (error: unknown): boolean => {
+  if (!(error instanceof Error)) return false;
+  const message = error.message.toLowerCase();
+  return (
+    message.includes("cancel") ||
+    message.includes("rejected") ||
+    message.includes("user rejected") ||
+    message.includes("aborted")
+  );
+};
+
+const signChallenge = async (
+  message: Uint8Array,
+  signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | undefined,
+  adapter: unknown
+): Promise<Uint8Array> => {
+  if (adapter && isSignMessageAdapter(adapter)) {
+    try {
+      return await adapter.signMessage(message);
+    } catch (error: unknown) {
+      if (isUserCancel(error)) throw error;
+    }
+  }
+
+  if (!signMessage) {
+    throw new Error("Wallet cannot sign authentication challenge.");
+  }
+
+  return signMessage(message);
+};
+
+const requestLoginNonce = async (publicKey: string): Promise<string> => {
+  const nonceRes = await fetch(`/api/auth/login?publicKey=${publicKey}`);
+  if (!nonceRes.ok) throw new Error("Failed to get nonce.");
+  const { nonce } = await nonceRes.json();
+  return nonce;
+};
+
+const submitLogin = async (
+  publicKey: string,
+  signature: Uint8Array,
+  nonce: string
+): Promise<LoginResponse> => {
+  const loginRes = await fetch("/api/auth/login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({
+      publicKey,
+      signature: Buffer.from(signature).toString("hex"),
+      nonce,
+    }),
+  });
+
+  const data: LoginResponse = await loginRes.json();
+  if (!loginRes.ok) {
+    if (loginRes.status === 403) {
+      throw new Error("FORBIDDEN");
+    }
+    throw new Error(data.error || "Login failed.");
+  }
+
+  return data;
+};
+
+const buildLoginHandler = ({
+  publicKey,
+  connected,
+  signMessage,
+  adapter,
+  setAuthState,
+  logoutAndRedirect,
+  toast,
+  loginInProgressRef,
+}: {
+  publicKey: unknown;
+  connected: boolean;
+  signMessage: ((message: Uint8Array) => Promise<Uint8Array>) | undefined;
+  adapter: unknown;
+  setAuthState: React.Dispatch<React.SetStateAction<AuthState>>;
+  logoutAndRedirect: (path?: string) => Promise<void>;
+  toast: ReturnType<typeof useToast>["toast"];
+  loginInProgressRef: MutableRefObject<boolean>;
+}) =>
+  async (): Promise<boolean> => {
     if (loginInProgressRef.current) return false;
     loginInProgressRef.current = true;
     try {
-      if (!publicKey || !signMessage || !connected) throw new Error("Wallet not connected.");
+      if (!publicKey || !connected) throw new Error("Wallet not connected.");
       setAuthState(p => ({ ...p, isLoading: true, error: null }));
+
       const startTime = Date.now();
-      const nonceRes = await fetch(`/api/auth/login?publicKey=${publicKey.toString()}`);
-      if (!nonceRes.ok) throw new Error("Failed to get nonce.");
-      const { nonce } = await nonceRes.json();
+      const nonce = await requestLoginNonce(publicKey.toString());
+      const msgBytes = new TextEncoder().encode(`Sign this message to authenticate with Boby World.\nNonce: ${nonce}`);
+      const signature = await signChallenge(msgBytes, signMessage, adapter);
+      const data = await submitLogin(publicKey.toString(), signature, nonce);
 
-      const msgBytes = new TextEncoder().encode(
-        `Sign this message to authenticate with Boby World.\nNonce: ${nonce}`
-      );
-      let signature: Uint8Array;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      try {
-        signature = await (wallet?.adapter as any).signMessage(msgBytes, {
-          display: JSON.stringify({ title: "Boby World", domain: window.location.hostname }),
-        });
-      } catch {
-        signature = await signMessage(msgBytes);
-      }
-
-      const loginRes = await fetch("/api/auth/login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({
-          publicKey: publicKey.toString(),
-          signature: Buffer.from(signature).toString("hex"),
-          nonce,
-        }),
-      });
-      const data: LoginResponse = await loginRes.json();
-      if (!loginRes.ok) {
-        if (loginRes.status === 403) {
-          await logoutAndRedirect("/");
-          return false;
-        }
-        throw new Error(data.error || "Login failed.");
-      }
       if (data.success && data.publicKey) {
         performanceMonitor.recordLoadTime(Date.now() - startTime);
         setAuthState({
           isAuthenticated: true,
           isLoading: false,
-          user: { publicKey: data.publicKey, wallet: data.publicKey },
+          user: {
+            publicKey: data.publicKey,
+            wallet: data.publicKey,
+            totpEnabled: !!data.totpEnabled,
+            authMethod: data.authMethod || "wallet",
+          },
           error: null,
-          isLocked: false,
+          isLocked: !!data.totpEnabled,
+          authMethod: data.authMethod || "wallet",
         });
         localStorage.setItem("last_user_pk", data.publicKey);
         toast({
@@ -73,8 +142,14 @@ export const useSolanaAuth = ({ setAuthState, logoutAndRedirect }: UseSolanaAuth
         });
         return true;
       }
+
       throw new Error("Unknown login error.");
     } catch (e: unknown) {
+      if (e instanceof Error && e.message === "FORBIDDEN") {
+        await logoutAndRedirect("/");
+        return false;
+      }
+
       const msg = e instanceof Error ? e.message : "Login failed";
       setAuthState(p => ({ ...p, isLoading: false, error: msg, isAuthenticated: false }));
       toast({ variant: "destructive", title: "Login Error", description: msg });
@@ -82,7 +157,26 @@ export const useSolanaAuth = ({ setAuthState, logoutAndRedirect }: UseSolanaAuth
     } finally {
       loginInProgressRef.current = false;
     }
-  }, [publicKey, signMessage, connected, wallet, setAuthState, logoutAndRedirect, toast]);
+  };
+
+export const useSolanaAuth = ({ setAuthState, logoutAndRedirect }: UseSolanaAuthProps) => {
+  const { publicKey, signMessage, connected, wallet } = useWallet();
+  const { toast } = useToast();
+  const loginInProgressRef = useRef(false);
+
+  const login = useCallback(
+    buildLoginHandler({
+      publicKey,
+      connected,
+      signMessage,
+      adapter: wallet?.adapter,
+      setAuthState,
+      logoutAndRedirect,
+      toast,
+      loginInProgressRef,
+    }),
+    [publicKey, connected, signMessage, wallet?.adapter, setAuthState, logoutAndRedirect, toast]
+  );
 
   return { login };
 };

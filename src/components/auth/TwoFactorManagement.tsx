@@ -232,6 +232,7 @@ const TOTPSection = ({
             {setupData ? (
               <TOTPSetupDialog
                 qrCodeUrl={setupData.qrCodeUrl}
+                secret={setupData.secret}
                 onVerify={enableTOTP}
                 loading={loading}
               />
@@ -285,7 +286,7 @@ export const TwoFactorManagement: React.FC = () => {
 
       <Separator className="bg-primary/5" />
 
-      <div className="grid gap-6">
+      <div className="grid gap-6 max-h-[70vh] overflow-y-auto pr-2">
         {isMobileDevice && <PasskeySection pkManagement={pkManagement} />}
         <TOTPSection totpManagement={totpManagement} />
       </div>

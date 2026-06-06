@@ -65,7 +65,13 @@ export class WebAuthnTransactionSigner {
       return credential;
     } catch (error) {
       logger.error("[TransactionSigner] Error signing transaction:", error);
-      return null;
+      if (
+        error instanceof DOMException &&
+        (error.name === "NotAllowedError" || error.name === "AbortError")
+      ) {
+        return null;
+      }
+      throw error;
     }
   }
 }

@@ -1,5 +1,6 @@
 import { sessionManager } from "@/lib/advancedSessionManager";
 import { auditLogger } from "@/lib/audit-logger";
+import { withAuth } from "@/lib/auth-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp, isMobile } from "@/lib/request-utils";
@@ -9,15 +10,16 @@ import { logger } from "@/utils/logger";
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 
-export async function POST(request: Request) {
+export const POST = withAuth(async (request) => {
   try {
-    const { userId, token } = await request.json();
+    const { token } = await request.json();
+    const userId = request.user.sub;
     const ip = getClientIp(request);
     const userAgent = request.headers.get("user-agent") || "unknown";
     const mobile = isMobile(request);
 
-    if (!userId || !token) {
-      return NextResponse.json({ error: "User ID and token are required" }, { status: 400 });
+    if (!token) {
+      return NextResponse.json({ error: "Token is required" }, { status: 400 });
     }
 
     const secret = await TOTPService.getUserSecret(userId);
@@ -25,20 +27,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "TOTP not enabled for this user" }, { status: 403 });
     }
 
-    let isValid = await TOTPService.verifyToken(token, secret);
+    const verificationResult = await TOTPService.verifyTokenWithReason(token, secret);
+    let isValid = verificationResult === "valid";
 
     if (!isValid && token.length === 8) {
       isValid = await TOTPService.verifyBackupCode(userId, token);
     }
 
     if (!isValid) {
+      const errorMessage =
+        verificationResult === "expired"
+          ? "Expired verification code. Please use the latest code from your authenticator app."
+          : "Invalid verification code. Please check the code and try again.";
+
       await auditLogger.logEvent(
         "TOTP_VERIFICATION_FAILED",
-        `Invalid TOTP token for user ${userId}`,
+        `${errorMessage} for user ${userId}`,
         { ip, userAgent },
         "warn"
       );
-      return NextResponse.json({ error: "Invalid verification code" }, { status: 401 });
+      return NextResponse.json({ error: errorMessage }, { status: 401 });
     }
 
     const rhost = request.headers.get("host") || "";
@@ -46,6 +54,8 @@ export async function POST(request: Request) {
       success: true,
       message: "Login successful",
       publicKey: userId,
+      authMethod: "totp",
+      totpEnabled: true,
     });
 
     const nonce = `totp-${Date.now()}`;
@@ -102,4 +112,4 @@ export async function POST(request: Request) {
     logger.error("[TOTP Verify] Error:", error);
     return NextResponse.json({ error: "Authentication failed" }, { status: 500 });
   }
-}
+});

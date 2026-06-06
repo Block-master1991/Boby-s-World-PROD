@@ -1,23 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogFooter,
 } from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
-import { Shield, Loader2, KeyRound } from "lucide-react";
+import { Input } from "@/components/ui/input";
 import {
   InputOTP,
   InputOTPGroup,
-  InputOTPSlot,
   InputOTPSeparator,
+  InputOTPSlot,
 } from "@/components/ui/input-otp";
-import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { KeyRound, Loader2, Shield } from "lucide-react";
+import React, { useState } from "react";
 
 interface TOTPVerificationDialogProps {
   isOpen: boolean;
@@ -34,26 +34,48 @@ const OTPInputSection = ({
   token: string;
   setToken: (v: string) => void;
   onComplete: () => void;
-}) => (
-  <div className="space-y-2">
-    <Label htmlFor="token" className="sr-only">
-      Verification Code
-    </Label>
-    <InputOTP maxLength={6} value={token} onChange={setToken} onComplete={onComplete}>
-      <InputOTPGroup>
-        <InputOTPSlot index={0} />
-        <InputOTPSlot index={1} />
-        <InputOTPSlot index={2} />
-      </InputOTPGroup>
-      <InputOTPSeparator />
-      <InputOTPGroup>
-        <InputOTPSlot index={3} />
-        <InputOTPSlot index={4} />
-        <InputOTPSlot index={5} />
-      </InputOTPGroup>
-    </InputOTP>
-  </div>
-);
+}) => {
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const digits = text.replace(/\D/g, "").slice(0, 6);
+      if (!digits) return;
+      setToken(digits);
+    } catch {
+      // Ignore clipboard errors and keep the user in control.
+    }
+  };
+
+  return (
+    <div className="space-y-3">
+      <Label htmlFor="token" className="sr-only">
+        Verification Code
+      </Label>
+      <InputOTP maxLength={6} value={token} onChange={setToken} onComplete={onComplete}>
+        <InputOTPGroup>
+          <InputOTPSlot index={0} />
+          <InputOTPSlot index={1} />
+          <InputOTPSlot index={2} />
+        </InputOTPGroup>
+        <InputOTPSeparator />
+        <InputOTPGroup>
+          <InputOTPSlot index={3} />
+          <InputOTPSlot index={4} />
+          <InputOTPSlot index={5} />
+        </InputOTPGroup>
+      </InputOTP>
+      <Button
+        variant="secondary"
+        size="sm"
+        type="button"
+        onClick={handlePaste}
+        className="w-full"
+      >
+        Paste from clipboard
+      </Button>
+    </div>
+  );
+};
 
 const BackupInputSection = ({
   token,

@@ -10,7 +10,7 @@ export const PurchaseItemSchema = z.object({
       response: z.any(),
     })
     .optional(),
-  totpToken: z.string().optional(),
+  purchaseVerificationToken: z.string().optional(),
 });
 
 export type PurchaseItemInput = z.infer<typeof PurchaseItemSchema>;
