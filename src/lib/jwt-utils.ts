@@ -60,10 +60,26 @@ export class JWTManager {
     return true;
   }
 
-  private static readonly ACCESS_TOKEN_SECRET =
-    JWT_ACCESS_SECRET || "access-secret-dev-for-boby-world-app-CHANGE-IN-PROD";
-  private static readonly REFRESH_TOKEN_SECRET =
-    JWT_REFRESH_SECRET || "refresh-secret-dev-for-boby-world-app-CHANGE-IN-PROD";
+  private static get ACCESS_TOKEN_SECRET(): string {
+    const secret = JWT_ACCESS_SECRET;
+    if (!secret || secret.length < 32) {
+      throw new Error(
+        "[FATAL] JWT_ACCESS_SECRET is not set or too short (minimum 32 characters). " +
+        "Set it in your environment variables."
+      );
+    }
+    return secret;
+  }
+  private static get REFRESH_TOKEN_SECRET(): string {
+    const secret = JWT_REFRESH_SECRET;
+    if (!secret || secret.length < 32) {
+      throw new Error(
+        "[FATAL] JWT_REFRESH_SECRET is not set or too short (minimum 32 characters). " +
+        "Set it in your environment variables."
+      );
+    }
+    return secret;
+  }
 
   // Expiry times in seconds
   private static readonly ACCESS_TOKEN_EXPIRY_SECONDS = 15 * 60; // 15 minutes

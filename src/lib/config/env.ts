@@ -16,11 +16,11 @@ const envSchema = z.object({
   DEDICATED_RPC_ENDPOINT: z.string().url().optional(),
   FIREBASE_CLIENT_EMAIL: z.string().email().optional(),
   FIREBASE_PRIVATE_KEY: z.string().optional(),
-  JWT_ACCESS_SECRET: z.string().optional(),
-  JWT_REFRESH_SECRET: z.string().optional(),
-  REDIS_URL: z.string().optional(),
+  JWT_ACCESS_SECRET: z.string().min(32, "JWT_ACCESS_SECRET must be at least 32 characters").optional(),
+  JWT_REFRESH_SECRET: z.string().min(32, "JWT_REFRESH_SECRET must be at least 32 characters").optional(),
+  REDIS_URL: z.string().url("REDIS_URL must be a valid URL").optional(),
   SLACK_WEBHOOK_URL: z.string().url().optional(),
-  MASTER_ENCRYPTION_KEY: z.string().optional(),
+  MASTER_ENCRYPTION_KEY: z.string().min(1, "MASTER_ENCRYPTION_KEY is required (JWK format or hex)").optional(),
   RESEND_API_KEY: z.string().optional(),
   FROM_EMAIL: z.string().email().optional(),
   JUPITER_API_KEY: z.string().optional(),
@@ -234,3 +234,62 @@ export const CDN_CONFIG = {
   enabled: isProd || isStaging,
   baseUrl: env.NEXT_PUBLIC_CDN_BASE_URL,
 };
+
+/**
+ * Startup validation — executed once when the server starts.
+ * Ensures all critical secrets are present and strong enough in production.
+ */
+if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
+  const REQUIRED_SECRETS = [
+    "JWT_ACCESS_SECRET",
+    "JWT_REFRESH_SECRET",
+    "MASTER_ENCRYPTION_KEY",
+    "FIREBASE_PRIVATE_KEY",
+    "FIREBASE_CLIENT_EMAIL",
+    "REDIS_URL",
+  ] as const;
+
+  const missing = REQUIRED_SECRETS.filter(key => !process.env[key]);
+
+  if (missing.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error("❌ FATAL: Missing required environment variables in production:");
+    missing.forEach(key => console.error(`  - ${key}`));
+    process.exit(1);
+  }
+
+  // Validate secret strength
+  const JWT_ACCESS = process.env["JWT_ACCESS_SECRET"]!;
+  const JWT_REFRESH = process.env["JWT_REFRESH_SECRET"]!;
+  const MASTER_KEY = process.env["MASTER_ENCRYPTION_KEY"]!;
+
+  if (JWT_ACCESS.length < 64) {
+    // eslint-disable-next-line no-console
+    console.error("❌ FATAL: JWT_ACCESS_SECRET must be at least 64 characters");
+    process.exit(1);
+  }
+  if (JWT_REFRESH.length < 64) {
+    // eslint-disable-next-line no-console
+    console.error("❌ FATAL: JWT_REFRESH_SECRET must be at least 64 characters");
+    process.exit(1);
+  }
+  // MASTER_ENCRYPTION_KEY can be in JWK format (JSON) or hex format
+  try {
+    const parsedKey = JSON.parse(MASTER_KEY);
+    if (!parsedKey.kty || !parsedKey.k) {
+      // eslint-disable-next-line no-console
+      console.error("❌ FATAL: MASTER_ENCRYPTION_KEY JWK must contain 'kty' and 'k' fields");
+      process.exit(1);
+    }
+  } catch {
+    // Not JSON — validate as hex string (must be at least 64 hex chars = 32 bytes)
+    if (MASTER_KEY.length < 64 || !/^[0-9a-fA-F]+$/.test(MASTER_KEY)) {
+      // eslint-disable-next-line no-console
+      console.error("❌ FATAL: MASTER_ENCRYPTION_KEY must be a valid JWK JSON or at least 64 hex characters");
+      process.exit(1);
+    }
+  }
+
+  // eslint-disable-next-line no-console
+  console.log("✅ All required secrets validated successfully");
+}

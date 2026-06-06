@@ -118,9 +118,14 @@ const handleResponseStatus = async (
 
   if (response.status === 401) {
     logger.warn(`Received 401 for: ${url}`);
-    if (await handle401Error()) {
-      logger.log(`Retrying after session refresh: ${url}`);
-      return retryState.attemptFetch();
+    // TOTP verification failures should NOT trigger session refresh.
+    // A 401 from TOTP check means the code was invalid/expired, not that the session expired.
+    const isTOTPVerificationFailure = url.includes("/api/auth/totp/");
+    if (!isTOTPVerificationFailure) {
+      if (await handle401Error()) {
+        logger.log(`Retrying after session refresh: ${url}`);
+        return retryState.attemptFetch();
+      }
     }
     return response;
   }

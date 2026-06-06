@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "quality": "npm run lint:strict && npm run typecheck && npm run format:check",
     "quality:fix": "npm run lint:fix && npm run format",
+    "generate-secrets": "npx tsx scripts/generate-secrets.ts",
     "analyze": "ANALYZE=true npm run build",
     "analyze:view": "npx webpack-bundle-analyzer .next/static/chunks/*.js",
     "test": "jest",

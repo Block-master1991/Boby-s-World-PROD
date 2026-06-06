@@ -32,19 +32,19 @@ const nextConfig: NextConfig = {
     });
 
     if (!isServer) {
-        config.resolve.alias = {
-            ...config.resolve.alias,
-            'pino': 'pino/browser',
-            'pino-pretty': 'pino-pretty/lib/browser',
-            'sonic-boom': false,
-            'thread-stream': false,
-            'fastbench': false,
-            'pino-elasticsearch': false,
-            'tap': false,
-            'tape': false,
-            'desm': false,
-            'why-is-node-running': false,
-        };
+      config.resolve.alias = {
+        ...config.resolve.alias,
+        'pino': 'pino/browser',
+        'pino-pretty': 'pino-pretty/lib/browser',
+        'sonic-boom': false,
+        'thread-stream': false,
+        'fastbench': false,
+        'pino-elasticsearch': false,
+        'tap': false,
+        'tape': false,
+        'desm': false,
+        'why-is-node-running': false,
+      };
     }
 
     config.module.rules.push({

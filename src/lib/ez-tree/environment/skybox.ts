@@ -112,7 +112,9 @@ export class Skybox extends THREE.Object3D {
   }
 
   private async loadHDRViaWorker(hdrData: ArrayBuffer): Promise<void> {
-    const worker = new Worker(new URL("../../../workers/hdrWorker.ts", import.meta.url));
+    // Use pre-built worker file from public/ to avoid import.meta.url issues in Next.js
+    const workerUrl = new URL('/workers/hdrWorker.js', window.location.origin).href;
+    const worker = new Worker(workerUrl);
 
     try {
       await new Promise<void>((resolve, reject) => {
