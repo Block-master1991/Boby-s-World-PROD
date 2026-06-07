@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -123,13 +124,13 @@ export const TOTPVerificationDialog: React.FC<TOTPVerificationDialogProps> = ({
             )}
             {useBackupCode ? "Backup Code" : "Two-Factor Authentication"}
           </DialogTitle>
-        </DialogHeader>
-        <div className="flex flex-col items-center gap-4 py-4">
-          <p className="text-sm text-muted-foreground text-center">
+          <DialogDescription>
             {useBackupCode
               ? "Enter one of your 8-character backup codes."
               : "Enter the 6-digit code from your authenticator app."}
-          </p>
+          </DialogDescription>
+        </DialogHeader>
+        <div className="flex flex-col items-center gap-4 py-4">
           <div className="w-full flex justify-center py-2">
             {useBackupCode ? (
               <BackupInputSection token={token} setToken={setToken} />

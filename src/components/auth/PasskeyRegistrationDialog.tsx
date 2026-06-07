@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -40,6 +41,9 @@ export const PasskeyRegistrationDialog: React.FC<PasskeyRegistrationDialogProps>
     <DialogContent>
       <DialogHeader>
         <DialogTitle>Register New Passkey</DialogTitle>
+        <DialogDescription>
+          Enter a name for this passkey to help you identify it later
+        </DialogDescription>
       </DialogHeader>
       <div className="space-y-4">
         <div>

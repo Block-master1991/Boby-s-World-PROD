@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -118,6 +119,9 @@ export const StoreManagementHeader: React.FC<{
             <DialogTitle className="text-xl font-bold">
               {p.isEditing ? "Edit Store Item" : "New Store Item"}
             </DialogTitle>
+            <DialogDescription>
+              {p.isEditing ? "Edit the store item details below" : "Add a new item to the store"}
+            </DialogDescription>
           </DialogHeader>
           <StoreItemForm
             formData={p.formData}

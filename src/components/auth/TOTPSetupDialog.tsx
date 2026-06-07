@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -62,11 +63,11 @@ export const TOTPSetupDialog: React.FC<TOTPSetupDialogProps> = ({
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Setup Authenticator App</DialogTitle>
+          <DialogDescription>
+            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
+          </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-4 py-4">
-          <p className="text-sm text-muted-foreground text-center">
-            Scan this QR code with your authenticator app (Google Authenticator, Authy, etc.)
-          </p>
           <div className="bg-white p-2 rounded-lg">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48" />

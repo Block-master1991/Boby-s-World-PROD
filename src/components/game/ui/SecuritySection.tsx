@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -42,6 +43,9 @@ export const SecuritySection: React.FC<SecuritySectionProps> = ({
         <DialogContent className="sm:max-w-[500px] p-0 overflow-hidden">
           <DialogHeader className="p-6 pb-0">
             <DialogTitle>Account Security</DialogTitle>
+            <DialogDescription>
+              Manage your account security settings and two-factor authentication options.
+            </DialogDescription>
           </DialogHeader>
           <div className="p-6 pt-2">
             <TwoFactorManagement />

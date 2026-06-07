@@ -5,7 +5,7 @@ import { PurchaseStatusOverlay } from "@/components/game/PurchaseStatusOverlay";
 import StoreItemSkeleton from "@/components/shared/StoreItemSkeleton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -337,11 +337,11 @@ const InGameStore: React.FC<InGameStoreProps> = ({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Choose verification method</DialogTitle>
+            <DialogDescription>
+              Please choose a verification method to proceed with your purchase.
+            </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-2">
-            <p className="text-sm text-muted-foreground">
-              Please choose a verification method to proceed with your purchase.
-            </p>
             <div className="space-y-2">
               <Button
                 className="w-full"

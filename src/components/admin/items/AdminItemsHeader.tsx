@@ -15,6 +15,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -78,6 +79,9 @@ function ItemDialog({ isOpen, onOpenChange, isEditing, onResetForm, children }: 
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{isEditing ? "Edit Item" : "Add New Item"}</DialogTitle>
+          <DialogDescription>
+            {isEditing ? "Edit the item details below" : "Add a new item to the store"}
+          </DialogDescription>
         </DialogHeader>
         {children}
       </DialogContent>
