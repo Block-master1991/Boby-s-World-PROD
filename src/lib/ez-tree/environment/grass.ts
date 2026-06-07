@@ -10,16 +10,8 @@ import { simplex2d } from "./noise";
 let loaded = false;
 let _grassMesh: THREE.Mesh | null = null;
 
-export class GrassOptions {
-  public instanceCountPerChunk: number = 2000; // Number of grass instances per chunk
-  public scale: number = 100;
-  public patchiness: number = 0.8; // Increased from 0.7 to 0.8 to reduce density for mobile
-  public size: { x: number; y: number; z: number } = { x: 0.2, y: 0.2, z: 0.2 };
-  public sizeVariation: { x: number; y: number; z: number } = { x: 0.05, y: 0.05, z: 0.05 };
-  public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // Apply same wind strength used in flowers
-  public windFrequency: number = 1.2; // Apply same wind frequency used in flowers
-  public windScale: number = 500.0; // Apply same wind scale used in flowers
-}
+import { GrassOptions } from "./environmentOptions";
+export { GrassOptions };
 
 export class Grass extends THREE.Object3D {
   public options: GrassOptions;

@@ -6,14 +6,8 @@ import TreeOptions from "../options";
 import { TreePreset, loadPreset } from "../presets";
 import { Tree } from "../tree";
 
-export class TreesOptions {
-  public treeCountPerChunk: number = 1;
-  public scale: number = 100;
-  public patchiness: number = 0.7;
-  public windStrength: { x: number; y: number; z: number } = { x: 0.05, y: 0.02, z: 0.05 };
-  public windFrequency: number = 0.2;
-  public windScale: number = 800.0;
-}
+import { TreesOptions } from "./environmentOptions";
+export { TreesOptions };
 
 export class Trees extends THREE.Object3D {
   public options: TreesOptions;

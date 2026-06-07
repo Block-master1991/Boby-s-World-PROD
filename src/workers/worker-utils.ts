@@ -1,9 +1,6 @@
 // src/workers/worker-utils.ts
 // import { logger } from 'utils/logger'; // REMOVED to prevent worker crash
-import type { FlowerOptions } from "../lib/ez-tree/environment/flowers";
-import type { GrassOptions } from "../lib/ez-tree/environment/grass";
-import type { RockOptions as RocksOptions } from "../lib/ez-tree/environment/rocks";
-import type { TreesOptions } from "../lib/ez-tree/environment/trees";
+import type { FlowerOptions, GrassOptions, RockOptions as RocksOptions, TreesOptions } from "../lib/ez-tree/environment/environmentOptions";
 
 const logger = {
   // eslint-disable-next-line no-console

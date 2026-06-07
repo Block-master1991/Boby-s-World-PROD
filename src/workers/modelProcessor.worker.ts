@@ -1,5 +1,7 @@
 // src/workers/modelProcessor.worker.ts
-import * as THREE from "three";
+// NOTE: No THREE.js import — it causes Worker crash (DOM dependency) and rendering flicker.
+// All THREE.BufferGeometry / THREE.BufferAttribute / THREE.MathUtils.clamp usage
+// has been replaced with lightweight plain-JS equivalents that are safe in a Worker.
 
 // --- TYPE DEFINITIONS ---
 interface WorkerEventData {
@@ -19,6 +21,38 @@ interface WorkerResponseData {
   error?: string;
 }
 
+// --- LIGHTWEIGHT GEOMETRY STORAGE (no THREE.js) ---
+
+/** Replaces THREE.BufferAttribute — just pairs a TypedArray with an itemSize. */
+interface LiteAttribute {
+  array: ArrayBufferView;
+  itemSize: number;
+}
+
+/** Replaces THREE.BufferGeometry — a simple attribute map + optional index. */
+class LiteGeometry {
+  attributes: Map<string, LiteAttribute> = new Map();
+  indexAttr: LiteAttribute | null = null;
+
+  setAttribute(name: string, attr: LiteAttribute) {
+    this.attributes.set(name, attr);
+  }
+  getAttribute(name: string): LiteAttribute | undefined {
+    return this.attributes.get(name);
+  }
+  setIndex(attr: LiteAttribute) {
+    this.indexAttr = attr;
+  }
+  get index(): LiteAttribute | null {
+    return this.indexAttr;
+  }
+}
+
+/** Replaces THREE.MathUtils.clamp — identical behaviour, zero dependencies. */
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
+}
+
 // --- HELPER FUNCTIONS ---
 
 const getTypedArray = (attrName: string, buffer: ArrayBuffer) => {
@@ -28,13 +62,13 @@ const getTypedArray = (attrName: string, buffer: ArrayBuffer) => {
   return new Float32Array(buffer);
 };
 
-const loadGeometry = (geometryData: WorkerEventData["data"]) => {
-  const geometry = new THREE.BufferGeometry();
+const loadGeometry = (geometryData: WorkerEventData["data"]): LiteGeometry => {
+  const geometry = new LiteGeometry();
   for (const attrName in geometryData.attributes) {
     const attr = geometryData.attributes[attrName];
     if (attr) {
       const typedArray = getTypedArray(attrName, attr.array);
-      geometry.setAttribute(attrName, new THREE.BufferAttribute(typedArray, attr.itemSize));
+      geometry.setAttribute(attrName, { array: typedArray, itemSize: attr.itemSize });
     }
   }
   if (geometryData.index) {
@@ -42,13 +76,13 @@ const loadGeometry = (geometryData: WorkerEventData["data"]) => {
       geometryData.index.array instanceof ArrayBuffer
         ? new Uint32Array(geometryData.index.array)
         : geometryData.index.array;
-    geometry.setIndex(new THREE.BufferAttribute(indexArray, 1));
+    geometry.setIndex({ array: indexArray, itemSize: 1 });
   }
   return geometry;
 };
 
 const compressPosition = (
-  geometry: THREE.BufferGeometry,
+  geometry: LiteGeometry,
   geometryData: WorkerEventData["data"]
 ) => {
   const positionAttr = geometry.getAttribute("position");
@@ -74,20 +108,20 @@ const compressPosition = (
     const val = originalArray[i];
     if (val !== undefined) {
       quantizedArray[i] = Math.round(
-        THREE.MathUtils.clamp((val - min) / (scale || 1), -32768, 32767)
+        clamp((val - min) / (scale || 1), -32768, 32767)
       );
     }
   }
 
   geometry.setAttribute(
     "position",
-    new THREE.BufferAttribute(quantizedArray, positionAttr.itemSize)
+    { array: quantizedArray, itemSize: positionAttr.itemSize }
   );
   geometryData.attributes["position"].array = quantizedArray.buffer;
   geometryData.quantization = { min, scale };
 };
 
-const compressUV = (geometry: THREE.BufferGeometry, geometryData: WorkerEventData["data"]) => {
+const compressUV = (geometry: LiteGeometry, geometryData: WorkerEventData["data"]) => {
   const uvAttr = geometry.getAttribute("uv");
   if (!uvAttr || !geometryData.attributes["uv"]) return;
 
@@ -97,15 +131,15 @@ const compressUV = (geometry: THREE.BufferGeometry, geometryData: WorkerEventDat
   for (let i = 0; i < originalArray.length; i++) {
     const val = originalArray[i];
     if (val !== undefined) {
-      quantizedArray[i] = Math.round(THREE.MathUtils.clamp(val * 65535, 0, 65535));
+      quantizedArray[i] = Math.round(clamp(val * 65535, 0, 65535));
     }
   }
 
-  geometry.setAttribute("uv", new THREE.BufferAttribute(quantizedArray, uvAttr.itemSize));
+  geometry.setAttribute("uv", { array: quantizedArray, itemSize: uvAttr.itemSize });
   geometryData.attributes["uv"].array = quantizedArray.buffer;
 };
 
-const compressNormal = (geometry: THREE.BufferGeometry, geometryData: WorkerEventData["data"]) => {
+const compressNormal = (geometry: LiteGeometry, geometryData: WorkerEventData["data"]) => {
   const normalAttr = geometry.getAttribute("normal");
   if (!normalAttr || !geometryData.attributes["normal"]) return;
 
@@ -115,11 +149,11 @@ const compressNormal = (geometry: THREE.BufferGeometry, geometryData: WorkerEven
   for (let i = 0; i < originalArray.length; i++) {
     const val = originalArray[i];
     if (val !== undefined) {
-      quantizedArray[i] = Math.round(THREE.MathUtils.clamp(val * 127, -127, 127));
+      quantizedArray[i] = Math.round(clamp(val * 127, -127, 127));
     }
   }
 
-  geometry.setAttribute("normal", new THREE.BufferAttribute(quantizedArray, normalAttr.itemSize));
+  geometry.setAttribute("normal", { array: quantizedArray, itemSize: normalAttr.itemSize });
   geometryData.attributes["normal"].array = quantizedArray.buffer;
 };
 
@@ -132,7 +166,7 @@ const compressGeometryAdvanced = (geometryData: WorkerEventData["data"]) => {
   compressNormal(geometry, geometryData);
 
   if (geometry.index && geometryData.index) {
-    geometryData.index.array = new Uint32Array(geometry.index.array).buffer as ArrayBuffer;
+    geometryData.index.array = new Uint32Array(geometry.index.array.buffer).buffer as ArrayBuffer;
   }
 
   for (const attrName in geometryData.attributes) {

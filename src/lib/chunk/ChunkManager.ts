@@ -13,9 +13,10 @@ import type { Rocks } from "../ez-tree/environment/rocks";
 import type { Trees } from "../ez-tree/environment/trees";
 import { ChunkContentManager } from "./ChunkContentManager";
 import type { ChunkContent, ChunkData, ChunkManagerEventMap } from "./types";
+import { generateChunkDataMainThread } from "./chunkGeneratorMainThread";
 
 export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
-  private worker: Worker;
+  private worker: Worker | null = null;
   private loadedChunks = new Map<string, ChunkContent>();
   private playerPosition = new THREE.Vector3();
   private lastPlayerChunk: { chunkX: number; chunkZ: number } | null = null;
@@ -26,7 +27,7 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   private isProcessingQueue = false;
   private _generatorsReady = false;
   private contentManager: ChunkContentManager;
-  private pendingResolves = new Map<string, (data: ChunkData) => void>();
+  private pendingResolves = new Map<string, (data: ChunkData | ChunkContent) => void>();
   private pendingTreeGroups = new Map<string, { group: THREE.Group; timeoutId: number }>();
   private frustum = new THREE.Frustum();
   private projScreenMatrix = new THREE.Matrix4();
@@ -46,14 +47,27 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       treesGenerator,
       flowersGenerator
     );
-    this.worker = new Worker(new URL("../../workers/chunkWorker.ts", import.meta.url));
-    this.worker.onmessage = e => this.handleWorkerMessage(e);
-    this.worker.onerror = e => {
-      if (!this._workerFailed) {
-        this._workerFailed = true;
-        logger.warn(`[ChunkManager] Worker failed, switching to main-thread generation: ${e.message || e.type || "unknown error"}`);
-      }
-    };
+    try {
+      this.worker = new Worker(new URL("../../workers/chunkWorker.ts", import.meta.url));
+      this.worker.onmessage = e => this.handleWorkerMessage(e);
+      this.worker.onerror = e => {
+        if (!this._workerFailed) {
+          this._workerFailed = true;
+          const details = [
+            `message: ${e.message || 'none'}`,
+            `filename: ${e.filename || 'none'}`,
+            `lineno: ${e.lineno || 'none'}`,
+            `colno: ${e.colno || 'none'}`,
+            `type: ${e.type || 'none'}`,
+          ].join(', ');
+          logger.warn(`[ChunkManager] Worker failed, switching to main-thread generation: {${details}}`);
+          this.worker?.terminate();
+        }
+      };
+    } catch {
+      this._workerFailed = true;
+      logger.warn(`[ChunkManager] Worker creation failed, using main-thread fallback`);
+    }
   }
 
   private handleWorkerMessage(e: MessageEvent) {
@@ -265,13 +279,20 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
     }
 
     return new Promise(resolve => {
-      this.pendingResolves.set(key, data => {
-        this.contentManager.populateChunk(chunk, data);
-        chunk.isLoaded = true;
-        this.dispatchEvent({ type: "chunk-loaded", chunkKey: key, chunk });
-        resolve(chunk);
+      this.pendingResolves.set(key, (data) => {
+        clearTimeout(workerTimeout);
+        if ("grassData" in data && "rocksData" in data) {
+          // Worker response: ChunkData
+          this.contentManager.populateChunk(chunk, data as ChunkData);
+          chunk.isLoaded = true;
+          this.dispatchEvent({ type: "chunk-loaded", chunkKey: key, chunk });
+          resolve(chunk);
+        } else {
+          // Main-thread fallback: ChunkContent
+          resolve(data as ChunkContent);
+        }
       });
-      this.worker.postMessage({
+      this.worker?.postMessage({
         chunkX: x,
         chunkZ: z,
         grassOptions: this.grassGenerator.options,
@@ -282,25 +303,24 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
         worldMin: WORLD_MIN_BOUND,
         worldMax: WORLD_MAX_BOUND,
       });
-      setTimeout(() => {
+      const workerTimeout = window.setTimeout(() => {
         if (this.pendingResolves.has(key)) {
           this.pendingResolves.delete(key);
           // Worker didn't respond - try main thread fallback
           this._workerFailed = true;
           this.loadChunkMainThread(x, z, key, chunk).then(resolve);
         }
-      }, 5000);
+      }, 2000);
     });
   }
 
-  private async loadChunkMainThread(
+  private loadChunkMainThread(
     x: number,
     z: number,
     key: string,
     chunk: ChunkContent
   ): Promise<ChunkContent> {
     try {
-      const { generateChunkDataMainThread } = await import("./chunkGeneratorMainThread");
       const data = generateChunkDataMainThread(
         x, z,
         this.grassGenerator.options,
@@ -311,11 +331,11 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
       this.contentManager.populateChunk(chunk, data);
       chunk.isLoaded = true;
       this.dispatchEvent({ type: "chunk-loaded", chunkKey: key, chunk });
+      return Promise.resolve(chunk);
     } catch (e) {
       logger.warn(`[ChunkManager] Main-thread chunk generation failed for ${key}:`, e);
-      return this.createFallbackChunk(key);
+      return Promise.resolve(this.createFallbackChunk(key));
     }
-    return chunk;
   }
 
   public updateModern(elapsedTime: number, camera?: THREE.Camera): void {
@@ -403,7 +423,9 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   public dispose(): void {
     this.loadedChunks.forEach(c => this.contentManager.unloadChunk(this, c));
     this.loadedChunks.clear();
-    this.worker.terminate();
+    if (!this._workerFailed && this.worker) {
+      this.worker.terminate();
+    }
   }
   private createFallbackChunk(key: string): ChunkContent {
     const chunk: ChunkContent = {

@@ -1,15 +1,25 @@
 // src/workers/chunkWorker.ts
-import * as THREE from "three";
+// NOTE: No THREE.js import — it causes Worker crash (DOM dependency)
 import { CHUNK_SIZE } from "../lib/chunkUtils";
-import type { FlowerOptions } from "../lib/ez-tree/environment/flowers";
-import type { GrassOptions } from "../lib/ez-tree/environment/grass";
-import { simplex2d } from "../lib/ez-tree/environment/noise";
-import type { RockOptions as RocksOptions } from "../lib/ez-tree/environment/rocks";
-import type { TreesOptions } from "../lib/ez-tree/environment/trees";
+import type { FlowerOptions, GrassOptions, RockOptions as RocksOptions, TreesOptions } from "../lib/ez-tree/environment/environmentOptions";
+import { simplex2dWorker } from "../lib/ez-tree/environment/noiseWorker";
 import RNG from "../lib/ez-tree/rng";
 import { ProceduralCore } from "../utils/procedural-core";
 import type { ChunkData, ChunkWorkerMessage } from "./worker-utils";
 import { cleanupCache, OccupancyGrid, updatePerformanceMetrics } from "./worker-utils";
+
+// --- Lightweight math helpers (no THREE.js dependency) ---
+function eulerToQuaternion(x: number, y: number, z: number): [number, number, number, number] {
+  const cx = Math.cos(x / 2), sx = Math.sin(x / 2);
+  const cy = Math.cos(y / 2), sy = Math.sin(y / 2);
+  const cz = Math.cos(z / 2), sz = Math.sin(z / 2);
+  return [
+    sx * cy * cz - cx * sy * sz, // x
+    cx * sy * cz + sx * cy * sz, // y
+    cx * cy * sz - sx * sy * cz, // z
+    cx * cy * cz + sx * sy * sz, // w
+  ];
+}
 
 const generatedChunkData = new Map<string, ChunkData>();
 const noiseCache = new Map<string, number>();
@@ -27,7 +37,7 @@ function getCachedNoise(x: number, y: number, scale: number): number {
     return cachedValue;
   }
 
-  const value = simplex2d(new THREE.Vector2(x / scale, y / scale));
+  const value = simplex2dWorker(x / scale, y / scale);
   noiseCache.set(key, value);
 
   // Evict oldest entries if cache is too large
@@ -77,25 +87,21 @@ function processGrass(params: {
   const n = 0.5 + 0.5 * getCachedNoise(worldX, worldZ, opts.scale);
   if (n > opts.patchiness - 0.05 || env.grid.isOccupied(localX, localZ, 0.2)) return;
 
-  const position = new THREE.Vector3(
-    worldX + rng.random(-0.5, 0.5),
-    0,
-    worldZ + rng.random(-0.5, 0.5)
-  );
-  const quaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(0, rng.random(0, 2 * Math.PI), 0)
-  );
-  const scale = new THREE.Vector3(
-    opts.sizeVariation.x * rng.random(0, 1) + opts.size.x,
-    opts.sizeVariation.y * rng.random(0, 1) + opts.size.y,
-    opts.sizeVariation.z * rng.random(0, 1) + opts.size.z
-  );
-  const color = new THREE.Color(0.25 + rng.random(0, 0.1), 0.3 + rng.random(0, 0.3), 0.1);
+  const px = worldX + rng.random(-0.5, 0.5);
+  const py = 0;
+  const pz = worldZ + rng.random(-0.5, 0.5);
+  const q = eulerToQuaternion(0, rng.random(0, 2 * Math.PI), 0);
+  const sx = opts.sizeVariation.x * rng.random(0, 1) + opts.size.x;
+  const sy = opts.sizeVariation.y * rng.random(0, 1) + opts.size.y;
+  const sz = opts.sizeVariation.z * rng.random(0, 1) + opts.size.z;
+  const cr = 0.25 + rng.random(0, 0.1);
+  const cg = 0.3 + rng.random(0, 0.3);
+  const cb = 0.1;
 
-  out.positions.push(position.x, position.y, position.z);
-  out.scales.push(scale.x, scale.y, scale.z);
-  out.quaternions.push(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-  out.colors.push(color.r, color.g, color.b);
+  out.positions.push(px, py, pz);
+  out.scales.push(sx, sy, sz);
+  out.quaternions.push(q[0], q[1], q[2], q[3]);
+  out.colors.push(cr, cg, cb);
 }
 
 function generateGrassData(opts: GrassOptions, env: GenOptions) {
@@ -140,22 +146,19 @@ function processRock(params: {
   if (n < opts.patchiness + 0.05 || env.grid.isOccupied(localX, localZ, 1.0)) return;
 
   env.grid.markOccupied(localX, localZ, 1.0);
-  const position = new THREE.Vector3(worldX + rng.random(-1, 1), 0, worldZ + rng.random(-1, 1));
-  const quaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(rng.random(0, 0.2), rng.random(0, 2 * Math.PI), rng.random(0, 0.2))
-  );
+  const px = worldX + rng.random(-1, 1);
+  const py = 0;
+  const pz = worldZ + rng.random(-1, 1);
+  const q = eulerToQuaternion(rng.random(0, 0.2), rng.random(0, 2 * Math.PI), rng.random(0, 0.2));
   const bScale = opts.size.x + opts.sizeVariation.x * rng.random(0, 1);
-  const scale = new THREE.Vector3(bScale, bScale, bScale);
-  const color = new THREE.Color(
-    0.4 + rng.random(0, 0.1),
-    0.4 + rng.random(0, 0.1),
-    0.4 + rng.random(0, 0.1)
-  );
+  const cr = 0.4 + rng.random(0, 0.1);
+  const cg = 0.4 + rng.random(0, 0.1);
+  const cb = 0.4 + rng.random(0, 0.1);
 
-  out.positions.push(position.x, position.y, position.z);
-  out.scales.push(scale.x, scale.y, scale.z);
-  out.quaternions.push(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-  out.colors.push(color.r, color.g, color.b);
+  out.positions.push(px, py, pz);
+  out.scales.push(bScale, bScale, bScale);
+  out.quaternions.push(q[0], q[1], q[2], q[3]);
+  out.colors.push(cr, cg, cb);
 }
 
 function generateRockData(opts: RocksOptions, env: GenOptions) {
@@ -200,18 +203,19 @@ function processTree(params: {
   if (n > opts.patchiness - 0.05 || env.grid.isOccupied(localX, localZ, 1.5)) return;
 
   env.grid.markOccupied(localX, localZ, 1.5);
-  const position = new THREE.Vector3(worldX + rng.random(-2, 2), 0, worldZ + rng.random(-2, 2));
-  const quaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(0, rng.random(0, 2 * Math.PI), 0)
-  );
+  const px = worldX + rng.random(-2, 2);
+  const py = 0;
+  const pz = worldZ + rng.random(-2, 2);
+  const q = eulerToQuaternion(0, rng.random(0, 2 * Math.PI), 0);
   const treeScale = 0.5 + rng.random(0, 0.5);
-  const scale = new THREE.Vector3(treeScale, treeScale, treeScale);
-  const color = new THREE.Color(0.1 + rng.random(0, 0.1), 0.3 + rng.random(0, 0.2), 0.1);
+  const cr = 0.1 + rng.random(0, 0.1);
+  const cg = 0.3 + rng.random(0, 0.2);
+  const cb = 0.1;
 
-  out.positions.push(position.x, position.y, position.z);
-  out.scales.push(scale.x, scale.y, scale.z);
-  out.quaternions.push(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-  out.colors.push(color.r, color.g, color.b);
+  out.positions.push(px, py, pz);
+  out.scales.push(treeScale, treeScale, treeScale);
+  out.quaternions.push(q[0], q[1], q[2], q[3]);
+  out.colors.push(cr, cg, cb);
 }
 
 function generateTreeData(opts: TreesOptions, env: GenOptions) {
@@ -259,22 +263,19 @@ function processFlower(params: {
     return;
 
   env.grid.markOccupied(localX, localZ, 0.3);
-  const position = new THREE.Vector3(worldX + rng.random(-1, 1), 0, worldZ + rng.random(-1, 1));
-  const quaternion = new THREE.Quaternion().setFromEuler(
-    new THREE.Euler(rng.random(0, 0.2), rng.random(0, 2 * Math.PI), rng.random(0, 0.2))
-  );
+  const px = worldX + rng.random(-1, 1);
+  const py = 0;
+  const pz = worldZ + rng.random(-1, 1);
+  const q = eulerToQuaternion(rng.random(0, 0.2), rng.random(0, 2 * Math.PI), rng.random(0, 0.2));
   const bScale = (opts.size.x + opts.sizeVariation.x * rng.random(0, 1)) / 7;
-  const scale = new THREE.Vector3(bScale, bScale, bScale);
-  const color = new THREE.Color(
-    0.4 + rng.random(0, 0.1),
-    0.4 + rng.random(0, 0.1),
-    0.4 + rng.random(0, 0.1)
-  );
+  const cr = 0.4 + rng.random(0, 0.1);
+  const cg = 0.4 + rng.random(0, 0.1);
+  const cb = 0.4 + rng.random(0, 0.1);
 
-  out.positions.push(position.x, position.y, position.z);
-  out.scales.push(scale.x, scale.y, scale.z);
-  out.quaternions.push(quaternion.x, quaternion.y, quaternion.z, quaternion.w);
-  out.colors.push(color.r, color.g, color.b);
+  out.positions.push(px, py, pz);
+  out.scales.push(bScale, bScale, bScale);
+  out.quaternions.push(q[0], q[1], q[2], q[3]);
+  out.colors.push(cr, cg, cb);
 }
 
 function generateFlowerData(opts: FlowerOptions, env: GenOptions) {

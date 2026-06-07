@@ -52,6 +52,18 @@ const nextConfig: NextConfig = {
       use: ['raw-loader'],
     });
 
+    // --- Web Worker support for Next.js + Webpack 5 ---
+    // Fix: Webpack 5 wraps chunks in `(self, ...)` by default, but Web Workers
+    // may not have `self` as the global object during initialisation in some
+    // Next.js dev-server configurations.  Setting `globalObject` to `self`
+    // ensures the generated worker chunk can resolve its runtime.
+    if (!isServer) {
+      config.output = {
+        ...config.output,
+        globalObject: 'self',
+      };
+    }
+
     // Add performance hints - Increased for game bundles with Three.js
     if (!isServer) {
         config.performance = {

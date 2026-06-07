@@ -8,11 +8,8 @@ import type { ChunkData } from "../../workers/worker-utils";
 import { OccupancyGrid } from "../../workers/worker-utils";
 import { CHUNK_SIZE } from "../chunkUtils";
 import { WORLD_MAX_BOUND, WORLD_MIN_BOUND } from "../constants";
-import type { FlowerOptions } from "../ez-tree/environment/flowers";
-import type { GrassOptions } from "../ez-tree/environment/grass";
+import type { FlowerOptions, GrassOptions, RockOptions as RocksOptions, TreesOptions } from "../ez-tree/environment/environmentOptions";
 import { simplex2d } from "../ez-tree/environment/noise";
-import type { RockOptions as RocksOptions } from "../ez-tree/environment/rocks";
-import type { TreesOptions } from "../ez-tree/environment/trees";
 import RNG from "../ez-tree/rng";
 
 // Noise cache for main-thread generation

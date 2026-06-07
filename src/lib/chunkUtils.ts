@@ -17,15 +17,15 @@ export function getChunkCoordinates(worldX: number, worldZ: number) {
 
 /**
  * Converts chunk coordinates to the world position of the chunk's center.
+ * Returns a plain object to avoid THREE.js dependency (safe for Web Workers).
  * @param chunkX The chunk X coordinate.
  * @param chunkZ The chunk Z coordinate.
- * @returns A THREE.Vector3 representing the center world position of the chunk.
+ * @returns An object with x, y, z representing the center world position of the chunk.
  */
-import * as THREE from "three"; // Import THREE for Vector3
-export function getChunkWorldPosition(chunkX: number, chunkZ: number) {
+export function getChunkWorldPosition(chunkX: number, chunkZ: number): { x: number; y: number; z: number } {
   const worldX = chunkX * CHUNK_SIZE + CHUNK_SIZE / 2;
   const worldZ = chunkZ * CHUNK_SIZE + CHUNK_SIZE / 2;
-  return new THREE.Vector3(worldX, 0, worldZ);
+  return { x: worldX, y: 0, z: worldZ };
 }
 
 /**

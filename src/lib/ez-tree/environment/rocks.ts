@@ -11,13 +11,8 @@ let _rock1Mesh: THREE.Mesh | null = null;
 let _rock2Mesh: THREE.Mesh | null = null;
 let _rock3Mesh: THREE.Mesh | null = null;
 
-export class RockOptions {
-  public rockCountPerChunk: number = 5; // Number of rocks per chunk
-  public size: { x: number; y: number; z: number } = { x: 0.2, y: 0.2, z: 0.2 };
-  public sizeVariation: { x: number; y: number; z: number } = { x: 0.3, y: 0.3, z: 0.3 };
-  public scale: number = 100;
-  public patchiness: number = 0.7;
-}
+import { RockOptions } from "./environmentOptions";
+export { RockOptions };
 
 export class Rocks extends THREE.Group {
   public options: RockOptions;

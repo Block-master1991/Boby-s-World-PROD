@@ -13,16 +13,8 @@ let _flowerBlueMesh: THREE.Mesh | null = null;
 let _flowerWhiteMesh: THREE.Mesh | null = null;
 let _flowerYellowMesh: THREE.Mesh | null = null;
 
-export class FlowerOptions {
-  public flowersCountPerChunk: number = 5; // Number of flowers per chunk
-  public size: { x: number; y: number; z: number } = { x: 0.5, y: 0.5, z: 0.5 }; // Uniform size for the original model
-  public sizeVariation: { x: number; y: number; z: number } = { x: 0, y: 0, z: 0 }; // No size variation
-  public scale: number = 100.0; // Uniform scale
-  public patchiness: number = 0.6;
-  public windStrength: { x: number; y: number; z: number } = { x: 0.6, y: 0.6, z: 0.6 }; // Wind strength (multiplier)
-  public windFrequency: number = 1.2; // Wind frequency (multiplier)
-  public windScale: number = 500.0; // Wind scale
-}
+import { FlowerOptions } from "./environmentOptions";
+export { FlowerOptions };
 
 export class Flowers extends THREE.Group {
   public options: FlowerOptions;
