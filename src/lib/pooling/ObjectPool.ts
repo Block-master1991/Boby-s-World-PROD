@@ -1,17 +1,35 @@
 import { logger } from "@/utils/logger";
 import type { PoolConfig, PoolStats } from "./types";
 
+/** Tracks when an object was acquired and its idle metadata */
+interface ActiveEntry<T> {
+  obj: T;
+  acquiredAt: number;
+}
+
+interface AvailableEntry<T> {
+  obj: T;
+  releasedAt: number;
+}
+
 export abstract class ObjectPool<T> {
-  protected active = new Set<T>();
-  protected available = new Array<T>();
+  protected active = new Map<T, ActiveEntry<T>>();
+  protected available: AvailableEntry<T>[] = [];
   protected config: PoolConfig;
   protected stats = {
     created: 0,
     reused: 0,
     disposed: 0,
     peakUsage: 0,
+    growCount: 0,
+    shrinkCount: 0,
+    lastCleanupTime: 0,
   };
-  protected cleanupInterval: NodeJS.Timeout | null = null;
+  protected cleanupInterval: ReturnType<typeof setInterval> | null = null;
+
+  /** Rolling window of hold durations (ms) for avgHoldTimeMs calculation */
+  private holdTimeWindow: number[] = [];
+  private readonly HOLD_TIME_WINDOW_SIZE = 200;
 
   constructor(config: Partial<PoolConfig> = {}) {
     this.config = {
@@ -19,11 +37,16 @@ export abstract class ObjectPool<T> {
       maxSize: 100,
       growthFactor: 1.5,
       shrinkThreshold: 0.3,
-      cleanupInterval: 30000, // 30 seconds
+      cleanupInterval: 30000,
+      minAvailableRatio: 0.1,
+      maxIdleTime: 120000,
+      preWarm: true,
       ...config,
     };
 
-    this.initializePool();
+    if (this.config.preWarm !== false) {
+      this.initializePool();
+    }
     this.startCleanupInterval();
   }
 
@@ -35,7 +58,7 @@ export abstract class ObjectPool<T> {
   private initializePool(): void {
     for (let i = 0; i < this.config.initialSize; i++) {
       const obj = this.create();
-      this.available.push(obj);
+      this.available.push({ obj, releasedAt: performance.now() });
     }
   }
 
@@ -47,43 +70,53 @@ export abstract class ObjectPool<T> {
 
   get(): T {
     let obj: T;
+    const now = performance.now();
 
-    // Try to get from available pool
+    // Try to get from available pool (most recently released first for cache locality)
     if (this.available.length > 0) {
-      obj = this.available.pop()!;
+      const { obj: pooledObj } = this.available.pop()!;
+      obj = pooledObj;
       this.stats.reused++;
     } else {
       // Create new object if pool is not at max capacity
-      if (this.active.size + this.available.length < this.config.maxSize) {
+      const currentTotal = this.active.size + this.available.length;
+      if (currentTotal < this.config.maxSize) {
         obj = this.create();
         this.stats.created++;
+        this.stats.growCount++;
       } else {
-        // Pool is full, wait for an object to become available
-        // For now, create a new one (could implement waiting queue later)
+        // Pool is full – create one anyway but log a warning
         obj = this.create();
         this.stats.created++;
         logger.warn(
-          `[ObjectPool] Pool full, created additional object. Active: ${this.active.size}`
+          `[ObjectPool] Pool full (max ${this.config.maxSize}), created overflow object. Active: ${this.active.size}`
         );
       }
     }
 
     this.reset(obj);
-    this.active.add(obj);
+    this.active.set(obj, { obj, acquiredAt: now });
 
     // Update peak usage
-    const currentUsage = this.active.size;
-    if (currentUsage > this.stats.peakUsage) {
-      this.stats.peakUsage = currentUsage;
+    if (this.active.size > this.stats.peakUsage) {
+      this.stats.peakUsage = this.active.size;
     }
 
     return obj;
   }
 
   release(obj: T): void {
-    if (!this.active.has(obj)) {
+    const entry = this.active.get(obj);
+    if (!entry) {
       logger.warn("[ObjectPool] Attempted to release object not in active pool");
       return;
+    }
+
+    // Track hold time
+    const holdDuration = performance.now() - entry.acquiredAt;
+    this.holdTimeWindow.push(holdDuration);
+    if (this.holdTimeWindow.length > this.HOLD_TIME_WINDOW_SIZE) {
+      this.holdTimeWindow.shift();
     }
 
     this.active.delete(obj);
@@ -99,35 +132,56 @@ export abstract class ObjectPool<T> {
     this.reset(obj);
 
     // Check if we need to shrink the pool
-    const totalObjects = this.active.size + this.available.length;
+    const totalObjects = this.active.size + this.available.length + 1; // +1 for the object being released
+    const minAvailable = Math.max(1, Math.ceil(this.config.initialSize * (this.config.minAvailableRatio ?? 0.1)));
+
     if (
       totalObjects > this.config.initialSize &&
-      this.available.length / totalObjects > this.config.shrinkThreshold
+      this.available.length / totalObjects > this.config.shrinkThreshold &&
+      this.available.length > minAvailable
     ) {
-      // Remove excess objects
+      // Shrink: dispose the object being released + some idle ones
+      this.dispose(obj);
+      this.stats.disposed++;
+      this.stats.shrinkCount++;
+
+      // Also evict the oldest idle entries (up to 20% of available)
       const excessCount = Math.floor(this.available.length * 0.2);
-      for (let i = 0; i < excessCount; i++) {
-        const excessObj = this.available.pop();
-        if (excessObj) {
-          this.dispose(excessObj);
+      // Sort by releasedAt ascending (oldest first)
+      this.available.sort((a, b) => a.releasedAt - b.releasedAt);
+      for (let i = 0; i < excessCount && this.available.length > minAvailable; i++) {
+        const excessEntry = this.available.shift();
+        if (excessEntry) {
+          this.dispose(excessEntry.obj);
           this.stats.disposed++;
         }
       }
     } else {
-      this.available.push(obj);
+      this.available.push({ obj, releasedAt: performance.now() });
     }
   }
 
   private performCleanup(): void {
-    // Clean up invalid objects from available pool
-    this.available = this.available.filter(obj => {
-      if (!this.isValid(obj)) {
-        this.dispose(obj);
+    const now = performance.now();
+    this.stats.lastCleanupTime = now;
+    const maxIdleTime = this.config.maxIdleTime ?? 120000;
+    const minAvailable = Math.max(1, Math.ceil(this.config.initialSize * (this.config.minAvailableRatio ?? 0.1)));
+
+    // Clean up invalid and expired idle objects from available pool
+    const stillAvailable: AvailableEntry<T>[] = [];
+    for (const entry of this.available) {
+      const isExpired = now - entry.releasedAt > maxIdleTime;
+      const isInvalid = !this.isValid(entry.obj);
+
+      if (isInvalid || (isExpired && stillAvailable.length >= minAvailable)) {
+        this.dispose(entry.obj);
         this.stats.disposed++;
-        return false;
+        this.stats.shrinkCount++;
+      } else {
+        stillAvailable.push(entry);
       }
-      return true;
-    });
+    }
+    this.available = stillAvailable;
 
     // Log stats periodically
     const hitRate =
@@ -136,8 +190,14 @@ export abstract class ObjectPool<T> {
         : 0;
 
     logger.log(
-      `[ObjectPool] Cleanup - Active: ${this.active.size}, Available: ${this.available.length}, Hit Rate: ${hitRate.toFixed(1)}%`
+      `[ObjectPool] Cleanup - Active: ${this.active.size}, Available: ${this.available.length}, Hit Rate: ${hitRate.toFixed(1)}%, Grows: ${this.stats.growCount}, Shrinks: ${this.stats.shrinkCount}`
     );
+  }
+
+  private computeAvgHoldTime(): number {
+    if (this.holdTimeWindow.length === 0) return 0;
+    const sum = this.holdTimeWindow.reduce((a, b) => a + b, 0);
+    return sum / this.holdTimeWindow.length;
   }
 
   getStats(): PoolStats {
@@ -153,19 +213,23 @@ export abstract class ObjectPool<T> {
       disposed: this.stats.disposed,
       peakUsage: this.stats.peakUsage,
       hitRate,
+      avgHoldTimeMs: Math.round(this.computeAvgHoldTime() * 100) / 100,
+      growCount: this.stats.growCount,
+      shrinkCount: this.stats.shrinkCount,
+      lastCleanupTime: this.stats.lastCleanupTime,
     };
   }
 
   disposeAll(): void {
     // Dispose all active objects
-    for (const obj of this.active) {
-      this.dispose(obj);
+    for (const entry of this.active.values()) {
+      this.dispose(entry.obj);
     }
     this.active.clear();
 
     // Dispose all available objects
-    for (const obj of this.available) {
-      this.dispose(obj);
+    for (const entry of this.available) {
+      this.dispose(entry.obj);
     }
     this.available = [];
 
@@ -175,8 +239,11 @@ export abstract class ObjectPool<T> {
       this.cleanupInterval = null;
     }
 
+    // Reset stats
+    this.holdTimeWindow = [];
+
     logger.log(
-      `[ObjectPool] Disposed all objects. Total disposed: ${this.stats.disposed + this.active.size + this.available.length}`
+      `[ObjectPool] Disposed all objects. Total disposed: ${this.stats.disposed}`
     );
   }
 }
