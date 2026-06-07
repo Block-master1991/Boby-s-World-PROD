@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { usePasskeyOnboarding } from "@/hooks/usePasskeyOnboarding";
+import { useSecurityOnboarding } from "@/hooks/useSecurityOnboarding";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { Shield } from "lucide-react";
 import React from "react";
@@ -54,6 +55,7 @@ export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({
     onClose,
     onPasskeyRegistered
   );
+  const { handleRemindLater, handleDismissPermanently } = useSecurityOnboarding();
   const { title, desc } = getStepContent(step);
   const isSecurityEnabled = hasPasskey || totpEnabled;
 
@@ -61,6 +63,16 @@ export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({
     handleClose();
     // Redirect to security settings to set up TOTP
     router.push("/settings?tab=security");
+  };
+
+  const handleRemindLaterClick = () => {
+    handleRemindLater();
+    handleClose();
+  };
+
+  const handleDismissPermanentlyClick = () => {
+    handleDismissPermanently();
+    handleClose();
   };
 
   return (
@@ -88,6 +100,8 @@ export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({
               onRegister={registerPasskey}
               onSetupTotp={handleSetupTotp}
               isSecurityEnabled={isSecurityEnabled}
+              onRemindLater={handleRemindLaterClick}
+              onDismissPermanently={handleDismissPermanentlyClick}
             />
           )}
           {step === "register" && <RegisterStep />}

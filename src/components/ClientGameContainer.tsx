@@ -5,6 +5,7 @@ import CaptchaScreen from "@/components/game-bootstrap/CaptchaScreen";
 import LoadingScreen from "@/components/game-bootstrap/LoadingScreen";
 import { useAudio } from "@/contexts/AudioContext";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useSecurityOnboarding } from "@/hooks/useSecurityOnboarding";
 import { useToast } from "@/hooks/use-toast";
 import { RECAPTCHA_SITE_KEY } from "@/lib/constants";
 import { logger } from "@/utils/logger";
@@ -71,44 +72,21 @@ function useCaptchaLogic(isAuthenticated: boolean) {
   return { captchaVerified, handleCaptchaSuccess };
 }
 
-function useOnboardingLogic(isLoading: boolean, isAuthenticated: boolean, hasPasskey: boolean) {
-  const [showOnboarding, setShowOnboarding] = useState(false);
-
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && !hasPasskey) {
-      const dismissed = localStorage.getItem("passkey_onboarding_dismissed");
-      const now = Date.now();
-      if (!dismissed || now - parseInt(dismissed) > 3 * 24 * 60 * 60 * 1000) {
-        setShowOnboarding(true);
-      }
-    }
-  }, [isLoading, isAuthenticated, hasPasskey]);
-
-  const handleCloseOnboarding = () => {
-    setShowOnboarding(false);
-    localStorage.setItem("passkey_onboarding_dismissed", Date.now().toString());
-  };
-
-  return { showOnboarding, handleCloseOnboarding };
-}
+// Removed useOnboardingLogic - now using useSecurityOnboarding hook
 
 function useClientGameContainerLogic() {
-  const { isAuthenticated, hasPasskey, isLoading } = useAuthContext();
+  const { isAuthenticated, isLoading } = useAuthContext();
   const { captchaVerified, handleCaptchaSuccess } = useCaptchaLogic(isAuthenticated);
-  const { showOnboarding, handleCloseOnboarding } = useOnboardingLogic(
-    isLoading,
-    isAuthenticated,
-    hasPasskey
-  );
+  const { showModal, handleDismiss } = useSecurityOnboarding();
 
   return {
     isAuthenticated,
     isLoading,
-    showOnboarding,
+    showOnboarding: showModal,
     captchaVerified,
     siteKey: RECAPTCHA_SITE_KEY,
     handleCaptchaSuccess,
-    handleCloseOnboarding,
+    handleCloseOnboarding: handleDismiss,
   };
 }
 

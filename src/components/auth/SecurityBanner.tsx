@@ -2,13 +2,19 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { useSecurityOnboarding } from "@/hooks/useSecurityOnboarding";
 import { ArrowRight, Shield } from "lucide-react";
 import React, { useState } from "react";
-import { PasskeyOnboardingModal } from "./PasskeyOnboardingModal";
 
-const BannerContent: React.FC<{ onDismiss: () => void; onEnable: () => void }> = ({
-  onDismiss,
+
+const BannerContent: React.FC<{
+  onEnable: () => void;
+  onRemindLater: () => void;
+  onDismissPermanently: () => void;
+}> = ({
   onEnable,
+  onRemindLater,
+  onDismissPermanently,
 }) => (
   <div className="bg-amber-500/10 border-b border-amber-500/20 p-3 relative overflow-hidden group">
     <div className="absolute inset-0 bg-gradient-to-r from-amber-500/5 to-transparent w-full h-full animate-pulse" />
@@ -18,9 +24,9 @@ const BannerContent: React.FC<{ onDismiss: () => void; onEnable: () => void }> =
           <Shield className="w-4 h-4 text-amber-500" />
         </div>
         <div>
-          <p className="text-sm font-medium text-amber-200">Secure your account with Biometrics</p>
+          <p className="text-sm font-medium text-amber-200">Secure Your Account</p>
           <p className="text-xs text-amber-200/60 hidden sm:block">
-            Protect your assets and enable faster logins with Passkey.
+            Add an extra layer of security with multi-factor authentication
           </p>
         </div>
       </div>
@@ -29,16 +35,24 @@ const BannerContent: React.FC<{ onDismiss: () => void; onEnable: () => void }> =
           variant="ghost"
           size="sm"
           className="text-amber-200 hover:text-amber-100 hover:bg-amber-500/20 text-xs"
-          onClick={onDismiss}
+          onClick={onRemindLater}
         >
-          Dismiss
+          Remind me later
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-amber-200 hover:text-amber-100 hover:bg-amber-500/20 text-xs"
+          onClick={onDismissPermanently}
+        >
+          Don't show again
         </Button>
         <Button
           size="sm"
           className="bg-amber-500 hover:bg-amber-600 text-black font-bold h-8 text-xs px-4"
           onClick={onEnable}
         >
-          Enable Now <ArrowRight className="w-3 h-3 ml-1" />
+          Set Up Now <ArrowRight className="w-3 h-3 ml-1" />
         </Button>
       </div>
     </div>
@@ -47,15 +61,31 @@ const BannerContent: React.FC<{ onDismiss: () => void; onEnable: () => void }> =
 
 export const SecurityBanner: React.FC = () => {
   const { isAuthenticated, hasPasskey, isLoading } = useAuthContext();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isVisible, setIsVisible] = useState(true);
+  const { showModal, handleDismiss, handleRemindLater, handleDismissPermanently } = useSecurityOnboarding();
+  const [showBanner, setShowBanner] = useState(true);
 
-  if (isLoading || !isAuthenticated || hasPasskey || !isVisible) return null;
+  const handleRemindLaterClick = () => {
+    handleRemindLater();
+    setShowBanner(false);
+    handleDismiss();
+  };
+
+  const handleDismissPermanentlyClick = () => {
+    handleDismissPermanently();
+    setShowBanner(false);
+    handleDismiss();
+  };
+
+  if (isLoading || !isAuthenticated || hasPasskey || !showModal || !showBanner) return null;
 
   return (
     <>
-      <BannerContent onDismiss={() => setIsVisible(false)} onEnable={() => setIsModalOpen(true)} />
-      <PasskeyOnboardingModal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} />
+      <BannerContent 
+        onEnable={handleDismiss}
+        onRemindLater={handleRemindLaterClick}
+        onDismissPermanently={handleDismissPermanentlyClick}
+      />
+      
     </>
   );
 };

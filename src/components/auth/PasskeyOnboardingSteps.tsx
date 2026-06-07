@@ -13,7 +13,9 @@ export const IntroStep: React.FC<{
   onRegister: () => void;
   onSetupTotp?: () => void;
   isSecurityEnabled?: boolean;
-}> = ({ description, setDescription, onClose, onRegister, onSetupTotp, isSecurityEnabled }) => {
+  onRemindLater?: () => void;
+  onDismissPermanently?: () => void;
+}> = ({ description, setDescription, onClose, onRegister, onSetupTotp, isSecurityEnabled, onRemindLater, onDismissPermanently }) => {
   const [isMobileDevice, setIsMobileDevice] = useState(false);
 
   useEffect(() => {
@@ -118,13 +120,26 @@ export const IntroStep: React.FC<{
         </div>
       </div>
 
-      <Button
-        variant="ghost"
-        onClick={onClose}
-        className="w-full text-xs text-muted-foreground hover:text-foreground mt-2"
-      >
-        Maybe Later
-      </Button>
+      <div className="flex gap-2 mt-4">
+        {onRemindLater && (
+          <Button
+            variant="ghost"
+            onClick={onRemindLater}
+            className="flex-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Remind me later
+          </Button>
+        )}
+        {onDismissPermanently && (
+          <Button
+            variant="ghost"
+            onClick={onDismissPermanently}
+            className="flex-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            Don't show again
+          </Button>
+        )}
+      </div>
     </>
   );
 };
