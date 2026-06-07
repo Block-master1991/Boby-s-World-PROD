@@ -1,7 +1,9 @@
 "use client";
 
+import DisconnectButton from "@/components/shared/DisconnectButton";
 import DogMovement from "@/components/game/DogMovement";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useAuth } from "@/hooks/useAuth";
@@ -19,9 +21,33 @@ interface GameMenuSheetContentProps {
   adapterPublicKey: PublicKey | null;
 }
 
+/**
+ * UserInfoCard - Displays user connection status and address inside the menu
+ */
+const UserInfoCard: React.FC<{ authUserPublicKey: string }> = ({ authUserPublicKey }) => (
+  <Card className="bg-card/95 backdrop-blur-sm border-border/50 shadow-xl">
+    <CardContent className="p-3">
+      <div className="flex items-center gap-3">
+        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+        <div className="font-mono text-sm bg-muted px-2 py-1 rounded border break-all flex-shrink-0">
+          {authUserPublicKey.substring(0, 4)}...
+          {authUserPublicKey.substring(authUserPublicKey.length - 4)}
+        </div>
+        <DisconnectButton
+          size="sm"
+          variant="outline"
+          className="h-7 px-2 text-xs border-destructive/20 hover:border-destructive/40 flex-shrink-0"
+          redirectPath="/"
+        />
+      </div>
+    </CardContent>
+  </Card>
+);
+
 const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
   isWalletMismatch,
   isAuthenticated,
+  authUserPublicKey,
   sessionPublicKey,
   adapterPublicKey,
 }) => {
@@ -38,6 +64,11 @@ const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
           adapterPublicKey={adapterPublicKey}
         />
       </SheetHeader>
+      {isAuthenticated && authUserPublicKey && (
+        <div className="px-4 pt-3">
+          <UserInfoCard authUserPublicKey={authUserPublicKey} />
+        </div>
+      )}
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-3">
           <Button

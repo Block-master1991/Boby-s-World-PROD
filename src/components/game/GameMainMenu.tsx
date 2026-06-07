@@ -1,42 +1,15 @@
 "use client";
 
-import DisconnectButton from "@/components/shared/DisconnectButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { useAuth } from "@/hooks/useAuth";
-import { type User } from "@/types/auth";
 import Image from "next/image";
 import React, { useState } from "react";
 
 interface GameMainMenuProps {
   onGameModeSelected: (mode: "boby-world" | "running-game") => void;
 }
-
-/**
- * UserInfoCard - Sub-component to display user connection status and address
- */
-const UserInfoCard: React.FC<{ authUser: User }> = ({ authUser }) => (
-  <div className="fixed top-4 left-4 z-30 w-auto max-w-[calc(100vw-2rem)]">
-    <Card className="bg-card/95 backdrop-blur-sm border-border/50 shadow-xl">
-      <CardContent className="p-3">
-        <div className="flex items-center gap-3">
-          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
-          <div className="font-mono text-sm bg-muted px-2 py-1 rounded border break-all flex-shrink-0">
-            {authUser.publicKey.substring(0, 4)}...
-            {authUser.publicKey.substring(authUser.publicKey.length - 4)}
-          </div>
-          <DisconnectButton
-            size="sm"
-            variant="outline"
-            className="h-7 px-2 text-xs border-destructive/20 hover:border-destructive/40 flex-shrink-0"
-            redirectPath="/"
-          />
-        </div>
-      </CardContent>
-    </Card>
-  </div>
-);
 
 /**
  * GameModeOption - Sub-component for individual game mode selection cards
@@ -79,11 +52,10 @@ const GameModeOption: React.FC<GameModeOptionProps> = ({
 
 const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected }) => {
   const [selectedMode, setSelectedMode] = useState<"boby-world" | "running-game">("boby-world");
-  const { isAuthenticated, user: authUser } = useAuth();
 
   return (
     <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
-      {isAuthenticated && authUser && <UserInfoCard authUser={authUser} />}
+      
 
       <div className="flex items-center justify-center min-h-screen">
         <Card className="w-full max-w-md md:max-w-2xl glass-card overflow-y-auto">
