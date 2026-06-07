@@ -43,7 +43,7 @@ export interface AssetHealthReport {
 export interface AssetMetadata {
   id: string;
   url: string;
-  type: "model" | "texture" | "audio";
+  type: "model" | "texture" | "audio" | "ui";
   priority: number;
   estimatedSize: number; // KB
   dependencies?: string[];

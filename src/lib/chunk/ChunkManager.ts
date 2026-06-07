@@ -310,7 +310,7 @@ export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
           this._workerFailed = true;
           this.loadChunkMainThread(x, z, key, chunk).then(resolve);
         }
-      }, 2000);
+      }, 1000);
     });
   }
 

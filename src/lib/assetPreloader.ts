@@ -79,7 +79,9 @@ class IntelligentAssetPreloader {
       for (const [id, asset] of this.assets) {
         if (this.isAssetInZone(asset, zone)) {
           const dist = this.getDistanceToZone(asset, zone);
-          const score = zone.priority * (1 / (1 + dist)) * (1 / asset.estimatedSize);
+          // UI assets get highest priority to load before game world
+          const typeBonus = asset.type === "ui" ? 100 : 1;
+          const score = typeBonus * zone.priority * (1 / (1 + dist)) * (1 / asset.estimatedSize);
           scores.set(id, (scores.get(id) || 0) + score);
         }
       }
