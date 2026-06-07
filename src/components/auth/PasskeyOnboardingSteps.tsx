@@ -3,8 +3,8 @@
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ArrowRight, CheckCircle, Key, Smartphone } from "lucide-react";
-import React from "react";
+import { ArrowRight, CheckCircle, Key, Smartphone, ShieldCheck } from "lucide-react";
+import React, { useEffect, useState } from "react";
 
 export const IntroStep: React.FC<{
   description: string;
@@ -12,74 +12,122 @@ export const IntroStep: React.FC<{
   onClose: () => void;
   onRegister: () => void;
   onSetupTotp?: () => void;
-}> = ({ description, setDescription, onClose, onRegister, onSetupTotp }) => (
-  <>
-    <div className="space-y-4">
-      {/* Passkey Option */}
-      <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5 transition-all hover:border-primary/40">
-        <div className="flex items-start gap-4">
-          <div className="p-2 bg-primary/10 rounded-xl">
-            <Key className="h-6 w-6 text-primary" />
-          </div>
-          <div className="space-y-1">
-            <p className="font-bold text-sm">Passkey Authentication (Recommended)</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Faster, more secure logins using your device's fingerprint or face ID.
-            </p>
-            <div className="pt-2">
-              <Label
-                htmlFor="device-description"
-                className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
-              >
-                Device Name
-              </Label>
-              <Input
-                id="device-description"
-                placeholder="e.g., My iPhone, Work Laptop"
-                value={description}
-                onChange={e => setDescription(e.target.value)}
-                className="h-8 text-xs mt-1 bg-background"
-              />
+  isSecurityEnabled?: boolean;
+}> = ({ description, setDescription, onClose, onRegister, onSetupTotp, isSecurityEnabled }) => {
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as Window & { opera?: string }).opera || "";
+      setIsMobileDevice(
+        /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent)
+      );
+    };
+    checkMobile();
+  }, []);
+
+  // If security is already enabled, show completion message
+  if (isSecurityEnabled) {
+    return (
+      <div className="text-center py-8 space-y-4">
+        <div className="bg-green-500/10 h-20 w-20 rounded-full flex items-center justify-center mx-auto shadow-inner">
+          <ShieldCheck className="h-12 w-12 text-green-500" />
+        </div>
+        <div className="space-y-2">
+          <p className="font-bold text-lg">Security Already Enabled</p>
+          <p className="text-sm text-muted-foreground">
+            Your account is already protected with multi-factor authentication.
+          </p>
+        </div>
+        <Button onClick={onClose} className="w-full">
+          Done
+        </Button>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div className="space-y-4">
+        {/* Passkey Option - Mobile Only */}
+        {isMobileDevice && (
+          <div className="p-4 rounded-2xl border-2 border-primary/20 bg-primary/5 transition-all hover:border-primary/40">
+            <div className="flex items-start gap-4">
+              <div className="p-2 bg-primary/10 rounded-xl">
+                <Key className="h-6 w-6 text-primary" />
+              </div>
+              <div className="space-y-1">
+                <p className="font-bold text-sm">Passkey Authentication (Recommended)</p>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Faster, more secure logins using your device's fingerprint or face ID.
+                </p>
+                <div className="pt-2">
+                  <Label
+                    htmlFor="device-description"
+                    className="text-[10px] uppercase tracking-wider font-bold text-muted-foreground"
+                  >
+                    Device Name
+                  </Label>
+                  <Input
+                    id="device-description"
+                    placeholder="e.g., My iPhone, Work Laptop"
+                    value={description}
+                    onChange={e => setDescription(e.target.value)}
+                    className="h-8 text-xs mt-1 bg-background"
+                  />
+                </div>
+                <Button onClick={onRegister} className="w-full mt-3 h-9 font-bold text-xs gap-2">
+                  Set Up Passkey <ArrowRight className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
-            <Button onClick={onRegister} className="w-full mt-3 h-9 font-bold text-xs gap-2">
-              Set Up Passkey <ArrowRight className="h-3 w-3" />
-            </Button>
+          </div>
+        )}
+
+        {/* TOTP Option - Primary on Desktop */}
+        <div className={`p-4 rounded-2xl transition-all ${
+          !isMobileDevice 
+            ? "border-2 border-primary/20 bg-primary/5 hover:border-primary/40" 
+            : "border border-muted bg-muted/20 hover:bg-muted/30"
+        }`}>
+          <div className="flex items-start gap-4">
+            <div className={`p-2 rounded-xl ${
+              !isMobileDevice ? "bg-primary/10" : "bg-background shadow-sm"
+            }`}>
+              <Smartphone className={`h-6 w-6 ${
+                !isMobileDevice ? "text-primary" : "text-muted-foreground"
+              }`} />
+            </div>
+            <div className="space-y-1">
+              <p className="font-bold text-sm">
+                Authenticator App
+                {!isMobileDevice && " (Recommended)"}
+              </p>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Use apps like Google Authenticator or Authy to generate codes.
+              </p>
+              <Button
+                variant={isMobileDevice ? "outline" : "default"}
+                onClick={onSetupTotp}
+                className="w-full mt-3 h-9 font-bold text-xs gap-2"
+              >
+                Set Up Authenticator <ArrowRight className="h-3 w-3" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* TOTP Option */}
-      <div className="p-4 rounded-2xl border border-muted bg-muted/20 transition-all hover:bg-muted/30">
-        <div className="flex items-start gap-4">
-          <div className="p-2 bg-background rounded-xl shadow-sm">
-            <Smartphone className="h-6 w-6 text-muted-foreground" />
-          </div>
-          <div className="space-y-1">
-            <p className="font-bold text-sm">Authenticator App</p>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              Use apps like Google Authenticator or Authy to generate codes.
-            </p>
-            <Button
-              variant="outline"
-              onClick={onSetupTotp}
-              className="w-full mt-3 h-9 font-bold text-xs gap-2"
-            >
-              Set Up Authenticator <ArrowRight className="h-3 w-3" />
-            </Button>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <Button
-      variant="ghost"
-      onClick={onClose}
-      className="w-full text-xs text-muted-foreground hover:text-foreground mt-2"
-    >
-      Maybe Later
-    </Button>
-  </>
-);
+      <Button
+        variant="ghost"
+        onClick={onClose}
+        className="w-full text-xs text-muted-foreground hover:text-foreground mt-2"
+      >
+        Maybe Later
+      </Button>
+    </>
+  );
+};
 
 export const RegisterStep = () => (
   <div className="text-center py-12">

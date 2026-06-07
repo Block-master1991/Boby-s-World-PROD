@@ -8,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { usePasskeyOnboarding } from "@/hooks/usePasskeyOnboarding";
+import { useAuthContext } from "@/contexts/AuthContext";
 import { Shield } from "lucide-react";
 import React from "react";
 import { IntroStep, RegisterStep, SuccessStep } from "./PasskeyOnboardingSteps";
@@ -47,12 +48,14 @@ export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({
   onPasskeyRegistered,
 }) => {
   const router = useRouter();
+  const { hasPasskey, totpEnabled } = useAuthContext();
   const { step, description, setDescription, registerPasskey, handleClose } = usePasskeyOnboarding(
     isOpen,
     onClose,
     onPasskeyRegistered
   );
   const { title, desc } = getStepContent(step);
+  const isSecurityEnabled = hasPasskey || totpEnabled;
 
   const handleSetupTotp = () => {
     handleClose();
@@ -84,6 +87,7 @@ export const PasskeyOnboardingModal: React.FC<PasskeyOnboardingModalProps> = ({
               onClose={handleClose}
               onRegister={registerPasskey}
               onSetupTotp={handleSetupTotp}
+              isSecurityEnabled={isSecurityEnabled}
             />
           )}
           {step === "register" && <RegisterStep />}
