@@ -27,16 +27,18 @@ interface GameMenuSheetContentProps {
 const UserInfoCard: React.FC<{ authUserPublicKey: string }> = ({ authUserPublicKey }) => (
   <Card className="bg-card/95 backdrop-blur-sm border-border/50 shadow-xl">
     <CardContent className="p-3">
-      <div className="flex items-center gap-3">
-        <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
-        <div className="font-mono text-sm bg-muted px-2 py-1 rounded border break-all flex-shrink-0">
-          {authUserPublicKey.substring(0, 4)}...
-          {authUserPublicKey.substring(authUserPublicKey.length - 4)}
+      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
+          <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse flex-shrink-0"></div>
+          <div className="font-mono text-xs sm:text-sm bg-muted px-2 py-1 rounded border break-all flex-grow sm:flex-grow-0">
+            {authUserPublicKey.substring(0, 4)}...
+            {authUserPublicKey.substring(authUserPublicKey.length - 4)}
+          </div>
         </div>
         <DisconnectButton
           size="sm"
           variant="outline"
-          className="h-7 px-2 text-xs border-destructive/20 hover:border-destructive/40 flex-shrink-0"
+          className="h-7 px-2 text-xs border-destructive/20 hover:border-destructive/40 flex-shrink-0 w-full sm:w-auto"
           redirectPath="/"
         />
       </div>

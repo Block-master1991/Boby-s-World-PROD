@@ -6,6 +6,12 @@ import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import Image from "next/image";
 import React, { useState } from "react";
+import { GameSheets } from "@/components/game/ui/GameSheets";
+import { useAuth } from "@/hooks/useAuth";
+import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { useGameData } from "@/hooks/game-ui/useGameData";
+import { useGameEconomy } from "@/hooks/game-ui/useGameEconomy";
+import { useGameInventory } from "@/hooks/game-ui/useGameInventory";
 
 interface GameMainMenuProps {
   onGameModeSelected: (mode: "boby-world" | "running-game") => void;
@@ -52,10 +58,58 @@ const GameModeOption: React.FC<GameModeOptionProps> = ({
 
 const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected }) => {
   const [selectedMode, setSelectedMode] = useState<"boby-world" | "running-game">("boby-world");
+  const [sheets, setSheets] = useState({ menu: false, store: false, wallet: false, inventory: false });
+  const { isAuthenticated, user: authUser, isWalletConnectedAndMatching } = useAuth();
+  const { sessionPublicKey, adapterPublicKey, isWalletMismatch } = useSessionWallet();
+  
+  const gameData = useGameData({ sessionPublicKey: sessionPublicKey?.toBase58() });
+  const { fetchPlayerData } = gameData;
+  const economy = useGameEconomy({
+    isAuthenticated,
+    isWalletConnectedAndMatching,
+    authUserPublicKey: authUser?.publicKey,
+    playerGameUSDT: gameData.playerGameUSDT,
+    fetchPlayerData,
+    updateBalanceLocally: gameData.updateBalanceLocally,
+    lastSyncId: gameData.lastSyncId,
+  });
+  const inventory = useGameInventory({
+    isAuthenticated,
+    isWalletConnectedAndMatching,
+    authUserPublicKey: authUser?.publicKey,
+    fetchPlayerData,
+    protectionBottleCount: gameData.protectionBottleCount,
+    guardianShieldCount: gameData.guardianShieldCount,
+    speedyPawsTreatCount: gameData.speedyPawsTreatCount,
+    coinMagnetTreatCount: gameData.coinMagnetTreatCount,
+    activateSpeedBoost: () => () => {},
+    activateGuardianShield: () => () => {},
+    activateCoinMagnet: () => () => {},
+  });
+
+  const toggleSheet = (key: "menu" | "store" | "wallet" | "inventory", val: boolean) => {
+    setSheets(prev => ({ ...prev, [key]: val }));
+  };
+  const isPaused = Object.values(sheets).some(Boolean) || isWalletMismatch;
 
   return (
     <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
       
+
+      <GameSheets
+        sheets={sheets}
+        toggleSheet={toggleSheet}
+        isPaused={isPaused}
+        isWalletMismatch={isWalletMismatch}
+        isAuthenticated={isAuthenticated}
+        authUserPublicKey={authUser?.publicKey}
+        sessionPublicKey={sessionPublicKey}
+        adapterPublicKey={adapterPublicKey}
+        isWalletConnectedAndMatching={isWalletConnectedAndMatching}
+        gameData={gameData}
+        economy={economy}
+        inventory={inventory}
+      />
 
       <div className="flex items-center justify-center min-h-screen">
         <Card className="w-full max-w-md md:max-w-2xl glass-card overflow-y-auto">
