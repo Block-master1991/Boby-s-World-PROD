@@ -239,7 +239,7 @@ export const CDN_CONFIG = {
  * Startup validation — executed once when the server starts.
  * Ensures all critical secrets are present and strong enough in production.
  */
-if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
+if (typeof process !== "undefined" && process.env.NODE_ENV === "production" && typeof window === "undefined") {
   const REQUIRED_SECRETS = [
     "JWT_ACCESS_SECRET",
     "JWT_REFRESH_SECRET",
