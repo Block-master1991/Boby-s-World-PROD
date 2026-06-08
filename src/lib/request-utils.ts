@@ -62,3 +62,20 @@ export function isMobile(request: Request): boolean {
   const userAgent = request.headers.get("user-agent") || "";
   return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
 }
+
+/**
+ * Checks if an IP is whitelisted, supporting exact matches and wildcard patterns (e.g. "192.168.*")
+ */
+export function isIpWhitelisted(ip: string, allowedAdminIpsConfig: string): boolean {
+  if (!allowedAdminIpsConfig) return false;
+  const patterns = allowedAdminIpsConfig.split(",").map(p => p.trim()).filter(Boolean);
+  for (const pattern of patterns) {
+    if (pattern === ip) return true;
+    if (pattern.includes("*")) {
+      const regexStr = `^${pattern.replace(/\./g, "\\.").replace(/\*/g, ".*")}$`;
+      const regex = new RegExp(regexStr);
+      if (regex.test(ip)) return true;
+    }
+  }
+  return false;
+}

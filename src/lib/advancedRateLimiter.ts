@@ -16,16 +16,8 @@ import type {
   SuspiciousActivity,
 } from "./ratelimit/types";
 import redis from "./redis";
-import { getClientIp } from "./request-utils";
+import { getClientIp, isIpWhitelisted } from "./request-utils";
 import { SecurityEventLevel, securityLogger } from "./securityLogger";
-
-/** IPs that are never rate-limited (comma-separated in ALLOWED_ADMIN_IPS env var) */
-const WHITELISTED_IPS = new Set<string>(
-  (process.env["ALLOWED_ADMIN_IPS"] ?? "")
-    .split(",")
-    .map((ip) => ip.trim())
-    .filter(Boolean)
-);
 
 export type {
   AdaptiveLimits,
@@ -104,7 +96,11 @@ export class AdvancedRateLimiter {
       const ip = getClientIp(request);
 
       // Always allow: localhost, bypass mode, and ENV-whitelisted IPs (e.g. ALLOWED_ADMIN_IPS)
-      if (this.isLocalhost(ip, request) || options?.bypassMode || WHITELISTED_IPS.has(ip))
+      if (
+        this.isLocalhost(ip, request) ||
+        options?.bypassMode ||
+        isIpWhitelisted(ip, process.env["ALLOWED_ADMIN_IPS"] ?? "")
+      )
         return { allowed: true, action: "allow" };
 
       if (await isIpInList("whitelist", ip)) return { allowed: true, action: "allow" };

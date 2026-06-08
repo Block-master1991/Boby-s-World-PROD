@@ -4,7 +4,7 @@ import redis from "@/lib/redis";
 import { auditLogger } from "@/lib/audit-logger";
 import { setCsrfTokenResponse } from "@/lib/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
-import { getClientIp } from "@/lib/request-utils";
+import { getClientIp, isIpWhitelisted } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/securityIntegration";
 import { TOTPService } from "@/lib/totp-service";
 import { LoginRequestSchema, validateRequestBody } from "@/lib/validation-schemas";
@@ -51,17 +51,9 @@ export async function GET(request: Request) {
   }
 }
 
-/** IPs that are never rate-limited (same set as advancedRateLimiter, read from ENV) */
-const ADMIN_WHITELISTED_IPS = new Set<string>(
-  (process.env["ALLOWED_ADMIN_IPS"] ?? "")
-    .split(",")
-    .map((ip) => ip.trim())
-    .filter(Boolean)
-);
-
 async function handleRateLimit(request: Request, ip: string): Promise<NextResponse | null> {
   // Whitelisted IPs (e.g. developers/admins) are never rate-limited on login
-  if (ADMIN_WHITELISTED_IPS.has(ip)) return null;
+  if (isIpWhitelisted(ip, process.env["ALLOWED_ADMIN_IPS"] ?? "")) return null;
 
   const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(request, ip, {
     endpoint: "login-attempt",
