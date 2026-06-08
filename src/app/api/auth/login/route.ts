@@ -1,5 +1,6 @@
 import { AdvancedRateLimiter } from "@/lib/advancedRateLimiter";
 import { sessionManager } from "@/lib/advancedSessionManager";
+import redis from "@/lib/redis";
 import { auditLogger } from "@/lib/audit-logger";
 import { setCsrfTokenResponse } from "@/lib/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
@@ -50,21 +51,38 @@ export async function GET(request: Request) {
   }
 }
 
+/** IPs that are never rate-limited (same set as advancedRateLimiter, read from ENV) */
+const ADMIN_WHITELISTED_IPS = new Set<string>(
+  (process.env["ALLOWED_ADMIN_IPS"] ?? "")
+    .split(",")
+    .map((ip) => ip.trim())
+    .filter(Boolean)
+);
+
 async function handleRateLimit(request: Request, ip: string): Promise<NextResponse | null> {
+  // Whitelisted IPs (e.g. developers/admins) are never rate-limited on login
+  if (ADMIN_WHITELISTED_IPS.has(ip)) return null;
+
   const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(request, ip, {
     endpoint: "login-attempt",
-    options: { customLimit: 10 },
+    // 20 attempts per 60-second window — reasonable for humans, blocks brute-force
+    options: { customLimit: 20 },
   });
   if (!rateLimitResult.allowed) {
     logger.warn(`[LOGIN] Rate limit exceeded for IP ${ip}`);
     await auditLogger.logRateLimitHit(`IP:${ip}`, "/api/auth/login", { ip });
-    return NextResponse.json(
+    const retrySecs = rateLimitResult.retryAfter ?? 60;
+    const rateLimitUntil = Date.now() + retrySecs * 1000;
+    const response = NextResponse.json(
       {
         error: "Too many login attempts. Please try again later.",
-        retryAfter: rateLimitResult.retryAfter,
+        retryAfter: retrySecs,
+        rateLimitUntil,
       },
       { status: 429 }
     );
+    response.headers.set("Retry-After", String(retrySecs));
+    return response;
   }
   return null;
 }
@@ -76,6 +94,10 @@ async function handleNonceVerification(
 ): Promise<NextResponse | null> {
   const nonceResult = await verifyAndConsumeNonce(publicKey, clientNonce);
   if (!nonceResult.success) {
+    const failuresKey = `consecutive_failures:${ip}`;
+    await redis.incr(failuresKey).catch(() => {});
+    await redis.expire(failuresKey, 86400).catch(() => {});
+
     if (
       nonceResult.reason === "too_many_attempts" ||
       nonceResult.reason === "too_many_attempts_mismatch"
@@ -117,6 +139,53 @@ interface TokenSessionParams {
   userAgentHash: string;
 }
 
+function setSessionCookies(params: {
+  response: NextResponse;
+  accessToken: string;
+  refreshToken: string;
+  clientNonce: string;
+  requestHost: string;
+}) {
+  const { response, accessToken, refreshToken, clientNonce, requestHost } = params;
+  response.cookies.set(
+    "accessToken",
+    accessToken,
+    JWTManager.createSecureCookieOptions(15 * 60, requestHost)
+  );
+  response.cookies.set(
+    "refreshToken",
+    refreshToken,
+    JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
+  );
+  response.cookies.set(
+    "nonce",
+    clientNonce,
+    JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
+  );
+}
+
+async function handleSecureSession(
+  request: Request,
+  response: NextResponse,
+  publicKey: string,
+  requestHost: string
+) {
+  const deviceInfo = securityIntegration.extractDeviceInfo(request);
+  const secureSession = await sessionManager.createSecureSession(publicKey, deviceInfo);
+  if (secureSession) {
+    const cookieOptions = JWTManager.createSecureCookieOptions(30 * 60, requestHost);
+    response.cookies.set("secure_session", secureSession.sessionId, {
+      ...cookieOptions,
+      httpOnly: true,
+    });
+    response.cookies.set("session_seed", secureSession.currentSeed, {
+      ...cookieOptions,
+      httpOnly: true,
+    });
+    logger.log(`[LOGIN] Secure session created: ${secureSession.sessionId}`);
+  }
+}
+
 async function issueTokensAndSession(
   request: Request,
   params: TokenSessionParams
@@ -150,41 +219,21 @@ async function issueTokensAndSession(
     authMethod: "wallet",
     totpEnabled,
   });
-  response.cookies.set(
-    "accessToken",
-    accessToken,
-    JWTManager.createSecureCookieOptions(15 * 60, requestHost)
-  );
-  response.cookies.set(
-    "refreshToken",
-    refreshToken,
-    JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
-  );
-  response.cookies.set(
-    "nonce",
-    clientNonce,
-    JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
-  );
 
-  const deviceInfo = securityIntegration.extractDeviceInfo(request);
-  const secureSession = await sessionManager.createSecureSession(publicKey, deviceInfo);
-  if (secureSession) {
-    const cookieOptions = JWTManager.createSecureCookieOptions(30 * 60, requestHost);
-    response.cookies.set("secure_session", secureSession.sessionId, {
-      ...cookieOptions,
-      httpOnly: true,
-    });
-    response.cookies.set("session_seed", secureSession.currentSeed, {
-      ...cookieOptions,
-      httpOnly: true,
-    });
-    logger.log(`[LOGIN] Secure session created: ${secureSession.sessionId}`);
-  }
+  setSessionCookies({ response, accessToken, refreshToken, clientNonce, requestHost });
+  await handleSecureSession(request, response, publicKey, requestHost);
 
   await auditLogger.logLoginSuccess(publicKey, {
     ip: getClientIp(request),
     userAgent: request.headers.get("user-agent") || "unknown",
   });
+
+  const ip = getClientIp(request);
+  const failuresKey = `consecutive_failures:${ip}`;
+  await redis.del(failuresKey).catch(() => {});
+  const reputationKey = `reputation:${ip}`;
+  await redis.setex(reputationKey, 3600, "100").catch(() => {});
+
   return setCsrfTokenResponse(response, publicKey, requestHost);
 }
 
@@ -225,6 +274,9 @@ export async function POST(request: Request) {
     logger.log("[LOGIN] Verifying signature...");
     if (!verifySignature(publicKey, signature, clientNonce)) {
       await auditLogger.logLoginFailure({ publicKey, ip }, "Invalid signature");
+      const failuresKey = `consecutive_failures:${ip}`;
+      await redis.incr(failuresKey).catch(() => {});
+      await redis.expire(failuresKey, 86400).catch(() => {});
       return NextResponse.json({ error: "Signature verification failed" }, { status: 403 });
     }
     logger.log("[LOGIN] Signature verified successfully");

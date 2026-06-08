@@ -56,8 +56,6 @@
     "sourceMap": true,
     "removeComments": false,
     "importHelpers": true,
-    "downlevelIteration": true,
-    "ignoreDeprecations": "6.0",
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     // Next.js specific

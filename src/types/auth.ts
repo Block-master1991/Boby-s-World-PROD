@@ -12,6 +12,8 @@ export interface AuthState {
   error: string | null;
   isLocked: boolean;
   authMethod?: string | undefined;
+  rateLimitUntil?: number | null;
+  retryAfter?: number | null;
 }
 
 export interface LoginResponse {
@@ -21,6 +23,8 @@ export interface LoginResponse {
   totpEnabled?: boolean;
   error?: string;
   nonce?: string;
+  rateLimitUntil?: number | null;
+  retryAfter?: number | null;
 }
 
 export interface WebAuthnRegisterOptions {

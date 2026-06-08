@@ -14,6 +14,20 @@ interface SignMessageAdapter {
   signMessage: (message: Uint8Array) => Promise<Uint8Array>;
 }
 
+class RateLimitError extends Error {
+  status: number;
+  retryAfter: number;
+  rateLimitUntil: number;
+
+  constructor(message: string, status: number, retryAfter: number, rateLimitUntil: number) {
+    super(message);
+    this.name = "RateLimitError";
+    this.status = status;
+    this.retryAfter = retryAfter;
+    this.rateLimitUntil = rateLimitUntil;
+  }
+}
+
 const isSignMessageAdapter = (adapter: unknown): adapter is SignMessageAdapter => {
   return (
     typeof adapter === "object" &&
@@ -56,7 +70,26 @@ const signChallenge = async (
 
 const requestLoginNonce = async (publicKey: string): Promise<string> => {
   const nonceRes = await fetch(`/api/auth/login?publicKey=${publicKey}`);
-  if (!nonceRes.ok) throw new Error("Failed to get nonce.");
+  if (!nonceRes.ok) {
+    if (nonceRes.status === 429) {
+      let data: Partial<LoginResponse> = {};
+      try {
+        data = await nonceRes.json() as Partial<LoginResponse>;
+      } catch {
+        // Ignore JSON parsing errors
+      }
+      const retryAfterHeader = nonceRes.headers.get("Retry-After");
+      const retryAfter = data.retryAfter ?? (retryAfterHeader ? parseInt(retryAfterHeader, 10) : 60);
+      const rateLimitUntil = data.rateLimitUntil ?? (Date.now() + retryAfter * 1000);
+      throw new RateLimitError(
+        data.error || "Too many login attempts. Please try again later.",
+        429,
+        retryAfter,
+        rateLimitUntil
+      );
+    }
+    throw new Error("Failed to get nonce.");
+  }
   const { nonce } = await nonceRes.json();
   return nonce;
 };
@@ -82,10 +115,79 @@ const submitLogin = async (
     if (loginRes.status === 403) {
       throw new Error("FORBIDDEN");
     }
+    if (loginRes.status === 429) {
+      throw new RateLimitError(
+        data.error || "Too many login attempts. Please try again later.",
+        429,
+        data.retryAfter ?? 60,
+        data.rateLimitUntil ?? (Date.now() + (data.retryAfter ?? 60) * 1000)
+      );
+    }
     throw new Error(data.error || "Login failed.");
   }
 
   return data;
+};
+
+const handleLoginSuccess = (
+  startTime: number,
+  data: LoginResponse,
+  setAuthState: React.Dispatch<React.SetStateAction<AuthState>>,
+  toast: ReturnType<typeof useToast>["toast"]
+) => {
+  performanceMonitor.recordLoadTime(Date.now() - startTime);
+  setAuthState({
+    isAuthenticated: true,
+    isLoading: false,
+    user: {
+      publicKey: data.publicKey!,
+      wallet: data.publicKey!,
+      totpEnabled: !!data.totpEnabled,
+      authMethod: data.authMethod || "wallet",
+    },
+    error: null,
+    isLocked: !!data.totpEnabled,
+    authMethod: data.authMethod || "wallet",
+    rateLimitUntil: null,
+    retryAfter: null,
+  });
+  localStorage.setItem("last_user_pk", data.publicKey!);
+  toast({
+    title: "Login Successful",
+    description: `Wallet: ${data.publicKey!.slice(0, 8)}...`,
+  });
+};
+
+const handleLoginFailure = async (
+  error: unknown,
+  setAuthState: React.Dispatch<React.SetStateAction<AuthState>>,
+  logoutAndRedirect: (path?: string) => Promise<void>,
+  toast: ReturnType<typeof useToast>["toast"]
+): Promise<boolean> => {
+  if (error instanceof Error && error.message === "FORBIDDEN") {
+    await logoutAndRedirect("/");
+    return false;
+  }
+
+  if (error instanceof RateLimitError) {
+    const { retryAfter, rateLimitUntil } = error;
+    const msg = error.message;
+    setAuthState(p => ({
+      ...p,
+      isLoading: false,
+      error: msg,
+      isAuthenticated: false,
+      rateLimitUntil,
+      retryAfter,
+    }));
+    toast({ variant: "destructive", title: "Rate Limited", description: msg });
+    return false;
+  }
+
+  const msg = error instanceof Error ? error.message : "Login failed";
+  setAuthState(p => ({ ...p, isLoading: false, error: msg, isAuthenticated: false }));
+  toast({ variant: "destructive", title: "Login Error", description: msg });
+  return false;
 };
 
 const buildLoginHandler = ({
@@ -97,6 +199,7 @@ const buildLoginHandler = ({
   logoutAndRedirect,
   toast,
   loginInProgressRef,
+  authState,
 }: {
   publicKey: unknown;
   connected: boolean;
@@ -106,9 +209,22 @@ const buildLoginHandler = ({
   logoutAndRedirect: (path?: string) => Promise<void>;
   toast: ReturnType<typeof useToast>["toast"];
   loginInProgressRef: MutableRefObject<boolean>;
+  authState: AuthState;
 }) =>
   async (): Promise<boolean> => {
     if (loginInProgressRef.current) return false;
+
+    // Client-side rate-limit block before any network request
+    if (authState.rateLimitUntil && Date.now() < authState.rateLimitUntil) {
+      const remaining = Math.ceil((authState.rateLimitUntil - Date.now()) / 1000);
+      toast({
+        variant: "destructive",
+        title: "Rate Limited",
+        description: `Too many login attempts. Please wait ${remaining} seconds.`,
+      });
+      return false;
+    }
+
     loginInProgressRef.current = true;
     try {
       if (!publicKey || !connected) throw new Error("Wallet not connected.");
@@ -121,45 +237,19 @@ const buildLoginHandler = ({
       const data = await submitLogin(publicKey.toString(), signature, nonce);
 
       if (data.success && data.publicKey) {
-        performanceMonitor.recordLoadTime(Date.now() - startTime);
-        setAuthState({
-          isAuthenticated: true,
-          isLoading: false,
-          user: {
-            publicKey: data.publicKey,
-            wallet: data.publicKey,
-            totpEnabled: !!data.totpEnabled,
-            authMethod: data.authMethod || "wallet",
-          },
-          error: null,
-          isLocked: !!data.totpEnabled,
-          authMethod: data.authMethod || "wallet",
-        });
-        localStorage.setItem("last_user_pk", data.publicKey);
-        toast({
-          title: "Login Successful",
-          description: `Wallet: ${data.publicKey.slice(0, 8)}...`,
-        });
+        handleLoginSuccess(startTime, data, setAuthState, toast);
         return true;
       }
 
       throw new Error("Unknown login error.");
     } catch (e: unknown) {
-      if (e instanceof Error && e.message === "FORBIDDEN") {
-        await logoutAndRedirect("/");
-        return false;
-      }
-
-      const msg = e instanceof Error ? e.message : "Login failed";
-      setAuthState(p => ({ ...p, isLoading: false, error: msg, isAuthenticated: false }));
-      toast({ variant: "destructive", title: "Login Error", description: msg });
-      return false;
+      return handleLoginFailure(e, setAuthState, logoutAndRedirect, toast);
     } finally {
       loginInProgressRef.current = false;
     }
   };
 
-export const useSolanaAuth = ({ setAuthState, logoutAndRedirect }: UseSolanaAuthProps) => {
+export const useSolanaAuth = ({ authState, setAuthState, logoutAndRedirect }: UseSolanaAuthProps) => {
   const { publicKey, signMessage, connected, wallet } = useWallet();
   const { toast } = useToast();
   const loginInProgressRef = useRef(false);
@@ -174,8 +264,9 @@ export const useSolanaAuth = ({ setAuthState, logoutAndRedirect }: UseSolanaAuth
       logoutAndRedirect,
       toast,
       loginInProgressRef,
+      authState,
     }),
-    [publicKey, connected, signMessage, wallet?.adapter, setAuthState, logoutAndRedirect, toast]
+    [publicKey, connected, signMessage, wallet?.adapter, setAuthState, logoutAndRedirect, toast, authState]
   );
 
   return { login };

@@ -163,6 +163,33 @@ const useSessionCheck = (
 
 // ─── Main Hook ────────────────────────────────────────────────────────────────
 
+const useRateLimitCountdown = (
+  rateLimitUntil: number | null | undefined,
+  setAuthState: React.Dispatch<React.SetStateAction<AuthState>>
+) => {
+  useEffect(() => {
+    if (!rateLimitUntil) return;
+    const interval = setInterval(() => {
+      const remaining = rateLimitUntil ? rateLimitUntil - Date.now() : 0;
+      if (remaining <= 0) {
+        setAuthState(p => ({
+          ...p,
+          rateLimitUntil: null,
+          retryAfter: null,
+          error: p.error?.includes("Too many login attempts") ? null : p.error,
+        }));
+        clearInterval(interval);
+      } else {
+        setAuthState(p => ({
+          ...p,
+          retryAfter: Math.ceil(remaining / 1000),
+        }));
+      }
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [rateLimitUntil, setAuthState]);
+};
+
 export const useAuthCore = () => {
   const { publicKey: adapterPublicKey, connected } = useWallet();
   const [authState, setAuthState] = useState<AuthState>({
@@ -212,6 +239,8 @@ export const useAuthCore = () => {
   useEffect(() => {
     if (retryRequested) checkSession();
   }, [retryRequested, checkSession]);
+
+  useRateLimitCountdown(authState.rateLimitUntil, setAuthState);
 
   return {
     authState,

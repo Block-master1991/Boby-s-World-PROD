@@ -19,12 +19,20 @@ import redis from "./redis";
 import { getClientIp } from "./request-utils";
 import { SecurityEventLevel, securityLogger } from "./securityLogger";
 
+/** IPs that are never rate-limited (comma-separated in ALLOWED_ADMIN_IPS env var) */
+const WHITELISTED_IPS = new Set<string>(
+  (process.env["ALLOWED_ADMIN_IPS"] ?? "")
+    .split(",")
+    .map((ip) => ip.trim())
+    .filter(Boolean)
+);
+
 export type {
   AdaptiveLimits,
   BehavioralStats,
   PatternAnalysisResult,
   RateLimitResult,
-  SuspiciousActivity,
+  SuspiciousActivity
 };
 
 export class AdvancedRateLimiter {
@@ -45,21 +53,14 @@ export class AdvancedRateLimiter {
   }
 
   public static getInstance(): AdvancedRateLimiter {
-    if (!AdvancedRateLimiter.instance) {
-      AdvancedRateLimiter.instance = new AdvancedRateLimiter();
-    }
-    return AdvancedRateLimiter.instance;
+    return AdvancedRateLimiter.instance || (AdvancedRateLimiter.instance = new AdvancedRateLimiter());
   }
 
   private initializeCleanup(): void {
     setInterval(() => {
       const now = Date.now();
-      for (const [id, data] of this.userReputation) {
-        if (now - data.lastActivity > 3600000) this.userReputation.delete(id);
-      }
-      for (const [id, stats] of this.userBehavioralStats) {
-        if (now - stats.lastRequestTime > 7200000) this.userBehavioralStats.delete(id);
-      }
+      this.userReputation.forEach((data, id) => { if (now - data.lastActivity > 3600000) this.userReputation.delete(id); });
+      this.userBehavioralStats.forEach((stats, id) => { if (now - stats.lastRequestTime > 7200000) this.userBehavioralStats.delete(id); });
     }, 1800000);
   }
 
@@ -70,13 +71,8 @@ export class AdvancedRateLimiter {
   ): Promise<void> {
     try {
       await securityLogger.logEvent({
-        type: activity.type,
-        level:
-          activity.severity === "critical" ? SecurityEventLevel.CRITICAL : SecurityEventLevel.WARN,
-        message: activity.description,
-        ip,
-        endpoint,
-        evidence: activity.evidence,
+        type: activity.type, ip, endpoint, evidence: activity.evidence, message: activity.description,
+        level: activity.severity === "critical" ? SecurityEventLevel.CRITICAL : SecurityEventLevel.WARN,
       });
 
       const logData = { ...activity, ip, endpoint, timestamp: Date.now() };
@@ -91,9 +87,7 @@ export class AdvancedRateLimiter {
     }
   }
 
-  /**
-   * Check Rate Limit
-   */
+  //Check Rate Limit
   public async checkRateLimit(
     request: Request,
     identifier: string,
@@ -106,44 +100,40 @@ export class AdvancedRateLimiter {
     try {
       const { endpoint, deviceInfo, options } = context;
       const ip = getClientIp(request);
-      if (this.isLocalhost(ip, request) || options?.bypassMode)
+
+      // Always allow: localhost, bypass mode, and ENV-whitelisted IPs (e.g. ALLOWED_ADMIN_IPS)
+      if (this.isLocalhost(ip, request) || options?.bypassMode || WHITELISTED_IPS.has(ip))
         return { allowed: true, action: "allow" };
 
       if (await isIpInList("whitelist", ip)) return { allowed: true, action: "allow" };
       if (await isIpInList("blacklist", ip)) return this.handleBlacklisted(ip, endpoint);
 
       const isPanicMode = (await redis?.get("security:panic_mode")) === "1";
-      const reputation = await calculateUserReputation(
-        identifier,
-        deviceInfo,
-        this.REPUTATION_DECAY
-      );
+      const reputation = await calculateUserReputation(identifier, deviceInfo, this.REPUTATION_DECAY);
       const initialRisk = await calculateRiskScore(identifier, deviceInfo, endpoint);
       const riskWithPanic = isPanicMode ? initialRisk + 50 : initialRisk;
 
       const limits = calculateAdaptiveLimits({
-        reputation,
-        riskScore: riskWithPanic,
+        reputation, riskScore: riskWithPanic,
         baseLimit: isPanicMode ? Math.floor(this.BASE_LIMIT * 0.2) : this.BASE_LIMIT,
         maxBurst: isPanicMode ? Math.floor(this.MAX_BURST * 0.2) : this.MAX_BURST,
-        windowSize: this.SLIDING_WINDOW,
-        customLimit: options?.customLimit,
+        windowSize: this.SLIDING_WINDOW, customLimit: options?.customLimit,
       });
 
       const results = await this.getEnforcementResults(identifier, endpoint, request, limits);
       const behavioralRisk = analyzeBehavior(identifier, this.userBehavioralStats);
 
       const finalResult = synthesizeResults({
-        sliding: results.sliding,
-        burst: results.burst,
-        pattern: results.pattern,
-        riskScore: riskWithPanic + behavioralRisk,
-        limits,
+        sliding: results.sliding, burst: results.burst, pattern: results.pattern,
+        riskScore: riskWithPanic + behavioralRisk, limits,
         thresholds: { challenge: this.CHALLENGE_THRESHOLD, block: this.BLOCK_THRESHOLD },
       });
 
       if (finalResult.action !== "allow") {
         await this.handleEnforcementAction(ip, endpoint, finalResult, results.pattern);
+        const failuresKey = `consecutive_failures:${identifier}`;
+        await redis.incr(failuresKey).catch(() => {});
+        await redis.expire(failuresKey, 86400).catch(() => {});
       }
 
       return finalResult;
@@ -221,8 +211,17 @@ export class AdvancedRateLimiter {
         description: pattern.description,
         evidence: pattern.evidence,
       });
-      if (result.action === "block") {
-        await blockIp(ip, `Automated Block: ${pattern.description} (Score: ${result.riskScore})`);
+
+      // Only permanently (auto-temporarily) block IPs with genuinely high risk scores.
+      // Simple sliding-window overflow (e.g. a user hammering the login button) is
+      // handled by returning 429 — NOT by blacklisting the IP.
+      const riskScore = result.riskScore ?? 0;
+      if (result.action === "block" && riskScore >= this.BLOCK_THRESHOLD) {
+        await blockIp(
+          ip,
+          `Automated Block: ${pattern.description} (Score: ${riskScore})`,
+          false // auto-block = temporary (24h), not permanent
+        );
       }
     } catch {
       /* ignore */
@@ -237,11 +236,7 @@ export class AdvancedRateLimiter {
       const currentCount = (await redis.zcard(key)) || 0;
       await redis.zadd(key, now, `${now}:${Math.random()}`);
       await redis.expire(key, Math.ceil(limits.windowSize / 1000));
-      return {
-        allowed: currentCount < limits.baseLimit,
-        count: currentCount,
-        remaining: Math.max(0, limits.baseLimit - currentCount),
-      };
+      return { allowed: currentCount < limits.baseLimit, count: currentCount, remaining: Math.max(0, limits.baseLimit - currentCount) };
     }
     return this.checkLocalSlidingWindow(id, ep, limits);
   }
@@ -252,11 +247,7 @@ export class AdvancedRateLimiter {
     const timestamps = (this.localWindow.get(key) || []).filter(t => t > now - limits.windowSize);
     timestamps.push(now);
     this.localWindow.set(key, timestamps);
-    return {
-      allowed: timestamps.length <= limits.baseLimit,
-      count: timestamps.length,
-      remaining: Math.max(0, limits.baseLimit - timestamps.length),
-    };
+    return { allowed: timestamps.length <= limits.baseLimit, count: timestamps.length, remaining: Math.max(0, limits.baseLimit - timestamps.length) };
   }
 
   private async checkBurstPattern(id: string, ep: string) {
@@ -271,16 +262,8 @@ export class AdvancedRateLimiter {
     return { allowed: true, burstCount: 0 };
   }
 
-  public getStats(): {
-    activeIdentifiers: number;
-    reputationCacheSize: number;
-    patternCacheSize: number;
-  } {
-    return {
-      activeIdentifiers: this.userReputation.size,
-      reputationCacheSize: this.userReputation.size,
-      patternCacheSize: 0,
-    };
+  public getStats() {
+    return { activeIdentifiers: this.userReputation.size, reputationCacheSize: this.userReputation.size, patternCacheSize: 0 };
   }
 
   // Internal access for tests (preserved original names for index-access compatibility)
@@ -293,9 +276,7 @@ export class AdvancedRateLimiter {
   }
 
   public cleanup(): void {
-    this.userReputation.clear();
-    this.userBehavioralStats.clear();
-    this.localWindow.clear();
+    this.userReputation.clear(); this.userBehavioralStats.clear(); this.localWindow.clear();
   }
 }
 

@@ -1,38 +1,51 @@
 import type { AdminRequest } from "@/lib/admin-middleware";
 import { withSignedAdminAuth } from "@/lib/admin-middleware";
 import { withCsrfProtection } from "@/lib/csrf-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { blockIp, unblockIp } from "@/lib/ip-list";
 import redis from "@/lib/redis";
 import { logger } from "@/utils/logger";
-import { getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 
 export const POST = withSignedAdminAuth(
   withCsrfProtection(async (request: AdminRequest) => {
     try {
       const body = await request.json();
-      const { action, ip, enabled } = body;
+      const { action, ip, reason, enabled } = body;
 
       if (!action) {
         return NextResponse.json({ error: "Missing action" }, { status: 400 });
       }
 
+      // ── Unblock IP ──────────────────────────────────────────────────────────
       if (action === "unblock_ip") {
         if (!ip) return NextResponse.json({ error: "Missing IP" }, { status: 400 });
 
-        // 1. Remove from Redis
+        await unblockIp(ip);
+
+        // Also clear all rate-limit tracking keys so the IP starts fresh
         if (redis) {
-          await redis.del(`ratelimit:blacklist:${ip}`);
+          await Promise.allSettled([
+            redis.del(`sliding:${ip}:login-attempt`),
+            redis.del(`burst:${ip}:login-attempt`),
+            redis.del(`ratelimit:patterns:${ip}`),
+            redis.del(`reputation:${ip}`),
+          ]);
         }
 
-        // 2. Remove from Firestore
-        await initializeAdminApp();
-        const db = getFirestore();
-        await db.collection("ratelimit_blacklist").doc(ip).delete();
-
-        return NextResponse.json({ success: true, message: `IP ${ip} unblocked` });
+        logger.log(`[Admin] IP ${ip} fully unblocked and tracking data cleared.`);
+        return NextResponse.json({ success: true, message: `IP ${ip} unblocked and tracking reset` });
       }
 
+      // ── Manual permanent block (admin-initiated) ────────────────────────────
+      if (action === "manual_block_ip") {
+        if (!ip) return NextResponse.json({ error: "Missing IP" }, { status: 400 });
+
+        await blockIp(ip, reason ?? "Manual admin block", true /* permanent */);
+
+        return NextResponse.json({ success: true, message: `IP ${ip} permanently blocked` });
+      }
+
+      // ── Panic Mode ──────────────────────────────────────────────────────────
       if (action === "toggle_panic_mode") {
         if (typeof enabled !== "boolean")
           return NextResponse.json({ error: "Missing enabled flag" }, { status: 400 });

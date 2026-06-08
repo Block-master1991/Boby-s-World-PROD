@@ -21,7 +21,7 @@ interface ConnectivityIndicatorProps {
 
 const useHeaderLogic = () => {
   const [isClient, setIsClient] = useState(false);
-  const { isAuthenticated, isLoading, login, logout, user, securityLevel, isOnline } = useAuth();
+  const { isAuthenticated, isLoading, login, logout, user, securityLevel, isOnline, retryAfter, rateLimitUntil } = useAuth();
   const { connected } = useWallet();
 
   useEffect(() => {
@@ -45,6 +45,8 @@ const useHeaderLogic = () => {
     isOnline,
     connected,
     handleAuthAction,
+    retryAfter,
+    rateLimitUntil,
   };
 };
 
@@ -127,15 +129,23 @@ const AuthActions = ({
   isAuthenticated,
   connected,
   user,
+  retryAfter,
+  rateLimitUntil,
 }: ReturnType<typeof useHeaderLogic>) => (
   <div className="flex items-center gap-4">
     {isClient && (
       <Button
         onClick={handleAuthAction}
-        disabled={isLoading || (connected && isAuthenticated && !user)}
+        disabled={isLoading || (connected && isAuthenticated && !user) || !!(rateLimitUntil && Date.now() < rateLimitUntil)}
         className="bg-accent text-accent-foreground hover:bg-accent/90"
       >
-        {isLoading ? "" : isAuthenticated ? "Logout" : "Login"}
+        {isLoading
+          ? ""
+          : isAuthenticated
+            ? "Logout"
+            : rateLimitUntil && Date.now() < rateLimitUntil
+              ? `Wait ${retryAfter ?? 0}s`
+              : "Login"}
       </Button>
     )}
     {isClient ? (

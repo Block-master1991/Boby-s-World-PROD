@@ -37,8 +37,17 @@ export async function calculateUserReputation(
       }
     }
 
-    // Apply decay and bounds
-    score = Math.max(0, Math.min(100, score * decayRate));
+    // Check consecutive failures
+    const failuresKey = `consecutive_failures:${identifier}`;
+    const failuresVal = await redis.get(failuresKey);
+    const failures = failuresVal ? parseInt(failuresVal, 10) : 0;
+
+    // Apply decay and bounds only if we have 10 or more consecutive failures
+    if (failures >= 10) {
+      score = Math.max(0, Math.min(100, score * decayRate));
+    } else {
+      score = Math.max(0, Math.min(100, score));
+    }
 
     // Save (Fire and Forget)
     redis.setex(reputationKey, 3600, score.toString()).catch(() => {});
