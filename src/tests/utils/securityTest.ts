@@ -185,13 +185,15 @@ export class SecurityTestSuite {
       const limiter = AdvancedRateLimiter.getInstance();
 
       // Simulate normal activity
-      for (let i = 0; i < 11; i++) {
+      // Send 25 requests to satisfy the 20-request warmup period.
+      // Use 100ms delay (10 req/sec) to establish a low average frequency baseline.
+      for (let i = 0; i < 25; i++) {
         limiter["analyzeBehavior"](identifier);
         // eslint-disable-next-line no-await-in-loop
-        await new Promise(r => setTimeout(r, 10)); // constant speed
+        await new Promise(r => setTimeout(r, 100));
       }
 
-      // Simulate sudden deviation
+      // Simulate sudden deviation (0ms delay -> capped at 200 req/sec -> 20x deviation)
       let score = 0;
       for (let i = 0; i < 5; i++) {
         score = limiter["analyzeBehavior"](identifier);

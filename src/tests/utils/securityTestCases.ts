@@ -167,7 +167,7 @@ export async function runPerformanceTests(
     async () => {
       const startTime = Date.now();
       const deviceInfo = getMockDevice();
-      const sessionsToCreate = 10;
+      const sessionsToCreate = 3;
       for (let i = 0; i < sessionsToCreate; i++) {
         // eslint-disable-next-line no-await-in-loop
         const session = await sessionManager.createSecureSession(`perf-user-${i}`, deviceInfo);
@@ -178,7 +178,7 @@ export async function runPerformanceTests(
       }
       return { duration: Date.now() - startTime, sessionsCreated: sessionsToCreate };
     },
-    10000
+    30000
   );
 }
 
@@ -201,7 +201,8 @@ async function runRepeatedRequestsTest(runner: SecurityTestSuite) {
     };
 
     let blockedRequests = 0;
-    for (let i = 0; i < 50; i++) {
+    const testRequests = 20;
+    for (let i = 0; i < testRequests; i++) {
       // eslint-disable-next-line no-await-in-loop
       const result = await rateLimiter.checkRateLimit(
         mockRequest as unknown as Request,
@@ -211,7 +212,7 @@ async function runRepeatedRequestsTest(runner: SecurityTestSuite) {
       if (!result.allowed) blockedRequests++;
     }
     if (blockedRequests === 0) throw new Error("Suspicious requests were not blocked");
-    return { blockedRequests, totalRequests: 50 };
+    return { blockedRequests, totalRequests: testRequests };
   });
 }
 

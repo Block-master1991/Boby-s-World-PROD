@@ -1,6 +1,10 @@
 import { securityIntegration } from "../lib/securityIntegration";
 import { securityTestSuite } from "./utils/securityTest";
 
+jest.mock("../lib/slack-alert", () => ({
+  sendSlackAlert: jest.fn().mockResolvedValue(true),
+}));
+
 // Polyfill setImmediate for gRPC/Firebase in Jest environment
 if (typeof setImmediate === "undefined") {
   (global as any).setImmediate = (fn: Function, ...args: any[]) => setTimeout(fn, 0, ...args);
@@ -16,12 +20,13 @@ describe("Security Verification Suite", () => {
 
   // Cleanup before and after to ensure clean environment
   beforeAll(async () => {
-    securityIntegration.cleanup();
+    await securityIntegration.cleanup();
   });
 
   afterAll(async () => {
-    securityIntegration.cleanup();
+    await securityIntegration.cleanup();
   });
+
 
   it("should run all security tests successfully", async () => {
     // Run the suite

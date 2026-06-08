@@ -13,14 +13,12 @@ const getCrypto = () => {
   return webcrypto as unknown as Crypto;
 };
 
-const cryptoAPI = getCrypto();
-
 export class LocalKMSProvider implements KMSProvider {
   public readonly name = "LocalWebCrypto";
   public readonly isHardwareBacked = false;
 
   generateKey(algorithm: AesKeyGenParams): Promise<CryptoKey> {
-    return cryptoAPI.subtle.generateKey(
+    return getCrypto().subtle.generateKey(
       algorithm,
       true, // Extractable in local version as Backup
       ["encrypt", "decrypt"]
@@ -28,8 +26,9 @@ export class LocalKMSProvider implements KMSProvider {
   }
 
   async encrypt(key: CryptoKey, data: Uint8Array): Promise<ArrayBuffer> {
-    const iv = cryptoAPI.getRandomValues(new Uint8Array(12));
-    const encrypted = await cryptoAPI.subtle.encrypt(
+    const crypto = getCrypto();
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const encrypted = await crypto.subtle.encrypt(
       { name: "AES-GCM", iv } as AesGcmParams,
       key,
       data as unknown as BufferSource
@@ -47,7 +46,7 @@ export class LocalKMSProvider implements KMSProvider {
     const iv = view.slice(0, 12);
     const ciphertext = view.slice(12);
 
-    return cryptoAPI.subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
+    return getCrypto().subtle.decrypt({ name: "AES-GCM", iv }, key, ciphertext);
   }
 
   async securelyClearKey(key: CryptoKey): Promise<void> {
@@ -58,8 +57,9 @@ export class LocalKMSProvider implements KMSProvider {
 
   async validateIntegrity(key: CryptoKey): Promise<boolean> {
     try {
+      const crypto = getCrypto();
       const testData = new Uint8Array(16);
-      cryptoAPI.getRandomValues(testData);
+      crypto.getRandomValues(testData);
       const encrypted = await this.encrypt(key, testData);
       const decrypted = await this.decrypt(key, encrypted);
       return Buffer.from(decrypted).equals(Buffer.from(testData));

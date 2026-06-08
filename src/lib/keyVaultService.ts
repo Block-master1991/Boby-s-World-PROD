@@ -5,14 +5,14 @@ import type { KMSProvider } from "./kms/KMSProvider";
 import { LocalKMSProvider } from "./kms/LocalKMSProvider";
 import { MASTER_ENCRYPTION_KEY } from "./server-constants";
 
+// Lazy getter — resolved at call time, not import time.
+// This ensures Jest mocks applied in setupFiles are visible before first use.
 const getCrypto = () => {
   if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.subtle) {
     return globalThis.crypto;
   }
   return webcrypto as unknown as Crypto;
 };
-
-const cryptoAPI = getCrypto();
 
 export class KeyVaultService {
   private static instance: KeyVaultService;
@@ -117,14 +117,14 @@ export class KeyVaultService {
   }
 
   public importKey(jwk: JsonWebKey): Promise<CryptoKey> {
-    return cryptoAPI.subtle.importKey("jwk", jwk, { name: "AES-GCM", length: 256 }, true, [
+    return getCrypto().subtle.importKey("jwk", jwk, { name: "AES-GCM", length: 256 }, true, [
       "encrypt",
       "decrypt",
     ]);
   }
 
   public exportKey(key: CryptoKey): Promise<JsonWebKey> {
-    return cryptoAPI.subtle.exportKey("jwk", key);
+    return getCrypto().subtle.exportKey("jwk", key);
   }
 
   public generateRawKey(): Promise<CryptoKey> {
@@ -208,14 +208,15 @@ export class KeyVaultService {
     }
   }
   private async generateHardwareProtectedKey(algorithm: AesKeyGenParams): Promise<CryptoKey> {
-    if (this.HARDWARE_PROTECTION_ENABLED && cryptoAPI.subtle) {
+    const crypto = getCrypto();
+    if (this.HARDWARE_PROTECTION_ENABLED && crypto.subtle) {
       try {
-        return await cryptoAPI.subtle.generateKey(algorithm, false, ["encrypt", "decrypt"]);
+        return await crypto.subtle.generateKey(algorithm, false, ["encrypt", "decrypt"]);
       } catch {
         logger.warn("[KeyVault] HSM not available, using regular encryption");
       }
     }
-    return cryptoAPI.subtle.generateKey(algorithm, true, ["encrypt", "decrypt"]);
+    return crypto.subtle.generateKey(algorithm, true, ["encrypt", "decrypt"]);
   }
   private encryptMetadata(metadata: KeyMetadata): Promise<KeyMetadata> {
     return Promise.resolve({

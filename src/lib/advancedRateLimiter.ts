@@ -76,10 +76,12 @@ export class AdvancedRateLimiter {
       });
 
       const logData = { ...activity, ip, endpoint, timestamp: Date.now() };
+      // Fire-and-forget: Redis persistence is non-critical background bookkeeping.
+      // It must never block the rate-limit decision path or add cloud-Redis latency.
       if (redis) {
-        await redis.lpush("suspicious_activity", JSON.stringify(logData));
-        await redis.ltrim("suspicious_activity", 0, 99);
-        await redis.expire("suspicious_activity", 86400);
+        redis.lpush("suspicious_activity", JSON.stringify(logData)).catch(() => {});
+        redis.ltrim("suspicious_activity", 0, 99).catch(() => {});
+        redis.expire("suspicious_activity", 86400).catch(() => {});
       }
       logger.warn("[AdvancedRateLimiter] Suspicious activity:", logData);
     } catch (error) {
@@ -123,9 +125,14 @@ export class AdvancedRateLimiter {
       const results = await this.getEnforcementResults(identifier, endpoint, request, limits);
       const behavioralRisk = analyzeBehavior(identifier, this.userBehavioralStats);
 
+      // Cap the behavioral contribution so that a transient burst (e.g. Next.js parallel
+      // asset prefetch) alone cannot push a legitimate user over the challenge or block
+      // threshold. The behavioral signal is an escalation factor, not a primary driver.
+      const cappedBehavioralRisk = Math.min(behavioralRisk, 30);
+
       const finalResult = synthesizeResults({
         sliding: results.sliding, burst: results.burst, pattern: results.pattern,
-        riskScore: riskWithPanic + behavioralRisk, limits,
+        riskScore: riskWithPanic + cappedBehavioralRisk, limits,
         thresholds: { challenge: this.CHALLENGE_THRESHOLD, block: this.BLOCK_THRESHOLD },
       });
 

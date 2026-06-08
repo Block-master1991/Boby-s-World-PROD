@@ -1,58 +1,25 @@
-import { getClientIp } from "@/lib/request-utils"; // Helper function to extract IP from request
-import { cookies, headers } from "next/headers";
 import type { NextRequest, NextResponse } from "next/server";
 import { logger } from "utils/logger";
 import { auditLogger } from "./audit-logger";
 import { isDev } from "./config/env";
-import { JWTManager, type JWTPayload } from "./jwt-utils"; // Ensure type is imported if not already
+import { JWTManager, type JWTPayload } from "./jwt-utils";
 import { securityIntegration } from "./securityIntegration";
-
-export async function verifySessionOrReject(
-  request: Request
-): Promise<{ user: { publicKey: string } }> {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get("accessToken")?.value;
-
-  if (!accessToken) {
-    throw new Error("Missing access token");
-  }
-
-  // Read fingerprint information
-  const ip = getClientIp(request); // Ensure this function exists in lib/request-utils.ts
-  const userAgent = (await headers()).get("user-agent") || "unknown";
-
-  const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
-  if (!payload || !payload.sub) {
-    throw new Error("Invalid or expired access token");
-  }
-
-  // === Advanced Session Validation ===
-  const secureSessionId = cookieStore.get("secure_session")?.value;
-  if (secureSessionId) {
-    const sessionValidation = await securityIntegration.validateSession(secureSessionId, request);
-    if (!sessionValidation.valid) {
-      logger.warn(
-        `[AuthMiddleware] Stateful session validation failed: ${sessionValidation.error}`
-      );
-      throw new Error(
-        "Your session has been expired or revoked for security reasons. Please login again."
-      );
-    }
-  }
-
-  return { user: { publicKey: payload.sub } };
-}
-
-export interface AuthenticatedRequest extends NextRequest {
-  user: JWTPayload;
-}
-
 import {
   createAuthErrorResponse,
   extractAuthRequestMetadata,
   type AuthMetadata,
 } from "./auth-helpers";
+
 export { createAuthErrorResponse, extractAuthRequestMetadata, type AuthMetadata };
+export {
+  verifySessionOrReject,
+  extractUserFromToken,
+  validateTokenFromRequest,
+} from "./auth-validation";
+
+export interface AuthenticatedRequest extends NextRequest {
+  user: JWTPayload;
+}
 
 interface RequestWithTokens extends NextRequest {
   _nextTokens?: { accessToken: string; newRefreshToken: string };
@@ -73,20 +40,22 @@ async function verifyWafRequest(request: NextRequest): Promise<NextResponse | nu
 
 async function performRateLimit(
   request: NextRequest,
-  metadata: AuthMetadata
+  metadata: AuthMetadata,
+  userId?: string
 ): Promise<NextResponse | null> {
   const { ip, userAgent } = metadata;
+  const identifier = userId || ip;
   const { AdvancedRateLimiter } = await import("./advancedRateLimiter");
-  const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(request, ip, {
+  const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(request, identifier, {
     endpoint: request.nextUrl.pathname,
     deviceInfo: securityIntegration.extractDeviceInfo(request),
   });
 
   if (!rateLimitResult.allowed) {
     logger.warn(
-      `[AuthMiddleware] Rate limit exceeded for IP ${ip} on path ${request.nextUrl.pathname}`
+      `[AuthMiddleware] Rate limit exceeded for ${userId ? `user ${userId}` : `IP ${ip}`} on path ${request.nextUrl.pathname}`
     );
-    await auditLogger.logRateLimitHit(ip, request.nextUrl.pathname, { userAgent, ip });
+    await auditLogger.logRateLimitHit(identifier, request.nextUrl.pathname, { userAgent, ip });
     return createAuthErrorResponse({
       message: "Too many requests. Please try again later.",
       code: "RATE_LIMIT_EXCEEDED",
@@ -134,7 +103,6 @@ async function handleTokenAuth(
   if (refreshResult) {
     const newPayload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
     if (newPayload) {
-      // ATTACH FOR SYNC: Attach next tokens to the request so withAuth can set them in response cookies
       (request as RequestWithTokens)._nextTokens = refreshResult;
       return { payload: newPayload };
     }
@@ -210,6 +178,48 @@ async function validateSecureSession(
   return { nextSeed: seedResult.nextSeed };
 }
 
+async function syncAuthCookies(
+  response: NextResponse,
+  request: NextRequest,
+  payload: JWTPayload,
+  nextSeed?: string
+): Promise<void> {
+  const requestHost = request.headers.get("host") || undefined;
+
+  if ((request as RequestWithTokens)._nextTokens) {
+    const { accessToken, newRefreshToken } = (request as RequestWithTokens)._nextTokens!;
+
+    response.cookies.set(
+      "accessToken",
+      accessToken,
+      JWTManager.createSecureCookieOptions(15 * 60, requestHost)
+    );
+    response.cookies.set(
+      "refreshToken",
+      newRefreshToken,
+      JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
+    );
+
+    const { CSRFManager } = await import("@/lib/csrf-utils");
+    const csrfToken = await CSRFManager.getOrCreateToken(payload.sub);
+    response.cookies.set("csrfToken", csrfToken, {
+      httpOnly: false,
+      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
+      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
+      maxAge: 30 * 60,
+      path: "/",
+    });
+  }
+
+  if (nextSeed) {
+    response.cookies.set(
+      "session_seed",
+      nextSeed,
+      JWTManager.createSecureCookieOptions(30 * 60, requestHost)
+    );
+  }
+}
+
 export function withAuth<T extends unknown[]>(
   handler: (req: AuthenticatedRequest, ...args: T) => Promise<NextResponse>
 ) {
@@ -219,10 +229,12 @@ export function withAuth<T extends unknown[]>(
       if (wafRes) return wafRes;
 
       const metadata = extractAuthRequestMetadata(request);
-      const rlRes = await performRateLimit(request, metadata);
+      const authResult = await handleTokenAuth(request, metadata);
+      const userId = "payload" in authResult ? authResult.payload.sub : undefined;
+
+      const rlRes = await performRateLimit(request, metadata, userId);
       if (rlRes) return rlRes;
 
-      const authResult = await handleTokenAuth(request, metadata);
       if ("status" in authResult) return authResult;
 
       const { payload } = authResult;
@@ -232,43 +244,7 @@ export function withAuth<T extends unknown[]>(
       (request as AuthenticatedRequest).user = payload;
       const response = await handler(request as AuthenticatedRequest, ...args);
 
-      // --- TOKEN SYNC RESTORATION ---
-      // If the token was refreshed during handleTokenAuth, we MUST set it in the response cookies.
-      if ((request as RequestWithTokens)._nextTokens) {
-        const { accessToken, newRefreshToken } = (request as RequestWithTokens)._nextTokens!;
-        const requestHost = request.headers.get("host") || undefined;
-
-        response.cookies.set(
-          "accessToken",
-          accessToken,
-          JWTManager.createSecureCookieOptions(15 * 60, requestHost)
-        );
-        response.cookies.set(
-          "refreshToken",
-          newRefreshToken,
-          JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
-        );
-
-        // Also issue/sync a fresh CSRF token tied to the new session identity
-        const { CSRFManager } = await import("@/lib/csrf-utils");
-        const csrfToken = await CSRFManager.getOrCreateToken(payload.sub);
-        response.cookies.set("csrfToken", csrfToken, {
-          httpOnly: false,
-          secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-          sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
-          maxAge: 30 * 60,
-          path: "/",
-        });
-      }
-
-      if (sessionResult.nextSeed) {
-        const requestHost = request.headers.get("host") || undefined;
-        response.cookies.set(
-          "session_seed",
-          sessionResult.nextSeed,
-          JWTManager.createSecureCookieOptions(30 * 60, requestHost)
-        );
-      }
+      await syncAuthCookies(response, request, payload, sessionResult.nextSeed);
 
       return response;
     } catch (error: unknown) {
@@ -281,81 +257,4 @@ export function withAuth<T extends unknown[]>(
       });
     }
   };
-}
-
-export async function extractUserFromToken(request: NextRequest): Promise<JWTPayload | null> {
-  logger.log("[extractUserFromToken] Attempting to extract user from token.");
-  try {
-    const { accessToken, userAgent, ip } = extractAuthRequestMetadata(request);
-
-    logger.log(
-      "[extractUserFromToken] AccessToken from cookies:",
-      accessToken ? "Found" : "Not Found"
-    );
-    if (!accessToken) return null;
-
-    const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
-    logger.log("[extractUserFromToken] Verified payload:", payload);
-    return payload;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    logger.error("[extractUserFromToken] Error during extraction:", errorMessage);
-    return null;
-  }
-}
-
-export async function validateTokenFromRequest(request: Request): Promise<JWTPayload | null> {
-  logger.log("[validateTokenFromRequest] Starting token validation from request.");
-  try {
-    const { userAgent, ip, cookieHeader } = extractAuthRequestMetadata(request);
-
-    logger.log(
-      "[validateTokenFromRequest] Cookie header:",
-      cookieHeader ? `"${cookieHeader.substring(0, 100)}..."` : "Not found"
-    );
-
-    if (!cookieHeader) {
-      logger.warn("[validateTokenFromRequest] No cookie header found in the request.");
-      return null;
-    }
-
-    const accessToken = JWTManager.extractTokenFromCookies(cookieHeader, "accessToken");
-    logger.log(
-      "[validateTokenFromRequest] Extracted accessToken from cookie header:",
-      accessToken ? `"${accessToken.substring(0, 20)}..."` : "Not found"
-    );
-
-    if (!accessToken) {
-      logger.warn("[validateTokenFromRequest] Access token not found in extracted cookies.");
-      return null;
-    }
-
-    logger.log(
-      "[validateTokenFromRequest] Attempting to verify accessToken:",
-      `${accessToken.substring(0, 20)}...`
-    );
-    const payload = await JWTManager.verifyAccessToken(accessToken, userAgent, ip);
-
-    if (payload) {
-      logger.log(
-        "[validateTokenFromRequest] Access token verification successful. Payload sub:",
-        payload.sub
-      );
-    } else {
-      logger.warn(
-        "[validateTokenFromRequest] Access token verification failed (returned null). Token was:",
-        `${accessToken.substring(0, 20)}...`
-      );
-    }
-    return payload;
-  } catch (error: unknown) {
-    const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
-    const errorStack = error instanceof Error ? error.stack : undefined;
-    logger.error(
-      "[validateTokenFromRequest] Exception during token validation:",
-      errorMessage,
-      errorStack
-    );
-    return null;
-  }
 }

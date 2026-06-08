@@ -21,19 +21,18 @@ export async function calculateUserReputation(
     let score = existing ? parseInt(existing) : 100;
 
     if (deviceInfo) {
-      // Reward for real browsers
-      if (deviceInfo.plugins.length > 0) score += 5;
+      // NOTE: `plugins` is always empty in modern browsers (NPAPI deprecated).
+      // We no longer give a bonus for having plugins populated.
 
-      // Reward for common timezones
-      const reasonableTimezone = ["UTC", "GMT", "EST", "PST", "CET", "EET"];
-      if (reasonableTimezone.some(tz => deviceInfo.timezone.includes(tz))) {
-        score += 3;
+      // Penalty for explicit bot/scraper user-agents
+      const ua = deviceInfo.userAgent.toLowerCase();
+      if (ua.includes("bot") || ua.includes("crawler") || ua.includes("python") || ua.includes("curl")) {
+        score -= 20;
       }
 
-      // Penalty for bots/scripts
-      const ua = deviceInfo.userAgent.toLowerCase();
-      if (ua.includes("bot") || ua.includes("crawler") || ua.includes("python")) {
-        score -= 20;
+      // Reward for having a valid timezone (attacker scripts often omit this)
+      if (deviceInfo.timezone && deviceInfo.timezone.length > 0) {
+        score += 2;
       }
     }
 
@@ -60,37 +59,45 @@ export async function calculateUserReputation(
 }
 
 /**
- * Calculate device-specific risk components
+ * Calculate device-specific risk components.
+ * All penalties are calibrated for real-world modern browsers and mobile devices.
  */
 function calculateDeviceRisk(deviceInfo: DeviceInfo): number {
   let risk = 0;
 
-  // Resolution check
+  // Screen resolution check — only flag clearly bogus or missing values.
+  // Modern phones (iPhone SE: 375px, older Androids: 320px) must NOT be penalized.
+  // Lower bound 320px is the smallest valid mobile screen width.
   if (deviceInfo.screenResolution) {
     const parts = deviceInfo.screenResolution.split("x");
-    const width = parts[0] ? Number(parts[0]) : undefined;
-    const height = parts[1] ? Number(parts[1]) : undefined;
+    const width = parts[0] ? Number(parts[0]) : 0;
+    const height = parts[1] ? Number(parts[1]) : 0;
 
-    if (width !== undefined && height !== undefined) {
-      if (width < 400 || height < 400 || width > 8000 || height > 6000) {
-        risk += 15;
-      }
+    const isInvalidWidth = width === 0 || width < 320 || width > 8000;
+    const isInvalidHeight = height === 0 || height < 240 || height > 6000;
+
+    if (isInvalidWidth || isInvalidHeight) {
+      risk += 15;
     }
   }
 
-  // Hardware/Environment checks
+  // Hardware concurrency: only penalize impossible values (0 or > 128 cores).
+  // Headless chromium reports 2 cores; that's perfectly valid.
   if (
-    deviceInfo.hardwareConcurrency &&
-    (deviceInfo.hardwareConcurrency < 1 || deviceInfo.hardwareConcurrency > 64)
+    deviceInfo.hardwareConcurrency !== undefined &&
+    deviceInfo.hardwareConcurrency !== null &&
+    (deviceInfo.hardwareConcurrency < 1 || deviceInfo.hardwareConcurrency > 128)
   ) {
     risk += 10;
   }
 
-  if (deviceInfo.plugins.length === 0) {
-    risk += 20;
-  }
+  // NOTE: We intentionally do NOT penalize for plugins === 0.
+  // NPAPI plugins are deprecated and disabled in all modern browsers (Chrome, Firefox, Edge, Safari).
+  // The server-side device info extractor always sends plugins: [], so this check would
+  // penalize ALL authenticated API calls.
 
-  if (!deviceInfo.timezone) {
+  // Missing timezone is suspicious — legitimate browsers always have one.
+  if (!deviceInfo.timezone || deviceInfo.timezone.trim() === "") {
     risk += 10;
   }
 

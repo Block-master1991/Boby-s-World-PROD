@@ -8,10 +8,14 @@ import { AdvancedRateLimiter, type RateLimitResult } from "./advancedRateLimiter
 import { sessionManager, type DeviceInfo, type SessionData } from "./advancedSessionManager";
 import { keyVault } from "./keyVaultService";
 import type { AuthenticationResult, SecurityContext, SecurityStats } from "./securityTypes";
-// Ensure crypto API is available in Node.js environment (Jest/SSR)
-const cryptoAPI = globalThis.crypto?.subtle
-  ? (globalThis.crypto as Crypto)
-  : (webcrypto as unknown as Crypto);
+// Lazy getter — resolved at call time, not import time.
+// This ensures Jest mocks applied in setupFiles are visible before first use.
+const getCrypto = (): Crypto => {
+  if (typeof globalThis.crypto !== "undefined" && globalThis.crypto.subtle) {
+    return globalThis.crypto as Crypto;
+  }
+  return webcrypto as unknown as Crypto;
+};
 
 export class SecurityIntegration {
   private static instance: SecurityIntegration;
@@ -120,9 +124,10 @@ export class SecurityIntegration {
 
       const encoder = new TextEncoder();
       const dataBuffer = encoder.encode(data);
-      const iv = cryptoAPI.getRandomValues(new Uint8Array(12));
+      const crypto = getCrypto();
+      const iv = crypto.getRandomValues(new Uint8Array(12));
 
-      const encrypted = await cryptoAPI.subtle.encrypt({ name: "AES-GCM", iv }, key, dataBuffer);
+      const encrypted = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, dataBuffer);
 
       const combined = new Uint8Array(iv.length + encrypted.byteLength);
       combined.set(iv, 0);
@@ -147,7 +152,7 @@ export class SecurityIntegration {
       const iv = combined.slice(0, 12);
       const encrypted = combined.slice(12);
 
-      const decrypted = await cryptoAPI.subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
+      const decrypted = await getCrypto().subtle.decrypt({ name: "AES-GCM", iv }, key, encrypted);
 
       return new TextDecoder().decode(decrypted);
     } catch (error) {
