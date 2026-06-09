@@ -1,7 +1,7 @@
 // Asset Integrity Verification System
 import { logger } from "utils/logger";
-import type { IntegrityCheck, IntegrityReport } from "./asset/types";
-import { batchPromises, calculateSHA256 } from "./asset/utils";
+import type { IntegrityCheck, IntegrityReport } from "../asset/types";
+import { batchPromises, calculateSHA256 } from "../asset/utils";
 
 export type { IntegrityCheck, IntegrityReport };
 

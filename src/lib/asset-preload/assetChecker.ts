@@ -2,9 +2,9 @@
 // Checks which assets are missing and only loads what's needed
 
 import { logger } from "@/utils/logger";
-import type { AssetInfo } from "./gameAssetManifest";
-import { GAME_ASSET_MANIFEST } from "./gameAssetManifest";
-import { getAsset } from "./indexedDB";
+import type { AssetInfo } from "../gameAssetManifest";
+import { GAME_ASSET_MANIFEST } from "../gameAssetManifest";
+import { getAsset } from "../indexedDB";
 
 export interface AssetCheckResult {
   totalAssets: number;

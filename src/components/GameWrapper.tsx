@@ -1,6 +1,6 @@
 "use client";
 
-import { checkCriticalAssets } from "@/lib/assetChecker";
+import { checkCriticalAssets } from "@/lib/asset-preload/assetChecker";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";
 import { logger } from "@/utils/logger";

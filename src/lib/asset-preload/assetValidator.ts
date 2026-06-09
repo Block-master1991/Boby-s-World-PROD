@@ -1,15 +1,15 @@
 // Asset Validator - Ensures all required game assets are properly loaded and cached
 import { logger } from "utils/logger";
 import {
-  validateAudioFormat,
-  validateGLBFormat,
-  validateHDRFormat,
-} from "./asset/formatValidators";
-import type { AssetHealthReport, ValidationResult } from "./asset/types";
-import { batchPromises } from "./asset/utils";
-import type { AssetInfo } from "./gameAssetManifest";
-import { GAME_ASSET_MANIFEST, getAssetsByPriority } from "./gameAssetManifest";
-import { getModel } from "./indexedDB";
+    validateAudioFormat,
+    validateGLBFormat,
+    validateHDRFormat,
+} from "../asset/formatValidators";
+import type { AssetHealthReport, ValidationResult } from "../asset/types";
+import { batchPromises } from "../asset/utils";
+import type { AssetInfo } from "../gameAssetManifest";
+import { GAME_ASSET_MANIFEST, getAssetsByPriority } from "../gameAssetManifest";
+import { getModel } from "../indexedDB";
 
 export type { AssetHealthReport, ValidationResult };
 

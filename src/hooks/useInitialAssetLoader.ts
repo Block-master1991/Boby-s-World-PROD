@@ -1,8 +1,8 @@
 "use client";
 
+import { initialAssetPreloader } from "@/lib/asset-preload/initialAssetPreloader";
+import type { PreloadProgress } from "@/lib/asset-preload/preloadTypes";
 import { MANIFEST_STATS } from "@/lib/gameAssetManifest";
-import { initialAssetPreloader } from "@/lib/initialAssetPreloader";
-import type { PreloadProgress } from "@/lib/preloadTypes";
 import { useCallback, useEffect, useState } from "react";
 
 interface UseInitialAssetLoaderProps {
@@ -46,7 +46,7 @@ export const useInitialAssetLoader = ({ onComplete, onError }: UseInitialAssetLo
     let mounted = true;
     const run = async () => {
       try {
-        const { checkAssetAvailability } = await import("@/lib/assetChecker");
+        const { checkAssetAvailability } = await import("@/lib/asset-preload/assetChecker");
         const result = await checkAssetAvailability();
         if (!mounted) return;
         if (result.allPresent) {

@@ -1,7 +1,7 @@
 import { logger } from "utils/logger";
-import { isDev } from "./config/env";
-import { MANIFEST_STATS } from "./gameAssetManifest";
-import type { DataType } from "./indexedDB";
+import { isDev } from "../config/env";
+import { MANIFEST_STATS } from "../gameAssetManifest";
+import type { DataType } from "../indexedDB";
 import type { PreloadProgress } from "./preloadTypes";
 
 export function isMobile(): boolean {

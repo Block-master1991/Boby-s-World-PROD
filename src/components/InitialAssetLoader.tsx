@@ -3,7 +3,7 @@
 import LoadingScreen from "@/components/game-bootstrap/LoadingScreen";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useInitialAssetLoader } from "@/hooks/useInitialAssetLoader";
-import type { PreloadProgress } from "@/lib/preloadTypes";
+import type { PreloadProgress } from "@/lib/asset-preload/preloadTypes";
 import React from "react";
 
 interface InitialAssetLoaderProps {

@@ -1,19 +1,19 @@
 // Initial Asset Preloader - Forces complete preload of all game assets into IndexedDB
 import { logger } from "utils/logger";
+import type { AssetInfo } from "../gameAssetManifest";
+import { getAssetsByPriority, getPriorityOrder, MANIFEST_STATS } from "../gameAssetManifest";
+import type { AssetMetadata } from "../indexedDB";
+import { isAvailable, putAsset } from "../indexedDB";
 import { verifyAssetIntegrity } from "./assetIntegrity";
-import type { AssetInfo } from "./gameAssetManifest";
-import { getAssetsByPriority, getPriorityOrder, MANIFEST_STATS } from "./gameAssetManifest";
-import type { AssetMetadata } from "./indexedDB";
-import { isAvailable, putAsset } from "./indexedDB";
 import type { PreloadOptions, PreloadProgress } from "./preloadTypes";
 import {
-  fetchAsset,
-  getAssetDataType,
-  getInitialProgress,
-  getMimeType,
-  getPriorityNum,
-  isMobile,
-  retryDelay,
+    fetchAsset,
+    getAssetDataType,
+    getInitialProgress,
+    getMimeType,
+    getPriorityNum,
+    isMobile,
+    retryDelay,
 } from "./preloaderUtils";
 
 // GLOBAL SCOPE EXTENSION
