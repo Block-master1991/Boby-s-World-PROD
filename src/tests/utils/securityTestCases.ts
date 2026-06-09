@@ -1,6 +1,6 @@
 import { AdvancedRateLimiter } from "../../lib/advancedRateLimiter";
 import { sessionManager } from "../../lib/advancedSessionManager";
-import { keyVault } from "../../lib/keyVaultService";
+import { keyVault } from "../../lib/key-vault/keyVaultService";
 import { securityIntegration } from "../../lib/security/securityIntegration";
 import type { SecurityTestSuite } from "./securityTest";
 

@@ -4,7 +4,7 @@
 
 import { createHash, randomBytes } from "crypto";
 import { logger } from "utils/logger";
-import { keyVault } from "../keyVaultService";
+import { keyVault } from "../key-vault/keyVaultService";
 import type { DeviceInfo } from "./types";
 
 /**

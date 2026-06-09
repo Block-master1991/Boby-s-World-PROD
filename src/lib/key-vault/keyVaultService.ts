@@ -1,9 +1,9 @@
 import { logger } from "@/utils/logger";
 import { createHash, randomBytes, webcrypto } from "node:crypto";
+import type { KMSProvider } from "../kms/KMSProvider";
+import { LocalKMSProvider } from "../kms/LocalKMSProvider";
+import { MASTER_ENCRYPTION_KEY } from "../server-constants";
 import type { KeyMetadata, KeyRotationOptions } from "./keyVaultTypes";
-import type { KMSProvider } from "./kms/KMSProvider";
-import { LocalKMSProvider } from "./kms/LocalKMSProvider";
-import { MASTER_ENCRYPTION_KEY } from "./server-constants";
 
 // Lazy getter — resolved at call time, not import time.
 // This ensures Jest mocks applied in setupFiles are visible before first use.
