@@ -2,7 +2,7 @@ import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import type { PlayerDocument } from "@/types/database";
 import { logger } from "@/utils/logger";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";

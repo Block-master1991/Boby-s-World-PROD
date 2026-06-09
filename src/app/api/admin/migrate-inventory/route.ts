@@ -109,7 +109,7 @@ export const POST = withSignedAdminAuth(
 
 async function checkMigrationStatus(): Promise<MigrationResult> {
   const admin = (await import("firebase-admin")).default;
-  const { initializeAdminApp } = await import("@/lib/firebase-admin");
+  const { initializeAdminApp } = await import("@/lib/firebase/firebase-admin");
   await initializeAdminApp();
   const db = admin.firestore();
   const migrationDoc = await db.collection("system").doc("inventory-migration-v2").get();

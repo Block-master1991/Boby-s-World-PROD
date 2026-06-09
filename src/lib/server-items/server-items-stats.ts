@@ -1,4 +1,4 @@
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "utils/logger";
 import { getAllStoreItems } from "./server-items-read";

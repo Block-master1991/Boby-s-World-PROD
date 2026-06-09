@@ -1,8 +1,8 @@
 import { cert, getApp, getApps, initializeApp, type App } from "firebase-admin/app";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
 import { logger } from "utils/logger";
-import { FIREBASE_PROJECT_ID } from "./constants";
-import { FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } from "./server-constants";
+import { FIREBASE_PROJECT_ID } from "../constants";
+import { FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } from "../server-constants";
 
 let app: App;
 export let db: Firestore;

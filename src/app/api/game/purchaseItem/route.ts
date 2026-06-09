@@ -3,7 +3,7 @@ import { withAuth } from "@/lib/auth-middleware";
 import { BOBY_TOKEN_MINT_ADDRESS, STORE_TREASURY_WALLET_ADDRESS } from "@/lib/constants";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import redis from "@/lib/redis";
 import { DEDICATED_RPC_ENDPOINT } from "@/lib/server-constants";
 import { getActiveStoreItems } from "@/lib/server-items/server-items";
@@ -13,10 +13,10 @@ import type { TransactionPayload } from "@/lib/webauthn/WebAuthnTransactionSigne
 import { WebAuthnTransactionSigner } from "@/lib/webauthn/WebAuthnTransactionSigner";
 import { logger } from "@/utils/logger";
 import {
-    Connection,
-    PublicKey,
-    clusterApiUrl,
-    type ParsedTransactionWithMeta,
+  Connection,
+  PublicKey,
+  clusterApiUrl,
+  type ParsedTransactionWithMeta,
 } from "@solana/web3.js";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";

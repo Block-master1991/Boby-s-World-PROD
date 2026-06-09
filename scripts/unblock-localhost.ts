@@ -6,7 +6,7 @@
 
 import "dotenv/config";
 import Redis from "ioredis";
-import { db, initializeAdminApp } from "../src/lib/firebase-admin";
+import { db, initializeAdminApp } from "../src/lib/firebase/firebase-admin";
 import { professionalLogger } from "../src/lib/logging";
 
 async function redisUnblock(localhostIps: string[], correlationId: string) {

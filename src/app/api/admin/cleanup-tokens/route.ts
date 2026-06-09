@@ -1,5 +1,5 @@
 import { env } from "@/lib/config/env";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { logger } from "@/utils/logger";
 import { getFirestore } from "firebase-admin/firestore";
 import type { NextRequest } from "next/server";

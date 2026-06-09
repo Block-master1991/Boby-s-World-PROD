@@ -6,7 +6,7 @@
 
 import "dotenv/config";
 import { Timestamp } from "firebase-admin/firestore";
-import { db, initializeAdminApp } from "../src/lib/firebase-admin";
+import { db, initializeAdminApp } from "../src/lib/firebase/firebase-admin";
 import { professionalLogger } from "../src/lib/logging";
 
 // Initial items data

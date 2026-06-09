@@ -5,7 +5,7 @@
  */
 
 import { getFirestore } from "firebase-admin/firestore";
-import { initializeAdminApp } from "../src/lib/firebase-admin";
+import { initializeAdminApp } from "../src/lib/firebase/firebase-admin";
 
 export async function validatePurge(testPublicKey: string) {
   console.log(`[TEST] Starting purge validation for: ${testPublicKey}`);

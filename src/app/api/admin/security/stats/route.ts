@@ -1,5 +1,5 @@
 import { withAdminAuth } from "@/lib/admin-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import redis from "@/lib/redis";
 import { logger } from "@/utils/logger";
 import { getFirestore } from "firebase-admin/firestore";

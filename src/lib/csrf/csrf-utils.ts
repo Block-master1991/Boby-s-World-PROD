@@ -2,7 +2,7 @@ import { randomBytes } from "crypto";
 import type { Firestore, Transaction } from "firebase-admin/firestore";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "utils/logger";
-import { initializeAdminApp } from "../firebase-admin";
+import { initializeAdminApp } from "../firebase/firebase-admin";
 
 const CSRF_TOKEN_EXPIRY_MINUTES = 30; // CSRF token expiry time
 

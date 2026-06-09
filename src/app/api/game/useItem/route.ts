@@ -7,16 +7,16 @@ import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { db } from "@/lib/firebase-admin";
+import { db } from "@/lib/firebase/firebase-admin";
 import type { PlayerDocument } from "@/types/database";
 import { COLLECTIONS } from "@/types/database";
 import { FieldValue } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import { logger } from "utils/logger";
 import {
-    calculateUpdatedInventory,
-    handleUseItemError,
-    validateUseRequest,
+  calculateUpdatedInventory,
+  handleUseItemError,
+  validateUseRequest,
 } from "./useItemHelpers";
 
 export const POST = withAuth(

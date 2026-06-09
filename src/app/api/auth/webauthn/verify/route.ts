@@ -6,7 +6,7 @@
 import { sessionManager } from "@/lib/advancedSessionManager";
 import { auditLogger } from "@/lib/audit-logger";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
-import { db, initializeAdminApp } from "@/lib/firebase-admin";
+import { db, initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import redis from "@/lib/redis";
 import { getClientIp } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/security/securityIntegration";

@@ -1,9 +1,9 @@
 import { BOBY_TOKEN_MINT_ADDRESS } from "@/lib/constants";
-import { logger } from "@/utils/logger";
-import { NextResponse, type NextRequest } from "next/server";
-import { initializeAdminApp } from "@/lib/firebase-admin";
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { getBobyPrice } from "@/lib/jupiterClient"; // <-- 1. Import the professional function
+import { logger } from "@/utils/logger";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { NextResponse, type NextRequest } from "next/server";
 
 let cachedPriceData: { price: number; timestamp: number } | null = null;
 const CACHE_DURATION_MS = 3 * 1000; // 3 seconds cache for the API response

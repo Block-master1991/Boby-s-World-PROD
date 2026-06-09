@@ -2,7 +2,7 @@ import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { db } from "@/lib/firebase-admin";
+import { db } from "@/lib/firebase/firebase-admin";
 import { keyVault } from "@/lib/keyVaultService";
 import type { UserKeyDocument } from "@/types/database";
 import { logger } from "@/utils/logger";

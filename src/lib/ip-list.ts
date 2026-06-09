@@ -1,7 +1,7 @@
+import redis from "@/lib/redis";
 import { logger } from "@/utils/logger";
 import { getFirestore } from "firebase-admin/firestore";
-import { initializeAdminApp } from "./firebase-admin";
-import redis from "./redis";
+import { initializeAdminApp } from "./firebase/firebase-admin";
 
 // Auto-block duration (24 hours). Manual admin blocks are permanent.
 const AUTO_BLOCK_TTL_SECONDS = 86400; // 24h

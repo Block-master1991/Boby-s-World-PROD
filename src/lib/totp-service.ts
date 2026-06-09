@@ -3,7 +3,7 @@
  * Handles generation and verification of Time-based One-Time Passwords.
  */
 
-import { db, initializeAdminApp } from "@/lib/firebase-admin";
+import { db, initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { logger } from "@/utils/logger";
 import crypto from "crypto";
 import { generateSecret, generateURI, verify } from "otplib";

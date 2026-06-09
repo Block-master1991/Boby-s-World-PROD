@@ -2,7 +2,7 @@
  * WebAuthn Verify Route Helpers
  */
 
-import { db, initializeAdminApp } from "@/lib/firebase-admin";
+import { db, initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { JWTManager } from "@/lib/jwt-utils";
 import type { WebAuthnCredential } from "@/lib/webauthn/webauthn-utils";
 import { WebAuthnUtils } from "@/lib/webauthn/webauthn-utils";

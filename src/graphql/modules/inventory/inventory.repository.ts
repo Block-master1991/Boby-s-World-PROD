@@ -1,4 +1,4 @@
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import type { InventoryItem } from "@/types/database";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 

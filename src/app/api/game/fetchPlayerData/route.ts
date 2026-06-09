@@ -5,12 +5,12 @@
 
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import type { PlayerDocument } from "@/types/database";
 import { COLLECTIONS } from "@/types/database";
+import { logger } from "@/utils/logger";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
-import { logger } from "utils/logger";
 import { createInitialPlayerData, handleFetchError } from "./fetchHelpers";
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {

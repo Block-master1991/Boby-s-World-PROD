@@ -8,7 +8,7 @@ import { getFirestore } from "firebase/firestore";
 // IMPORTANT: Replace this with your actual Firebase project configuration!
 // Go to your Firebase project settings, find "Your apps", and copy the config object.
 
-import { env } from "./config/env";
+import { env } from "../config/env";
 
 const firebaseConfig = {
   apiKey: env.NEXT_PUBLIC_FIREBASE_API_KEY!,

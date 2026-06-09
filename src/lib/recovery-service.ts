@@ -6,7 +6,7 @@
 import type { AuditEventMetadata } from "@/lib/audit-logger";
 import { auditLogger } from "@/lib/audit-logger";
 import { emailService } from "@/lib/email-service";
-import { db } from "@/lib/firebase-admin";
+import { db } from "@/lib/firebase/firebase-admin";
 import redis from "@/lib/redis";
 import { logger } from "@/utils/logger";
 

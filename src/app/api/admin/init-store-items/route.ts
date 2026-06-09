@@ -1,7 +1,7 @@
 import { withAdminAuth, withSignedAdminAuth } from "@/lib/admin-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import {
   createStoreItem,
   getAllStoreItems,

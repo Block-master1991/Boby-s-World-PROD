@@ -5,7 +5,7 @@
 
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { WebAuthnService } from "@/lib/webauthn/webauthn-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";

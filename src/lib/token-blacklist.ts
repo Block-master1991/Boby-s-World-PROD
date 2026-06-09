@@ -3,7 +3,7 @@ import type * as admin from "firebase-admin";
 import type { Timestamp as AdminTimestamp } from "firebase-admin/firestore";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "utils/logger";
-import { initializeAdminApp } from "./firebase-admin";
+import { initializeAdminApp } from "./firebase/firebase-admin";
 
 // Local alias for backward compatibility or brevity
 type BlacklistedTokenDoc = BlacklistedTokenDocument;

@@ -1,6 +1,6 @@
 import { withSignedAdminAuth } from "@/lib/admin-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import type { StoreItemDocument } from "@/types/database";
 import { logger } from "@/utils/logger";
 import { getFirestore } from "firebase-admin/firestore";

@@ -6,7 +6,7 @@
 
 import { randomBytes } from "crypto";
 import "dotenv/config";
-import { db, initializeAdminApp } from "../src/lib/firebase-admin";
+import { db, initializeAdminApp } from "../src/lib/firebase/firebase-admin";
 import redis from "../src/lib/redis";
 
 async function verifyFlow() {

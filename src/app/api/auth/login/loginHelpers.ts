@@ -1,4 +1,4 @@
-import { initializeAdminApp } from "@/lib/firebase-admin";
+import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { logger } from "@/utils/logger";
 import { PublicKey } from "@solana/web3.js";
 import { createHash, randomBytes } from "crypto";

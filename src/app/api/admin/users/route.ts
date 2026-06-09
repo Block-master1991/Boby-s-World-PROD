@@ -1,5 +1,5 @@
 import { withAdminAuth } from "@/lib/admin-middleware";
-import { db, initializeAdminApp } from "@/lib/firebase-admin";
+import { db, initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import type { PlayerDocument } from "@/types/database";
 import { logger } from "@/utils/logger";
 import type * as admin from "firebase-admin";

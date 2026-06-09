@@ -1,6 +1,6 @@
 "use client";
 
-import { db } from "@/lib/firebase";
+import { db } from "@/lib/firebase/firebase";
 import { logger } from "@/utils/logger";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import { collection, deleteDoc, doc, getDocs, orderBy, query, setDoc } from "firebase/firestore";
