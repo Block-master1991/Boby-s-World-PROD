@@ -1,6 +1,6 @@
 import { logger } from "@/utils/logger";
 import { createHash, randomBytes } from "crypto";
-import { getAppBaseDomain } from "./config/env";
+import { getAppBaseDomain } from "../config/env";
 
 // Authenticator Metadata Mapping (MDS) - List of some popular device definitions
 const AUTHENTICATOR_METADATA: Record<string, string> = {

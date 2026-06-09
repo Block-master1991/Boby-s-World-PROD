@@ -8,8 +8,8 @@ import { withAuth } from "@/lib/auth-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { securityIntegration } from "@/lib/security/securityIntegration";
 import { validateRequestBody, WebAuthnRegisterSchema } from "@/lib/validation-schemas";
-import { WebAuthnService } from "@/lib/webauthn-service";
-import { WebAuthnUtils } from "@/lib/webauthn-utils";
+import { WebAuthnService } from "@/lib/webauthn/webauthn-service";
+import { WebAuthnUtils } from "@/lib/webauthn/webauthn-utils";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 

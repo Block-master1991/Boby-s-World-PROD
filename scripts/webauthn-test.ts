@@ -4,7 +4,7 @@
  */
 
 import assert from "assert";
-import { WebAuthnUtils } from "../src/lib/webauthn-utils.js";
+import { WebAuthnUtils } from "../src/lib/webauthn/webauthn-utils.js";
 
 function runTests() {
   console.log("🧪 Starting WebAuthn Utility Tests...");

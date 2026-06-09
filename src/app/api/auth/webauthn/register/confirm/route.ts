@@ -10,7 +10,7 @@ import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { db, initializeAdminApp } from "@/lib/firebase-admin";
 import redis from "@/lib/redis";
 import { validateRequestBody, WebAuthnConfirmSchema } from "@/lib/validation-schemas";
-import { WebAuthnService } from "@/lib/webauthn-service";
+import { WebAuthnService } from "@/lib/webauthn/webauthn-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 

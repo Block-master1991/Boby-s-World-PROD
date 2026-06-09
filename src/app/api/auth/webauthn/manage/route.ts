@@ -5,10 +5,10 @@
 
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
-import { WebAuthnService } from "@/lib/webauthn-service";
+import { initializeAdminApp } from "@/lib/firebase-admin";
+import { WebAuthnService } from "@/lib/webauthn/webauthn-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
-import { initializeAdminApp } from "@/lib/firebase-admin";
 
 export const GET = withAuth(async (request: AuthenticatedRequest) => {
   await initializeAdminApp();

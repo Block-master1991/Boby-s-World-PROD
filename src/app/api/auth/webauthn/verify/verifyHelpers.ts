@@ -4,8 +4,8 @@
 
 import { db, initializeAdminApp } from "@/lib/firebase-admin";
 import { JWTManager } from "@/lib/jwt-utils";
-import type { WebAuthnCredential } from "@/lib/webauthn-utils";
-import { WebAuthnUtils } from "@/lib/webauthn-utils";
+import type { WebAuthnCredential } from "@/lib/webauthn/webauthn-utils";
+import { WebAuthnUtils } from "@/lib/webauthn/webauthn-utils";
 import { createHash } from "crypto";
 import type { ResponseCookie } from "next/dist/compiled/@edge-runtime/cookies";
 import type { NextResponse } from "next/server";

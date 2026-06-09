@@ -4,8 +4,8 @@
  */
 
 import { validateRequestBody, WebAuthnAuthenticateSchema } from "@/lib/validation-schemas";
-import { WebAuthnService } from "@/lib/webauthn-service";
-import { WebAuthnUtils } from "@/lib/webauthn-utils";
+import { WebAuthnService } from "@/lib/webauthn/webauthn-service";
+import { WebAuthnUtils } from "@/lib/webauthn/webauthn-utils";
 import { logger } from "@/utils/logger";
 import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";

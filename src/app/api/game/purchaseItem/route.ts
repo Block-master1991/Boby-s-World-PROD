@@ -8,9 +8,9 @@ import redis from "@/lib/redis";
 import { DEDICATED_RPC_ENDPOINT } from "@/lib/server-constants";
 import { getActiveStoreItems } from "@/lib/server-items/server-items";
 import { PurchaseItemSchema } from "@/lib/validations/game";
-import { WebAuthnUtils } from "@/lib/webauthn-utils";
-import type { TransactionPayload } from "@/lib/WebAuthnTransactionSigner";
-import { WebAuthnTransactionSigner } from "@/lib/WebAuthnTransactionSigner";
+import { WebAuthnUtils } from "@/lib/webauthn/webauthn-utils";
+import type { TransactionPayload } from "@/lib/webauthn/WebAuthnTransactionSigner";
+import { WebAuthnTransactionSigner } from "@/lib/webauthn/WebAuthnTransactionSigner";
 import { logger } from "@/utils/logger";
 import {
     Connection,
