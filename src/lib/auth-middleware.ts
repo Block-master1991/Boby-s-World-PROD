@@ -8,7 +8,7 @@ import {
 } from "./auth-helpers";
 import { isDev } from "./config/env";
 import { JWTManager, type JWTPayload } from "./jwt-utils";
-import { securityIntegration } from "./securityIntegration";
+import { securityIntegration } from "./security/securityIntegration";
 
 export {
     extractUserFromToken,

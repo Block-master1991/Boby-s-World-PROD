@@ -9,22 +9,22 @@ import { calculateAdaptiveLimits, synthesizeResults } from "./ratelimit/Decision
 import { analyzeBehavior, analyzeRequestPatterns } from "./ratelimit/patterns";
 import { calculateRiskScore, calculateUserReputation } from "./ratelimit/risk";
 import type {
-  AdaptiveLimits,
-  BehavioralStats,
-  PatternAnalysisResult,
-  RateLimitResult,
-  SuspiciousActivity,
+    AdaptiveLimits,
+    BehavioralStats,
+    PatternAnalysisResult,
+    RateLimitResult,
+    SuspiciousActivity,
 } from "./ratelimit/types";
 import redis from "./redis";
 import { getClientIp, isIpWhitelisted } from "./request-utils";
-import { SecurityEventLevel, securityLogger } from "./securityLogger";
+import { SecurityEventLevel, securityLogger } from "./security/securityLogger";
 
 export type {
-  AdaptiveLimits,
-  BehavioralStats,
-  PatternAnalysisResult,
-  RateLimitResult,
-  SuspiciousActivity
+    AdaptiveLimits,
+    BehavioralStats,
+    PatternAnalysisResult,
+    RateLimitResult,
+    SuspiciousActivity
 };
 
 export class AdvancedRateLimiter {

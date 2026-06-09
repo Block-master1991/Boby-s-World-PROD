@@ -5,7 +5,7 @@ import { auditLogger } from "./audit-logger";
 import type { AuthenticatedRequest } from "./auth-middleware";
 import { createAuthErrorResponse, withAuth } from "./auth-middleware";
 import { getClientIp } from "./request-utils";
-import { securityIntegration } from "./securityIntegration";
+import { securityIntegration } from "./security/securityIntegration";
 import { constructSignedMessage, verifySignature } from "./signature-verification";
 
 // Administrative configuration from validated environment

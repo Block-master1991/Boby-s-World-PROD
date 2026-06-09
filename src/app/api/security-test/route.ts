@@ -5,7 +5,7 @@
  */
 
 import { isDev } from "@/lib/config/env";
-import { SecurityScheduler } from "@/lib/security-scheduler";
+import { SecurityScheduler } from "@/lib/security/security-scheduler";
 import { securityTestSuite } from "@/tests/utils/securityTest";
 import { type NextRequest, NextResponse } from "next/server";
 import { logger } from "utils/logger";
@@ -115,7 +115,7 @@ export async function POST(request: NextRequest) {
   try {
     const { action } = await request.json();
     if (action === "cleanup") {
-      const { securityIntegration } = await import("@/lib/securityIntegration");
+      const { securityIntegration } = await import("@/lib/security/securityIntegration");
       securityIntegration.cleanup();
       return NextResponse.json({ success: true, message: "Systems cleaned" });
     }

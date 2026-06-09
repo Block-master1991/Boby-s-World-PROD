@@ -5,7 +5,7 @@ import { withAuth } from "@/lib/auth-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp, isMobile } from "@/lib/request-utils";
-import { securityIntegration } from "@/lib/securityIntegration";
+import { securityIntegration } from "@/lib/security/securityIntegration";
 import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { createHash } from "crypto";

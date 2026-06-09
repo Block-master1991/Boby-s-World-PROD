@@ -7,7 +7,7 @@ import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { initializeAdminApp } from "@/lib/firebase-admin";
-import { securityIntegration } from "@/lib/securityIntegration";
+import { securityIntegration } from "@/lib/security/securityIntegration";
 import { WebAuthnService } from "@/lib/webauthn-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";

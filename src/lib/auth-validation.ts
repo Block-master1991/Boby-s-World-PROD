@@ -7,9 +7,9 @@ import { getClientIp } from "@/lib/request-utils";
 import { cookies, headers } from "next/headers";
 import type { NextRequest } from "next/server";
 import { logger } from "utils/logger";
-import { JWTManager, type JWTPayload } from "./jwt-utils";
-import { securityIntegration } from "./securityIntegration";
 import { extractAuthRequestMetadata } from "./auth-helpers";
+import { JWTManager, type JWTPayload } from "./jwt-utils";
+import { securityIntegration } from "./security/securityIntegration";
 
 export async function verifySessionOrReject(
   request: Request

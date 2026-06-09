@@ -5,7 +5,7 @@ import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
 import redis from "@/lib/redis";
 import { getClientIp, isIpWhitelisted } from "@/lib/request-utils";
-import { securityIntegration } from "@/lib/securityIntegration";
+import { securityIntegration } from "@/lib/security/securityIntegration";
 import { TOTPService } from "@/lib/totp-service";
 import { LoginRequestSchema, validateRequestBody } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";

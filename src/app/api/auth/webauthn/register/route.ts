@@ -6,7 +6,7 @@
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { securityIntegration } from "@/lib/securityIntegration";
+import { securityIntegration } from "@/lib/security/securityIntegration";
 import { validateRequestBody, WebAuthnRegisterSchema } from "@/lib/validation-schemas";
 import { WebAuthnService } from "@/lib/webauthn-service";
 import { WebAuthnUtils } from "@/lib/webauthn-utils";

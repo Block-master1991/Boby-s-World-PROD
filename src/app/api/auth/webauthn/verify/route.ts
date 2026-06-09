@@ -9,7 +9,7 @@ import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { db, initializeAdminApp } from "@/lib/firebase-admin";
 import redis from "@/lib/redis";
 import { getClientIp } from "@/lib/request-utils";
-import { securityIntegration } from "@/lib/securityIntegration";
+import { securityIntegration } from "@/lib/security/securityIntegration";
 import { TOTPService } from "@/lib/totp-service";
 import { validateRequestBody, WebAuthnVerifySchema } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";

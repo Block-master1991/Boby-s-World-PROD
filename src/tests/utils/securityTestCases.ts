@@ -1,7 +1,7 @@
 import { AdvancedRateLimiter } from "../../lib/advancedRateLimiter";
 import { sessionManager } from "../../lib/advancedSessionManager";
 import { keyVault } from "../../lib/keyVaultService";
-import { securityIntegration } from "../../lib/securityIntegration";
+import { securityIntegration } from "../../lib/security/securityIntegration";
 import type { SecurityTestSuite } from "./securityTest";
 
 // Helper for type safety in tests

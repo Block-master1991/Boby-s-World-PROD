@@ -5,10 +5,10 @@
 
 import { logger } from "@/utils/logger";
 import { getFirestore, Timestamp, type Firestore } from "firebase-admin/firestore";
-import type { TestResult } from "../tests/utils/securityTest";
-import { securityTestSuite } from "../tests/utils/securityTest";
-import { auditLogger, type AuditEventType } from "./audit-logger";
-import { initializeAdminApp } from "./firebase-admin";
+import type { TestResult } from "../../tests/utils/securityTest";
+import { securityTestSuite } from "../../tests/utils/securityTest";
+import { auditLogger, type AuditEventType } from "../audit-logger";
+import { initializeAdminApp } from "../firebase-admin";
 
 export interface ScheduledTestSummary {
   id: string;
