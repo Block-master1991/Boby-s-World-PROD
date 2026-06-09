@@ -342,10 +342,10 @@
       "description": "Water bottle model",
       "exists": true,
       "sha256": "2f0d901d6e1b1143da612827bb2cc2b072cd0abe90155c170fda4603dbd55c42",
-      "actualSizeMB": 0.468,
+      "actualSizeMB": 2.4,
       "lastModified": "2025-08-11T17:19:42.379Z",
-      "sizeDifference": 0.268,
-      "percentDifference": 134
+      "sizeDifference": 2.2,
+      "percentDifference": 1100
     },
     {
       "path": "/textures/ez-tree/bark/oak_color_1k.jpg",

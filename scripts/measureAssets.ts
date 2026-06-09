@@ -8,8 +8,8 @@ import crypto from "crypto";
 import "dotenv/config";
 import fs from "fs";
 import path from "path";
-import type { AssetInfo } from "../src/lib/gameAssetManifest.js";
-import { GAME_ASSET_MANIFEST } from "../src/lib/gameAssetManifest.js";
+import { GAME_ASSET_MANIFEST } from "../src/lib/gameAssetManifest";
+import type { AssetInfo } from "../src/lib/gameAssetManifest.ts";
 import { professionalLogger } from "../src/lib/logging/index.js";
 
 // Configuration

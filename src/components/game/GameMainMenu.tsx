@@ -49,7 +49,7 @@ const GameModeOption: React.FC<GameModeOptionProps> = ({
       alt={title}
       width={100}
       height={100}
-      className="mb-4 rounded-md w-24 h-24 md:w-32 md:h-32"
+      className="mb-4 rounded-md w-24 md:w-32 h-auto"
     />
     <span className="text-lg md:text-2xl font-semibold text-foreground text-center">{title}</span>
     <span className="text-sm md:text-base text-muted-foreground text-center">{description}</span>

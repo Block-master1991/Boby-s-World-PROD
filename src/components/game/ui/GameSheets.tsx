@@ -51,7 +51,7 @@ const SheetBtn: React.FC<{ onClick: () => void; disabled: boolean; src: string; 
     disabled={disabled}
     className="h-12 w-12 overflow-hidden flex items-center justify-center p-0 border-none bg-transparent hover:bg-transparent"
   >
-    <Image src={src} alt={alt} width={48} height={48} className="h-full w-full object-contain" />
+    <Image src={src} alt={alt} width={48} height={48} className="object-contain" />
   </Button>
 );
 
