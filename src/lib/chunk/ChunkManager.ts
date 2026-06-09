@@ -1,19 +1,19 @@
 import * as THREE from "three";
 import { logger } from "utils/logger";
 import {
-  CHUNK_SIZE,
-  RENDER_DISTANCE_CHUNKS,
-  getChunkCoordinates,
-  getChunkKey,
+    CHUNK_SIZE,
+    RENDER_DISTANCE_CHUNKS,
+    getChunkCoordinates,
+    getChunkKey,
 } from "../chunkUtils";
 import { WORLD_MAX_BOUND, WORLD_MIN_BOUND } from "../constants";
-import type { Flowers } from "../ez-tree/environment/flowers";
-import type { Grass } from "../ez-tree/environment/grass";
-import type { Rocks } from "../ez-tree/environment/rocks";
-import type { Trees } from "../ez-tree/environment/trees";
+import type { Flowers } from "../world-generation/environment-generator/flowers";
+import type { Grass } from "../world-generation/environment-generator/grass";
+import type { Rocks } from "../world-generation/environment-generator/rocks";
+import type { Trees } from "../world-generation/environment-generator/trees";
 import { ChunkContentManager } from "./ChunkContentManager";
-import type { ChunkContent, ChunkData, ChunkManagerEventMap } from "./types";
 import { generateChunkDataMainThread } from "./chunkGeneratorMainThread";
+import type { ChunkContent, ChunkData, ChunkManagerEventMap } from "./types";
 
 export class ChunkManager extends THREE.Object3D<ChunkManagerEventMap> {
   private worker: Worker | null = null;

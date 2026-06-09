@@ -1,10 +1,10 @@
 import DogShieldEffect from "@/components/game/DogShieldEffect";
 import DogSpeedBeam from "@/components/game/DogSpeedBeam";
 import type { DogTransform } from "@/hooks/dog/constants";
-import { Environment } from "@/lib/ez-tree/environment/environment";
 import { initializeGPUInstancing } from "@/lib/gpu-instancing";
 import { initializeLODManager } from "@/lib/lod/lod-manager";
 import { initializeObjectPooling } from "@/lib/object-pooling";
+import { Environment } from "@/lib/world-generation/environment-generator/environment";
 import type { PublicKey } from "@solana/web3.js";
 import { useCallback, useEffect } from "react";
 import type * as THREE from "three";

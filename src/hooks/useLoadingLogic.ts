@@ -1,7 +1,7 @@
 import type { LoadingProgressData as LPData } from "@/components/game/helpers/PriorityAssetLoader";
 import { PriorityAssetLoader } from "@/components/game/helpers/PriorityAssetLoader";
 import { getChunkCoordinates } from "@/lib/chunkUtils";
-import type { Environment } from "@/lib/ez-tree/environment/environment";
+import type { Environment } from "@/lib/world-generation/environment-generator/environment";
 import { logger } from "@/utils/logger";
 import type { MutableRefObject as MRef } from "react";
 import { useCallback } from "react";

@@ -1,10 +1,10 @@
 import * as THREE from "three";
 import { Branch } from "./branch";
 import { TreeType } from "./enums";
-import { BranchGenerator } from "./generators/BranchGenerator";
-import { LeafGenerator } from "./generators/LeafGenerator";
 import type TreeOptions from "./options";
 import RNG from "./rng";
+import { BranchGenerator } from "./tree-mesh-generators/BranchGenerator";
+import { LeafGenerator } from "./tree-mesh-generators/LeafGenerator";
 import type { BranchGeometryData, LeafGeometryData, SectionData } from "./types";
 
 export class TreeGenerator {

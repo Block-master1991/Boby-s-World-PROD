@@ -10,8 +10,8 @@ export function updateWindShaders(materials: THREE.Material[], time: number): vo
 }
 
 import type * as THREE from "three";
-import type { FlowerOptions } from "../environment/flowers";
-import type { GrassOptions } from "../environment/grass";
+import type { FlowerOptions } from "../environment-generator/flowers";
+import type { GrassOptions } from "../environment-generator/grass";
 
 export function updateWindShaderUniforms(
   material: THREE.Material,

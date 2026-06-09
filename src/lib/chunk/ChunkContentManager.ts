@@ -1,9 +1,9 @@
 import * as THREE from "three";
-import type { Flowers } from "../ez-tree/environment/flowers";
-import type { Grass } from "../ez-tree/environment/grass";
-import type { Rocks } from "../ez-tree/environment/rocks";
-import type { Trees } from "../ez-tree/environment/trees";
 import { getLODManager } from "../lod/lod-manager";
+import type { Flowers } from "../world-generation/environment-generator/flowers";
+import type { Grass } from "../world-generation/environment-generator/grass";
+import type { Rocks } from "../world-generation/environment-generator/rocks";
+import type { Trees } from "../world-generation/environment-generator/trees";
 import type { ChunkContent, ChunkData } from "./types";
 
 export class ChunkContentManager {

@@ -6,9 +6,9 @@ import type {
   GrassOptions,
   RockOptions as RocksOptions,
   TreesOptions,
-} from "../lib/ez-tree/environment/environmentOptions";
-import { simplex2dWorker } from "../lib/ez-tree/environment/noiseWorker";
-import RNG from "../lib/ez-tree/rng";
+} from "../lib/world-generation/environment-generator/environmentOptions";
+import { simplex2dWorker } from "../lib/world-generation/environment-generator/noiseWorker";
+import RNG from "../lib/world-generation/rng";
 import type { OccupancyGrid } from "./worker-utils";
 
 // --- Lightweight math helpers (no THREE.js dependency) ---

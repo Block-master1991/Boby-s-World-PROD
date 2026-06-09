@@ -1,5 +1,5 @@
 import { CHUNK_SIZE } from "../lib/chunkUtils";
-import RNG from "../lib/ez-tree/rng";
+import RNG from "../lib/world-generation/rng";
 
 export interface WorldEntity {
   id: string;

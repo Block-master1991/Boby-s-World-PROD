@@ -1,10 +1,10 @@
 import type DogShieldEffect from "@/components/game/DogShieldEffect";
 import type DogSpeedBeam from "@/components/game/DogSpeedBeam";
-import type { Environment } from "@/lib/ez-tree/environment/environment";
 import { getGPUInstancingManager } from "@/lib/gpu-instancing";
 import { getLODManager } from "@/lib/lod/lod-manager";
 import { getMemoryMonitor } from "@/lib/object-pooling";
 import { getDevicePerformanceConfig } from "@/lib/utils";
+import type { Environment } from "@/lib/world-generation/environment-generator/environment";
 import { logger } from "@/utils/logger";
 import type { PublicKey } from "@solana/web3.js";
 import { useCallback, useRef } from "react";
