@@ -1,5 +1,5 @@
 import { logger } from "@/utils/logger";
-import { deleteAsset, getAllAssets, getAsset, putAsset } from "./indexedDB";
+import { deleteAsset, getAllAssets, getAsset, putAsset } from "../indexedDB";
 
 const SWR_STORE_PREFIX = "swr_";
 

@@ -1,7 +1,7 @@
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { initializeConnectionPooling } from "@/lib/connection-pool";
-import { swrBackgroundSync } from "@/lib/swr-config";
+import { swrBackgroundSync } from "@/lib/swr/swr-config";
 import { fetchWithCsrf } from "@/lib/utils";
 import { logger } from "@/utils/logger";
 import { useCallback, useEffect } from "react";

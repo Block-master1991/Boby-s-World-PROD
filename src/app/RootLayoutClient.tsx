@@ -1,16 +1,16 @@
 "use client";
 
-import React, { useEffect } from "react";
-import "@solana/wallet-adapter-react-ui/styles.css";
-import { SWRConfig } from "swr";
 import { Toaster } from "@/components/ui/toaster";
 import WalletContextProvider from "@/components/wallet/WalletContextProvider";
-import { AuthProvider } from "@/contexts/AuthContext";
 import { AudioProvider, useAudio } from "@/contexts/AudioContext";
-import dynamic from "next/dynamic";
-import { swrConfig } from "@/lib/swr-config";
+import { AuthProvider } from "@/contexts/AuthContext";
 import { performanceMonitor } from "@/lib/advanced-service-worker";
+import { swrConfig } from "@/lib/swr/swr-config";
 import { logger } from "@/utils/logger";
+import "@solana/wallet-adapter-react-ui/styles.css";
+import dynamic from "next/dynamic";
+import React, { useEffect } from "react";
+import { SWRConfig } from "swr";
 
 // Dynamically import SoundManager to keep the initial bundle light
 const SoundManager = dynamic(() => import("@/components/game/SoundManager"), {
