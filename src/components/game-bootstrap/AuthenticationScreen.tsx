@@ -1,8 +1,8 @@
 "use client";
 
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/hooks/useAuth";
-import { useAuthenticationLifecycle } from "@/hooks/useAuthenticationLifecycle";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useAuthenticationLifecycle } from "@/hooks/auth/useAuthenticationLifecycle";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { AlertCircle, ShieldCheck } from "lucide-react";
 import Image from "next/image";
 import React from "react";

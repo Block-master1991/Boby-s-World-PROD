@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/hooks/useAuth"; // Import useAuth
+import { useAuth } from "@/hooks/auth/useAuth"; // Import useAuth
 import React from "react";
 
 interface RunningGameUIProps {

@@ -7,13 +7,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { usePasskeyOnboarding } from "@/hooks/usePasskeyOnboarding";
-import { useSecurityOnboarding } from "@/hooks/useSecurityOnboarding";
 import { useAuthContext } from "@/contexts/AuthContext";
+import { usePasskeyOnboarding } from "@/hooks/passkey/usePasskeyOnboarding";
+import { useSecurityOnboarding } from "@/hooks/security/useSecurityOnboarding";
 import { Shield } from "lucide-react";
+import { useRouter } from "next/navigation";
 import React from "react";
 import { IntroStep, RegisterStep, SuccessStep } from "./PasskeyOnboardingSteps";
-import { useRouter } from "next/navigation";
 
 interface PasskeyOnboardingModalProps {
   isOpen: boolean;

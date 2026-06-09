@@ -7,7 +7,7 @@ import { WalletModalProvider } from "@solana/wallet-adapter-react-ui";
 import type { FC, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 // Removed static import of WalletConnectWalletAdapter for bundle optimization
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import { getAppOrigin } from "@/lib/config/env";
 import { SOL_NETWORK } from "@/lib/constants";
 import { logger } from "@/utils/logger";

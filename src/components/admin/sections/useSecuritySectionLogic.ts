@@ -1,6 +1,6 @@
 "use client";
 
-import { useAdminIpManagement } from "@/hooks/useAdminIpManagement";
+import { useAdminIpManagement } from "@/hooks/admin/useAdminIpManagement";
 import { useEffect, useState } from "react";
 
 export function useSecuritySectionLogic() {

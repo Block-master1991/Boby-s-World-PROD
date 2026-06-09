@@ -4,9 +4,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
-import { usePasskeyManagement } from "@/hooks/usePasskeyManagement";
-import type { Passkey } from "@/hooks/usePasskeyState";
-import { useTOTPManagement } from "@/hooks/useTOTPManagement";
+import { useTOTPManagement } from "@/hooks/auth/useTOTPManagement";
+import { usePasskeyManagement } from "@/hooks/passkey/usePasskeyManagement";
+import type { Passkey } from "@/hooks/passkey/usePasskeyState";
 import {
   CheckCircle2,
   Download,

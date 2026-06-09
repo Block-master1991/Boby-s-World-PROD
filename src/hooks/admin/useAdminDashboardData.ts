@@ -1,6 +1,6 @@
 "use client";
 
-import { useUserActivityUpdates, useUserStats } from "@/hooks/useAdminStats";
+import { useUserActivityUpdates, useUserStats } from "@/hooks/admin/useAdminStats";
 import { useApiFetch } from "@/utils/api";
 import { logger } from "@/utils/logger";
 import { useCallback, useEffect, useState } from "react";

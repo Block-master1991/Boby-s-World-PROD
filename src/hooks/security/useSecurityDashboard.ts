@@ -1,6 +1,6 @@
 "use client";
 
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import type { SecurityStats } from "@/types/security";
 import { logger } from "@/utils/logger";
 import { useCallback, useEffect, useState } from "react";

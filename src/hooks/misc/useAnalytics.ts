@@ -15,7 +15,7 @@ const useAnalyticsWorker = () => {
     sessionIdRef.current = `session_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`;
     if (typeof window !== "undefined" && window.Worker) {
       try {
-        workerRef.current = new Worker(new URL("../workers/analytics.worker.ts", import.meta.url));
+        workerRef.current = new Worker(new URL("../../workers/analytics.worker.ts", import.meta.url));
         workerRef.current.postMessage({
           type: "INIT_ANALYTICS",
           data: { sessionId: sessionIdRef.current },

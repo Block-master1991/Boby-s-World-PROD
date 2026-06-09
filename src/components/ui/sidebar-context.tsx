@@ -1,6 +1,6 @@
 "use client";
 
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import * as React from "react";
 
 export const SIDEBAR_COOKIE_NAME = "sidebar_state";

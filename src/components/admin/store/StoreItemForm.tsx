@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { StoreItemFormData } from "@/hooks/useStoreItemsManagement";
+import type { StoreItemFormData } from "@/hooks/store/useStoreItemsManagement";
 import { Loader2, Upload } from "lucide-react";
 import React from "react";
 

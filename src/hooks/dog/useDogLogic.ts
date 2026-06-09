@@ -3,14 +3,14 @@
 import type { GameObject } from "@/types/game";
 import { useCallback, useRef, type MutableRefObject } from "react";
 import type * as THREE from "three";
-import type { Octree } from "../lib/Octree";
-import { type DogTransform } from "./dog/constants";
-import { useDogAnimations } from "./dog/useDogAnimations";
-import { useDogAssets } from "./dog/useDogAssets";
-import { useDogEffects } from "./dog/useDogEffects";
-import { useDogInitialization } from "./dog/useDogInitialization";
-import { useDogMovement } from "./dog/useDogMovement";
-import { useDogUpdate } from "./dog/useDogUpdate";
+import type { Octree } from "../../lib/Octree";
+import { type DogTransform } from "./constants";
+import { useDogAnimations } from "./useDogAnimations";
+import { useDogAssets } from "./useDogAssets";
+import { useDogEffects } from "./useDogEffects";
+import { useDogInitialization } from "./useDogInitialization";
+import { useDogMovement } from "./useDogMovement";
+import { useDogUpdate } from "./useDogUpdate";
 
 interface DogLogicProps {
   sceneRef: MutableRefObject<THREE.Scene | null>;

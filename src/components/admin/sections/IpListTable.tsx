@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { IpEntry } from "@/hooks/useAdminIpManagement"; // Fixed: Type import
+import type { IpEntry } from "@/hooks/admin/useAdminIpManagement"; // Fixed: Type import
 import { Trash2 } from "lucide-react";
 
 interface IpListTableProps {

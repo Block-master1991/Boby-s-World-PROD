@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLoggerDashboard } from "@/hooks/useLoggerDashboard";
+import { useLoggerDashboard } from "@/hooks/misc/useLoggerDashboard";
 import { LogFilters } from "./logger/LogFilters";
 import { LogMobileView } from "./logger/LogMobileView";
 import { LogTable } from "./logger/LogTable";

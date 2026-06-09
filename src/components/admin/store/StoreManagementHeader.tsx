@@ -18,7 +18,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import type { StoreItemFormData } from "@/hooks/useStoreItemsManagement";
+import type { StoreItemFormData } from "@/hooks/store/useStoreItemsManagement";
 import { Database, ImageIcon, Package, Plus, RefreshCw } from "lucide-react";
 import React from "react";
 import { StoreItemForm } from "./StoreItemForm";

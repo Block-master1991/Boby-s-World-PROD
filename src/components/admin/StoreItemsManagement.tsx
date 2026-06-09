@@ -1,6 +1,6 @@
 "use client";
 
-import { useStoreItemsManagement } from "@/hooks/useStoreItemsManagement";
+import { useStoreItemsManagement } from "@/hooks/store/useStoreItemsManagement";
 import { StoreItemsGrid } from "./store/StoreItemsGrid";
 import { StoreItemsStats } from "./store/StoreItemsStats";
 import { StoreManagementHeader } from "./store/StoreManagementHeader";

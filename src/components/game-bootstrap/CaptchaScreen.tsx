@@ -1,7 +1,7 @@
 "use client";
 
 import { useAudio } from "@/contexts/AudioContext";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { logger } from "@/utils/logger";
 import { AlertTriangle, PawPrint } from "lucide-react";
 import Image from "next/image";

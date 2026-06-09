@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 const SPEED_BOOST_DURATION = 30;

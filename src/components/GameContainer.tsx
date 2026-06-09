@@ -6,10 +6,10 @@ import {
   SoundControlButton,
 } from "@/components/game-bootstrap/GameContainerViews";
 import { useAudio } from "@/contexts/AudioContext";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { useGameContainerHandlers, useGameContainerState } from "@/hooks/useGameContainer";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
+import { useGameContainerHandlers, useGameContainerState } from "@/hooks/renderer/useGameContainer";
+import { useToast } from "@/hooks/ui/use-toast";
 import { env } from "@/lib/config/env";
 import { ADMIN_WALLET_ADDRESS } from "@/lib/constants";
 import { logger } from "@/utils/logger";

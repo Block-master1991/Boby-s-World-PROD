@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent } from "@/components/ui/card";
-import type { StoreItem } from "@/hooks/useStoreItemsManagement";
+import type { StoreItem } from "@/hooks/store/useStoreItemsManagement";
 import { Package } from "lucide-react";
 import React from "react";
 import { AdminStatSkeleton } from "../AdminStatSkeleton";

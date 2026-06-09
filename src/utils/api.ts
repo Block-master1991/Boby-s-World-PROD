@@ -1,5 +1,5 @@
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { initializeConnectionPooling } from "@/lib/connection-pool";
 import { swrBackgroundSync } from "@/lib/swr/swr-config";
 import { fetchWithCsrf } from "@/lib/utils";

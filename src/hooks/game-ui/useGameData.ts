@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { useFetchPlayerData } from "@/hooks/useGraphQL";
 import { logger } from "@/utils/logger";
 import { useCallback, useState } from "react";

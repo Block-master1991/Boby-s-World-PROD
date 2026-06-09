@@ -1,4 +1,4 @@
-import type { CoinData } from "@/hooks/useCoinLogic";
+import type { CoinData } from "@/hooks/coin/useCoinLogic";
 import { ENEMY_PROTECTION_RADIUS_VAL, WORLD_MAX_BOUND, WORLD_MIN_BOUND } from "@/lib/constants";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";

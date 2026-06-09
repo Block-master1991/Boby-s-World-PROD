@@ -1,8 +1,8 @@
 "use client";
 
-import { useItemsData } from "@/hooks/useItemsData";
-import { useStoreItemActions } from "@/hooks/useStoreItemActions";
-import { useStoreMigration } from "@/hooks/useStoreMigration";
+import { useItemsData } from "@/hooks/misc/useItemsData";
+import { useStoreItemActions } from "@/hooks/store/useStoreItemActions";
+import { useStoreMigration } from "@/hooks/store/useStoreMigration";
 import type { StoreItemDocument } from "@/types/database";
 import { useEffect, useState } from "react";
 

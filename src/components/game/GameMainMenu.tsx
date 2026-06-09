@@ -3,15 +3,15 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import Image from "next/image";
-import React, { useState } from "react";
 import { GameSheets } from "@/components/game/ui/GameSheets";
-import { useAuth } from "@/hooks/useAuth";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
 import { useGameData } from "@/hooks/game-ui/useGameData";
 import { useGameEconomy } from "@/hooks/game-ui/useGameEconomy";
 import { useGameInventory } from "@/hooks/game-ui/useGameInventory";
+import Image from "next/image";
+import React, { useState } from "react";
 
 interface GameMainMenuProps {
   onGameModeSelected: (mode: "boby-world" | "running-game") => void;

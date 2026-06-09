@@ -1,7 +1,7 @@
 "use client";
 
-import { useToast } from "@/hooks/use-toast";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
+import { useToast } from "@/hooks/ui/use-toast";
 import { createSignedAdminHeaders } from "@/utils/frontend-auth";
 import { logger } from "@/utils/logger";
 

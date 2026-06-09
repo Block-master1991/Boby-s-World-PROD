@@ -1,9 +1,9 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useToast } from "@/hooks/use-toast";
-import { usePWAInstall } from "@/hooks/usePWAInstall";
+import { usePWAInstall } from "@/hooks/misc/usePWAInstall";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
+import { useToast } from "@/hooks/ui/use-toast";
 import { logger } from "@/utils/logger";
 import { Download, Smartphone, X } from "lucide-react";
 import React, { useState } from "react";

@@ -1,4 +1,4 @@
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/auth/useAuth";
 import { ADMIN_WALLET_ADDRESS } from "@/lib/constants";
 import { GAME_QUERIES } from "@/lib/graphql-client";
 import { useApiFetch } from "@/utils/api";

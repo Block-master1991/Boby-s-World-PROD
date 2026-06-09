@@ -2,7 +2,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { LogEntry } from "@/hooks/useLoggerDashboardModules";
+import type { LogEntry } from "@/hooks/misc/useLoggerDashboardModules";
 import { Activity, Database, FileText, Shield } from "lucide-react";
 import React from "react";
 

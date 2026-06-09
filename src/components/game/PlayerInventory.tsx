@@ -7,7 +7,7 @@
 import InventoryItemSkeleton from "@/components/shared/InventoryItemSkeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetDescription, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useInventoryData } from "@/hooks/useInventoryData";
+import { useInventoryData } from "@/hooks/misc/useInventoryData";
 import Image from "next/image";
 import React from "react";
 import InventoryItemCard from "./InventoryItemCard";

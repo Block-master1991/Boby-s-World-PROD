@@ -5,7 +5,7 @@ import { SecurityAlerts } from "@/components/admin/security/SecurityAlerts";
 import { SecurityHeader } from "@/components/admin/security/SecurityHeader";
 import { SecurityStatsGrid } from "@/components/admin/security/SecurityStatsGrid";
 import { SecurityTabs } from "@/components/admin/security/SecurityTabs";
-import { useSecurityDashboard } from "@/hooks/useSecurityDashboard";
+import { useSecurityDashboard } from "@/hooks/security/useSecurityDashboard";
 
 export default function SecurityDashboard() {
   const { stats, loading, lastUpdated, processing, fetchStats, togglePanicMode, unblockIp } =

@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
-import { usePasskeyManagement } from "@/hooks/usePasskeyManagement";
+import { usePasskeyManagement } from "@/hooks/passkey/usePasskeyManagement";
 import { Shield } from "lucide-react";
 import React from "react";
 import { PasskeyManagementContent, UnauthenticatedView } from "./PasskeyManagementComponents";

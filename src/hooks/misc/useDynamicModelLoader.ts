@@ -3,12 +3,12 @@
 import { type GameObject } from "@/types/game";
 import { useCallback, useEffect, type MutableRefObject } from "react";
 import * as THREE from "three";
-import { type Octree } from "../lib/Octree";
-import { type DynamicLoadableObject } from "./dynamic-loader/constants";
-import { useModelLoaderCleanup } from "./dynamic-loader/useModelCleanup";
-import { useModelLoaders } from "./dynamic-loader/useModelLoaders";
-import { useModelOps } from "./dynamic-loader/useModelOps";
-import { useModelPool } from "./dynamic-loader/useModelPool";
+import { type Octree } from "../../lib/Octree";
+import { type DynamicLoadableObject } from "../dynamic-loader/constants";
+import { useModelLoaderCleanup } from "../dynamic-loader/useModelCleanup";
+import { useModelLoaders } from "../dynamic-loader/useModelLoaders";
+import { useModelOps } from "../dynamic-loader/useModelOps";
+import { useModelPool } from "../dynamic-loader/useModelPool";
 
 interface UseDynamicModelLoaderProps {
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;

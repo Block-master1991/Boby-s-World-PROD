@@ -1,12 +1,12 @@
 "use client";
 
-import DisconnectButton from "@/components/shared/DisconnectButton";
 import DogMovement from "@/components/game/DogMovement";
+import DisconnectButton from "@/components/shared/DisconnectButton";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/auth/useAuth";
 import type { PublicKey } from "@solana/web3.js";
 import { Trophy, Users } from "lucide-react";
 import React from "react";

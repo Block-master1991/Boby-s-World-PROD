@@ -4,7 +4,7 @@ import { PasskeyOnboardingModal } from "@/components/auth/PasskeyOnboardingModal
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { useAdminPasskeyEnrollment } from "@/hooks/useAdminPasskeyEnrollment";
+import { useAdminPasskeyEnrollment } from "@/hooks/admin/useAdminPasskeyEnrollment";
 import { AlertTriangle, Key, Shield } from "lucide-react";
 import React from "react";
 

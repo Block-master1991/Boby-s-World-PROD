@@ -6,7 +6,7 @@ import { logger } from "@/utils/logger";
 import type { MutableRefObject } from "react";
 import * as React from "react";
 import * as THREE from "three";
-import { Octree } from "../lib/Octree";
+import { Octree } from "../../lib/Octree";
 
 interface UseSceneSetupProps {
   mountRef: MutableRefObject<HTMLDivElement | null>;

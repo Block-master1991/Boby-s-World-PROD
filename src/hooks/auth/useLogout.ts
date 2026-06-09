@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { backgroundSync, cacheManager, performanceMonitor } from "@/lib/advanced-service-worker";
 import type { AuthState } from "@/types/auth";
 import { logger } from "@/utils/logger";

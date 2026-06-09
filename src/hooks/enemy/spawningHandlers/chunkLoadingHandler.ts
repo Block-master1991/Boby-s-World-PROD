@@ -1,4 +1,4 @@
-import type { CoinData } from "@/hooks/useCoinLogic";
+import type { CoinData } from "@/hooks/coin/useCoinLogic";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";
 import { useCallback } from "react";

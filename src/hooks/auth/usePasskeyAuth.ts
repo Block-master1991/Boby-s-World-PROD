@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { fetchWithCsrf } from "@/lib/utils";
 import type { AuthState, WebAuthnRegisterOptions } from "@/types/auth";
 import { safeBufferFromBase64url, uint8ArrayToBase64url } from "@/utils/base64";

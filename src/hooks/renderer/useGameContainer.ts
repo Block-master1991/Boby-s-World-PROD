@@ -1,9 +1,9 @@
 "use client";
 
 import type { useAudio } from "@/contexts/AudioContext";
-import type { useToast } from "@/hooks/use-toast";
-import type { useAuth } from "@/hooks/useAuth";
-import type { useSessionWallet } from "@/hooks/useSessionWallet";
+import type { useAuth } from "@/hooks/auth/useAuth";
+import type { useSessionWallet } from "@/hooks/auth/useSessionWallet";
+import type { useToast } from "@/hooks/ui/use-toast";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";
 import { logger } from "@/utils/logger";

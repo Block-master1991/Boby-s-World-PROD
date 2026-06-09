@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { useApiFetch } from "@/utils/api";
 import { logger } from "@/utils/logger";
 import type { usePasskeyState } from "./usePasskeyState";

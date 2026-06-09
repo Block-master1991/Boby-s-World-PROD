@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
 import {
   BOBY_TOKEN_MINT_ADDRESS,
   LAMPORTS_PER_SOL,

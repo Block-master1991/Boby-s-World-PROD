@@ -1,6 +1,6 @@
 "use client";
 
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import type { StoreItemDefinition } from "@/lib/server-items/server-items";
 import { solanaPaymentService, type PurchaseProgress } from "@/lib/solana/solanaPaymentService";
 import { WebAuthnTransactionSigner } from "@/lib/webauthn/WebAuthnTransactionSigner";

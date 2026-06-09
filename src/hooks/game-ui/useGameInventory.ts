@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from "@/lib/items";
 import { useApiFetch } from "@/utils/api";
 import { logger } from "@/utils/logger";

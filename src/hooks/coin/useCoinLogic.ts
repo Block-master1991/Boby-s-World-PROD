@@ -4,12 +4,12 @@ import type { GameObject } from "@/types/game";
 import type { MutableRefObject } from "react";
 import { useCallback, useRef } from "react";
 import * as THREE from "three";
-import type { Octree } from "../lib/Octree";
-import { RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from "../lib/chunkUtils";
-import type { CoinData } from "./coin/constants";
-import { useCoinInteraction, type FloatingEffectOptions } from "./coin/useCoinInteraction";
-import { useCoinLoader } from "./coin/useCoinLoader";
-import { useCoinSpawning } from "./coin/useCoinSpawning";
+import type { Octree } from "../../lib/Octree";
+import { RENDER_DISTANCE_CHUNKS, getChunkCoordinates, getChunkKey } from "../../lib/chunkUtils";
+import type { CoinData } from "./constants";
+import { useCoinInteraction, type FloatingEffectOptions } from "./useCoinInteraction";
+import { useCoinLoader } from "./useCoinLoader";
+import { useCoinSpawning } from "./useCoinSpawning";
 export type { CoinData };
 
 interface UseCoinLogicProps {

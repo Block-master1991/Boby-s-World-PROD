@@ -1,8 +1,8 @@
 "use client";
 
-import { useToast } from "@/hooks/use-toast";
-import type { StoreItemFormData } from "@/hooks/useAdminItems";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import type { StoreItemFormData } from "@/hooks/admin/useAdminItems";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
+import { useToast } from "@/hooks/ui/use-toast";
 import { createSignedAdminHeaders } from "@/utils/frontend-auth";
 import type { PublicKey } from "@solana/web3.js";
 

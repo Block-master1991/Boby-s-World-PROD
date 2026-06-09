@@ -1,7 +1,7 @@
 "use client";
 
 import { IpListTable } from "@/components/admin/sections/IpListTable";
-import type { IpEntry } from "@/hooks/useAdminIpManagement";
+import type { IpEntry } from "@/hooks/admin/useAdminIpManagement";
 
 interface IpManagementGridProps {
   whitelist: IpEntry[];

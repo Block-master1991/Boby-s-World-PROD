@@ -1,7 +1,7 @@
 "use client";
 
 import { Skeleton } from "@/components/ui/skeleton";
-import type { LogEntry } from "@/hooks/useLoggerDashboardModules";
+import type { LogEntry } from "@/hooks/misc/useLoggerDashboardModules";
 import React from "react";
 import { LogTableRow } from "./LogTableRow";
 

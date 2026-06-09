@@ -194,7 +194,6 @@ export class Skybox extends THREE.Object3D {
 
       // Yield to main thread every 64 scanlines to avoid blocking
       if (y % 64 === 0) {
-        // eslint-disable-next-line no-await-in-loop
         await new Promise(resolve => setTimeout(resolve, 0));
       }
     }

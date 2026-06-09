@@ -1,9 +1,9 @@
 "use client";
 
 import { Button, type ButtonProps } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
+import { useToast } from "@/hooks/ui/use-toast";
 import { logger } from "@/utils/logger";
 import { LogOut, PawPrint } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";

@@ -1,6 +1,6 @@
-import { useIsMobile } from "@/hooks/use-mobile";
-import { useAuth } from "@/hooks/useAuth";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
+import { useAuth } from "@/hooks/auth/useAuth";
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
+import { useIsMobile } from "@/hooks/ui/use-mobile";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";
 import { useEffect, useMemo, useState } from "react";

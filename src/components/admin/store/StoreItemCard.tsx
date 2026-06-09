@@ -14,7 +14,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { StoreItem } from "@/hooks/useStoreItemsManagement";
+import type { StoreItem } from "@/hooks/store/useStoreItemsManagement";
 import { Edit, Trash2 } from "lucide-react";
 import Image from "next/image";
 import React from "react";

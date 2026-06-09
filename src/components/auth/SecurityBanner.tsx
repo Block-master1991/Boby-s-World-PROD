@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { useSecurityOnboarding } from "@/hooks/useSecurityOnboarding";
+import { useSecurityOnboarding } from "@/hooks/security/useSecurityOnboarding";
 import { ArrowRight, Shield } from "lucide-react";
 import React, { useState } from "react";
 

@@ -9,7 +9,7 @@ import { OverviewSection } from "@/components/admin/sections/OverviewSection";
 import type { UserStatsPayload } from "@/components/admin/sections/OverviewUserStats";
 import { SecuritySection } from "@/components/admin/sections/SecuritySection";
 import { StoreItemsManagement } from "@/components/admin/StoreItemsManagement";
-import type { UserStatsState } from "@/hooks/useAdminDashboardData";
+import type { UserStatsState } from "@/hooks/admin/useAdminDashboardData";
 
 interface DashboardData {
   userStats: UserStatsState | null;

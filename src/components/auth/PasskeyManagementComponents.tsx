@@ -3,7 +3,7 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import type { Passkey } from "@/hooks/usePasskeyManagement";
+import type { Passkey } from "@/hooks/passkey/usePasskeyManagement";
 import { Smartphone, Trash2 } from "lucide-react";
 import React from "react";
 

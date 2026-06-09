@@ -1,4 +1,4 @@
-import type { CoinData } from "@/hooks/useCoinLogic";
+import type { CoinData } from "@/hooks/coin/useCoinLogic";
 import * as THREE from "three";
 import { ENEMY_ANIMATION_NAMES } from "../constants";
 import type { EnemyData } from "../types";

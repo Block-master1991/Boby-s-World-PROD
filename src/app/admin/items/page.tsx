@@ -4,7 +4,7 @@ import { AdminItemForm } from "@/components/admin/items/AdminItemForm";
 import { AdminItemsGrid } from "@/components/admin/items/AdminItemsGrid";
 import { AdminItemsHeader } from "@/components/admin/items/AdminItemsHeader";
 import { AdminItemsStats } from "@/components/admin/items/AdminItemsStats";
-import { useAdminItems } from "@/hooks/useAdminItems";
+import { useAdminItems } from "@/hooks/admin/useAdminItems";
 
 function PageHeader({ logic }: { logic: ReturnType<typeof useAdminItems> }) {
   return (

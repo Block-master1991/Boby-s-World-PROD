@@ -1,7 +1,7 @@
 "use client";
 
 import { useAuthContext } from "@/contexts/AuthContext";
-import { toast } from "@/hooks/use-toast";
+import { toast } from "@/hooks/ui/use-toast";
 import { logger } from "@/utils/logger";
 import { useEffect, useState } from "react";
 

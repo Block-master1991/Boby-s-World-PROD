@@ -1,6 +1,6 @@
 "use client";
 
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/hooks/auth/useAuth";
 import { ADMIN_WALLET_ADDRESS } from "@/lib/constants";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";

@@ -1,7 +1,7 @@
 "use client";
 
 import { Badge } from "@/components/ui/badge";
-import type { LogEntry } from "@/hooks/useLoggerDashboardModules";
+import type { LogEntry } from "@/hooks/misc/useLoggerDashboardModules";
 import { Activity, Database, FileText, Shield } from "lucide-react";
 import React from "react";
 

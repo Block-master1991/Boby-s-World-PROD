@@ -1,6 +1,6 @@
 "use client";
 
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import type { StoreItemDocument } from "@/types/database";
 import { logger } from "@/utils/logger";
 import { useCallback, useState } from "react";

@@ -1,4 +1,4 @@
-import type { CoinData } from "@/hooks/useCoinLogic";
+import type { CoinData } from "@/hooks/coin/useCoinLogic";
 import { getChunkCoordinates } from "@/lib/chunkUtils";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";

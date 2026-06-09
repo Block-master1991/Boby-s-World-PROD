@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import type { StoreItemFormData } from "@/hooks/useAdminItems";
+import type { StoreItemFormData } from "@/hooks/admin/useAdminItems";
 
 interface FormProps {
   formData: StoreItemFormData;

@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import { getDisplayErrorMessage, useBobyPriceLogic } from "@/hooks/useBobyPriceLogic";
+import { getDisplayErrorMessage, useBobyPriceLogic } from "@/hooks/misc/useBobyPriceLogic";
 import { PawPrint, RefreshCw } from "lucide-react";
 import Image from "next/image";
 import React from "react";

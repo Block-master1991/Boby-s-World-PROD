@@ -1,7 +1,7 @@
 "use client";
 
 import { Button } from "@/components/ui/button";
-import type { StoreItem } from "@/hooks/useStoreItemsManagement";
+import type { StoreItem } from "@/hooks/store/useStoreItemsManagement";
 import { Package } from "lucide-react";
 import React from "react";
 import { AdminItemSkeleton } from "../AdminItemSkeleton";

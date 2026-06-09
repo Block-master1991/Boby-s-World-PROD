@@ -1,4 +1,4 @@
-import type { CoinData } from "@/hooks/useCoinLogic";
+import type { CoinData } from "@/hooks/coin/useCoinLogic";
 import { logger } from "@/utils/logger";
 import { useCallback, useRef } from "react";
 import type { EnemyData } from "./types";

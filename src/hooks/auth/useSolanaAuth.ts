@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { performanceMonitor } from "@/lib/advanced-service-worker";
 import type { AuthState, LoginResponse } from "@/types/auth";
 import { useWallet } from "@solana/wallet-adapter-react";

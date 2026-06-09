@@ -1,7 +1,7 @@
 "use client";
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { LogStats } from "@/hooks/useLoggerDashboardModules";
+import type { LogStats } from "@/hooks/misc/useLoggerDashboardModules";
 import { Activity, AlertTriangle, Clock } from "lucide-react";
 import React from "react";
 

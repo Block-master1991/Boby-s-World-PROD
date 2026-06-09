@@ -2,8 +2,8 @@
  * Custom hook for managing inventory data and logic
  */
 
+import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
 import { useConsumableItem, useUserInventory } from "@/hooks/useGraphQL";
-import { useSessionWallet } from "@/hooks/useSessionWallet";
 import { getStoreItemsActiveWithIcons, type StoreItemDefinition } from "@/lib/items";
 import { logger } from "@/utils/logger";
 import { useCallback, useEffect, useMemo, useState } from "react";

@@ -32,7 +32,7 @@ export class KeyVaultService {
 
       if (process.env["KMS_PROVIDER"] === "aws") {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
-        const { AwsKmsProvider } = require("./kms/AwsKmsProvider");
+        const { AwsKmsProvider } = require("../kms/AwsKmsProvider");
         provider = new AwsKmsProvider({
           region: process.env["AWS_REGION"] || "us-east-1",
           keyId: process.env["AWS_KMS_KEY_ID"] || "alias/master-key",

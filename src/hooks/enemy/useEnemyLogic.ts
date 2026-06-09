@@ -6,17 +6,17 @@ import type { GameObject } from "@/types/game";
 import type { MutableRefObject } from "react";
 import * as React from "react";
 import * as THREE from "three";
-import type { FloatingEffectOptions } from "./coin/useCoinInteraction";
-import { ENEMY_ANIMATION_NAMES, ENEMY_DEATH_DURATION } from "./enemy/constants";
-import type { EnemyData } from "./enemy/types";
-import { useEnemyCombat } from "./enemy/useEnemyCombat";
-import { useEnemyLoader } from "./enemy/useEnemyLoader";
-import { useEnemyMovement } from "./enemy/useEnemyMovement";
-import { useEnemyOctreeManager } from "./enemy/useEnemyOctreeManager";
-import { useEnemyReconciliation } from "./enemy/useEnemyReconciliation";
-import { useEnemySpawning } from "./enemy/useEnemySpawning";
-import type { CoinData } from "./useCoinLogic";
-import { useDynamicModelLoader } from "./useDynamicModelLoader";
+import type { FloatingEffectOptions } from "../coin/useCoinInteraction";
+import type { CoinData } from "../coin/useCoinLogic";
+import { useDynamicModelLoader } from "../misc/useDynamicModelLoader";
+import { ENEMY_ANIMATION_NAMES, ENEMY_DEATH_DURATION } from "./constants";
+import type { EnemyData } from "./types";
+import { useEnemyCombat } from "./useEnemyCombat";
+import { useEnemyLoader } from "./useEnemyLoader";
+import { useEnemyMovement } from "./useEnemyMovement";
+import { useEnemyOctreeManager } from "./useEnemyOctreeManager";
+import { useEnemyReconciliation } from "./useEnemyReconciliation";
+import { useEnemySpawning } from "./useEnemySpawning";
 
 interface Props {
   sceneRef: MutableRefObject<THREE.Scene | null>;
@@ -54,7 +54,7 @@ type UpdateReconciliationFn = (delta: number) => void;
 type UpdateOneFn = (enemy: EnemyData, ctx: Ctx) => void;
 type FilterDeadFn = (delta: number) => void;
 
-import { VISIBLE_ENEMY_DISTANCE } from "./coin/constants";
+import { VISIBLE_ENEMY_DISTANCE } from "../coin/constants";
 
 const updateVis = (e: EnemyData, dogPos: THREE.Vector3) => {
   // Decoupled visibility: Enemies visible based on their own distance, not the coin's

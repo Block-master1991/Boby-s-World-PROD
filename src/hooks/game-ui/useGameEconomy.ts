@@ -1,4 +1,4 @@
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/ui/use-toast";
 import { ENEMY_COLLISION_PENALTY_USDT } from "@/lib/constants";
 import { useApiFetch } from "@/utils/api";
 import { logger } from "@/utils/logger";
