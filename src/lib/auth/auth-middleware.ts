@@ -1,18 +1,18 @@
 import type { NextRequest, NextResponse } from "next/server";
 import { logger } from "utils/logger";
-import { auditLogger } from "./audit-logger";
+import { isDev } from "../config/env";
+import { auditLogger } from "../logging/audit-logger";
+import { securityIntegration } from "../security/securityIntegration";
 import {
-    createAuthErrorResponse,
-    extractAuthRequestMetadata,
-    type AuthMetadata,
+  createAuthErrorResponse,
+  extractAuthRequestMetadata,
+  type AuthMetadata,
 } from "./auth-helpers";
-import { isDev } from "./config/env";
 import { JWTManager, type JWTPayload } from "./jwt-utils";
-import { securityIntegration } from "./security/securityIntegration";
 
 export {
-    extractUserFromToken,
-    validateTokenFromRequest, verifySessionOrReject
+  extractUserFromToken,
+  validateTokenFromRequest, verifySessionOrReject
 } from "./auth-validation";
 export { createAuthErrorResponse, extractAuthRequestMetadata, type AuthMetadata };
 
@@ -44,7 +44,7 @@ async function performRateLimit(
 ): Promise<NextResponse | null> {
   const { ip, userAgent } = metadata;
   const identifier = userId || ip;
-  const { AdvancedRateLimiter } = await import("./advancedRateLimiter");
+  const { AdvancedRateLimiter } = await import("../ratelimit/advancedRateLimiter");
   const rateLimitResult = await AdvancedRateLimiter.getInstance().checkRateLimit(request, identifier, {
     endpoint: request.nextUrl.pathname,
     deviceInfo: securityIntegration.extractDeviceInfo(request),

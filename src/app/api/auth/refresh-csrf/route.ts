@@ -1,5 +1,5 @@
+import { JWTManager } from "@/lib/auth/jwt-utils";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
-import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp } from "@/lib/request-utils";
 import { logger } from "@/utils/logger";
 import type { NextRequest } from "next/server";

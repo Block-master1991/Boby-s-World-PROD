@@ -5,7 +5,7 @@
 
 import pino from "pino";
 import pinoHttp from "pino-http";
-import { isProd } from "./config/env";
+import { isProd } from "../config/env";
 
 // Determine environment
 const isProduction = isProd;

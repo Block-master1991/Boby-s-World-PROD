@@ -1,12 +1,12 @@
-import { sessionManager } from "@/lib/advancedSessionManager";
-import { auditLogger } from "@/lib/audit-logger";
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
+import { JWTManager } from "@/lib/auth/jwt-utils";
+import { TOTPService } from "@/lib/auth/totp-service";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
-import { JWTManager } from "@/lib/jwt-utils";
+import { auditLogger } from "@/lib/logging/audit-logger";
 import { getClientIp, isMobile } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/security/securityIntegration";
-import { TOTPService } from "@/lib/totp-service";
+import { sessionManager } from "@/lib/session/advancedSessionManager";
 import { logger } from "@/utils/logger";
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";

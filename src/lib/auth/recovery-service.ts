@@ -3,10 +3,10 @@
  * Centralized logic for account recovery processes
  */
 
-import type { AuditEventMetadata } from "@/lib/audit-logger";
-import { auditLogger } from "@/lib/audit-logger";
 import { emailService } from "@/lib/email-service";
 import { db } from "@/lib/firebase/firebase-admin";
+import type { AuditEventMetadata } from "@/lib/logging/audit-logger";
+import { auditLogger } from "@/lib/logging/audit-logger";
 import redis from "@/lib/redis";
 import { logger } from "@/utils/logger";
 

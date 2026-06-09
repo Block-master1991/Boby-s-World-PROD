@@ -3,8 +3,8 @@
  * GET /api/game/purchaseHistory
  */
 
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { db } from "@/lib/firebase/firebase-admin";
 import type { TransactionSignatureDocument } from "@/types/database";

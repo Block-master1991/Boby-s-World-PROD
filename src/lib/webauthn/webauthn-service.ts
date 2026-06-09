@@ -4,9 +4,9 @@
  */
 
 import { randomBytes } from "crypto";
-import type { AuditEventMetadata } from "../audit-logger";
-import { auditLogger } from "../audit-logger";
 import { db, initializeAdminApp } from "../firebase/firebase-admin";
+import type { AuditEventMetadata } from "../logging/audit-logger";
+import { auditLogger } from "../logging/audit-logger";
 import redis from "../redis";
 import { WebAuthnUtils } from "./webauthn-utils";
 

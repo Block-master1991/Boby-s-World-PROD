@@ -1,5 +1,5 @@
 import type { NextResponse } from "next/server";
-import { JWTManager } from "../jwt-utils";
+import { JWTManager } from "../auth/jwt-utils";
 import { CSRFManager } from "./csrf-utils";
 
 /**

@@ -7,8 +7,8 @@ import { logger } from "@/utils/logger";
 import { getFirestore, Timestamp, type Firestore } from "firebase-admin/firestore";
 import type { TestResult } from "../../tests/utils/securityTest";
 import { securityTestSuite } from "../../tests/utils/securityTest";
-import { auditLogger, type AuditEventType } from "../audit-logger";
 import { initializeAdminApp } from "../firebase/firebase-admin";
+import { auditLogger, type AuditEventType } from "../logging/audit-logger";
 
 export interface ScheduledTestSummary {
   id: string;

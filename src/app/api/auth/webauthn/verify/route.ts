@@ -3,14 +3,14 @@
  * POST /api/auth/webauthn/verify
  */
 
-import { sessionManager } from "@/lib/advancedSessionManager";
-import { auditLogger } from "@/lib/audit-logger";
+import { TOTPService } from "@/lib/auth/totp-service";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { db, initializeAdminApp } from "@/lib/firebase/firebase-admin";
+import { auditLogger } from "@/lib/logging/audit-logger";
 import redis from "@/lib/redis";
 import { getClientIp } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/security/securityIntegration";
-import { TOTPService } from "@/lib/totp-service";
+import { sessionManager } from "@/lib/session/advancedSessionManager";
 import { validateRequestBody, WebAuthnVerifySchema } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";
 import type { NextRequest } from "next/server";

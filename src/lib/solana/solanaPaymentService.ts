@@ -10,7 +10,7 @@ import {
   BOBY_TOKEN_MINT_ADDRESS,
   SOL_NETWORK,
   STORE_TREASURY_WALLET_ADDRESS,
-} from "./constants";
+} from "../constants";
 
 // Token decimals
 
@@ -26,7 +26,7 @@ import type {
   PurchasePhase,
   PurchaseProgress,
   TransactionResult,
-} from "../types/solana";
+} from "../../types/solana";
 
 export type { PriorityFeeConfig, PurchasePhase, PurchaseProgress, TransactionResult };
 

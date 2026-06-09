@@ -4,9 +4,9 @@
  */
 import { webcrypto } from "node:crypto";
 import { logger } from "utils/logger";
-import { AdvancedRateLimiter, type RateLimitResult } from "../advancedRateLimiter";
-import { sessionManager, type DeviceInfo, type SessionData } from "../advancedSessionManager";
 import { keyVault } from "../key-vault/keyVaultService";
+import { AdvancedRateLimiter, type RateLimitResult } from "../ratelimit/advancedRateLimiter";
+import { sessionManager, type DeviceInfo, type SessionData } from "../session/advancedSessionManager";
 import type { AuthenticationResult, SecurityContext, SecurityStats } from "./securityTypes";
 // Lazy getter — resolved at call time, not import time.
 // This ensures Jest mocks applied in setupFiles are visible before first use.

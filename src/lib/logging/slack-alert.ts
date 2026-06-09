@@ -1,6 +1,6 @@
 import axios from "axios";
 import { logger } from "utils/logger";
-import { getAppEnv, isDev } from "./config/env";
+import { getAppEnv, isDev } from "../config/env";
 
 export interface SlackAlertOptions {
   level?: "info" | "warn" | "error" | "critical";

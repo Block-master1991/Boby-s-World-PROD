@@ -3,8 +3,8 @@
  * DELETE /api/auth/webauthn/manage/[credentialId]
  */
 
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import { securityIntegration } from "@/lib/security/securityIntegration";

@@ -3,8 +3,8 @@
  * POST /api/auth/webauthn/register/confirm
  */
 
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { db, initializeAdminApp } from "@/lib/firebase/firebase-admin";

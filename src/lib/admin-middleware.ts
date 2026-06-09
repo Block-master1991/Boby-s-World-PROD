@@ -1,9 +1,9 @@
 import { env, isDev } from "@/lib/config/env";
 import { NextResponse } from "next/server";
 import { logger } from "utils/logger";
-import { auditLogger } from "./audit-logger";
-import type { AuthenticatedRequest } from "./auth-middleware";
-import { createAuthErrorResponse, withAuth } from "./auth-middleware";
+import type { AuthenticatedRequest } from "./auth/auth-middleware";
+import { createAuthErrorResponse, withAuth } from "./auth/auth-middleware";
+import { auditLogger } from "./logging/audit-logger";
 import { getClientIp } from "./request-utils";
 import { securityIntegration } from "./security/securityIntegration";
 import { constructSignedMessage, verifySignature } from "./signature-verification";

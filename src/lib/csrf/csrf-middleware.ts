@@ -1,8 +1,8 @@
 import { getClientIp } from "@/lib/request-utils";
 import { logger } from "@/utils/logger";
 import { NextResponse, type NextRequest } from "next/server";
-import { auditLogger } from "../audit-logger";
-import { JWTManager } from "../jwt-utils";
+import { JWTManager } from "../auth/jwt-utils";
+import { auditLogger } from "../logging/audit-logger";
 import { CSRFManager } from "./csrf-utils";
 
 async function validateCsrfToken(

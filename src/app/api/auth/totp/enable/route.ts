@@ -1,6 +1,6 @@
-import { withAuth } from "@/lib/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
+import { TOTPService } from "@/lib/auth/totp-service";
 import { getClientIp } from "@/lib/request-utils";
-import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 
@@ -24,7 +24,7 @@ export const POST = withAuth(async request => {
     const response = NextResponse.json(result);
 
     // Upgrade the current session to MFA since they just verified their token
-    const { JWTManager } = await import("@/lib/jwt-utils");
+    const { JWTManager } = await import("@/lib/auth/jwt-utils");
     const requestHost = request.headers.get("host") || undefined;
 
     const newAccessToken = JWTManager.createAccessToken({

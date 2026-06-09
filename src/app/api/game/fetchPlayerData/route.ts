@@ -3,8 +3,8 @@
  * GET /api/game/fetchPlayerData
  */
 
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
 import { initializeAdminApp } from "@/lib/firebase/firebase-admin";
 import type { PlayerDocument } from "@/types/database";
 import { COLLECTIONS } from "@/types/database";

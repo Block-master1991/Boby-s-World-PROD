@@ -3,8 +3,8 @@
  */
 
 import { logger } from "utils/logger";
-import type { DeviceInfo } from "../advancedSessionManager";
 import redis from "../redis";
+import type { DeviceInfo } from "../session/advancedSessionManager";
 
 /**
  * Calculate user reputation based on device and history

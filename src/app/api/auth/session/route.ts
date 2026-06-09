@@ -1,8 +1,8 @@
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { createAuthErrorResponse, withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { createAuthErrorResponse, withAuth } from "@/lib/auth/auth-middleware";
+import { TOTPService } from "@/lib/auth/totp-service";
 import { isDev } from "@/lib/config/env";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
-import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 export const runtime = "nodejs";

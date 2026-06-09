@@ -5,7 +5,7 @@
  */
 
 import { logger } from "utils/logger";
-import redis from "./redis";
+import redis from "../redis";
 
 /**
  * Rate limits per mutation (requests per minute)

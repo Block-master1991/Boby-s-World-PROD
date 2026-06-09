@@ -3,7 +3,7 @@
  * Safe logging that doesn't expose sensitive data in production
  */
 
-import { pinoLogger } from "../utils/logger";
+import { pinoLogger } from "../../utils/logger";
 
 // Client-specific logger instance
 export const clientLogger = pinoLogger.child({ component: "Client" });
@@ -182,5 +182,6 @@ export {
   errorLogger as errors,
   gameLogger as game,
   interactionLogger as interactions,
-  performanceLogger as perf,
+  performanceLogger as perf
 };
+

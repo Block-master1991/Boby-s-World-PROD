@@ -4,7 +4,7 @@
  */
 
 import { logger } from "utils/logger";
-import { sendSlackAlert, type SlackAlertOptions } from "../slack-alert";
+import { sendSlackAlert, type SlackAlertOptions } from "../logging/slack-alert";
 
 export enum SecurityEventLevel {
   INFO = "info",

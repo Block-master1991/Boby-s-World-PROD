@@ -2,8 +2,8 @@ import { ASSOCIATED_TOKEN_PROGRAM_ID, Token, TOKEN_PROGRAM_ID } from "@solana/sp
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { ComputeBudgetProgram } from "@solana/web3.js";
 import { logger } from "utils/logger";
-import type { PriorityFeeConfig } from "../types/solana";
-import { BOBY_TOKEN_DECIMALS } from "./constants";
+import type { PriorityFeeConfig } from "../../types/solana";
+import { BOBY_TOKEN_DECIMALS } from "../constants";
 
 /**
  * Get associated token addresses for sender and treasury

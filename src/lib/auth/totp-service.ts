@@ -8,9 +8,9 @@ import { logger } from "@/utils/logger";
 import crypto from "crypto";
 import { generateSecret, generateURI, verify } from "otplib";
 import QRCode from "qrcode";
-import type { AuditEventMetadata } from "./audit-logger";
-import { auditLogger } from "./audit-logger";
-import { EncryptionUtils } from "./encryption";
+import { EncryptionUtils } from "../encryption";
+import type { AuditEventMetadata } from "../logging/audit-logger";
+import { auditLogger } from "../logging/audit-logger";
 
 export class TOTPService {
   /**

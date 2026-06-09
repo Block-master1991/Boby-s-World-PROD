@@ -3,7 +3,7 @@
  * This file demonstrates various logging patterns and best practices
  */
 
-import { serverLogger, withLogging } from "./src/lib/server-logger";
+import { serverLogger, withLogging } from "./src/lib/logging/server-logger";
 import { logger, pinoLogger } from "./src/utils/logger";
 
 // Server-side usage examples

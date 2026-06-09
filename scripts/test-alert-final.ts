@@ -2,7 +2,7 @@ import dotenv from "dotenv";
 import path from "path";
 dotenv.config({ path: path.resolve(process.cwd(), ".env.local") });
 
-import { sendSlackAlert } from "../src/lib/slack-alert";
+import { sendSlackAlert } from "../src/lib/logging/slack-alert";
 
 async function runTest() {
   console.log("🚀 Triggering Professional Slack Alert Test...");

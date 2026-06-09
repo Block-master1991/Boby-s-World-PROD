@@ -1,5 +1,5 @@
-import { withAuth } from "@/lib/auth-middleware";
-import { TOTPService } from "@/lib/totp-service";
+import { withAuth } from "@/lib/auth/auth-middleware";
+import { TOTPService } from "@/lib/auth/totp-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 

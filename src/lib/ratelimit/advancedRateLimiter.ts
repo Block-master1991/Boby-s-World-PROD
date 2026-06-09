@@ -3,28 +3,28 @@
  */
 
 import { logger } from "utils/logger";
-import type { DeviceInfo } from "./advancedSessionManager";
-import { blockIp, isIpInList } from "./ip-list";
-import { calculateAdaptiveLimits, synthesizeResults } from "./ratelimit/DecisionEngine";
-import { analyzeBehavior, analyzeRequestPatterns } from "./ratelimit/patterns";
-import { calculateRiskScore, calculateUserReputation } from "./ratelimit/risk";
+import { blockIp, isIpInList } from "../ip-list";
+import redis from "../redis";
+import { getClientIp, isIpWhitelisted } from "../request-utils";
+import { SecurityEventLevel, securityLogger } from "../security/securityLogger";
+import type { DeviceInfo } from "../session/advancedSessionManager";
+import { calculateAdaptiveLimits, synthesizeResults } from "./DecisionEngine";
+import { analyzeBehavior, analyzeRequestPatterns } from "./patterns";
+import { calculateRiskScore, calculateUserReputation } from "./risk";
 import type {
-    AdaptiveLimits,
-    BehavioralStats,
-    PatternAnalysisResult,
-    RateLimitResult,
-    SuspiciousActivity,
-} from "./ratelimit/types";
-import redis from "./redis";
-import { getClientIp, isIpWhitelisted } from "./request-utils";
-import { SecurityEventLevel, securityLogger } from "./security/securityLogger";
+  AdaptiveLimits,
+  BehavioralStats,
+  PatternAnalysisResult,
+  RateLimitResult,
+  SuspiciousActivity,
+} from "./types";
 
 export type {
-    AdaptiveLimits,
-    BehavioralStats,
-    PatternAnalysisResult,
-    RateLimitResult,
-    SuspiciousActivity
+  AdaptiveLimits,
+  BehavioralStats,
+  PatternAnalysisResult,
+  RateLimitResult,
+  SuspiciousActivity
 };
 
 export class AdvancedRateLimiter {

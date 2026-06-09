@@ -4,16 +4,16 @@
 
 import { randomBytes } from "crypto";
 import { logger } from "utils/logger";
-import redis from "./redis";
-import { performSessionChecks, safeCompare } from "./session/manager-helpers";
-import { calculateRiskScore } from "./session/risk";
+import redis from "../redis";
+import { performSessionChecks, safeCompare } from "./manager-helpers";
+import { calculateRiskScore } from "./risk";
 import {
   generateAdvancedDeviceFingerprint,
   generateDeviceBindingKey,
   generateHighEntropy,
   generateSecureSessionId,
-} from "./session/security";
-import type { DeviceInfo, GeoLocation, SessionData, SessionOptions } from "./session/types";
+} from "./security";
+import type { DeviceInfo, GeoLocation, SessionData, SessionOptions } from "./types";
 
 // Re-export for backward compatibility
 export type { DeviceInfo, GeoLocation, SessionData, SessionOptions };

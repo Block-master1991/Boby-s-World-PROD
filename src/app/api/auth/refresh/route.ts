@@ -1,7 +1,7 @@
-import { createAuthErrorResponse } from "@/lib/auth-middleware";
+import { createAuthErrorResponse } from "@/lib/auth/auth-middleware";
+import { JWTManager } from "@/lib/auth/jwt-utils";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp } from "@/lib/request-utils";
 import { logger } from "@/utils/logger";
 import { cookies } from "next/headers";

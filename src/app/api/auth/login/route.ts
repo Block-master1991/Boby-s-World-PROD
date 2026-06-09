@@ -1,12 +1,12 @@
-import { AdvancedRateLimiter } from "@/lib/advancedRateLimiter";
-import { sessionManager } from "@/lib/advancedSessionManager";
-import { auditLogger } from "@/lib/audit-logger";
+import { JWTManager } from "@/lib/auth/jwt-utils";
+import { TOTPService } from "@/lib/auth/totp-service";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
-import { JWTManager } from "@/lib/jwt-utils";
+import { auditLogger } from "@/lib/logging/audit-logger";
+import { AdvancedRateLimiter } from "@/lib/ratelimit/advancedRateLimiter";
 import redis from "@/lib/redis";
 import { getClientIp, isIpWhitelisted } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/security/securityIntegration";
-import { TOTPService } from "@/lib/totp-service";
+import { sessionManager } from "@/lib/session/advancedSessionManager";
 import { LoginRequestSchema, validateRequestBody } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";
 import { PublicKey } from "@solana/web3.js";
@@ -14,12 +14,12 @@ import { getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import nacl from "tweetnacl";
 import {
-    createOrUpdatePlayerDoc,
-    ensureFirestoreConnectivity,
-    generateNonce,
-    sha256Base64,
-    validatePublicKey,
-    verifyAndConsumeNonce,
+  createOrUpdatePlayerDoc,
+  ensureFirestoreConnectivity,
+  generateNonce,
+  sha256Base64,
+  validatePublicKey,
+  verifyAndConsumeNonce,
 } from "./loginHelpers";
 
 export async function GET(request: Request) {

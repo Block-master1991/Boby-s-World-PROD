@@ -1,7 +1,7 @@
 import type { AdminRequest } from "@/lib/admin-middleware";
 import { withAdminAuth } from "@/lib/admin-middleware";
-import type { AuditSeverity } from "@/lib/audit-logger";
-import { auditLogger } from "@/lib/audit-logger";
+import type { AuditSeverity } from "@/lib/logging/audit-logger";
+import { auditLogger } from "@/lib/logging/audit-logger";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 

@@ -3,8 +3,8 @@
  * POST /api/auth/webauthn/register
  */
 
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { securityIntegration } from "@/lib/security/securityIntegration";
 import { validateRequestBody, WebAuthnRegisterSchema } from "@/lib/validation-schemas";

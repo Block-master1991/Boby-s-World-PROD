@@ -1,4 +1,4 @@
-import { checkGraphQLMutationRateLimit } from "@/lib/graphql-rate-limiter";
+import { checkGraphQLMutationRateLimit } from "@/lib/ratelimit/graphql-rate-limiter";
 import { GraphQLError } from "graphql";
 import type { GraphQLContext } from "../../context";
 import { EVENTS } from "../../pubsub";

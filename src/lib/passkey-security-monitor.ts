@@ -3,8 +3,8 @@
  * Provides real-time monitoring and alerting for passkey-related security events
  */
 
-import { auditLogger } from "./audit-logger";
-import { sendSlackAlert } from "./slack-alert";
+import { auditLogger } from "./logging/audit-logger";
+import { sendSlackAlert } from "./logging/slack-alert";
 
 export interface PasskeySecurityMetrics {
   totalPasskeys: number;

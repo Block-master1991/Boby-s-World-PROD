@@ -1,5 +1,5 @@
-import { validateTokenFromRequest, type AuthenticatedRequest } from "@/lib/auth-middleware";
-import type { JWTPayload } from "@/lib/jwt-utils";
+import { validateTokenFromRequest, type AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import type { JWTPayload } from "@/lib/auth/jwt-utils";
 import { logger } from "@/utils/logger";
 import type { NextRequest } from "next/server";
 import { createPlayerLoader } from "../loaders/player.loader";

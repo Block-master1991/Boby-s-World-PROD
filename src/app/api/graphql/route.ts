@@ -88,8 +88,8 @@ const yoga = createYoga({
   ],
 });
 
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
-import { withAuth } from "@/lib/auth-middleware";
+import type { AuthenticatedRequest } from "@/lib/auth/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
 
 // Export Next.js Route Handlers
 export const GET = (request: Request) => yoga.handle(request);

@@ -4,8 +4,8 @@
  */
 
 import { logger } from "utils/logger";
-import { AdvancedRateLimiter } from "../../lib/advancedRateLimiter";
-import { sessionManager } from "../../lib/advancedSessionManager";
+import { AdvancedRateLimiter } from "../../lib/ratelimit/advancedRateLimiter";
+import { sessionManager } from "../../lib/session/advancedSessionManager";
 import {
   runKeyVaultTests,
   runPerformanceTests,

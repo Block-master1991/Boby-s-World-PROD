@@ -1,6 +1,6 @@
-import { withAuth } from "@/lib/auth-middleware";
+import { withAuth } from "@/lib/auth/auth-middleware";
+import { TOTPService } from "@/lib/auth/totp-service";
 import redis from "@/lib/redis";
-import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { randomBytes } from "crypto";
 import { NextResponse } from "next/server";

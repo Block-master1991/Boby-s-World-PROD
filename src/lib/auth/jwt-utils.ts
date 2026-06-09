@@ -2,9 +2,9 @@
 import { logger } from "@/utils/logger";
 import { createHash, randomBytes } from "crypto";
 import jwt from "jsonwebtoken";
-import { getAppBaseDomain, isProd } from "./config/env";
-import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from "./server-constants";
-import { TokenBlacklistManager } from "./token-blacklist";
+import { getAppBaseDomain, isProd } from "../config/env";
+import { JWT_ACCESS_SECRET, JWT_REFRESH_SECRET } from "../server-constants";
+import { TokenBlacklistManager } from "../token-blacklist";
 
 export interface JWTPayload {
   sub: string; // Subject (user's public key)
