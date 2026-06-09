@@ -9,7 +9,81 @@ import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
+import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 
+// ─── Helper: verify TOTP token or backup code ────────────────────────────────
+async function verifyTotpToken(
+  userId: string,
+  token: string
+): Promise<{ isValid: boolean; reason: string }> {
+  const secret = await TOTPService.getUserSecret(userId);
+  if (!secret) return { isValid: false, reason: "no_secret" };
+
+  const verificationResult = await TOTPService.verifyTokenWithReason(token, secret);
+  let isValid = verificationResult === "valid";
+
+  if (!isValid && token.length === 8) {
+    isValid = await TOTPService.verifyBackupCode(userId, token);
+  }
+
+  return { isValid, reason: verificationResult };
+}
+
+// ─── Helper: build access + refresh tokens ───────────────────────────────────
+function buildTotpTokens(userId: string, ip: string, userAgent: string) {
+  const nonce = `totp-${Date.now()}`;
+  const ipHash = createHash("sha256").update(ip).digest("base64");
+  const userAgentHash = createHash("sha256").update(userAgent).digest("base64");
+
+  const tokenParams = {
+    publicKey: userId,
+    nonce,
+    userAgentHash,
+    ipHash,
+    authMethod: "totp" as const,
+    totpEnabled: true,
+  };
+
+  return {
+    nonce,
+    accessToken: JWTManager.createAccessToken(tokenParams),
+    refreshToken: JWTManager.createRefreshToken(tokenParams),
+  };
+}
+
+// ─── Helper: attach cookies and session to response ──────────────────────────
+interface TotpSessionParams {
+  userId: string;
+  rhost: string;
+  nonce: string;
+  accessToken: string;
+  refreshToken: string;
+}
+
+async function attachTotpCookies(
+  request: AuthenticatedRequest,
+  resp: NextResponse,
+  params: TotpSessionParams
+): Promise<void> {
+  const { userId, rhost, nonce, accessToken, refreshToken } = params;
+  resp.cookies.set("accessToken", accessToken, JWTManager.createSecureCookieOptions(15 * 60, rhost));
+  resp.cookies.set("refreshToken", refreshToken, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, rhost));
+  resp.cookies.set("nonce", nonce, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, rhost));
+
+  const sess = await sessionManager.createSecureSession(
+    userId,
+    securityIntegration.extractDeviceInfo(request),
+    { authMethod: "totp" }
+  );
+
+  if (sess) {
+    const sessCookieOptions = JWTManager.createSecureCookieOptions(30 * 60, rhost);
+    resp.cookies.set("secure_session", sess.sessionId, { ...sessCookieOptions, httpOnly: true });
+    resp.cookies.set("session_seed", sess.currentSeed, { ...sessCookieOptions, httpOnly: true });
+  }
+}
+
+// ─── Route Handler ────────────────────────────────────────────────────────────
 export const POST = withAuth(async (request) => {
   try {
     const { token } = await request.json();
@@ -22,24 +96,17 @@ export const POST = withAuth(async (request) => {
       return NextResponse.json({ error: "Token is required" }, { status: 400 });
     }
 
-    const secret = await TOTPService.getUserSecret(userId);
-    if (!secret) {
+    const { isValid, reason } = await verifyTotpToken(userId, token);
+
+    if (reason === "no_secret") {
       return NextResponse.json({ error: "TOTP not enabled for this user" }, { status: 403 });
-    }
-
-    const verificationResult = await TOTPService.verifyTokenWithReason(token, secret);
-    let isValid = verificationResult === "valid";
-
-    if (!isValid && token.length === 8) {
-      isValid = await TOTPService.verifyBackupCode(userId, token);
     }
 
     if (!isValid) {
       const errorMessage =
-        verificationResult === "expired"
+        reason === "expired"
           ? "Expired verification code. Please use the latest code from your authenticator app."
           : "Invalid verification code. Please check the code and try again.";
-
       await auditLogger.logEvent(
         "TOTP_VERIFICATION_FAILED",
         `${errorMessage} for user ${userId}`,
@@ -58,49 +125,9 @@ export const POST = withAuth(async (request) => {
       totpEnabled: true,
     });
 
-    const nonce = `totp-${Date.now()}`;
-    const ipHash = createHash("sha256").update(ip).digest("base64");
-    const userAgentHash = createHash("sha256").update(userAgent).digest("base64");
+    const { nonce, accessToken, refreshToken } = buildTotpTokens(userId, ip, userAgent);
+    await attachTotpCookies(request, resp, { userId, rhost, nonce, accessToken, refreshToken });
 
-    const accessToken = JWTManager.createAccessToken({
-      publicKey: userId,
-      nonce,
-      userAgentHash,
-      ipHash,
-      authMethod: "totp",
-      totpEnabled: true,
-    });
-    const refreshToken = JWTManager.createRefreshToken({
-      publicKey: userId,
-      nonce,
-      userAgentHash,
-      ipHash,
-      authMethod: "totp",
-      totpEnabled: true,
-    });
-
-    const cookieOptions = JWTManager.createSecureCookieOptions(15 * 60, rhost);
-    resp.cookies.set("accessToken", accessToken, cookieOptions);
-    resp.cookies.set(
-      "refreshToken",
-      refreshToken,
-      JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, rhost)
-    );
-    resp.cookies.set("nonce", nonce, JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, rhost));
-
-    const sess = await sessionManager.createSecureSession(
-      userId,
-      securityIntegration.extractDeviceInfo(request),
-      {
-        authMethod: "totp",
-      }
-    );
-
-    if (sess) {
-      const sessCookieOptions = JWTManager.createSecureCookieOptions(30 * 60, rhost);
-      resp.cookies.set("secure_session", sess.sessionId, { ...sessCookieOptions, httpOnly: true });
-      resp.cookies.set("session_seed", sess.currentSeed, { ...sessCookieOptions, httpOnly: true });
-    }
     await auditLogger.logEvent(
       "LOGIN_SUCCESS",
       `User ${userId} logged in via TOTP`,

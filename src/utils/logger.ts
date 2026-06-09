@@ -14,7 +14,7 @@ import { professionalLogger, type LogContext } from "../lib/logging";
  
 const isBrowser =
   typeof window !== "undefined" ||
-  (typeof self !== "undefined" && typeof (self as any).postMessage === "function");
+  (typeof self !== "undefined" && typeof (self as unknown as { postMessage?: unknown }).postMessage === "function");
 const isProduction = isProd;
 
 // Create Pino logger configuration (kept for compatibility)

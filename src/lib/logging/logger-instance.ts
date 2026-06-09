@@ -4,12 +4,16 @@ import { LoggerCore } from "./core/LoggerCore";
 /**
  * Default logger instance - backward compatible with existing logger
  */
+type GlobalWithProcess = typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+};
+
 const getEnv = (key: string): string | undefined => {
   try {
     if (typeof process !== "undefined" && process.env) return process.env[key];
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof globalThis !== "undefined" && (globalThis as any).process?.env)
-      return (globalThis as any).process.env[key];
+    const g = globalThis as GlobalWithProcess;
+    if (typeof globalThis !== "undefined" && g.process?.env)
+      return g.process.env[key];
   } catch {
     /* ignore */
   }

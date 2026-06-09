@@ -9,15 +9,21 @@ import { getLogLevelFromEnv, LogLevel, toPinoLevel } from "./LogLevel";
 const isBrowser = typeof window !== "undefined" && typeof window.document !== "undefined";
  
 const isWorker =
-  typeof self !== "undefined" && typeof (self as any).postMessage === "function" && !isBrowser;
+  typeof self !== "undefined" &&
+  "postMessage" in self &&
+  !isBrowser;
+
+type GlobalWithProcess = typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+};
 
 const getEnv = (key: string): string | undefined => {
   try {
     if (typeof process !== "undefined" && process.env) return process.env[key];
     // In some environments, globalThis.process might exist
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    if (typeof globalThis !== "undefined" && (globalThis as any).process?.env)
-      return (globalThis as any).process.env[key];
+    const g = globalThis as GlobalWithProcess;
+    if (typeof globalThis !== "undefined" && g.process?.env)
+      return g.process.env[key];
   } catch {
     /* ignore */
   }
