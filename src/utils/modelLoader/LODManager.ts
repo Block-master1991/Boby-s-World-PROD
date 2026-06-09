@@ -1,6 +1,6 @@
 import type * as THREE from "three";
 
-import { getLODManager } from "@/lib/lod-manager";
+import { getLODManager } from "@/lib/lod/lod-manager";
 
 export class LODManager {
   private static instance: LODManager;

@@ -3,7 +3,7 @@ import type { Flowers } from "../ez-tree/environment/flowers";
 import type { Grass } from "../ez-tree/environment/grass";
 import type { Rocks } from "../ez-tree/environment/rocks";
 import type { Trees } from "../ez-tree/environment/trees";
-import { getLODManager } from "../lod-manager";
+import { getLODManager } from "../lod/lod-manager";
 import type { ChunkContent, ChunkData } from "./types";
 
 export class ChunkContentManager {

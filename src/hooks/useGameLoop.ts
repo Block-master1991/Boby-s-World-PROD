@@ -2,7 +2,7 @@ import type DogShieldEffect from "@/components/game/DogShieldEffect";
 import type DogSpeedBeam from "@/components/game/DogSpeedBeam";
 import type { Environment } from "@/lib/ez-tree/environment/environment";
 import { getGPUInstancingManager } from "@/lib/gpu-instancing";
-import { getLODManager } from "@/lib/lod-manager";
+import { getLODManager } from "@/lib/lod/lod-manager";
 import { getMemoryMonitor } from "@/lib/object-pooling";
 import { getDevicePerformanceConfig } from "@/lib/utils";
 import { logger } from "@/utils/logger";
