@@ -1,9 +1,9 @@
-import type { NextRequest } from "next/server";
-import { NextResponse } from "next/server";
-import { logger } from "@/utils/logger";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp } from "@/lib/request-utils";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
+import { logger } from "@/utils/logger";
+import type { NextRequest } from "next/server";
+import { NextResponse } from "next/server";
 
 export async function POST(request: NextRequest) {
   logger.log("[Refresh CSRF Endpoint] Received request to refresh CSRF token.");

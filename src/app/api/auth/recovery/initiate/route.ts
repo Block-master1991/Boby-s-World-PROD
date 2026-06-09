@@ -3,7 +3,7 @@
  * Handles secure account recovery process for users who lose access to all passkeys
  */
 
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { RecoveryService } from "@/lib/recovery-service";
 import { getClientIp } from "@/lib/request-utils";
 import { RecoveryInitiateSchema, validateRequestBody } from "@/lib/validation-schemas";

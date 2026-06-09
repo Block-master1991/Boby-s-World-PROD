@@ -1,6 +1,6 @@
 import type { AdminRequest } from "@/lib/admin-middleware";
 import { withSignedAdminAuth } from "@/lib/admin-middleware";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { blockIp, unblockIp } from "@/lib/ip-list";
 import redis from "@/lib/redis";
 import { logger } from "@/utils/logger";

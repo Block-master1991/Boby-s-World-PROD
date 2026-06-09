@@ -4,13 +4,13 @@
  */
 
 import { auditLogger } from "@/lib/audit-logger";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { RecoveryService } from "@/lib/recovery-service";
 import { getClientIp } from "@/lib/request-utils";
 import {
-  RecoveryCancelSchema,
-  RecoveryVerifySchema,
-  validateRequestBody,
+    RecoveryCancelSchema,
+    RecoveryVerifySchema,
+    validateRequestBody,
 } from "@/lib/validation-schemas";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";

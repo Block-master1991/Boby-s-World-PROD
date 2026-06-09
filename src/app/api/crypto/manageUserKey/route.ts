@@ -1,7 +1,7 @@
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { db } from "@/lib/firebase-admin";
 import { keyVault } from "@/lib/keyVaultService";
 import type { UserKeyDocument } from "@/types/database";

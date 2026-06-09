@@ -1,6 +1,6 @@
 import type { NextResponse } from "next/server";
+import { JWTManager } from "../jwt-utils";
 import { CSRFManager } from "./csrf-utils";
-import { JWTManager } from "./jwt-utils";
 
 /**
  * Helper function to refresh CSRF token and set it in the response uniformly

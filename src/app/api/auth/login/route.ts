@@ -1,9 +1,9 @@
 import { AdvancedRateLimiter } from "@/lib/advancedRateLimiter";
 import { sessionManager } from "@/lib/advancedSessionManager";
-import redis from "@/lib/redis";
 import { auditLogger } from "@/lib/audit-logger";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
+import redis from "@/lib/redis";
 import { getClientIp, isIpWhitelisted } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/securityIntegration";
 import { TOTPService } from "@/lib/totp-service";
@@ -14,12 +14,12 @@ import { getFirestore } from "firebase-admin/firestore";
 import { NextResponse } from "next/server";
 import nacl from "tweetnacl";
 import {
-  createOrUpdatePlayerDoc,
-  ensureFirestoreConnectivity,
-  generateNonce,
-  sha256Base64,
-  validatePublicKey,
-  verifyAndConsumeNonce,
+    createOrUpdatePlayerDoc,
+    ensureFirestoreConnectivity,
+    generateNonce,
+    sha256Base64,
+    validatePublicKey,
+    verifyAndConsumeNonce,
 } from "./loginHelpers";
 
 export async function GET(request: Request) {

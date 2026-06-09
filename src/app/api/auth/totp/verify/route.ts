@@ -1,7 +1,8 @@
 import { sessionManager } from "@/lib/advancedSessionManager";
 import { auditLogger } from "@/lib/audit-logger";
+import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp, isMobile } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/securityIntegration";
@@ -9,7 +10,6 @@ import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { createHash } from "crypto";
 import { NextResponse } from "next/server";
-import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 
 // ─── Helper: verify TOTP token or backup code ────────────────────────────────
 async function verifyTotpToken(

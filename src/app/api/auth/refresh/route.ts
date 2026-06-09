@@ -1,6 +1,6 @@
 import { createAuthErrorResponse } from "@/lib/auth-middleware";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp } from "@/lib/request-utils";
 import { logger } from "@/utils/logger";

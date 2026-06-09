@@ -5,7 +5,7 @@
 
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { withAuth } from "@/lib/auth-middleware";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { db } from "@/lib/firebase-admin";
 import type { TransactionSignatureDocument } from "@/types/database";
 import { COLLECTIONS } from "@/types/database";

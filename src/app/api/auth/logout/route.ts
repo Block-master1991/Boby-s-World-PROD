@@ -1,6 +1,6 @@
 import { auditLogger } from "@/lib/audit-logger";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
-import { CSRFManager } from "@/lib/csrf-utils";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
+import { CSRFManager } from "@/lib/csrf/csrf-utils";
 import { JWTManager } from "@/lib/jwt-utils";
 import { getClientIp } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/securityIntegration";

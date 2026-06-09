@@ -1,21 +1,20 @@
 import type { NextRequest, NextResponse } from "next/server";
 import { logger } from "utils/logger";
 import { auditLogger } from "./audit-logger";
+import {
+    createAuthErrorResponse,
+    extractAuthRequestMetadata,
+    type AuthMetadata,
+} from "./auth-helpers";
 import { isDev } from "./config/env";
 import { JWTManager, type JWTPayload } from "./jwt-utils";
 import { securityIntegration } from "./securityIntegration";
-import {
-  createAuthErrorResponse,
-  extractAuthRequestMetadata,
-  type AuthMetadata,
-} from "./auth-helpers";
 
-export { createAuthErrorResponse, extractAuthRequestMetadata, type AuthMetadata };
 export {
-  verifySessionOrReject,
-  extractUserFromToken,
-  validateTokenFromRequest,
+    extractUserFromToken,
+    validateTokenFromRequest, verifySessionOrReject
 } from "./auth-validation";
+export { createAuthErrorResponse, extractAuthRequestMetadata, type AuthMetadata };
 
 export interface AuthenticatedRequest extends NextRequest {
   user: JWTPayload;
@@ -200,7 +199,7 @@ async function syncAuthCookies(
       JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
     );
 
-    const { CSRFManager } = await import("@/lib/csrf-utils");
+    const { CSRFManager } = await import("@/lib/csrf/csrf-utils");
     const csrfToken = await CSRFManager.getOrCreateToken(payload.sub);
     response.cookies.set("csrfToken", csrfToken, {
       httpOnly: false,

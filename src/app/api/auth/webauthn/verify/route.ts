@@ -5,10 +5,10 @@
 
 import { sessionManager } from "@/lib/advancedSessionManager";
 import { auditLogger } from "@/lib/audit-logger";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { db, initializeAdminApp } from "@/lib/firebase-admin";
-import { getClientIp } from "@/lib/request-utils";
 import redis from "@/lib/redis";
+import { getClientIp } from "@/lib/request-utils";
 import { securityIntegration } from "@/lib/securityIntegration";
 import { TOTPService } from "@/lib/totp-service";
 import { validateRequestBody, WebAuthnVerifySchema } from "@/lib/validation-schemas";

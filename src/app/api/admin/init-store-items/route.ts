@@ -1,12 +1,12 @@
 import { withAdminAuth, withSignedAdminAuth } from "@/lib/admin-middleware";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { initializeAdminApp } from "@/lib/firebase-admin";
 import {
-  createStoreItem,
-  getAllStoreItems,
-  updateStoreItem,
-  type StoreItemDefinition,
+    createStoreItem,
+    getAllStoreItems,
+    updateStoreItem,
+    type StoreItemDefinition,
 } from "@/lib/server-items";
 import type { StoreItemDocument } from "@/types/database";
 import { logger } from "@/utils/logger";

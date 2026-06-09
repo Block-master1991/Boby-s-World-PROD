@@ -1,7 +1,7 @@
 import type { AuthenticatedRequest } from "@/lib/auth-middleware";
 import { createAuthErrorResponse, withAuth } from "@/lib/auth-middleware";
 import { isDev } from "@/lib/config/env";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { TOTPService } from "@/lib/totp-service";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";

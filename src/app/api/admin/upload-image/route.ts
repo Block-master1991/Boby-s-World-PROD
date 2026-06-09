@@ -1,6 +1,6 @@
 import type { AdminRequest } from "@/lib/admin-middleware";
 import { withAdminAuth, withSignedAdminAuth } from "@/lib/admin-middleware";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { logger } from "@/utils/logger";
 import { mkdir, unlink, writeFile } from "fs/promises";
 import { NextResponse } from "next/server";

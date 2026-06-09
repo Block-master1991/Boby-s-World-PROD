@@ -1,7 +1,7 @@
 import type { AdminRequest } from "@/lib/admin-middleware";
 import { withAdminAuth, withSignedAdminAuth } from "@/lib/admin-middleware";
-import { setCsrfTokenResponse } from "@/lib/csrf-helper";
-import { withCsrfProtection } from "@/lib/csrf-middleware";
+import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
+import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { logger } from "@/utils/logger";
 import { spawn, type ChildProcess } from "child_process";
 import { NextResponse } from "next/server";
