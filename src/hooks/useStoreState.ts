@@ -1,7 +1,7 @@
 "use client";
 
 import { useBobyPrice } from "@/hooks/useBobyPrice";
-import type { StoreItemDefinition } from "@/lib/server-items";
+import type { StoreItemDefinition } from "@/lib/server-items/server-items";
 import { useCallback, useEffect, useState } from "react";
 
 /**

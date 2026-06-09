@@ -1,7 +1,7 @@
 "use client";
 
 import { useToast } from "@/hooks/use-toast";
-import type { StoreItemDefinition } from "@/lib/server-items";
+import type { StoreItemDefinition } from "@/lib/server-items/server-items";
 import { solanaPaymentService, type PurchaseProgress } from "@/lib/solanaPaymentService";
 import { WebAuthnTransactionSigner } from "@/lib/WebAuthnTransactionSigner";
 import { useApiFetch } from "@/utils/api";
@@ -9,9 +9,9 @@ import { uint8ArrayToBase64url } from "@/utils/base64";
 import { logger } from "@/utils/logger";
 import type { AuthSig, VerificationPayload } from "@/utils/solanaPurchaseHelpers";
 import {
-  buildBobyPurchaseTransaction,
-  pollTransactionConfirmation,
-  verifyPurchaseWithBackend,
+    buildBobyPurchaseTransaction,
+    pollTransactionConfirmation,
+    verifyPurchaseWithBackend,
 } from "@/utils/solanaPurchaseHelpers";
 import type { Connection, PublicKey, Transaction } from "@solana/web3.js";
 import { useCallback, useState } from "react";

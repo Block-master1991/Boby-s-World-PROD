@@ -1,5 +1,5 @@
 import { withAdminAuth } from "@/lib/admin-middleware";
-import { initializeStoreItemsInFirestore } from "@/lib/server-items";
+import { initializeStoreItemsInFirestore } from "@/lib/server-items/server-items";
 import { logger } from "@/utils/logger";
 import { NextResponse } from "next/server";
 

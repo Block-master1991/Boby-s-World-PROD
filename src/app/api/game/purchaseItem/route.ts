@@ -6,7 +6,7 @@ import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { initializeAdminApp } from "@/lib/firebase-admin";
 import redis from "@/lib/redis";
 import { DEDICATED_RPC_ENDPOINT } from "@/lib/server-constants";
-import { getActiveStoreItems } from "@/lib/server-items";
+import { getActiveStoreItems } from "@/lib/server-items/server-items";
 import { PurchaseItemSchema } from "@/lib/validations/game";
 import { WebAuthnUtils } from "@/lib/webauthn-utils";
 import type { TransactionPayload } from "@/lib/WebAuthnTransactionSigner";

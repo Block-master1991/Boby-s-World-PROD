@@ -2,7 +2,7 @@ import type { AdminRequest } from "@/lib/admin-middleware";
 import { withAdminAuth, withSignedAdminAuth } from "@/lib/admin-middleware";
 import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
-import { deleteStoreItem, getStoreItemById, updateStoreItem } from "@/lib/server-items";
+import { deleteStoreItem, getStoreItemById, updateStoreItem } from "@/lib/server-items/server-items";
 import type { StoreItemDocument } from "@/types/database";
 import { NextResponse } from "next/server";
 import { logger } from "utils/logger";

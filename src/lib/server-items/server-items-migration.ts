@@ -1,7 +1,7 @@
 import { initializeAdminApp } from "@/lib/firebase-admin";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "utils/logger";
-import { fallbackStoreItems } from "./items";
+import { fallbackStoreItems } from "../items";
 import type { ItemResult, StoreItemDefinition } from "./server-items-types";
 
 // Function to migrate initial items to Firestore

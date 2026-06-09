@@ -1,4 +1,4 @@
-import { getActiveStoreItems, getAllStoreItems, getStoreItemById } from "@/lib/server-items-read";
+import { getActiveStoreItems, getAllStoreItems, getStoreItemById } from "@/lib/server-items/server-items-read";
 import type { InventoryItem } from "@/types/database";
 import { UseItemSchema } from "../../validation/schemas";
 import { InventoryRepository } from "./inventory.repository";

@@ -15,7 +15,7 @@ import { useSessionWallet } from "@/hooks/useSessionWallet";
 import { useActiveStoreItems } from "@/hooks/useStoreItems";
 import { useStorePurchase } from "@/hooks/useStorePurchase";
 import { useStoreState } from "@/hooks/useStoreState";
-import type { StoreItemDefinition } from "@/lib/server-items";
+import type { StoreItemDefinition } from "@/lib/server-items/server-items";
 import { useConnection } from "@solana/wallet-adapter-react";
 import type { PublicKey } from "@solana/web3.js";
 import { AlertCircle, Minus, PawPrint, Plus, RefreshCw, Send } from "lucide-react";

@@ -3,11 +3,11 @@ import { setCsrfTokenResponse } from "@/lib/csrf/csrf-helper";
 import { withCsrfProtection } from "@/lib/csrf/csrf-middleware";
 import { initializeAdminApp } from "@/lib/firebase-admin";
 import {
-    createStoreItem,
-    getAllStoreItems,
-    updateStoreItem,
-    type StoreItemDefinition,
-} from "@/lib/server-items";
+  createStoreItem,
+  getAllStoreItems,
+  updateStoreItem,
+  type StoreItemDefinition,
+} from "@/lib/server-items/server-items";
 import type { StoreItemDocument } from "@/types/database";
 import { logger } from "@/utils/logger";
 import { getFirestore } from "firebase-admin/firestore";
