@@ -2,8 +2,8 @@
 // Extends base indexedDB functionality with data compression for large assets
 
 import { logger } from "@/utils/logger";
-import type { AssetMetadata } from "./indexedDB";
-import { getAsset, putAsset } from "./indexedDB";
+import type { AssetMetadata } from ".";
+import { getAsset, putAsset } from ".";
 
 /**
  * Check if CompressionStream API is available
