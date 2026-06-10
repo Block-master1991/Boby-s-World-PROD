@@ -172,6 +172,7 @@ interface UseGameModeHandlerProps {
   setSelectedGameMode: (v: "none" | "boby-world" | "running-game") => void;
   setHasUserInteracted: (v: boolean) => void;
   setIsSoundPlaying: (v: boolean) => void;
+  setCurrentScreen: (screen: "boby-world" | "running-game") => void;
   soundManagerRef: MutableRefObject<{ playCurrentTrack: () => void } | null>;
 }
 
@@ -183,6 +184,10 @@ export const useGameModeHandler = (p: UseGameModeHandlerProps) => {
       p.setGameUILoadProgress(0);
       p.setSelectedGameMode(mode);
       p.setHasUserInteracted(true);
+      
+      // تغيير الشاشة في AudioContext لتفعيل الصوت المناسب
+      p.setCurrentScreen(mode);
+      
       p.soundManagerRef.current?.playCurrentTrack();
       p.setIsSoundPlaying(true);
     },
@@ -193,6 +198,7 @@ export const useGameModeHandler = (p: UseGameModeHandlerProps) => {
       p.setGameUILoadProgress,
       p.setSelectedGameMode,
       p.setIsSoundPlaying,
+      p.setCurrentScreen,
     ]
   );
 };
@@ -290,6 +296,7 @@ export const useGameContainerHandlers = (
     setSelectedGameMode: state.setSelectedGameMode,
     setHasUserInteracted,
     setIsSoundPlaying: state.setIsSoundPlaying,
+    setCurrentScreen: audio.setCurrentScreen,
     soundManagerRef,
   });
 
