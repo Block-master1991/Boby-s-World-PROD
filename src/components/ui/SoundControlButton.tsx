@@ -35,8 +35,8 @@ export const SoundControlButton: React.FC<SoundControlButtonProps> = ({
           transition-all duration-300 ease-in-out
           hover:scale-110 active:scale-95
           ${isSoundPlaying 
-            ? "bg-gradient-to-br from-purple-500 to-pink-500 border-purple-300 shadow-lg shadow-purple-500/50" 
-            : "bg-gradient-to-br from-gray-700 to-gray-900 border-gray-600 shadow-lg"
+            ? "bg-gradient-to-br from-primary-500 to-secondary-500 border-primary-300 shadow-lg shadow-primary-500/50" 
+            : "bg-gradient-to-br from-secondary-700 to-secondary-900 border-secondary-600 shadow-lg"
           }
         `}
       >
@@ -76,7 +76,7 @@ export const SoundControlButton: React.FC<SoundControlButtonProps> = ({
 
         {/* Glow effect */}
         {isSoundPlaying && (
-          <div className="absolute inset-0 bg-gradient-to-r from-purple-400 to-pink-400 opacity-0 hover:opacity-20 transition-opacity duration-300" />
+          <div className="absolute inset-0 bg-gradient-to-r from-primary-400 to-secondary-400 opacity-0 hover:opacity-20 transition-opacity duration-300" />
         )}
       </Button>
     </div>
