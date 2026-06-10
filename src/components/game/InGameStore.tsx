@@ -96,21 +96,27 @@ const StoreItemCard: React.FC<ItemCardProps> = ({
   onDec,
   onChg,
 }) => (
-  <Card className="flex flex-col">
-    <CardHeader className="flex-row items-center gap-2 p-3 space-y-0">
-      <Image src={item.image} alt={item.name} width={40} height={40} className="rounded border" />
+  <Card className="flex flex-col sm:h-52 md:h-56 lg:h-64 transition-all duration-300 hover:shadow-lg hover:scale-[1.02] overflow-hidden flex-shrink-0 flex-grow-0">
+    <CardHeader className="flex-row items-center gap-2 sm:gap-3 p-3 sm:p-4 space-y-0">
+      <Image 
+        src={item.image} 
+        alt={item.name} 
+        width={40} 
+        height={40} 
+        className="rounded border sm:rounded-lg sm:border-2 transition-all duration-300 hover:shadow-md" 
+      />
       <div className="min-w-0 flex-1">
-        <CardTitle className="text-sm truncate">{item.name}</CardTitle>
-        <p className="text-xs font-bold text-primary">${item.price.toFixed(3)}</p>
+        <CardTitle className="text-sm sm:text-base font-bold truncate">{item.name}</CardTitle>
+        <p className="text-xs sm:text-sm font-bold text-primary">${item.price.toFixed(3)}</p>
       </div>
     </CardHeader>
-    <CardContent className="p-3 pt-0 flex flex-col gap-2">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1">
+    <CardContent className="p-3 sm:p-4 pt-4 flex flex-col gap-2 sm:gap-3 mt-auto transition-all duration-300 flex-shrink-0">
+      <div className="flex items-center justify-between flex-col sm:flex-row gap-2 sm:gap-0">
+        <div className="flex items-center gap-1 sm:gap-2 w-full sm:w-auto justify-center sm:justify-start">
           <Button
             variant="outline"
             size="icon"
-            className="h-7 w-7"
+            className="h-7 w-7 hover:bg-primary/10"
             onClick={() => onDec(item.id)}
             disabled={qty <= 1}
           >
@@ -120,15 +126,20 @@ const StoreItemCard: React.FC<ItemCardProps> = ({
             type="number"
             value={qty}
             onChange={e => onChg(item.id, e.target.value)}
-            className="h-7 w-12 text-center text-xs p-0"
+            className="h-7 w-12 sm:w-14 text-center text-xs sm:text-sm p-0"
           />
-          <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => onInc(item.id)}>
+          <Button 
+            variant="outline" 
+            size="icon" 
+            className="h-7 w-7 hover:bg-primary/10" 
+            onClick={() => onInc(item.id)}
+          >
             <Plus className="h-3 w-3" />
           </Button>
         </div>
-        <div className="text-right">
-          <p className="text-[10px] text-muted-foreground underline decoration-primary/30">Total</p>
-          <p className="text-xs font-bold">
+        <div className="text-right w-full sm:w-auto mt-1 sm:mt-0">
+          <p className="text-[10px] sm:text-xs text-muted-foreground underline decoration-primary/30">Total</p>
+          <p className="text-xs sm:text-sm font-bold">
             {price
               ? ((item.price * qty) / price).toLocaleString(undefined, {
                   maximumFractionDigits: BOBY_TOKEN_DECIMALS,
@@ -143,13 +154,13 @@ const StoreItemCard: React.FC<ItemCardProps> = ({
           onBuy(item, qty).catch(() => {});
         }}
         disabled={disabled || loading}
-        className="w-full text-xs h-8"
+        className="w-full text-xs sm:text-sm h-8 mt-1 transition-all duration-300 hover:bg-primary hover:text-primary-foreground hover:shadow-md"
       >
         {loading ? (
           <span className="animate-pulse">Wait...</span>
         ) : (
           <>
-            <Send className="mr-1 h-3 w-3" /> Purchase
+            <Send className="mr-1 sm:mr-2 h-3 w-3" /> Purchase
           </>
         )}
       </Button>

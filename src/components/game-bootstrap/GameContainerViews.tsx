@@ -41,10 +41,14 @@ export const SoundControlButton: React.FC<SoundControlButtonProps> = ({
   isMuted,
   onToggle,
 }) => {
-  if (areSheetsOpen) return null;
   return (
     <div
-      style={{ position: "fixed", top: "20px", right: "20px", zIndex: 1000 }}
+      style={{ 
+        position: "fixed", 
+        top: "20px", 
+        right: "20px", 
+        zIndex: areSheetsOpen ? 1 : 9999  // zIndex منخفض عندما يكون الشيت مفتوحاً
+      }}
       className="sm:top-6 sm:right-6 md:top-8 md:right-8"
     >
       <Button

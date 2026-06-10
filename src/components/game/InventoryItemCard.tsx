@@ -35,7 +35,7 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
   const handleMax = () => setQuantity(currentCount);
 
   return (
-    <Card className="flex flex-col">
+    <Card className="flex flex-col h-full">
       <CardHeader className="flex-row items-center gap-3 p-4 space-y-0">
         <Image
           src={definition.image || "https://placehold.co/60x60.png"}
@@ -52,31 +52,31 @@ const InventoryItemCard: React.FC<InventoryItemCardProps> = ({
         </div>
       </CardHeader>
       {definition.description && (
-        <CardContent className="p-4 pt-0 flex flex-col flex-grow">
-          <CardDescription className="text-xs mb-2">{definition.description}</CardDescription>
-          {!isAutomated && currentCount > 0 && (
-            <>
-              <ItemQuantitySelector
-                quantity={quantity}
-                maxCount={currentCount}
-                isDisabled={isLoading}
-                onIncrement={handleIncrement}
-                onDecrement={handleDecrement}
-                onMax={handleMax}
-                onChange={handleQuantityChange}
-              />
-              <Button
-                variant="default"
-                size="sm"
-                className="mt-4 w-full text-xs px-2 py-1"
-                onClick={() => onUse(definition.id, quantity)}
-                disabled={isLoading}
-              >
-                {isLoading ? "Using..." : `Use ${quantity} Item(s)`}
-              </Button>
-            </>
-          )}
-        </CardContent>
+        <CardDescription className="text-xs p-4 pt-2 overflow-auto max-h-32">
+          {definition.description}
+        </CardDescription>
+      )}
+      {!isAutomated && currentCount > 0 && (
+        <div className="mt-auto p-4">
+          <ItemQuantitySelector
+            quantity={quantity}
+            maxCount={currentCount}
+            isDisabled={isLoading}
+            onIncrement={handleIncrement}
+            onDecrement={handleDecrement}
+            onMax={handleMax}
+            onChange={handleQuantityChange}
+          />
+          <Button
+            variant="default"
+            size="sm"
+            className="mt-4 w-full text-xs px-2 py-1"
+            onClick={() => onUse(definition.id, quantity)}
+            disabled={isLoading}
+          >
+            {isLoading ? "Using..." : `Use ${quantity} Item(s)`}
+          </Button>
+        </div>
       )}
     </Card>
   );

@@ -25,7 +25,7 @@ interface GameMenuSheetContentProps {
  * UserInfoCard - Displays user connection status and address inside the menu
  */
 const UserInfoCard: React.FC<{ authUserPublicKey: string }> = ({ authUserPublicKey }) => (
-  <Card className="bg-card/95 backdrop-blur-sm border-border/50 shadow-xl">
+  <Card className="border border-border/50 bg-transparent">
     <CardContent className="p-3">
       <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2 sm:gap-3">
         <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
@@ -66,11 +66,7 @@ const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
           adapterPublicKey={adapterPublicKey}
         />
       </SheetHeader>
-      {isAuthenticated && authUserPublicKey && (
-        <div className="px-4 pt-3">
-          <UserInfoCard authUserPublicKey={authUserPublicKey} />
-        </div>
-      )}
+      
       <ScrollArea className="flex-grow">
         <div className="p-4 space-y-3">
           <Button
@@ -100,6 +96,11 @@ const GameMenuSheetContent: React.FC<GameMenuSheetContentProps> = ({
         </div>
       </ScrollArea>
       <SheetFooter className="p-4 border-t mt-auto flex flex-col sm:flex-col space-y-2 sm:space-y-2 sm:justify-start" />
+      {isAuthenticated && authUserPublicKey && (
+        <div className="px-4 pt-3">
+          <UserInfoCard authUserPublicKey={authUserPublicKey} />
+        </div>
+      )}
     </>
   );
 };
