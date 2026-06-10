@@ -3,7 +3,6 @@
 import { Button } from "@/components/ui/button";
 import type { Octree } from "@/lib/Octree";
 import type { GameObject } from "@/types/game";
-import { Volume2, VolumeX } from "lucide-react";
 import dynamic from "next/dynamic";
 import type { MutableRefObject } from "react";
 import React from "react";
@@ -26,44 +25,6 @@ const CaptchaScreen = dynamic(() => import("@/components/game-bootstrap/CaptchaS
 const GameLoadingOverlay = dynamic(() => import("@/components/game-bootstrap/GameLoadingOverlay"), {
   ssr: false,
 });
-
-// --- Sound Control Button ---
-interface SoundControlButtonProps {
-  areSheetsOpen: boolean;
-  isSoundPlaying: boolean;
-  onToggle: () => void;
-}
-
-export const SoundControlButton: React.FC<SoundControlButtonProps> = ({
-  areSheetsOpen,
-  isSoundPlaying,
-  onToggle,
-}) => {
-  return (
-    <div
-      style={{ 
-        position: "fixed", 
-        top: "20px", 
-        right: "20px", 
-        zIndex: areSheetsOpen ? 1 : 9999  // zIndex منخفض عندما يكون الشيت مفتوحاً
-      }}
-      className="sm:top-6 sm:right-6 md:top-8 md:right-8"
-    >
-      <Button
-        variant="outline"
-        size="icon"
-        onClick={onToggle}
-        aria-label={isSoundPlaying ? "Pause Sound" : "Play Sound"}
-      >
-        {isSoundPlaying ? (
-          <VolumeX className="h-4 w-4" />
-        ) : (
-          <Volume2 className="h-4 w-4 text-gray-500" />
-        )}
-      </Button>
-    </div>
-  );
-};
 
 // --- Enable Sound Fallback Button ---
 interface EnableSoundButtonProps {
@@ -127,6 +88,7 @@ interface GameModeContentProps {
   onGameModeSelected: (mode: "boby-world" | "running-game") => void;
   onAssetPreloadComplete: () => void;
   onAssetPreloadError: (error: string) => void;
+  onSheetsStateChange: (isOpen: boolean) => void;
 }
 
 const GameModeContent: React.FC<GameModeContentProps> = ({
@@ -135,11 +97,12 @@ const GameModeContent: React.FC<GameModeContentProps> = ({
   onGameModeSelected,
   onAssetPreloadComplete,
   onAssetPreloadError,
+  onSheetsStateChange,
 }) => {
   if (selectedGameMode !== "none") return null;
   if (!assetPreloadComplete)
     return <InitialAssetLoader onComplete={onAssetPreloadComplete} onError={onAssetPreloadError} />;
-  return <GameMainMenu onGameModeSelected={onGameModeSelected} />;
+  return <GameMainMenu onGameModeSelected={onGameModeSelected} onSheetsStateChange={onSheetsStateChange} />;
 };
 
 interface GameUIContentProps {
@@ -285,6 +248,7 @@ export const MainContentRenderer: React.FC<MainContentRendererProps> = props => 
         onGameModeSelected={onGameModeSelected}
         onAssetPreloadComplete={onAssetPreloadComplete}
         onAssetPreloadError={onAssetPreloadError}
+        onSheetsStateChange={onSheetsStateChange}
       />
     );
   }

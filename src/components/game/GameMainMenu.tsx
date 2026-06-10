@@ -11,10 +11,11 @@ import { useGameData } from "@/hooks/game-ui/useGameData";
 import { useGameEconomy } from "@/hooks/game-ui/useGameEconomy";
 import { useGameInventory } from "@/hooks/game-ui/useGameInventory";
 import Image from "next/image";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 interface GameMainMenuProps {
   onGameModeSelected: (mode: "boby-world" | "running-game") => void;
+  onSheetsStateChange?: (isOpen: boolean) => void;
 }
 
 /**
@@ -56,7 +57,7 @@ const GameModeOption: React.FC<GameModeOptionProps> = ({
   </Label>
 );
 
-const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected }) => {
+const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected, onSheetsStateChange }) => {
   const [selectedMode, setSelectedMode] = useState<"boby-world" | "running-game">("boby-world");
   const [sheets, setSheets] = useState({ menu: false, store: false, wallet: false, inventory: false });
   const { isAuthenticated, user: authUser, isWalletConnectedAndMatching } = useAuth();
@@ -91,6 +92,11 @@ const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected }) => {
     setSheets(prev => ({ ...prev, [key]: val }));
   };
   const isPaused = Object.values(sheets).some(Boolean) || isWalletMismatch;
+
+  // إبلاغ الأب بحالة الـ sheets حتى يضبط zIndex زر الصوت
+  useEffect(() => {
+    onSheetsStateChange?.(isPaused);
+  }, [isPaused, onSheetsStateChange]);
 
   return (
     <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
