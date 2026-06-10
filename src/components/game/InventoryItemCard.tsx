@@ -4,7 +4,7 @@
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import type { StoreItemDefinition } from "@/lib/items";
 import Image from "next/image";
 import React, { useCallback, useState } from "react";

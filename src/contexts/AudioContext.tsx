@@ -24,8 +24,8 @@ interface AudioContextType {
       | "loading"
       | "admin"
   ) => void;
-  isMuted: boolean;
-  toggleMute: () => void;
+  isSoundPlaying: boolean;
+  toggleSound: () => void;
   hasUserInteracted: boolean;
   setHasUserInteracted: (interacted: boolean) => void;
 }
@@ -36,7 +36,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const soundManagerRef = useRef<SoundManagerRef>(null);
   const [currentScreen, setCurrentScreenState] =
     useState<AudioContextType["currentScreen"]>("loading");
-  const [isMuted, setIsMuted] = useState(false);
+  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
   const setCurrentScreen = (screen: AudioContextType["currentScreen"]) => {
@@ -46,13 +46,11 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
     }
   };
 
-  const toggleMute = () => {
-    setIsMuted(prev => {
-      if (soundManagerRef.current) {
-        soundManagerRef.current.toggleMute();
-      }
-      return !prev;
-    });
+  const toggleSound = () => {
+    if (soundManagerRef.current) {
+      soundManagerRef.current.toggleMute();
+      setIsSoundPlaying(prev => !prev);
+    }
   };
 
   return (
@@ -61,8 +59,8 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
         soundManagerRef,
         currentScreen,
         setCurrentScreen,
-        isMuted,
-        toggleMute,
+        isSoundPlaying,
+        toggleSound,
         hasUserInteracted,
         setHasUserInteracted,
       }}

@@ -18,7 +18,7 @@ const SoundManager = dynamic(() => import("@/components/game/SoundManager"), {
 });
 
 function AudioInitializer() {
-  const { soundManagerRef, isMuted, hasUserInteracted } = useAudio();
+  const { soundManagerRef, hasUserInteracted } = useAudio();
 
   useEffect(() => {
     // This component primarily ensures SoundManager is rendered and connected to context.
@@ -27,7 +27,6 @@ function AudioInitializer() {
   return (
     <SoundManager
       ref={soundManagerRef}
-      isMuted={isMuted}
       hasUserInteracted={hasUserInteracted}
       onPlaybackBlocked={() => logger.warn("Audio playback was blocked.")}
       currentScreen={"loading"} // This prop is now internal to SoundManager, but still required by its interface

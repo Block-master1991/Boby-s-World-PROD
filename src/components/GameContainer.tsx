@@ -178,7 +178,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
     logoutAndRedirect,
     isWalletConnectedAndMatching,
   } = auth;
-  const { soundManagerRef, isMuted, toggleMute, setHasUserInteracted, setCurrentScreen } = audio;
+  const { isSoundPlaying, toggleSound, setHasUserInteracted, setCurrentScreen } = audio;
   const isAdmin = authUser?.publicKey === ADMIN_WALLET_ADDRESS;
 
   // Apply all effects
@@ -213,8 +213,6 @@ const GameContainer: React.FC<GameContainerProps> = ({
 
   // Callbacks - fully destructured to satisfy exhaustive-deps
   const {
-    isSoundPlaying,
-    setIsSoundPlaying,
     setAssetPreloadComplete,
     setIsGameUILoading,
     setGameUILoadProgress,
@@ -228,14 +226,8 @@ const GameContainer: React.FC<GameContainerProps> = ({
     captchaVerified,
   } = state;
   const handleSoundToggle = useCallback(() => {
-    if (!isSoundPlaying) {
-      soundManagerRef.current?.playCurrentTrack();
-      setIsSoundPlaying(true);
-      setHasUserInteracted(true);
-    } else {
-      toggleMute();
-    }
-  }, [isSoundPlaying, soundManagerRef, toggleMute, setHasUserInteracted, setIsSoundPlaying]);
+    toggleSound();
+  }, [toggleSound]);
 
   const onAssetPreloadComplete = useCallback(() => {
     logger.log("[GC] Preload done.");
@@ -271,7 +263,6 @@ const GameContainer: React.FC<GameContainerProps> = ({
       <SoundControlButton
         areSheetsOpen={areSheetsOpen}
         isSoundPlaying={isSoundPlaying}
-        isMuted={isMuted}
         onToggle={handleSoundToggle}
       />
       <EnableSoundButton show={showEnableSoundButton} onClick={handlers.handleEnableSoundClick} />

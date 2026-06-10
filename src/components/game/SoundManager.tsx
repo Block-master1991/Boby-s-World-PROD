@@ -21,7 +21,6 @@ export interface SoundManagerRef {
 }
 
 export interface SoundManagerProps {
-  isMuted: boolean;
   hasUserInteracted: boolean;
   onPlaybackBlocked?: (() => void) | undefined; // Callback for when playback is blocked
   currentScreen: ScreenType;
@@ -62,7 +61,7 @@ const loadWithCache = async (path: string, name: string): Promise<string> => {
   }
 };
 
-const useSoundState = (initialVolume: number, isMuted: boolean) => {
+const useSoundState = (initialVolume: number) => {
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [volume, setVolume] = useState(initialVolume);
   const [isReady, setIsReady] = useState(false);
@@ -84,13 +83,6 @@ const useSoundState = (initialVolume: number, isMuted: boolean) => {
     }
   }, [volume]);
 
-  useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.muted = isMuted;
-      audioRef.current.volume = isMuted ? 0 : volume;
-    }
-  }, [isMuted, volume]);
-
   return { audioRef, volume, setVolume, isReady, setIsReady };
 };
 
@@ -98,14 +90,13 @@ interface AutoPlayerOptions {
   audioRef: React.MutableRefObject<HTMLAudioElement | null>;
   isReady: boolean;
   setIsReady: (r: boolean) => void;
-  isMuted: boolean;
   hasUserInteracted: boolean;
   onPlaybackBlocked?: (() => void) | undefined;
 }
 
 const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
   const [screen, setScreen] = useState<ScreenType | null>(null);
-  const { audioRef, isReady, setIsReady, isMuted, hasUserInteracted, onPlaybackBlocked } = ops;
+  const { audioRef, isReady, setIsReady, hasUserInteracted, onPlaybackBlocked } = ops;
   const currentBlobUrl = useRef<string | null>(null);
   const currentOriginalSrc = useRef<string | null>(null);
 
@@ -130,7 +121,7 @@ const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
   );
 
   const tryPlay = useCallback(async () => {
-    if (!audioRef.current || !currentBlobUrl.current || isMuted || !isReady) return;
+    if (!audioRef.current || !currentBlobUrl.current || !isReady) return;
     try {
       if (audioRef.current.readyState >= 2 && audioRef.current.paused)
         await audioRef.current.play();
@@ -139,7 +130,7 @@ const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
         onPlaybackBlocked?.();
       } else logger.error("[SoundManager] Play error:", e);
     }
-  }, [audioRef, isMuted, isReady, onPlaybackBlocked]);
+  }, [audioRef, isReady, onPlaybackBlocked]);
 
   useEffect(() => {
     const track = getTrackForScreen(screen);
@@ -155,17 +146,16 @@ const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
     if (hasUserInteracted && isReady) tryPlay();
   }, [hasUserInteracted, isReady, tryPlay]);
 
-  return { setScreen, tryPlay };
+  return { setScreen, tryPlay, currentOriginalSrc };
 };
 
 const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(
-  ({ isMuted, hasUserInteracted, onPlaybackBlocked }, ref) => {
-    const { audioRef, volume, setVolume, isReady, setIsReady } = useSoundState(0.5, isMuted);
+  ({ hasUserInteracted, onPlaybackBlocked }, ref) => {
+    const { audioRef, volume, setVolume, isReady, setIsReady } = useSoundState(1);
     const { setScreen, tryPlay } = useTrackAutoPlayer({
       audioRef,
       isReady,
       setIsReady,
-      isMuted,
       hasUserInteracted,
       onPlaybackBlocked,
     });

@@ -31,14 +31,12 @@ const GameLoadingOverlay = dynamic(() => import("@/components/game-bootstrap/Gam
 interface SoundControlButtonProps {
   areSheetsOpen: boolean;
   isSoundPlaying: boolean;
-  isMuted: boolean;
   onToggle: () => void;
 }
 
 export const SoundControlButton: React.FC<SoundControlButtonProps> = ({
   areSheetsOpen,
   isSoundPlaying,
-  isMuted,
   onToggle,
 }) => {
   return (
@@ -55,14 +53,12 @@ export const SoundControlButton: React.FC<SoundControlButtonProps> = ({
         variant="outline"
         size="icon"
         onClick={onToggle}
-        aria-label={!isSoundPlaying ? "Enable Sound" : isMuted ? "Unmute" : "Mute"}
+        aria-label={isSoundPlaying ? "Pause Sound" : "Play Sound"}
       >
-        {!isSoundPlaying ? (
+        {isSoundPlaying ? (
           <VolumeX className="h-4 w-4" />
-        ) : isMuted ? (
-          <VolumeX className="h-4 w-4 text-gray-500" />
         ) : (
-          <Volume2 className="h-4 w-4 text-green-500" />
+          <Volume2 className="h-4 w-4 text-gray-500" />
         )}
       </Button>
     </div>
@@ -79,7 +75,7 @@ export const EnableSoundButton: React.FC<EnableSoundButtonProps> = ({ show, onCl
   if (!show) return null;
   return (
     <div style={{ position: "fixed", bottom: "80px", right: "20px", zIndex: 1000 }}>
-      <Button onClick={onClick}>Enable Sound</Button>
+      <Button onClick={onClick}>Play Sound</Button>
     </div>
   );
 };
