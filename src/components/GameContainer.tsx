@@ -3,8 +3,8 @@
 import {
   EnableSoundButton,
   MainContentRenderer,
-  SoundControlButton,
 } from "@/components/game-bootstrap/GameContainerViews";
+import { SoundControlButton } from "@/components/ui/SoundControlButton";
 import { useAudio } from "@/contexts/AudioContext";
 import { useAuth } from "@/hooks/auth/useAuth";
 import { useSessionWallet } from "@/hooks/auth/useSessionWallet";
