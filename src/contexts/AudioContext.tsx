@@ -36,7 +36,11 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
   const soundManagerRef = useRef<SoundManagerRef>(null);
   const [currentScreen, setCurrentScreenState] =
     useState<AudioContextType["currentScreen"]>("loading");
-  const [isSoundPlaying, setIsSoundPlaying] = useState(false);
+  const [isSoundPlaying, setIsSoundPlaying] = useState(() => {
+    // القيمة الافتراضية: مشغّل — إلا إذا أوقفه المستخدم سابقاً
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("boby_sound_paused") !== "true";
+  });
   const [hasUserInteracted, setHasUserInteracted] = useState(false);
 
   const setCurrentScreen = (screen: AudioContextType["currentScreen"]) => {
@@ -48,7 +52,7 @@ export const AudioProvider = ({ children }: { children: ReactNode }) => {
 
   const toggleSound = () => {
     if (soundManagerRef.current) {
-      soundManagerRef.current.toggleMute();
+      soundManagerRef.current.togglePlayback();
       setIsSoundPlaying(prev => !prev);
     }
   };

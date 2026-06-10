@@ -14,7 +14,8 @@ export type ScreenType =
   | "admin";
 
 export interface SoundManagerRef {
-  toggleMute: () => void;
+  /** إيقاف مؤقت / استئناف من نفس النقطة — لا يعيد التشغيل من البداية */
+  togglePlayback: () => void;
   setVolume: (volume: number) => void;
   playCurrentTrack: () => void;
   setTrack: (screen: ScreenType) => void;
@@ -22,13 +23,12 @@ export interface SoundManagerRef {
 
 export interface SoundManagerProps {
   hasUserInteracted: boolean;
-  onPlaybackBlocked?: (() => void) | undefined; // Callback for when playback is blocked
+  onPlaybackBlocked?: (() => void) | undefined;
   currentScreen: ScreenType;
 }
 
-/**
- * PHASE 3: Strict Lint & Object Options
- */
+const STORAGE_KEY = "boby_sound_paused";
+
 const getTrackForScreen = (screen: ScreenType | null): string | null => {
   const preGame = "/audio/Run_Bobby_start _to_main_menu.mp3";
   switch (screen) {
@@ -91,12 +91,13 @@ interface AutoPlayerOptions {
   isReady: boolean;
   setIsReady: (r: boolean) => void;
   hasUserInteracted: boolean;
+  isPausedByUser: React.MutableRefObject<boolean>;
   onPlaybackBlocked?: (() => void) | undefined;
 }
 
 const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
   const [screen, setScreen] = useState<ScreenType | null>(null);
-  const { audioRef, isReady, setIsReady, hasUserInteracted, onPlaybackBlocked } = ops;
+  const { audioRef, isReady, setIsReady, hasUserInteracted, isPausedByUser, onPlaybackBlocked } = ops;
   const currentBlobUrl = useRef<string | null>(null);
   const currentOriginalSrc = useRef<string | null>(null);
 
@@ -121,7 +122,8 @@ const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
   );
 
   const tryPlay = useCallback(async () => {
-    if (!audioRef.current || !currentBlobUrl.current || !isReady) return;
+    // لا تشغّل إذا أوقفه المستخدم يدوياً
+    if (!audioRef.current || !currentBlobUrl.current || !isReady || isPausedByUser.current) return;
     try {
       if (audioRef.current.readyState >= 2 && audioRef.current.paused)
         await audioRef.current.play();
@@ -130,7 +132,7 @@ const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
         onPlaybackBlocked?.();
       } else logger.error("[SoundManager] Play error:", e);
     }
-  }, [audioRef, isReady, onPlaybackBlocked]);
+  }, [audioRef, isReady, isPausedByUser, onPlaybackBlocked]);
 
   useEffect(() => {
     const track = getTrackForScreen(screen);
@@ -151,28 +153,58 @@ const useTrackAutoPlayer = (ops: AutoPlayerOptions) => {
 
 const SoundManager = forwardRef<SoundManagerRef, SoundManagerProps>(
   ({ hasUserInteracted, onPlaybackBlocked }, ref) => {
-    const { audioRef, volume, setVolume, isReady, setIsReady } = useSoundState(1);
+    const { audioRef, setVolume, isReady, setIsReady } = useSoundState(1);
+
+    // ref يتحكم في منع التشغيل التلقائي عند الإيقاف اليدوي
+    // نقرأ القيمة من localStorage لاستعادة الحالة عند إعادة التحميل
+    const isPausedByUser = useRef<boolean>(
+      typeof window !== "undefined"
+        ? localStorage.getItem(STORAGE_KEY) === "true"
+        : false
+    );
+
     const { setScreen, tryPlay } = useTrackAutoPlayer({
       audioRef,
       isReady,
       setIsReady,
       hasUserInteracted,
+      isPausedByUser,
       onPlaybackBlocked,
     });
 
-    useImperativeHandle(ref, () => ({
-      toggleMute: () => {
-        if (!audioRef.current) return;
-        audioRef.current.muted = !audioRef.current.muted;
-        audioRef.current.volume = audioRef.current.muted ? 0 : volume;
-      },
-      setVolume: (nv: number) => {
-        setVolume(nv);
-        if (audioRef.current) audioRef.current.volume = nv;
-      },
-      playCurrentTrack: () => tryPlay(),
-      setTrack: (s: ScreenType) => setScreen(s),
-    }));
+    useImperativeHandle(
+      ref,
+      () => ({
+        togglePlayback: () => {
+          const audio = audioRef.current;
+          if (!audio) {
+            logger.warn("[SoundManager] togglePlayback: audioRef is null");
+            return;
+          }
+
+          if (audio.paused) {
+            // ▶ استئناف من نفس اللحظة
+            isPausedByUser.current = false;
+            localStorage.setItem(STORAGE_KEY, "false");
+            audio.play().catch(e =>
+              logger.error("[SoundManager] Resume error:", e)
+            );
+          } else {
+            // ⏸ إيقاف مؤقت — currentTime يُحفظ تلقائياً
+            isPausedByUser.current = true;
+            localStorage.setItem(STORAGE_KEY, "true");
+            audio.pause();
+          }
+        },
+        setVolume: (nv: number) => {
+          setVolume(nv);
+          if (audioRef.current) audioRef.current.volume = nv;
+        },
+        playCurrentTrack: () => tryPlay(),
+        setTrack: (s: ScreenType) => setScreen(s),
+      }),
+      [audioRef, isPausedByUser, setVolume, tryPlay, setScreen]
+    );
 
     return null;
   }
