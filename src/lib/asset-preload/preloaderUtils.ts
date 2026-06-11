@@ -54,16 +54,23 @@ export async function fetchAsset(
   path: string,
   estimatedSizeMB: number,
   type: string,
-  signal: AbortSignal | null
+  signal: AbortSignal | null,
+  forceBypassCache: boolean = false
 ): Promise<ArrayBuffer> {
   const skipSW = estimatedSizeMB > 10 || type === "hdr";
-  const res = await fetch(path, {
+  let fetchPath = path;
+  if (forceBypassCache) {
+    const separator = path.includes('?') ? '&' : '?';
+    fetchPath = `${path}${separator}bypassCache=true&t=${Date.now()}`;
+  }
+
+  const res = await fetch(fetchPath, {
     signal,
     headers: {
-      ...(isDev ? { "Cache-Control": "no-cache", Pragma: "no-cache" } : {}),
+      ...(isDev || forceBypassCache ? { "Cache-Control": "no-cache", Pragma: "no-cache" } : {}),
       ...(skipSW ? { "Service-Worker": "script" } : {}),
     },
-    cache: skipSW ? "no-cache" : "default",
+    cache: skipSW || forceBypassCache ? "no-store" : "default",
   } as RequestInit);
 
   if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);

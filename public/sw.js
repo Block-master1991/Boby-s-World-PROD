@@ -1,5 +1,5 @@
 // Service Worker for Boby-s-World Asset Caching
-const CACHE_NAME = 'boby-world-assets-v1';
+const CACHE_NAME = 'boby-world-assets-v2';
 
 const ASSETS_TO_CACHE = [
     // Textures
@@ -114,34 +114,43 @@ self.addEventListener('fetch', event => {
         ASSETS_TO_CACHE.some(asset => url.includes(asset))) && !isLargeAsset;
 
     if (isGameAsset) {
+        // Strip query params for cache matching
+        const requestToMatch = new Request(url, { ignoreSearch: true });
+        
         event.respondWith(
-            caches.match(event.request).then(response => {
+            caches.match(event.request, { ignoreSearch: true }).then(response => {
+                const fetchPromise = fetch(event.request).then(fetchResponse => {
+                    if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
+                        return fetchResponse;
+                    }
+                    // Proactive cache update strategy
+                    const responseClone = fetchResponse.clone();
+                    caches.open(CACHE_NAME).then(cache => {
+                        cache.put(new Request(url.split('?')[0]), responseClone);
+                    });
+                    return fetchResponse;
+                }).catch(error => {
+                    console.error('[SW] Fetch failed:', error);
+                    throw error;
+                });
+
                 if (response) {
-                    // Asset in cache - serve immediately
-                    console.log('[SW] Serving from cache:', event.request.url);
+                    // Asset in cache - serve immediately (stale-while-revalidate)
+                    // If the request enforces cache bypass, don't return the stale response
+                    const urlObj = new URL(url);
+                    if (urlObj.searchParams.get('bypassCache') === 'true') {
+                        console.log('[SW] Bypassing cache for:', url);
+                        return fetchPromise;
+                    }
+                    console.log('[SW] Serving from cache:', url);
+                    // Continue fetching in background to update cache
                     return response;
                 }
 
                 // Not cached - fetch and cache for next time
-                return fetch(event.request).then(fetchResponse => {
-                    if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
-                        // Don't cache if response is invalid
-                        return fetchResponse;
-                    }
-
-                    // Clone the response to cache it
-                    const responseClone = fetchResponse.clone();
-
-                    caches.open(CACHE_NAME).then(cache => {
-                        console.log('[SW] Caching new asset:', event.request.url);
-                        cache.put(event.request, responseClone);
-                    });
-
-                    return fetchResponse;
-                }).catch(error => {
-                    console.error('[SW] Fetch failed:', error);
+                return fetchPromise.catch(() => {
                     // If fetch fails and we have a cached version, serve it as fallback
-                    return caches.match(event.request).catch(() => {
+                    return caches.match(event.request, { ignoreSearch: true }).catch(() => {
                         console.error('[SW] No cached fallback available');
                     });
                 });
@@ -150,12 +159,22 @@ self.addEventListener('fetch', event => {
     }
 });
 
+
 // Message event - for cache updates or clearing
 self.addEventListener('message', event => {
     if (event.data && event.data.type === 'CLEAR_CACHE') {
         caches.delete(CACHE_NAME).then(() => {
             console.log('[SW] Cache cleared');
-            event.ports[0].postMessage({ status: 'cache-cleared' });
+            if (event.ports && event.ports[0]) event.ports[0].postMessage({ status: 'cache-cleared' });
+        });
+    } else if (event.data && event.data.type === 'CLEAR_ASSET_CACHE') {
+        caches.open(CACHE_NAME).then(cache => {
+            const url = new URL(event.data.url, self.location.origin).toString();
+            // Delete matching requests ignoring search params
+            cache.delete(url, { ignoreSearch: true }).then((deleted) => {
+                console.log('[SW] Cleared specific asset cache:', url, deleted);
+            });
         });
     }
 });
+

@@ -146,26 +146,45 @@ class InitialAssetPreloader {
   ): Promise<void> {
     if (this.abortController?.signal.aborted) throw new Error("Aborted");
     let lastErr: Error | null = null;
+    let forceBypassCache = false;
 
     for (let i = 1; i <= retries; i++) {
       try {
-        // eslint-disable-next-line no-await-in-loop
-        await this.attemptLoad(asset, i, retries, onProgress);
+        await this.attemptLoad(asset, i, retries, onProgress, forceBypassCache);
         return;
       } catch (err) {
         lastErr = err as Error;
-        // eslint-disable-next-line no-await-in-loop
+        const msg = lastErr.message || "";
+        
+        // If integrity fails, force bypass cache on next try and notify SW
+        if (msg.includes("Integrity failed") || msg.includes("Size mismatch")) {
+          forceBypassCache = true;
+          if (typeof navigator !== 'undefined' && 'serviceWorker' in navigator && navigator.serviceWorker.controller) {
+            navigator.serviceWorker.controller.postMessage({
+              type: 'CLEAR_ASSET_CACHE',
+              url: asset.path
+            });
+          }
+        }
+        
         if (i < retries) await retryDelay(i, asset.path, lastErr);
       }
     }
-    this.failLoad(asset, retries, lastErr);
+    
+    if (asset.priority === "critical") {
+      this.failLoad(asset, retries, lastErr);
+    } else {
+      logger.warn(`[Preload] Giving up on non-critical asset ${asset.path} after ${retries} attempts. Error: ${lastErr?.message}`);
+      this.progress.errors.push(`Failed ${asset.path}: ${lastErr?.message}`);
+    }
   }
 
   private async attemptLoad(
     asset: AssetInfo,
     attempt: number,
     total: number,
-    onProgress?: (p: PreloadProgress) => void
+    onProgress?: (p: PreloadProgress) => void,
+    forceBypassCache: boolean = false
   ): Promise<void> {
     this.progress.currentAsset = asset.path;
     onProgress?.(this.progress);
@@ -175,7 +194,8 @@ class InitialAssetPreloader {
       asset.path,
       asset.estimatedSizeMB,
       asset.type,
-      this.abortController?.signal ?? null
+      this.abortController?.signal ?? null,
+      forceBypassCache
     );
     const hash = await this.checkIntegrity(asset, data);
     await this.storeAsset(asset, data, hash);
@@ -201,8 +221,7 @@ class InitialAssetPreloader {
     }
     this.progress.corruptedAssets++;
     logger.warn(`[Preload] Integrity failed: ${check.error}`);
-    if (asset.priority === "critical") throw new Error(`Critical corruption: ${check.error}`);
-    return undefined;
+    throw new Error(`Integrity failed: ${check.error}`);
   }
 
   private updateStats(asset: AssetInfo, data: ArrayBuffer): void {
