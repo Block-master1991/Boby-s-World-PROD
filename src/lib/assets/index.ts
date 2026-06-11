@@ -1,5 +1,5 @@
 // Game Asset Manifest - Statistics and exports
-// 🔄 Auto-updated with actual measurements on 6/11/2026, 4:01:57 PM
+// 🔄 Auto-updated with actual measurements on 6/11/2026, 7:05:31 PM
 
 import { CRITICAL_ASSETS, HIGH_PRIORITY_ASSETS } from "./high-priority";
 import { LOW_PRIORITY_ASSETS } from "./low-priority";
@@ -45,7 +45,7 @@ export const MANIFEST_STATS = {
   totalAssets: GAME_ASSET_MANIFEST.length,
   totalEstimatedSizeMB: getTotalEstimatedSize(),
   totalActualSizeMB: getTotalActualSize(),
-  measuredAt: "2026-06-11T13:01:57.765Z",
+  measuredAt: "2026-06-11T16:05:31.806Z",
   accuracy: 33.4,
   byPriority: {
     critical: getAssetsByPriority("critical").length,
