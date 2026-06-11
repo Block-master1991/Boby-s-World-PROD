@@ -59,12 +59,23 @@ export const useLoadingLogic = (p: UseLoadingLogicProps) => {
         // Compile all shaders for key game entities BEFORE the player starts moving.
         if (p.rendererRef.current) {
           const { ShaderPrewarmer } = await import("@/lib/shaderPrewarmer");
+          const FloatingEffect = (await import("@/components/game/FloatingEffect")).default;
+          
           const enemies = p.getPreloadableEnemies();
-          ShaderPrewarmer.prewarm(p.rendererRef.current, [
+          const floatingModels = await FloatingEffect.preloadModels();
+          
+          const prewarmObjects: (THREE.Object3D | null)[] = [
             p.dogModelRef.current,
             p.coinModelRef.current,
             ...enemies,
-          ]);
+            ...floatingModels,
+          ];
+
+          if (p.environmentRef.current) {
+            prewarmObjects.push(...p.environmentRef.current.getPreloadableObjects());
+          }
+          
+          ShaderPrewarmer.prewarm(p.rendererRef.current, prewarmObjects);
         }
       } catch (error) {
         logger.error("[useLoadingLogic] World init error:", error);

@@ -227,4 +227,15 @@ export class Environment extends THREE.Object3D {
     }
     return chunks;
   }
+
+  public getPreloadableObjects(): THREE.Object3D[] {
+    return [
+      this.ground,
+      this.skybox,
+      this.grassInstance,
+      this.rocksInstance,
+      this.treesInstance,
+      this.flowersInstance,
+    ];
+  }
 }

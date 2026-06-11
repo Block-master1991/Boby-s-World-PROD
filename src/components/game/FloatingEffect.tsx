@@ -36,6 +36,71 @@ class FloatingEffect {
     textTextures: new Map<string, THREE.CanvasTexture>(),
   };
 
+  public static preloadModels(): Promise<THREE.Object3D[]> {
+    const assets = ["/models/coin.glb", "/models/Water-bottle.glb"];
+    const loader = new GLTFLoader();
+
+    const loadPromises = assets.map((assetPath) => {
+      if (FloatingEffect.cache.models.has(assetPath)) {
+        return Promise.resolve(FloatingEffect.cache.models.get(assetPath)!);
+      }
+      
+      return new Promise<THREE.Object3D>((resolve, reject) => {
+        loader.load(
+          assetPath, 
+          gltf => {
+            const model = gltf.scene;
+            FloatingEffect.preprocessModelMaterial(assetPath, model);
+            FloatingEffect.cache.models.set(assetPath, model);
+            resolve(model);
+          },
+          undefined,
+          reject
+        );
+      });
+    });
+
+    return Promise.all(loadPromises);
+  }
+
+  private static preprocessModelMaterial(assetPath: string, model: THREE.Group) {
+    model.traverse(object => {
+      if ((object as THREE.Mesh).isMesh) {
+        const mesh = object as THREE.Mesh;
+        const { material } = mesh;
+        if (
+          material instanceof THREE.MeshStandardMaterial ||
+          material instanceof THREE.MeshPhysicalMaterial
+        ) {
+          if (assetPath.includes('coin')) {
+            material.emissive.copy(material.color);
+            material.emissiveIntensity = 0.5;
+            material.metalness = 1.0;
+          } else if (assetPath.includes('Water-bottle')) {
+            if (material.map) {
+              material.emissiveMap = material.map;
+              material.emissive = new THREE.Color(0xffffff);
+              material.emissiveIntensity = 0.4;
+            } else {
+              material.emissive.copy(material.color);
+              material.emissiveIntensity = 0.2;
+            }
+            material.metalness = 0.1;
+          } else {
+            if (material.map) {
+              material.emissiveMap = material.map;
+              material.emissive = new THREE.Color(0xffffff);
+              material.emissiveIntensity = 0.4;
+            } else {
+              material.emissive.copy(material.color);
+              material.emissiveIntensity = 0.4;
+            }
+          }
+        }
+      }
+    });
+  }
+
   constructor(options: FloatingEffectOptions) {
     this.id = options.id;
     this.camera = options.camera;
@@ -124,43 +189,7 @@ class FloatingEffect {
         loader.load(assetPath, gltf => {
           const model = gltf.scene;
           // Pre-process model base properties
-          model.traverse(object => {
-            if ((object as THREE.Mesh).isMesh) {
-              const mesh = object as THREE.Mesh;
-              const { material } = mesh;
-              if (
-                material instanceof THREE.MeshStandardMaterial ||
-                material instanceof THREE.MeshPhysicalMaterial
-              ) {
-                if (assetPath.includes('coin')) {
-                  material.emissive.copy(material.color);
-                  material.emissiveIntensity = 0.5;
-                  material.metalness = 1.0;
-                } else if (assetPath.includes('Water-bottle')) {
-                  // Allow texture colors to show through
-                  if (material.map) {
-                    material.emissiveMap = material.map;
-                    material.emissive = new THREE.Color(0xffffff);
-                    material.emissiveIntensity = 0.4;
-                  } else {
-                    material.emissive.copy(material.color);
-                    material.emissiveIntensity = 0.2;
-                  }
-                  // Keep metalness low so it doesn't look black without env map
-                  material.metalness = 0.1;
-                } else {
-                  if (material.map) {
-                    material.emissiveMap = material.map;
-                    material.emissive = new THREE.Color(0xffffff);
-                    material.emissiveIntensity = 0.4;
-                  } else {
-                    material.emissive.copy(material.color);
-                    material.emissiveIntensity = 0.4;
-                  }
-                }
-              }
-            }
-          });
+          FloatingEffect.preprocessModelMaterial(assetPath, model);
           FloatingEffect.cache.models.set(assetPath, model);
 
           // For the first instance, we also need to clone to be safe and consistent

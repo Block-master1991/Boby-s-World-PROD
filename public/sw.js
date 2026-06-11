@@ -117,11 +117,21 @@ self.addEventListener('fetch', event => {
         // Strip query params for cache matching
         event.respondWith(
             caches.match(event.request, { ignoreSearch: true }).then(response => {
-                const fetchPromise = fetch(event.request).then(fetchResponse => {
+                const urlObj = new URL(url);
+                const bypassCache = urlObj.searchParams.get('bypassCache') === 'true';
+
+                // If in cache and NO bypass requested -> Cache First (no background fetch!)
+                if (response && !bypassCache) {
+                    console.log('[SW] Serving from cache:', url);
+                    return response;
+                }
+
+                // Otherwise, fetch from network (Network-First or Cache-Miss)
+                return fetch(event.request).then(fetchResponse => {
                     if (!fetchResponse || fetchResponse.status !== 200 || fetchResponse.type !== 'basic') {
                         return fetchResponse;
                     }
-                    // Proactive cache update strategy
+                    // Cache the new response
                     const responseClone = fetchResponse.clone();
                     caches.open(CACHE_NAME).then(cache => {
                         cache.put(url.split('?')[0], responseClone);
@@ -129,28 +139,11 @@ self.addEventListener('fetch', event => {
                     return fetchResponse;
                 }).catch(error => {
                     console.error('[SW] Fetch failed:', error);
-                    throw error;
-                });
-
-                if (response) {
-                    // Asset in cache - serve immediately (stale-while-revalidate)
-                    // If the request enforces cache bypass, don't return the stale response
-                    const urlObj = new URL(url);
-                    if (urlObj.searchParams.get('bypassCache') === 'true') {
-                        console.log('[SW] Bypassing cache for:', url);
-                        return fetchPromise;
+                    // Fallback to cache if bypass failed
+                    if (response) {
+                        return response;
                     }
-                    console.log('[SW] Serving from cache:', url);
-                    // Continue fetching in background to update cache
-                    return response;
-                }
-
-                // Not cached - fetch and cache for next time
-                return fetchPromise.catch(() => {
-                    // If fetch fails and we have a cached version, serve it as fallback
-                    return caches.match(event.request, { ignoreSearch: true }).catch(() => {
-                        console.error('[SW] No cached fallback available');
-                    });
+                    throw error;
                 });
             })
         );
