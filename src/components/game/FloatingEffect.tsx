@@ -141,9 +141,32 @@ class FloatingEffect {
                 material instanceof THREE.MeshStandardMaterial ||
                 material instanceof THREE.MeshPhysicalMaterial
               ) {
-                material.emissive.copy(material.color);
-                material.emissiveIntensity = 0.5;
-                material.metalness = 1.0;
+                if (assetPath.includes('coin')) {
+                  material.emissive.copy(material.color);
+                  material.emissiveIntensity = 0.5;
+                  material.metalness = 1.0;
+                } else if (assetPath.includes('Water-bottle')) {
+                  // Allow texture colors to show through
+                  if (material.map) {
+                    material.emissiveMap = material.map;
+                    material.emissive = new THREE.Color(0xffffff);
+                    material.emissiveIntensity = 0.4;
+                  } else {
+                    material.emissive.copy(material.color);
+                    material.emissiveIntensity = 0.2;
+                  }
+                  // Keep metalness low so it doesn't look black without env map
+                  material.metalness = 0.1;
+                } else {
+                  if (material.map) {
+                    material.emissiveMap = material.map;
+                    material.emissive = new THREE.Color(0xffffff);
+                    material.emissiveIntensity = 0.4;
+                  } else {
+                    material.emissive.copy(material.color);
+                    material.emissiveIntensity = 0.4;
+                  }
+                }
               }
             }
           });
@@ -223,7 +246,13 @@ class FloatingEffect {
 
   private setupModel(model: THREE.Group) {
     this.iconMesh = model;
-    this.iconMesh.scale.set(1, 1, 1);
+    
+    if (this.effectType === "Bottle") {
+      this.iconMesh.scale.set(0.15, 0.15, 0.15); // Scale down the water bottle
+    } else {
+      this.iconMesh.scale.set(1, 1, 1);
+    }
+    
     this.iconMesh.position.set(0.5, 0, 0);
     this.mesh.add(this.iconMesh);
   }
