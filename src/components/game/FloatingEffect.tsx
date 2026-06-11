@@ -73,16 +73,7 @@ class FloatingEffect {
           return "";
       }
     } else {
-      switch (effectType) {
-        case "coin":
-          return "/coin-front.png";
-        case "Bottle":
-          return "/Bottle.png";
-        case "item":
-          return "/item.png";
-        default:
-          return "";
-      }
+      return "";
     }
   }
 
@@ -183,10 +174,15 @@ class FloatingEffect {
     }
 
     // 2. Load Text
-    const formattedValue = Number.isInteger(value) ? value.toString() : value.toFixed(3);
-    const text = value > 0 ? `+${formattedValue}` : `${formattedValue}`;
+    let displayValue = value;
+    if (effectType === "Bottle") {
+      displayValue = Math.round(value);
+    }
+    
+    const formattedValue = Number.isInteger(displayValue) ? displayValue.toString() : displayValue.toFixed(3);
+    const text = displayValue > 0 ? `+${formattedValue}` : `${formattedValue}`;
 
-    const textTexture = this.getCachedTextTexture(text, value);
+    const textTexture = this.getCachedTextTexture(text, displayValue);
     if (textTexture) {
       const textMaterial = new THREE.MeshBasicMaterial({
         map: textTexture,
@@ -249,11 +245,12 @@ class FloatingEffect {
     
     if (this.effectType === "Bottle") {
       this.iconMesh.scale.set(0.15, 0.15, 0.15); // Scale down the water bottle
+      this.iconMesh.position.set(0.15, 0, 0);
     } else {
       this.iconMesh.scale.set(1, 1, 1);
+      this.iconMesh.position.set(0.5, 0, 0);
     }
     
-    this.iconMesh.position.set(0.5, 0, 0);
     this.mesh.add(this.iconMesh);
   }
 
