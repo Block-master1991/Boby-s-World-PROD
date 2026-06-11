@@ -73,29 +73,21 @@ export const useJoystickControls = ({
   );
 
   const handleCanvasTouchMove = useCallback(
-    (x: number, y: number) => {
+    (touchX: number, touchY: number) => {
       if (!dynamicJoystickState.isActive) return;
-      // The callback receives current touch coordinates (or deltas, checking GameCanvas usage)
-      // GameCanvas.tsx prop says: onCanvasTouchMove: (deltaX: number, deltaY: number) => void
-      // But usually touch move gives absolute coordinates. Let's assume GameCanvas passes absolute X/Y or we need to check useTouchHandling.
-      // Wait, GameCanvas prop type says `deltaX, deltaY`?
-      // Let's assume absolute Position for joystick logic usually. If GameCanvas sends delta, we need to accumulate.
-      // BUT, looking at `calculateJoystickPosition`, it expects `touchX, touchY`.
-      // If `GameCanvas` sends deltas, we need to track `currentX/Y`.
-      // Ideally, `GameCanvas` should send absolute coordinates for a joystick.
-      // I will assume `GameCanvas` acts as a touch forwarder and sends `clientX, clientY`.
-      // If the prop name is `deltaX`, that's confusing.
-      // Let's stick to the previous implementation logic but with arguments. Previously it used `e.changedTouches[0].clientX`.
-      // So the caller must pass ClientX/Y.
-
+      // touchX/touchY هي إحداثيات مطلقة (clientX/Y) من لمسة الإصبع
+      // calculateJoystickPosition تحسب الإزاحة عن مركز الجويستك (baseScreenX/Y)
       const pos = calculateJoystickPosition(
-        x,
-        y,
+        touchX,
+        touchY,
         dynamicJoystickState.baseScreenX,
         dynamicJoystickState.baseScreenY
       );
       setDynamicJoystickState(prev => ({ ...prev, knobOffsetX: pos.x, knobOffsetY: pos.y }));
-      setJoystickMovement({ x: pos.normX, y: -pos.normY });
+      // محور Y في الشاشة: ⬆️ = سالب، ⬇️ = موجب
+      // محور Y في اللعبة (applyJoystick): jY < 0 = للأمام، jY > 0 = للخلف
+      // لذا نُبقي normY كما هو (بدون قلب) — السحب للأعلى يعطي normY سالبًا = للأمام ✅
+      setJoystickMovement({ x: pos.normX, y: pos.normY });
     },
     [
       dynamicJoystickState.isActive,

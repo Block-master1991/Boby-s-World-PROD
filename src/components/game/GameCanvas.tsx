@@ -35,7 +35,7 @@ interface GameCanvasProps {
   isPaused: boolean;
   joystickInput: { x: number; y: number } | null;
   onCanvasTouchStart: (screenX: number, screenY: number) => void;
-  onCanvasTouchMove: (deltaX: number, deltaY: number) => void;
+  onCanvasTouchMove: (touchX: number, touchY: number) => void;
   onCanvasTouchEnd: () => void;
   protectionBottleCount: number;
   onConsumeProtectionBottle: () => void;

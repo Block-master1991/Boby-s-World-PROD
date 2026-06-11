@@ -8,7 +8,7 @@ interface UseTouchHandlingProps {
   isPausedRef: MutableRefObject<boolean>;
   isJoystickInteractionActiveRef: MutableRefObject<boolean>;
   onCanvasTouchStartProp: (screenX: number, screenY: number) => void;
-  onCanvasTouchMoveProp: (deltaX: number, deltaY: number) => void;
+  onCanvasTouchMoveProp: (touchX: number, touchY: number) => void;
   onCanvasTouchEndProp: () => void;
   initialTouchPointRef: MutableRefObject<{ x: number; y: number; id: number } | null>;
 }
@@ -43,7 +43,9 @@ export const useTouchHandling = ({
         const t = Array.from(e.touches).find(v => v.identifier === iT.current?.id);
         if (t) {
           if (e.cancelable) e.preventDefault();
-          oTM(t.clientX - iT.current.x, t.clientY - iT.current.y);
+          // إرسال الإحداثيات المطلقة (clientX/Y) وليس الفرق (delta)،
+          // لأن handleCanvasTouchMove تحسب الإزاحة بنفسها عن نقطة البداية (baseScreenX/Y)
+          oTM(t.clientX, t.clientY);
         }
       }
     },
