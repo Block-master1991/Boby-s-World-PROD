@@ -115,8 +115,6 @@ self.addEventListener('fetch', event => {
 
     if (isGameAsset) {
         // Strip query params for cache matching
-        const requestToMatch = new Request(url, { ignoreSearch: true });
-        
         event.respondWith(
             caches.match(event.request, { ignoreSearch: true }).then(response => {
                 const fetchPromise = fetch(event.request).then(fetchResponse => {
@@ -126,7 +124,7 @@ self.addEventListener('fetch', event => {
                     // Proactive cache update strategy
                     const responseClone = fetchResponse.clone();
                     caches.open(CACHE_NAME).then(cache => {
-                        cache.put(new Request(url.split('?')[0]), responseClone);
+                        cache.put(url.split('?')[0], responseClone);
                     });
                     return fetchResponse;
                 }).catch(error => {
