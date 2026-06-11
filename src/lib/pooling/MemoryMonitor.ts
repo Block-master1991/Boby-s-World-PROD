@@ -7,11 +7,12 @@ import type { MemoryStats, MemoryThresholdConfig } from "./types";
 export class MemoryMonitor {
   private memoryHistory: number[] = [];
   private maxHistorySize = 100;
-  private warningThreshold = isMobileDevice() ? 350 * 1024 * 1024 : 800 * 1024 * 1024; // 350MB mobile, 800MB desktop
-  private criticalThreshold = isMobileDevice() ? 500 * 1024 * 1024 : 1200 * 1024 * 1024; // 500MB mobile, 1.2GB desktop
+  // Three.js games routinely sit at 400–600 MB on mobile; use realistic limits.
+  private warningThreshold = isMobileDevice() ? 600 * 1024 * 1024 : 900 * 1024 * 1024;   // 600 MB mobile, 900 MB desktop
+  private criticalThreshold = isMobileDevice() ? 800 * 1024 * 1024 : 1400 * 1024 * 1024; // 800 MB mobile, 1.4 GB desktop
 
   /** Early warning triggers at this fraction of the warning threshold */
-  private earlyWarningRatio = 0.8;
+  private earlyWarningRatio = 0.85;
 
   /** How often (ms) to re-evaluate thresholds dynamically */
   private dynamicReevaluationInterval: ReturnType<typeof setInterval> | null = null;
@@ -21,13 +22,23 @@ export class MemoryMonitor {
   private emergencyCleanupCount = 0;
   private earlyWarningCount = 0;
 
+  /**
+   * Cooldown between emergency cleanups – prevents the "cleanup → re-alloc → cleanup" spiral.
+   * Disposing all pools causes the engine to immediately re-create them, so flooding it
+   * with repeated disposals within seconds makes memory usage worse, not better.
+   */
+  private lastEmergencyCleanupTime = 0;
+  private readonly EMERGENCY_COOLDOWN_MS = 30_000; // at most one full disposal per 30 s
+
   /** Timestamps for growth-rate calculation – used in computeTrend */
   private lastRecordTime = 0;
   private lastRecordedUsed = 0;
 
   /** Real-time monitoring interval */
   private realtimeMonitorInterval: ReturnType<typeof setInterval> | null = null;
-  private readonly REALTIME_MONITOR_MS = 2000; // Check every 2 seconds
+  // 5 s is enough – the game loop already samples memory every ~2 s via recordMemoryUsage().
+  // Keeping this interval shorter would cause double-counting and unnecessary GC pressure.
+  private readonly REALTIME_MONITOR_MS = 5000;
 
   /** Callbacks for external subscribers */
   private warningCallbacks: Array<(stats: MemoryStats) => void> = [];
@@ -45,10 +56,16 @@ export class MemoryMonitor {
   private initializeThresholds(): void {
     const memory = this.getMemoryUsage();
     if (memory && memory.limit) {
-      // Set thresholds as percentages of the total heap limit
-      // Typically, we want to warn at 60% and error at 80% of actual available heap
-      this.warningThreshold = Math.min(this.warningThreshold, memory.limit * 0.6);
-      this.criticalThreshold = Math.min(this.criticalThreshold, memory.limit * 0.8);
+      // Clamp thresholds to 70% / 90% of the reported heap limit,
+      // but never go *below* the device-tuned floor values set in the constructor.
+      this.warningThreshold = Math.max(
+        this.warningThreshold,
+        Math.min(this.warningThreshold, memory.limit * 0.70)
+      );
+      this.criticalThreshold = Math.max(
+        this.criticalThreshold,
+        Math.min(this.criticalThreshold, memory.limit * 0.90)
+      );
 
       logger.log(
         `[MemoryMonitor] Initialized dynamic thresholds: Warning=${this.formatBytes(this.warningThreshold)}, Critical=${this.formatBytes(this.criticalThreshold)} (Limit=${this.formatBytes(memory.limit)})`
@@ -83,13 +100,14 @@ export class MemoryMonitor {
     const memory = this.getMemoryUsage();
     if (!memory || !memory.limit) return;
 
-    const newWarning = Math.min(
-      isMobileDevice() ? 350 * 1024 * 1024 : 800 * 1024 * 1024,
-      memory.limit * 0.6
+    // Never go below the device-tuned floor values
+    const newWarning = Math.max(
+      isMobileDevice() ? 600 * 1024 * 1024 : 900 * 1024 * 1024,
+      memory.limit * 0.70
     );
-    const newCritical = Math.min(
-      isMobileDevice() ? 500 * 1024 * 1024 : 1200 * 1024 * 1024,
-      memory.limit * 0.8
+    const newCritical = Math.max(
+      isMobileDevice() ? 800 * 1024 * 1024 : 1400 * 1024 * 1024,
+      memory.limit * 0.90
     );
 
     // Only log if thresholds changed significantly (>5%)
@@ -188,6 +206,19 @@ export class MemoryMonitor {
   }
 
   private triggerEmergencyCleanup(): void {
+    const now = Date.now();
+
+    // Enforce cooldown: disposing all pools causes the engine to immediately re-create them,
+    // so repeated disposals within a short window make memory usage *worse*.
+    if (now - this.lastEmergencyCleanupTime < this.EMERGENCY_COOLDOWN_MS) {
+      const remainingSec = Math.round((this.EMERGENCY_COOLDOWN_MS - (now - this.lastEmergencyCleanupTime)) / 1000);
+      logger.warn(
+        `[MemoryMonitor] EMERGENCY cooldown active – skipping disposal (next allowed in ${remainingSec}s)`
+      );
+      return;
+    }
+
+    this.lastEmergencyCleanupTime = now;
     this.emergencyCleanupCount++;
     logger.warn("[MemoryMonitor] EMERGENCY: Triggering full object pool disposal");
     disposeAllPools();

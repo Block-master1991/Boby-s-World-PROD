@@ -2,7 +2,6 @@ import type DogShieldEffect from "@/components/game/DogShieldEffect";
 import type DogSpeedBeam from "@/components/game/DogSpeedBeam";
 import { getGPUInstancingManager } from "@/lib/gpu-instancing";
 import { getLODManager } from "@/lib/lod/lod-manager";
-import { getMemoryMonitor } from "@/lib/object-pooling";
 import { getDevicePerformanceConfig } from "@/lib/utils";
 import type { Environment } from "@/lib/world-generation/environment-generator/environment";
 import { logger } from "@/utils/logger";
@@ -79,7 +78,9 @@ export const useGameLoop = (p: UseGameLoopProps) => {
       getLODManager()?.updateCameraPosition(cameraRef.current.position);
       getGPUInstancingManager()?.updateInstances();
     }
-    if (Math.floor(performance.now() / 16.6) % 120 === 0) getMemoryMonitor()?.recordMemoryUsage();
+    // Memory sampling is handled by MemoryMonitor's own setInterval (every 5 s).
+    // Calling recordMemoryUsage() here as well would double-sample and cause
+    // unnecessary GC pressure on mobile – so we intentionally omit it.
   }, []);
 
   const updateAllSystems = useCallback(
