@@ -5,6 +5,13 @@ import { logger } from "@/utils/logger";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useBatchedUpdates } from "./useBatchedUpdates";
 import { getBatchTimestamp } from "./useGameData";
+import { useAudio } from "@/contexts/AudioContext";
+
+let coinAudio: HTMLAudioElement | null = null;
+if (typeof window !== "undefined") {
+  coinAudio = new Audio("/audio/coin_collect.mp3");
+  coinAudio.preload = "auto";
+}
 
 interface OptimisticUpdate {
   id: string;
@@ -285,6 +292,7 @@ export const useGameEconomy = ({
 }: UseGameEconomyProps) => {
   const { toast } = useToast();
   const { apiFetch } = useApiFetch();
+  const { isSoundPlaying } = useAudio();
 
   const [economyState, setEconomyState] = useState<EconomyState>({
     optimisticUpdates: [],
@@ -338,13 +346,22 @@ export const useGameEconomy = ({
       toast({ title: "Blocked", description: "Connect wallet.", variant: "destructive" });
       return;
     }
+
+    if (isSoundPlaying && coinAudio) {
+      const playAudio = coinAudio.cloneNode() as HTMLAudioElement;
+      playAudio.volume = 0.6; // slightly lower volume
+      playAudio.play().catch(err => {
+        logger.warn("[useGameEconomy] Failed to play coin collect sound:", err);
+      });
+    }
+
     setEconomyState((p: EconomyState) => ({
       ...p,
       unbatchedCoin: Number((p.unbatchedCoin + USDT_PER_COIN).toFixed(6)),
       sessionCollectedUSDT: Number((p.sessionCollectedUSDT + USDT_PER_COIN).toFixed(6)),
     }));
     batchAddCoin(USDT_PER_COIN);
-  }, [isAuthenticated, isWalletConnectedAndMatching, authUserPublicKey, toast, batchAddCoin]);
+  }, [isAuthenticated, isWalletConnectedAndMatching, authUserPublicKey, toast, batchAddCoin, isSoundPlaying]);
 
   const handleEnemyCollisionPenalty = useCallback(() => {
     if (!isAuthenticated || !isWalletConnectedAndMatching || !authUserPublicKey) {
