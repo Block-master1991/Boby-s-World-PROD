@@ -1,6 +1,6 @@
 /**
  * Update Manifest Utility - TypeScript Version
- * Syncs the GAME_ASSET_MANIFEST in gameAssetManifest.ts with measured data from measured-assets.json.
+ * Syncs the GAME_ASSET_MANIFEST modular files with measured data from measured-assets.json.
  * Uses centralized Firebase initialization and professional logging.
  */
 
@@ -11,8 +11,11 @@ import path from "path";
 import { professionalLogger } from "../src/lib/logging";
 
 const MEASURED_DATA_PATH = path.join(process.cwd(), "scripts", "measured-assets.json");
-const MANIFEST_PATH = path.join(process.cwd(), "src", "lib", "gameAssetManifest.ts");
-const BACKUP_PATH = path.join(process.cwd(), "src", "lib", "gameAssetManifest.ts.backup");
+const ASSETS_DIR = path.join(process.cwd(), "src", "lib", "assets");
+const HIGH_PRIORITY_PATH = path.join(ASSETS_DIR, "high-priority.ts");
+const MEDIUM_PRIORITY_PATH = path.join(ASSETS_DIR, "medium-priority.ts");
+const LOW_PRIORITY_PATH = path.join(ASSETS_DIR, "low-priority.ts");
+const INDEX_PATH = path.join(ASSETS_DIR, "index.ts");
 
 interface MeasuredAsset {
   path: string;
@@ -39,152 +42,163 @@ interface MeasuredData {
 /**
  * Format asset object for TypeScript file generation
  */
-function formatAsset(asset: MeasuredAsset, indent = "    ") {
+function formatAsset(asset: MeasuredAsset, indent = "  ") {
+  const innerIndent = `${indent}  `;
   const lines = [
-    `{`,
-    `        path: '${asset.path}',`,
-    `        type: '${asset.type}',`,
-    `        priority: '${asset.priority}',`,
-    `        estimatedSizeMB: ${asset.estimatedSizeMB},`,
-    `        description: '${asset.description}'`,
+    `${indent}{`,
+    `${innerIndent}path: "${asset.path}",`,
+    `${innerIndent}type: "${asset.type}",`,
+    `${innerIndent}priority: "${asset.priority}",`,
+    `${innerIndent}estimatedSizeMB: ${asset.estimatedSizeMB},`,
   ];
 
-  if (asset.version) lines.splice(5, 0, `        version: '${asset.version}',`);
-  if (asset.sha256) lines.splice(5, 0, `        sha256: '${asset.sha256}',`);
-  if (asset.actualSizeMB !== undefined)
-    lines.splice(5, 0, `        actualSizeMB: ${asset.actualSizeMB},`);
-  if (asset.lastModified) lines.splice(5, 0, `        lastModified: '${asset.lastModified}',`);
+  if (asset.version) lines.push(`${innerIndent}version: "${asset.version}",`);
+  if (asset.sha256) lines.push(`${innerIndent}sha256: "${asset.sha256}",`);
+  if (asset.actualSizeMB !== undefined) {
+    lines.push(`${innerIndent}actualSizeMB: ${asset.actualSizeMB},`);
+  }
+  if (asset.lastModified) {
+    lines.push(`${innerIndent}lastModified: "${asset.lastModified}",`);
+  }
 
-  lines.push(`    }`);
-  return lines.map(line => indent + line).join("\n");
+  lines.push(`${innerIndent}description: "${asset.description.replace(/"/g, '\\"')}",`);
+  lines.push(`${indent}}`);
+  return lines.join("\n");
 }
 
-function getManifestHeader(measuredAt: string): string {
-  return `// Game Asset Manifest - Comprehensive list of all game resources
-// Used for initial preload into IndexedDB to enable offline gameplay
-// 🔄 Auto-updated with actual measurements on ${new Date(measuredAt).toLocaleString()}
+function generatePriorityContent(
+  variableName: string,
+  assets: MeasuredAsset[],
+  additionalAssets: { name: string; assets: MeasuredAsset[] }[] = []
+): string {
+  let content = `import type { AssetInfo } from "./types";\n\n`;
 
-export interface AssetInfo {
-    path: string;
-    type: 'model' | 'texture' | 'audio' | 'hdr';
-    priority: 'critical' | 'high' | 'medium' | 'low';
-    estimatedSizeMB: number;
-    description: string;
-    // ✨ Enhanced fields
-    version?: string;
-    sha256?: string;
-    actualSizeMB?: number;
-    lastModified?: string;
-    compressionType?: 'none' | 'gzip' | 'brotli';
-}
+  content += `export const ${variableName}: AssetInfo[] = [\n`;
+  content += assets.map(a => formatAsset(a, "  ")).join(",\n");
+  content += `\n];\n`;
 
-export const GAME_ASSET_MANIFEST: AssetInfo[] = [`;
-}
-
-function getManifestFooter(measuredData: MeasuredData): string {
-  return `
-];
-
-// Helper functions
-export function getAssetsByPriority(priority: 'critical' | 'high' | 'medium' | 'low'): AssetInfo[] {
-    return GAME_ASSET_MANIFEST.filter(asset => asset.priority === priority);
-}
-
-export function getTotalEstimatedSize(): number {
-    return GAME_ASSET_MANIFEST.reduce((total, asset) => total + asset.estimatedSizeMB, 0);
-}
-
-export function getTotalActualSize(): number {
-    return GAME_ASSET_MANIFEST.reduce((total, asset) => total + (asset.actualSizeMB || asset.estimatedSizeMB), 0);
-}
-
-export function getPriorityOrder(): ('critical' | 'high' | 'medium' | 'low')[] {
-    return ['critical', 'high', 'medium', 'low'];
-}
-
-export function getAssetsByType(type: 'model' | 'texture' | 'audio' | 'hdr'): AssetInfo[] {
-    return GAME_ASSET_MANIFEST.filter(asset => asset.type === type);
-}
-
-export function getAssetByPath(path: string): AssetInfo | undefined {
-    return GAME_ASSET_MANIFEST.find(asset => asset.path === path);
-}
-
-${getStatsSection(measuredData)}
-`;
-}
-
-function getStatsSection(measuredData: MeasuredData): string {
-  return `// Statistics
-export const MANIFEST_STATS = {
-    totalAssets: GAME_ASSET_MANIFEST.length,
-    totalEstimatedSizeMB: getTotalEstimatedSize(),
-    totalActualSizeMB: getTotalActualSize(),
-    measuredAt: '${measuredData.measuredAt}',
-    accuracy: ${measuredData.summary.accuracy.toFixed(2)},
-    byPriority: {
-        critical: getAssetsByPriority('critical').length,
-        high: getAssetsByPriority('high').length,
-        medium: getAssetsByPriority('medium').length,
-        low: getAssetsByPriority('low').length
-    },
-    byType: {
-        models: getAssetsByType('model').length,
-        textures: getAssetsByType('texture').length,
-        audio: getAssetsByType('audio').length,
-        hdr: getAssetsByType('hdr').length
-    }
-};`;
-}
-
-/**
- * Generate the final TypeScript content
- */
-function generateManifestContent(measuredData: MeasuredData): string {
-  const header = getManifestHeader(measuredData.measuredAt);
-  const assetsContent = buildAssetsContent(measuredData.assets);
-  const footer = getManifestFooter(measuredData);
-
-  return `${header + assetsContent}\n${footer}`;
-}
-
-function buildAssetsContent(assets: MeasuredAsset[]): string {
-  const priorityGroups: Record<string, MeasuredAsset[]> = {
-    critical: [],
-    high: [],
-    medium: [],
-    low: [],
-  };
-
-  assets.forEach(asset => {
-    const group = priorityGroups[asset.priority];
-    // Strict safe check: verify existence and group availability
-    if (asset.exists && group) {
-      group.push({
-        ...asset,
-        version: asset.version || "v1.0.0",
-      });
-    }
-  });
-
-  let content = "";
-  const priorities = ["critical", "high", "medium", "low"] as const;
-
-  priorities.forEach((priority, index) => {
-    const group = priorityGroups[priority];
-    if (group && group.length > 0) {
-      const prefix = index > 0 ? ",\n\n" : "\n";
-      content += `${prefix}    // === ${priority.toUpperCase()} ASSETS ===\n`;
-      content += group.map(a => formatAsset(a)).join(",\n");
-    }
+  additionalAssets.forEach(group => {
+    content += `\nexport const ${group.name}: AssetInfo[] = [\n`;
+    content += group.assets.map(a => formatAsset(a, "  ")).join(",\n");
+    content += `\n];\n`;
   });
 
   return content;
 }
 
+function generateIndexContent(measuredAt: string, accuracy: number): string {
+  return `// Game Asset Manifest - Statistics and exports
+// 🔄 Auto-updated with actual measurements on ${new Date(measuredAt).toLocaleString()}
+
+import { CRITICAL_ASSETS, HIGH_PRIORITY_ASSETS } from "./high-priority";
+import { LOW_PRIORITY_ASSETS } from "./low-priority";
+import { MEDIUM_PRIORITY_ASSETS } from "./medium-priority";
+import type { AssetInfo } from "./types";
+
+export const GAME_ASSET_MANIFEST: AssetInfo[] = [
+  ...CRITICAL_ASSETS,
+  ...HIGH_PRIORITY_ASSETS,
+  ...MEDIUM_PRIORITY_ASSETS,
+  ...LOW_PRIORITY_ASSETS,
+];
+
+export function getAssetsByPriority(priority: "critical" | "high" | "medium" | "low"): AssetInfo[] {
+  return GAME_ASSET_MANIFEST.filter(asset => asset.priority === priority);
+}
+
+export function getTotalEstimatedSize(): number {
+  return GAME_ASSET_MANIFEST.reduce((total, asset) => total + asset.estimatedSizeMB, 0);
+}
+
+export function getTotalActualSize(): number {
+  return GAME_ASSET_MANIFEST.reduce(
+    (total, asset) => total + (asset.actualSizeMB || asset.estimatedSizeMB),
+    0
+  );
+}
+
+export function getPriorityOrder(): ("critical" | "high" | "medium" | "low")[] {
+  return ["critical", "high", "medium", "low"];
+}
+
+export function getAssetsByType(type: "model" | "texture" | "audio" | "hdr"): AssetInfo[] {
+  return GAME_ASSET_MANIFEST.filter(asset => asset.type === type);
+}
+
+export function getAssetByPath(path: string): AssetInfo | undefined {
+  return GAME_ASSET_MANIFEST.find(asset => asset.path === path);
+}
+
+// Statistics
+export const MANIFEST_STATS = {
+  totalAssets: GAME_ASSET_MANIFEST.length,
+  totalEstimatedSizeMB: getTotalEstimatedSize(),
+  totalActualSizeMB: getTotalActualSize(),
+  measuredAt: "${measuredAt}",
+  accuracy: ${accuracy},
+  byPriority: {
+    critical: getAssetsByPriority("critical").length,
+    high: getAssetsByPriority("high").length,
+    medium: getAssetsByPriority("medium").length,
+    low: getAssetsByPriority("low").length,
+  },
+  byType: {
+    models: getAssetsByType("model").length,
+    textures: getAssetsByType("texture").length,
+    audio: getAssetsByType("audio").length,
+    hdr: getAssetsByType("hdr").length,
+  },
+};
+`;
+}
+
+async function writeManifestFiles(
+  correlationId: string,
+  criticalAssets: MeasuredAsset[],
+  highAssets: MeasuredAsset[],
+  mediumAssets: MeasuredAsset[],
+  lowAssets: MeasuredAsset[],
+  measuredAt: string,
+  accuracy: number
+) {
+  const makeBackup = async (filePath: string, backupPath: string) => {
+    try {
+      await fs.access(filePath, fsConstants.F_OK);
+      await fs.copyFile(filePath, backupPath);
+      professionalLogger.debug(`💾 Backup created for ${path.basename(filePath)}`, { correlationId });
+    } catch {
+      // file doesn't exist yet, skip backup
+    }
+  };
+
+  await makeBackup(HIGH_PRIORITY_PATH, `${HIGH_PRIORITY_PATH}.backup`);
+  await makeBackup(MEDIUM_PRIORITY_PATH, `${MEDIUM_PRIORITY_PATH}.backup`);
+  await makeBackup(LOW_PRIORITY_PATH, `${LOW_PRIORITY_PATH}.backup`);
+  await makeBackup(INDEX_PATH, `${INDEX_PATH}.backup`);
+
+  // Generate contents
+  const highPriorityContent = generatePriorityContent("CRITICAL_ASSETS", criticalAssets, [
+    { name: "HIGH_PRIORITY_ASSETS", assets: highAssets }
+  ]);
+  const mediumPriorityContent = generatePriorityContent("MEDIUM_PRIORITY_ASSETS", mediumAssets);
+  const lowPriorityContent = generatePriorityContent("LOW_PRIORITY_ASSETS", lowAssets);
+  const indexContent = generateIndexContent(measuredAt, accuracy);
+
+  // Write files
+  await fs.writeFile(HIGH_PRIORITY_PATH, highPriorityContent, "utf8");
+  await fs.writeFile(MEDIUM_PRIORITY_PATH, mediumPriorityContent, "utf8");
+  await fs.writeFile(LOW_PRIORITY_PATH, lowPriorityContent, "utf8");
+  await fs.writeFile(INDEX_PATH, indexContent, "utf8");
+
+  // Ensure src/lib/gameAssetManifest.ts remains a simple index exporter pointing to index.ts
+  const centralManifestPath = path.join(process.cwd(), "src", "lib", "gameAssetManifest.ts");
+  const centralManifestContent = `export * from "./assets/index";\nexport * from "./assets/types";\n`;
+  await fs.writeFile(centralManifestPath, centralManifestContent, "utf8");
+}
+
 async function updateManifest() {
   const correlationId = `manifest-update-${Date.now()}`;
-  professionalLogger.info("🔨 Starting Manifest Update Process", { correlationId });
+  professionalLogger.info("🔨 Starting Modular Manifest Update Process", { correlationId });
 
   try {
     try {
@@ -196,22 +210,31 @@ async function updateManifest() {
     const rawData = await fs.readFile(MEASURED_DATA_PATH, "utf8");
     const measuredData = JSON.parse(rawData) as MeasuredData;
 
-    // Backup
-    try {
-      await fs.access(MANIFEST_PATH, fsConstants.F_OK);
-      await fs.copyFile(MANIFEST_PATH, BACKUP_PATH);
-      professionalLogger.debug("💾 Backup created for gameAssetManifest.ts", { correlationId });
-    } catch {
-      // Manifest might not exist yet, skip backup
-    }
+    // Filter and map only existing assets
+    const activeAssets = measuredData.assets.filter(a => a.exists).map(a => ({
+      ...a,
+      version: a.version || "v1.0.0"
+    }));
 
-    const newContent = generateManifestContent(measuredData);
-    await fs.writeFile(MANIFEST_PATH, newContent, "utf8");
+    const criticalAssets = activeAssets.filter(a => a.priority === "critical");
+    const highAssets = activeAssets.filter(a => a.priority === "high");
+    const mediumAssets = activeAssets.filter(a => a.priority === "medium");
+    const lowAssets = activeAssets.filter(a => a.priority === "low");
 
-    professionalLogger.info("✨ Manifest synchronization completed!", {
+    await writeManifestFiles(
+      correlationId,
+      criticalAssets,
+      highAssets,
+      mediumAssets,
+      lowAssets,
+      measuredData.measuredAt,
+      measuredData.summary.accuracy
+    );
+
+    professionalLogger.info("✨ Modular Manifest synchronization completed!", {
       correlationId,
       accuracy: `${measuredData.summary.accuracy}%`,
-      found: measuredData.summary.foundAssets,
+      found: activeAssets.length,
     });
 
     process.exit(0);
