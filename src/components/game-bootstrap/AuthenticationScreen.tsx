@@ -52,7 +52,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
   }
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
+    <div className="game-bootstrap-container flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4 text-center">
       <Image
         src="/Boby-logo.png"
         alt="Boby World Logo"
@@ -115,7 +115,7 @@ const AuthenticationScreen: React.FC<AuthenticationScreenProps> = ({
         ))}
 
       {authError && (
-        <div className="mt-8 p-3 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-3 animate-shake">
+        <div className="mt-8 p-1 bg-destructive/10 border border-destructive/20 rounded-xl flex items-center gap-3 animate-shake">
           <AlertCircle className="h-4 w-4 text-destructive" />
           <p className="text-xs font-medium text-destructive">{authError}</p>
         </div>

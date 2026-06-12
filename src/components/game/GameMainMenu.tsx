@@ -40,7 +40,7 @@ const GameModeOption: React.FC<GameModeOptionProps> = ({
 }) => (
   <Label
     htmlFor={id}
-    className={`flex flex-col items-center justify-between rounded-md border p-4 md:p-8 cursor-pointer transition-all duration-200 glass-card hover:bg-primary/10
+    className={`game-mode-label flex flex-col items-center justify-between border p-8 md:p-8 cursor-pointer transition-all duration-200 glass-card hover:bg-primary/10
         ${selected ? "border-primary" : "border-border hover:border-primary/50"}`}
     onClick={() => onSelect(id)}
   >
@@ -99,7 +99,7 @@ const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected, onSheet
   }, [isPaused, onSheetsStateChange]);
 
   return (
-    <div className="min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
+    <div className="game-main-menu-page min-h-screen bg-background text-foreground px-4 sm:px-6 relative">
       
 
       <GameSheets
@@ -117,8 +117,8 @@ const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected, onSheet
         inventory={inventory}
       />
 
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md md:max-w-2xl glass-card overflow-y-auto">
+      <div className="game-menu-card-wrapper flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md md:max-w-2xl game-main-menu-card glass-card overflow-y-auto">
           <CardHeader>
             <CardTitle className="text-center text-2xl md:text-4xl text-foreground">
               Select Game Mode
@@ -131,7 +131,7 @@ const GameMainMenu: React.FC<GameMainMenuProps> = ({ onGameModeSelected, onSheet
             <RadioGroup
               value={selectedMode}
               onValueChange={(value: "boby-world" | "running-game") => setSelectedMode(value)}
-              className="grid grid-cols-1 md:grid-cols-2 gap-4"
+              className="game-mode-grid grid grid-cols-1 md:grid-cols-2 gap-4"
             >
               <GameModeOption
                 id="boby-world"

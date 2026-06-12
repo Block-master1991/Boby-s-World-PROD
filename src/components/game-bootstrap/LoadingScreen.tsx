@@ -461,7 +461,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
   // Simplified Indeterminate State (Pulsing Logo)
   if (variant === "indeterminate") {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-background text-center p-6">
+      <div className="game-bootstrap-container flex flex-col items-center justify-center min-h-screen bg-background text-center p-6">
         <div className="relative z-10 animate-pulse">
           <Image
             src="/Boby-logo.png"
@@ -485,7 +485,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({
     <>
       <LoadingStyles />
       <div
-        className={`flex flex-col items-center justify-center min-h-screen p-6 text-center relative overflow-hidden bg-gradient-to-br from-background via-background to-primary/5`}
+        className={`game-bootstrap-container flex flex-col items-center justify-center min-h-screen p-6 text-center relative overflow-hidden bg-gradient-to-br from-background via-background to-primary/5`}
       >
         <LoadingParticles />
         {showLogo && <LogoSection isError={isError} />}

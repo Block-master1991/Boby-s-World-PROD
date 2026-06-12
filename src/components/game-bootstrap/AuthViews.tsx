@@ -26,7 +26,7 @@ export const LoadingView: React.FC<CommonProps & { onRequestDisconnect: () => Pr
   isMobile,
   onRequestDisconnect,
 }) => (
-  <div className="flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
+  <div className="game-bootstrap-container flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-4">
     <div className="relative mb-8">
       <Image
         src="/Boby-logo.png"

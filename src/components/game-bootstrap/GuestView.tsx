@@ -83,19 +83,39 @@ const ConnectWalletSection: React.FC<{ hasPasskey: boolean; loginWithPasskey: ()
   </div>
 );
 
-const MobileTips: React.FC = () => (
-  <div className="bg-secondary/10 p-4 rounded-2xl border border-secondary/20 text-left">
-    <div className="flex items-center gap-2 mb-2">
-      <Smartphone className="h-4 w-4 text-primary" />
-      <span className="font-bold text-xs uppercase tracking-tight">Mobile Tips</span>
+const MobileTips: React.FC = () => {
+  const tips = [
+    "Use Phantom or Solflare for the smoothest experience.",
+    "You'll be redirected to your wallet app to sign.",
+    "Return to this tab once the signature is complete."
+  ];
+  const [currentTipIndex, setCurrentTipIndex] = React.useState(0);
+  const [fade, setFade] = React.useState(true);
+
+  React.useEffect(() => {
+    const updateIndex = () => {
+      setCurrentTipIndex((prev) => (prev + 1) % tips.length);
+      setFade(true);
+    };
+
+    const rotateTip = () => {
+      setFade(false);
+      setTimeout(updateIndex, 300);
+    };
+
+    const interval = setInterval(rotateTip, 5000);
+    return () => clearInterval(interval);
+  }, [tips.length]);
+
+  return (
+    <div className="bg-secondary/5 px-3 py-1.5 rounded-full border border-secondary/10 flex items-center gap-2 text-left w-full max-w-sm mx-auto transition-all duration-300">
+      <Smartphone className="h-3.5 w-3.5 text-primary shrink-0 animate-pulse" />
+      <span className={`text-[10px] text-muted-foreground leading-snug transition-opacity duration-300 ${fade ? 'opacity-100' : 'opacity-0'}`}>
+        {tips[currentTipIndex]}
+      </span>
     </div>
-    <ul className="text-[10px] text-muted-foreground space-y-1">
-      <li>• Use Phantom or Solflare for the smoothest experience.</li>
-      <li>• You'll be redirected to your wallet app to sign.</li>
-      <li>• Return to this tab once the signature is complete.</li>
-    </ul>
-  </div>
-);
+  );
+};
 
 interface GuestViewProps extends CommonProps {
   isPWA: boolean;

@@ -216,3 +216,217 @@ body {
     }
   }
 }
+
+/* Mobile Landscape Optimizations for Game Bootstrap screens */
+@media (max-height: 520px) and (orientation: landscape) {
+  /* Main Container */
+  .game-bootstrap-container {
+    padding: 0.5rem !important;
+  }
+
+  /* Logo Image */
+  .game-bootstrap-container img[alt*="Logo"],
+  .game-bootstrap-container img[alt*="Loading"] {
+    width: 45px !important;
+    height: 45px !important;
+    margin-bottom: 0.25rem !important;
+    margin-top: 0.15rem !important;
+  }
+
+  /* Headings & Text */
+  .game-bootstrap-container h1 {
+    font-size: 1.15rem !important;
+    margin-bottom: 0.15rem !important;
+    margin-top: 0.15rem !important;
+    line-height: 1.1 !important;
+  }
+  .game-bootstrap-container h2 {
+    font-size: 1.05rem !important;
+    margin-bottom: 0.15rem !important;
+    margin-top: 0.15rem !important;
+    line-height: 1.1 !important;
+  }
+  .game-bootstrap-container p {
+    font-size: 0.7rem !important;
+    margin-bottom: 0.15rem !important;
+    margin-top: 0.15rem !important;
+    line-height: 1.25 !important;
+  }
+
+  /* Margin and Padding Overrides */
+  .game-bootstrap-container .mb-8 {
+    margin-bottom: 0.2rem !important;
+  }
+  .game-bootstrap-container .mb-6 {
+    margin-bottom: 0.2rem !important;
+  }
+  .game-bootstrap-container .mb-4 {
+    margin-bottom: 0.15rem !important;
+  }
+  .game-bootstrap-container .mt-12 {
+    margin-top: 0.25rem !important;
+    font-size: 0.65rem !important;
+  }
+  .game-bootstrap-container .mt-12 svg,
+  .game-bootstrap-container .mt-12 .inline {
+    width: 0.75rem !important;
+    height: 0.75rem !important;
+    margin-right: 0.15rem !important;
+  }
+  .game-bootstrap-container .mt-8 {
+    margin-top: 0.2rem !important;
+  }
+  .game-bootstrap-container .mt-6 {
+    margin-top: 0.15rem !important;
+  }
+  .game-bootstrap-container .py-10 {
+    padding-top: 0.2rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+  .game-bootstrap-container .py-12 {
+    padding-top: 0.2rem !important;
+    padding-bottom: 0.2rem !important;
+  }
+
+  /* Space-y utilities override */
+  .game-bootstrap-container .space-y-3 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.25rem !important;
+  }
+  .game-bootstrap-container .space-y-4 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.25rem !important;
+  }
+  .game-bootstrap-container .space-y-6 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.25rem !important;
+  }
+  .game-bootstrap-container .space-y-8 > :not([hidden]) ~ :not([hidden]) {
+    margin-top: 0.35rem !important;
+  }
+
+  /* Cards and layout panels */
+  .game-bootstrap-container .bg-card {
+    padding: 0.35rem !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  /* Lock icon w-24 h-24 wrapper in LockedView */
+  .game-bootstrap-container .w-24.h-24 {
+    width: 3rem !important;
+    height: 3rem !important;
+    margin-bottom: 0.35rem !important;
+  }
+  .game-bootstrap-container .w-24.h-24 svg {
+    width: 1.5rem !important;
+    height: 1.5rem !important;
+  }
+
+  /* Panel paddings */
+  .game-bootstrap-container .p-6,
+  .game-bootstrap-container .p-5,
+  .game-bootstrap-container .p-4 {
+    padding: 0.35rem !important;
+  }
+
+  /* Buttons styling and sizes */
+  .game-bootstrap-container button,
+  .game-bootstrap-container .wallet-adapter-button-trigger {
+    padding: 0.35rem 0.75rem !important;
+    font-size: 0.75rem !important;
+    height: auto !important;
+    min-height: 1.75rem !important;
+  }
+  .game-bootstrap-container .wallet-adapter-button-trigger {
+    max-width: 180px !important;
+  }
+
+  /* Spinner / Phase icon */
+  .game-bootstrap-container .h-16.w-16 {
+    width: 2.5rem !important;
+    height: 2.5rem !important;
+  }
+  .game-bootstrap-container .h-16.w-16 svg {
+    width: 1.25rem !important;
+    height: 1.25rem !important;
+  }
+  
+  /* Cap the maximum width of the inner views so they don't look stretched */
+  .game-bootstrap-container > div:not(.absolute):not(.fixed) {
+    max-width: 320px !important;
+  }
+
+  /* Overlay text scaling */
+  .game-bootstrap-container .fixed.text-5xl {
+    font-size: 2rem !important;
+  }
+
+  /* Game Main Menu Landscape Scaling */
+  .game-main-menu-page .game-menu-card-wrapper {
+    min-height: 100vh !important;
+    height: 100vh !important;
+    padding: clamp(0.35rem, 1.5vh, 0.75rem) !important;
+    align-items: stretch !important;
+  }
+
+  .game-main-menu-page .game-main-menu-card {
+    max-width: min(90vw, 560px) !important;
+    margin: auto !important;
+    height: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+  }
+
+  .game-main-menu-page .game-main-menu-card > div:first-child { /* CardHeader */
+    padding: clamp(0.3rem, 1vh, 0.6rem) clamp(0.5rem, 2vw, 1rem) !important;
+  }
+
+  .game-main-menu-page .game-main-menu-card h3 { /* CardTitle */
+    font-size: clamp(1rem, 3.5vh, 1.5rem) !important;
+    margin-bottom: clamp(0.1rem, 0.5vh, 0.25rem) !important;
+    text-align: center !important;
+  }
+
+  .game-main-menu-page .game-main-menu-card p { /* CardDescription */
+    font-size: clamp(0.65rem, 1.8vh, 0.85rem) !important;
+    margin-top: 0 !important;
+    margin-bottom: 0 !important;
+    text-align: center !important;
+  }
+
+  .game-main-menu-page .game-main-menu-card > div:last-child { /* CardContent */
+    padding: clamp(0.3rem, 1vh, 0.6rem) clamp(0.5rem, 2vw, 1rem) clamp(0.5rem, 1.5vh, 0.9rem) clamp(0.5rem, 2vw, 1rem) !important;
+    flex: 1 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+  }
+
+  /* Make the game mode grid fill available height */
+  .game-main-menu-page .game-mode-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+    gap: clamp(0.3rem, 1vh, 0.6rem) !important;
+    flex: 1 !important;
+    align-content: stretch !important;
+  }
+
+  /* Game Mode Option labels — merged & proportional */
+  .game-main-menu-page .game-mode-label {
+    height: 100% !important;
+    justify-content: center !important;
+    padding: clamp(0.5rem, 2vh, 1rem) clamp(0.4rem, 1.5vw, 0.75rem) !important;
+  }
+
+  .game-main-menu-page .game-mode-label img {
+    width: clamp(48px, 14vh, 90px) !important;
+    height: clamp(48px, 14vh, 90px) !important;
+    margin-bottom: clamp(0.2rem, 1.2vh, 0.5rem) !important;
+  }
+
+  .game-main-menu-page .game-mode-label span.text-lg {
+    font-size: clamp(0.85rem, 3vh, 1.2rem) !important;
+    line-height: 1.25 !important;
+  }
+
+  .game-main-menu-page .game-mode-label span.text-sm {
+    font-size: clamp(0.7rem, 2vh, 0.9rem) !important;
+    line-height: 1.25 !important;
+  }
+}

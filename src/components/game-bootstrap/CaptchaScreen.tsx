@@ -257,7 +257,7 @@ const CaptchaScreen: React.FC<CaptchaScreenProps> = ({ siteKey, onVerificationSu
   };
 
   return (
-    <div className="relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
+    <div className="game-bootstrap-container relative flex flex-col items-center justify-center min-h-screen bg-background text-foreground p-8 text-center">
       {showOverlay && <CaptchaOverlay onClick={handleOverlayClick} />}
       <CaptchaHeader />
       <div className="mb-4 p-4 bg-card rounded-lg shadow-md border border-border relative">
