@@ -69,7 +69,7 @@ const Wrapper: React.FC<{
     </SheetTrigger>
     <SheetContent
       side="center"
-      className="p-0 flex flex-col rounded-xl border-2 shadow-xl overflow-y-auto"
+      className="p-0 flex flex-col rounded-none border-none shadow-none overflow-hidden w-full sm:w-full md:w-full lg:w-full xl:w-full 2xl:w-full h-full max-w-none"
     >
       {children}
     </SheetContent>
@@ -102,7 +102,7 @@ export const GameSheets: React.FC<GameSheetsProps> = p => {
   );
   const store = useMemo(
     () => (
-      <div className="w-full h-full">
+      <div className="w-full h-full flex flex-col overflow-hidden">
         {gD.isStoreLoading ? (
           <SheetLoading />
         ) : (
@@ -119,7 +119,7 @@ export const GameSheets: React.FC<GameSheetsProps> = p => {
   );
   const wallet = useMemo(
     () => (
-      <div className="w-full h-full">
+      <div className="w-full h-full flex flex-col overflow-hidden">
         {gD.isWalletLoading ? (
           <SheetLoading />
         ) : (
@@ -142,7 +142,7 @@ export const GameSheets: React.FC<GameSheetsProps> = p => {
   );
   const invent = useMemo(
     () => (
-      <div className="w-full h-full">
+      <div className="w-full h-full flex flex-col overflow-hidden">
         {gD.isInventoryLoading ? (
           <SheetLoading />
         ) : (
