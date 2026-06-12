@@ -46,6 +46,10 @@ const useCameraInitialization = (
   return { initializeCamera, resetCamera };
 };
 
+const tempOffset = new THREE.Vector3();
+const tempTarget = new THREE.Vector3();
+const tempLookAt = new THREE.Vector3();
+
 const useCameraUpdate = (
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>,
   dogModelRef: MutableRefObject<THREE.Group | null>
@@ -53,9 +57,9 @@ const useCameraUpdate = (
   const setupInitialCameraPosition = React.useCallback(() => {
     if (cameraRef.current && dogModelRef.current) {
       const dog = dogModelRef.current;
-      const worldOffset = CAMERA_FOLLOW_OFFSET.clone().applyQuaternion(dog.quaternion);
-      const targetCameraPosition = dog.position.clone().add(worldOffset);
-      cameraRef.current.position.lerp(targetCameraPosition, CAMERA_INITIAL_LERP_FACTOR);
+      tempOffset.copy(CAMERA_FOLLOW_OFFSET).applyQuaternion(dog.quaternion);
+      tempTarget.copy(dog.position).add(tempOffset);
+      cameraRef.current.position.lerp(tempTarget, CAMERA_INITIAL_LERP_FACTOR);
       cameraRef.current.lookAt(dog.position);
     }
   }, [cameraRef, dogModelRef]);
@@ -65,15 +69,20 @@ const useCameraUpdate = (
       if (!cameraRef.current || !dogModelRef.current) return;
       const dog = dogModelRef.current;
       const camera = cameraRef.current;
-      const worldOffset = CAMERA_FOLLOW_OFFSET.clone().applyQuaternion(dog.quaternion);
-      const cameraTargetPosition = dog.position.clone().add(worldOffset);
+      
+      tempOffset.copy(CAMERA_FOLLOW_OFFSET).applyQuaternion(dog.quaternion);
+      tempTarget.copy(dog.position).add(tempOffset);
+      
       const lerpFactor = delta ? CAMERA_LERP_FACTOR * delta * 60 : CAMERA_LERP_FACTOR;
-      if (camera.position.distanceToSquared(cameraTargetPosition) > POSITION_THRESHOLD_SQUARED) {
-        camera.position.lerp(cameraTargetPosition, lerpFactor);
+      if (camera.position.distanceToSquared(tempTarget) > POSITION_THRESHOLD_SQUARED) {
+        camera.position.lerp(tempTarget, lerpFactor);
       } else {
-        camera.position.copy(cameraTargetPosition);
+        camera.position.copy(tempTarget);
       }
-      camera.lookAt(dog.position.clone().add(new THREE.Vector3(0, 1.75, 0)));
+      
+      tempLookAt.copy(dog.position);
+      tempLookAt.y += 1.75;
+      camera.lookAt(tempLookAt);
     },
     [cameraRef, dogModelRef]
   );

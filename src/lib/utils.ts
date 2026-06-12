@@ -142,14 +142,54 @@ function getRendererSettings(isMobile: boolean, performanceLevel: string) {
   };
 }
 
+interface DevicePerformanceConfig {
+  isMobile: boolean;
+  performanceLevel: "low" | "medium" | "high";
+  environmentDensity: {
+    grassMultiplier: number;
+    treeMultiplier: number;
+    rocksMultiplier: number;
+    flowersMultiplier: number;
+  };
+  renderer: {
+    antialias: boolean;
+    shadowMapSize: number;
+    pixelRatio: number;
+  };
+  game: {
+    fpsLimit: number;
+    animationUpdates: boolean;
+  };
+}
+
+let cachedConfig: DevicePerformanceConfig | null = null;
+
 /**
  * Performance optimization config based on device
  */
-export function getDevicePerformanceConfig() {
+export function getDevicePerformanceConfig(): DevicePerformanceConfig {
+  if (typeof window === "undefined") {
+    // Return server-side default, do not cache.
+    const isMobile = false;
+    const performanceLevel = "high";
+    return {
+      isMobile,
+      performanceLevel,
+      environmentDensity: getEnvironmentDensity(isMobile, performanceLevel),
+      renderer: getRendererSettings(isMobile, performanceLevel),
+      game: {
+        fpsLimit: 60,
+        animationUpdates: true,
+      },
+    };
+  }
+
+  if (cachedConfig) return cachedConfig;
+
   const isMobile = isMobileDevice();
   const performanceLevel = getMobilePerformanceLevel();
 
-  return {
+  cachedConfig = {
     isMobile,
     performanceLevel,
     environmentDensity: getEnvironmentDensity(isMobile, performanceLevel),
@@ -159,6 +199,7 @@ export function getDevicePerformanceConfig() {
       animationUpdates: !isMobile,
     },
   };
+  return cachedConfig;
 }
 // Format bytes to human readable string
 export function formatBytes(bytes: number): string {

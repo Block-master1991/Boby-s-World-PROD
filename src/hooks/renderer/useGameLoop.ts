@@ -83,6 +83,8 @@ export const useGameLoop = (p: UseGameLoopProps) => {
     // unnecessary GC pressure on mobile – so we intentionally omit it.
   }, []);
 
+  const lastCleanupTimeRef = useRef<number>(0);
+
   const updateAllSystems = useCallback(
     (d: number) => {
       const {
@@ -109,7 +111,12 @@ export const useGameLoop = (p: UseGameLoopProps) => {
       if (environmentRef.current && cameraRef.current) {
         environmentRef.current.update(clockRef.current.getElapsedTime(), cameraRef.current);
       }
-      cleanupModelPool(60000, 5);
+      
+      const now = performance.now();
+      if (now - lastCleanupTimeRef.current > 5000) {
+        cleanupModelPool(60000, 5);
+        lastCleanupTimeRef.current = now;
+      }
     },
     [updateCore]
   );

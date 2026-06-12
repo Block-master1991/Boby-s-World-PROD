@@ -115,6 +115,9 @@ interface DitherableMaterial extends THREE.Material {
   setDitherIntensity?: (v: number) => void;
 }
 
+const tempTargetVec = new THREE.Vector3();
+const tempUpAxis = new THREE.Vector3(0, 1, 0);
+
 const updateCoinVisuals = (coin: CoinData, ctx: ProcessContext) => {
   if (coin.userData["isAnimatingCollection"]) {
     const elapsed =
@@ -122,17 +125,21 @@ const updateCoinVisuals = (coin: CoinData, ctx: ProcessContext) => {
     const progress = Math.min(1, elapsed / 200);
     const scale = Math.max(0.1, 2.5 * (1 - progress));
     coin.scale.set(scale, scale, scale);
-    coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), 0.5);
-    coin.position.lerp(ctx.dog.position.clone().add(new THREE.Vector3(0, 1, 0)), 0.4);
+    coin.rotateOnWorldAxis(tempUpAxis, 0.5);
+    tempTargetVec.copy(ctx.dog.position);
+    tempTargetVec.y += 1.0;
+    coin.position.lerp(tempTargetVec, 0.4);
     if (progress >= 1) removeCoin(coin, ctx.scene, ctx.octree);
   } else if (coin.userData["isAttracted"]) {
     coin.position.add(ctx.displacement);
     const dist = ctx.dog.position.distanceTo(coin.position);
     const speed = Math.min(0.4, 0.05 + ((ctx.magnetRadius - dist) / ctx.magnetRadius) * 0.35);
-    coin.position.lerp(ctx.dog.position.clone().add(new THREE.Vector3(0, 0.5, 0)), speed);
-    coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), coin.rotationSpeed || COIN_ROTATION_SPEED);
+    tempTargetVec.copy(ctx.dog.position);
+    tempTargetVec.y += 0.5;
+    coin.position.lerp(tempTargetVec, speed);
+    coin.rotateOnWorldAxis(tempUpAxis, coin.rotationSpeed || COIN_ROTATION_SPEED);
   } else if (ctx.dog.position.distanceTo(coin.position) < 150) {
-    coin.rotateOnWorldAxis(new THREE.Vector3(0, 1, 0), COIN_ROTATION_SPEED);
+    coin.rotateOnWorldAxis(tempUpAxis, COIN_ROTATION_SPEED);
   }
 
   // Smooth dither fade-in for newly appeared coins
@@ -204,14 +211,17 @@ export const useCoinInteraction = (props: InteractionProps) => {
 
   const magnetRadius = props.COIN_MAGNET_RADIUS ?? COIN_MAGNET_RADIUS;
   const lastDogPositionRef = useRef<THREE.Vector3>(new THREE.Vector3());
+  const displacementRef = useRef<THREE.Vector3>(new THREE.Vector3());
 
   const updateCoinPhysics = useCallback(() => {
     if (!dogModelRef.current || !sceneRef.current) return;
     const dog = dogModelRef.current;
 
+    displacementRef.current.copy(dog.position).sub(lastDogPositionRef.current);
+
     const ctx: ProcessContext = {
       dog,
-      displacement: dog.position.clone().sub(lastDogPositionRef.current),
+      displacement: displacementRef.current,
       magnetRadius,
       isMagnetActive: isCoinMagnetActiveRef.current,
       scene: sceneRef.current,

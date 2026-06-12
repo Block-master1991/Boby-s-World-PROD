@@ -30,6 +30,8 @@ const getSprintState = (
   return !!(keys["ShiftLeft"] || keys["ShiftRight"]);
 };
 
+const tempForward = new THREE.Vector3();
+
 const applyJoystick = (
   dog: THREE.Group,
   data: { jX: number; jY: number; speed: number },
@@ -41,10 +43,9 @@ const applyJoystick = (
     dog.rotation.y += (data.jX > 0 ? -1 : 1) * jRot * (Math.abs(data.jX) * 2) * delta;
     rot = true;
   }
-  const forward = new THREE.Vector3();
-  dog.getWorldDirection(forward);
+  dog.getWorldDirection(tempForward);
   const applied = data.speed * Math.abs(data.jY) * delta;
-  dog.position.addScaledVector(forward, (data.jY < 0 ? 1 : -1) * applied);
+  dog.position.addScaledVector(tempForward, (data.jY < 0 ? 1 : -1) * applied);
   return { rot, mov: applied > 0.001 };
 };
 
@@ -63,15 +64,14 @@ const applyKbd = (
     dog.rotation.y -= kRot * delta;
     rot = true;
   }
-  const forward = new THREE.Vector3();
-  dog.getWorldDirection(forward);
   let mov = false;
+  dog.getWorldDirection(tempForward);
   if (keys["KeyW"] || keys["ArrowUp"]) {
-    dog.position.addScaledVector(forward, speed * delta);
+    dog.position.addScaledVector(tempForward, speed * delta);
     mov = true;
   }
   if (keys["KeyS"] || keys["ArrowDown"]) {
-    dog.position.addScaledVector(forward, -speed * delta);
+    dog.position.addScaledVector(tempForward, -speed * delta);
     mov = true;
   }
   return { rot, mov };
