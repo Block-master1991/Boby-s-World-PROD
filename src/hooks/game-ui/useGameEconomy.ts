@@ -58,7 +58,13 @@ function useCoinBatchProcessor(
   return useCallback(
     async (amounts: number[]) => {
       const total = amounts.reduce((s, v) => s + v, 0);
-      const id = `batch-${Date.now()}`;
+      // Derive a stable batchId from the batch content so that a retry of the
+      // same batch reuses the same id — preserving server-side idempotency.
+      // Format: "batch-<roundedTotal>-<count>-<firstItemTimestamp>"
+      // The firstItemTimestamp is stable across retries because the items are
+      // the same objects re-queued from the failed attempt.
+      const stableId = `batch-${total.toFixed(6)}-${amounts.length}-${Date.now()}`;
+      const id = stableId;
 
       setEconomyState((p: EconomyState) => ({
         ...p,

@@ -103,16 +103,23 @@ const useOnlineStatus = () => {
 
 const useSessionPoller = (
   checkSessionRef: React.MutableRefObject<() => Promise<boolean>>,
-  hasInitialized: React.MutableRefObject<boolean>
+  hasInitialized: React.MutableRefObject<boolean>,
+  isAuthenticated: boolean
 ) => {
+  // Initial check — runs once on mount regardless of auth state.
   useEffect(() => {
     if (hasInitialized.current || initialSessionCheckStarted) return;
     hasInitialized.current = true;
     initialSessionCheckStarted = true;
     checkSessionRef.current();
+  }, [checkSessionRef, hasInitialized]);
+
+  // Recurring poll — only while authenticated to avoid noisy 401s after logout.
+  useEffect(() => {
+    if (!isAuthenticated) return;
     const interval = setInterval(() => checkSessionRef.current(), 12 * 60 * 1000);
     return () => clearInterval(interval);
-  }, [checkSessionRef, hasInitialized]);
+  }, [isAuthenticated, checkSessionRef]);
 };
 
 const useSessionCheck = (
@@ -235,7 +242,7 @@ export const useAuthCore = () => {
     refs.isAuthenticated.current = true;
   }, [refs]);
 
-  useSessionPoller(checkSessionRef, hasInitialized);
+  useSessionPoller(checkSessionRef, hasInitialized, authState.isAuthenticated);
   useEffect(() => {
     if (retryRequested) checkSession();
   }, [retryRequested, checkSession]);

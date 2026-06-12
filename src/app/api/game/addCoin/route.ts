@@ -29,7 +29,11 @@ export const POST = withAuth(
         return NextResponse.json({ error: "Invalid amount." }, { status: 400 });
       const isGranular =
         Math.abs((amount * 1000) % 1) < 0.0001 || Math.abs((amount * 1000) % 1) > 0.9999;
-      if (!isGranular || amount > 0.02)
+      // Max 0.1 USDT per batch (100 coins × 0.001).
+      // The previous 0.02 limit caused 400 errors when coins queued up during
+      // network slowdowns (3 s interval × 30+ coins = 0.03+ USDT).
+      // The Redis per-user rate-limit (1 req/s) remains the primary anti-cheat guard.
+      if (!isGranular || amount > 0.1)
         return NextResponse.json({ error: "Invalid batch." }, { status: 400 });
 
       const newBalance = await executeAddCoin(db, userPublicKey, amount, batchId);

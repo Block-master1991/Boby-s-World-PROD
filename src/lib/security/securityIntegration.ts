@@ -71,7 +71,7 @@ export class SecurityIntegration {
     sessionId: string,
     request: Request,
     deviceInfo?: DeviceInfo
-  ): Promise<{ valid: boolean; session?: SecurityContext; error?: string }> {
+  ): Promise<{ valid: boolean; session?: SecurityContext; error?: string; isInfraError?: boolean }> {
     try {
       const device = deviceInfo || this.extractDeviceInfo(request);
       const validation = await sessionManager.validateSession(
@@ -85,6 +85,9 @@ export class SecurityIntegration {
         return {
           valid: false,
           error: validation.reason || "Invalid session",
+          // Coerce to boolean: validation.isInfraError may be undefined when
+          // the session was simply not found (not an infra failure).
+          isInfraError: !!validation.isInfraError,
         };
       }
 
@@ -94,7 +97,7 @@ export class SecurityIntegration {
       };
     } catch (error) {
       logger.error("[SecurityIntegration] Session validation error:", error);
-      return { valid: false, error: "Session validation error" };
+      return { valid: false, error: "Session validation error", isInfraError: true };
     }
   }
 
@@ -229,23 +232,38 @@ export class SecurityIntegration {
   }
 
   public extractDeviceInfo(request: Request): DeviceInfo {
+    // On the server we only have access to HTTP headers; browser-only properties
+    // (canvas, WebGL, fonts, audio) are unavailable.  We use stable sentinel
+    // values so the fingerprint stays consistent across all server-side calls
+    // for the same user-agent — preventing spurious riskScore accumulation.
+    const userAgent = request.headers.get("user-agent") || "unknown";
+
+    // Read device hints forwarded by the client (if any); fall back to safe defaults.
+    const screenRes = request.headers.get("x-screen-resolution") || "server-inferred";
+    const hwConcurrency = parseInt(request.headers.get("x-hw-concurrency") || "4", 10);
+    const deviceMemory = parseInt(request.headers.get("x-device-memory") || "4", 10);
+    const touchPoints = parseInt(request.headers.get("x-touch-points") || "0", 10);
+    const platform = request.headers.get("x-platform") || "server-inferred";
+    const language = request.headers.get("accept-language")?.split(",")[0] || "en-US";
+
     return {
-      userAgent: request.headers.get("user-agent") || "unknown",
-      screenResolution: "1920x1080",
-      hardwareConcurrency: 4,
-      deviceMemory: 8,
-      plugins: [],
+      userAgent,
+      screenResolution: screenRes,
+      hardwareConcurrency: isNaN(hwConcurrency) ? 4 : hwConcurrency,
+      deviceMemory: isNaN(deviceMemory) ? 4 : deviceMemory,
+      touchPoints: isNaN(touchPoints) ? 0 : touchPoints,
+      platform,
+      language,
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-      language: "en-US",
-      platform: "unknown",
-      colorDepth: 24,
-      touchPoints: 0,
-      canvas: "default-canvas-fingerprint",
-      webgl: "default-webgl-fingerprint",
-      fonts: [],
-      audioContext: "default-audio",
-      battery: "unknown",
-      networkInfo: "unknown",
+      colorDepth: 24, // stable sentinel — not available server-side
+      // These fields are browser-only; sentinel values keep the fingerprint stable.
+      plugins: ["server-inferred"],
+      canvas: "server-inferred",
+      webgl: "server-inferred",
+      fonts: ["server-inferred"],
+      audioContext: "server-inferred",
+      battery: "server-inferred",
+      networkInfo: "server-inferred",
     };
   }
 

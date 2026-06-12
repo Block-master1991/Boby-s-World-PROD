@@ -102,6 +102,25 @@ export class TokenBlacklistManager {
   }
 
   static async isBlacklisted(jti: string, gracePeriodSeconds: number = 0): Promise<boolean> {
+    // --- Redis cache layer ---
+    // Skip cache when grace-period precision is needed (timing-sensitive path).
+    const useCache = gracePeriodSeconds === 0;
+    if (useCache) {
+      try {
+        const redisModule = await import("@/lib/redis");
+        const redis = redisModule.default;
+        if (redis) {
+          const cached = await redis.get(`bl:${jti}`);
+          if (cached !== null) {
+            logger.log(`[TokenBlacklist] Redis cache hit for JTI ${jti}: ${cached === "1" ? "BLACKLISTED" : "clean"}`);
+            return cached === "1";
+          }
+        }
+      } catch {
+        // Redis unavailable — fall through to Firestore
+      }
+    }
+
     try {
       await initializeAdminApp();
       const blacklistCol = this.getBlacklistCollection();
@@ -113,6 +132,7 @@ export class TokenBlacklistManager {
 
       if (!tokenDoc.exists) {
         logger.log(`[TokenBlacklist] Token JTI: ${jti} not found in blacklist.`);
+        if (useCache) await this.cacheBlacklistResult(jti, false);
         return false;
       }
 
@@ -137,9 +157,11 @@ export class TokenBlacklistManager {
 
       // Optional: Clean up very old tokens if their original expiry + buffer has passed.
       if (await this.shouldCleanupOldToken(tokenDoc, tokenData, now)) {
+        if (useCache) await this.cacheBlacklistResult(jti, false);
         return false;
       }
 
+      if (useCache) await this.cacheBlacklistResult(jti, true);
       return true; // Found in blacklist and not super-expired for cleanup
     } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : "An unknown error occurred";
@@ -155,6 +177,20 @@ export class TokenBlacklistManager {
         `[TokenBlacklist] Database error during blacklist check for JTI ${jti}. Treating as NOT blacklisted due to error.`
       );
       return false;
+    }
+  }
+
+  private static async cacheBlacklistResult(jti: string, isBlacklisted: boolean): Promise<void> {
+    try {
+      const redisModule = await import("@/lib/redis");
+      const redis = redisModule.default;
+      if (!redis) return;
+      // Blacklisted tokens: 5-min TTL (token is revoked, result won't change).
+      // Clean tokens: 2-min TTL (shorter because a revocation could arrive soon).
+      const ttl = isBlacklisted ? 300 : 120;
+      await redis.set(`bl:${jti}`, isBlacklisted ? "1" : "0", "EX", ttl);
+    } catch {
+      // Non-critical: cache miss is fine, just slightly slower
     }
   }
 

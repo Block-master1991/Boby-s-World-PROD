@@ -131,7 +131,7 @@ export class AdvancedSessionManager {
     deviceInfo: DeviceInfo,
     _currentIp: string, // Unused param
     currentLocation?: GeoLocation
-  ): Promise<{ valid: boolean; session?: SessionData; reason?: string }> {
+  ): Promise<{ valid: boolean; session?: SessionData; reason?: string; isInfraError?: boolean }> {
     try {
       const sessionKey = `${this.SESSION_PREFIX}${sessionId}`;
       const sessionStr = await redis.get(sessionKey);
@@ -161,7 +161,10 @@ export class AdvancedSessionManager {
       return { valid: true, session };
     } catch (error) {
       logger.error(`[SessionManager] Error validating session ${sessionId}:`, error);
-      return { valid: false, reason: "Validation error" };
+      // Distinguish infrastructure failures (Redis down/timeout) from genuine
+      // session invalidity so callers can apply a fallback strategy instead of
+      // immediately logging the user out.
+      return { valid: false, reason: "Validation error", isInfraError: true };
     }
   }
 
@@ -194,7 +197,10 @@ export class AdvancedSessionManager {
       const nextSeed = randomBytes(16).toString("hex");
       session.previousSeed = session.currentSeed;
       session.currentSeed = nextSeed;
-      session.seedExpiresAt = Date.now();
+      // Record when the OLD seed (now in previousSeed) stops being accepted.
+      // The grace-period check on line below uses: Date.now() - session.seedExpiresAt < 30_000
+      // so seedExpiresAt must be in the FUTURE (i.e. "expires at" = now + 30s).
+      session.seedExpiresAt = Date.now() + 30000;
       await redis.setex(sessionKey, this.DEFAULT_TIMEOUT, JSON.stringify(session));
       return { valid: true, nextSeed };
     }

@@ -24,6 +24,18 @@ interface RequestWithTokens extends NextRequest {
   _nextTokens?: { accessToken: string; newRefreshToken: string };
 }
 
+/**
+ * High-frequency game endpoints where clearing all cookies on auth failures would
+ * be destructive (e.g. mid-game coin sync). For these paths:
+ *  - Nonce mismatches return 401 WITHOUT cookie clearing (let client retry).
+ *  - Token expiry is handled by the standard refresh flow.
+ */
+const HIGH_FREQ_GAME_PATHS = ["/api/game/addCoin", "/api/game/applyPenalty"] as const;
+
+function isHighFreqGamePath(pathname: string): boolean {
+  return HIGH_FREQ_GAME_PATHS.some(p => pathname.startsWith(p));
+}
+
 async function verifyWafRequest(request: NextRequest): Promise<NextResponse | null> {
   const { verifyCloudflareRequest } = await import("@/lib/request-utils");
   if (!verifyCloudflareRequest(request)) {
@@ -69,6 +81,7 @@ async function handleTokenAuth(
   metadata: AuthMetadata
 ): Promise<NextResponse | { payload: JWTPayload }> {
   const { accessToken, refreshToken, userAgent, ip } = metadata;
+  const isHighFreq = isHighFreqGamePath(request.nextUrl.pathname);
   const payload = accessToken
     ? await JWTManager.verifyAccessToken(accessToken, userAgent, ip)
     : null;
@@ -77,11 +90,14 @@ async function handleTokenAuth(
     if (!storedNonce || payload.nonce !== storedNonce) {
       if (!isDev) {
         logger.warn(`[AuthMiddleware] Nonce mismatch for ${payload.sub}. Revoking session.`);
+        // For high-freq game paths: don't clear cookies — the client is in a game loop
+        // and the mismatch may be a transient race after a token rotation.
+        // For all other paths: clear cookies to force re-login.
         return createAuthErrorResponse({
           message: "Session nonce invalid. Please login again.",
           code: "NONCE_MISMATCH",
           status: 401,
-          clearCookies: true,
+          clearCookies: !isHighFreq,
         });
       }
       logger.warn(
@@ -95,7 +111,7 @@ async function handleTokenAuth(
       message: "Authentication required.",
       code: "NO_TOKENS",
       status: 401,
-      clearCookies: true,
+      clearCookies: !isHighFreq,
     });
   }
   const refreshResult = await JWTManager.refreshAccessToken(refreshToken, userAgent, ip);
@@ -109,14 +125,14 @@ async function handleTokenAuth(
       message: "Session refresh failed verification.",
       code: "REFRESH_VERIFY_FAILED",
       status: 401,
-      clearCookies: true,
+      clearCookies: !isHighFreq,
     });
   }
   return createAuthErrorResponse({
     message: "Invalid session. Please login again.",
     code: "INVALID_OR_EXPIRED_TOKEN",
     status: 401,
-    clearCookies: true,
+    clearCookies: !isHighFreq,
   });
 }
 
@@ -131,6 +147,16 @@ async function validateSecureSession(
   const { ip, userAgent } = metadata;
   const sessionValidation = await securityIntegration.validateSession(secureSessionId, request);
   if (!sessionValidation.valid) {
+    if (sessionValidation.isInfraError) {
+      // Redis is down or unreachable — do NOT log the user out.
+      // Fall back to JWT-only authentication so users can keep playing.
+      logger.warn(
+        `[AuthMiddleware withAuth] Redis/session infra error for ${payload.sub}. ` +
+        `Falling back to JWT-only auth. Error: ${sessionValidation.error}`
+      );
+      return { nextSeed: undefined };
+    }
+
     logger.log(
       `[AuthMiddleware withAuth] Stateful session validation failed: ${sessionValidation.error}`
     );

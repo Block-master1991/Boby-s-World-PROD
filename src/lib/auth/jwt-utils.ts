@@ -47,14 +47,21 @@ export class JWTManager {
       : "";
     const actualIpHash = expectedIpHash ? createHash("sha256").update(ip).digest("base64") : "";
 
+    // User-Agent mismatch is a strong signal of token theft — reject.
     if (expectedUserAgentHash && actualUserAgentHash !== expectedUserAgentHash) {
       logger.warn(`[JWTManager] User-Agent hash mismatch for token ${decoded.jti}`);
       return false;
     }
 
+    // IP changes are common on mobile (network switches, dynamic NAT, VPN).
+    // We audit-log the change but do NOT reject — the token is still valid.
+    // The session layer (advancedSessionManager) provides additional device binding.
     if (expectedIpHash && actualIpHash !== expectedIpHash) {
-      logger.warn(`[JWTManager] IP hash mismatch for token ${decoded.jti}`);
-      return false;
+      logger.warn(
+        `[JWTManager] IP changed for token ${decoded.jti}. Expected hash differs from current IP. ` +
+        `Allowing — will be captured in audit logs. (Mobile/NAT roaming is normal)`
+      );
+      // Intentionally not returning false; IP-only changes are not a blocking signal.
     }
 
     return true;
@@ -267,52 +274,158 @@ export class JWTManager {
     logger.log(
       `[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0, 20)}...`
     );
-    const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
-    if (!decodedRefreshToken) {
-      logger.warn(
-        "[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed."
-      );
-      return null;
+
+    const decoded = jwt.decode(refreshTokenValue) as JWTPayload | null;
+    const jti = decoded?.jti;
+
+    const lockKey = jti ? `lock:refresh:${jti}` : null;
+    const cacheKey = jti ? `refreshed:jti:${jti}` : null;
+    const lockValue = randomBytes(16).toString("hex");
+
+    let useRedis = false;
+    let lockAcquired = false;
+    let redis: any = null;
+
+    if (jti) {
+      try {
+        const redisModule = await import("@/lib/redis");
+        redis = redisModule.default;
+        const ping = await redis.ping();
+        if (ping === "PONG") {
+          useRedis = true;
+        }
+      } catch (err) {
+        useRedis = false;
+      }
     }
-    // Important: Revoke the old refresh token *after* successfully verifying it and *before* issuing new ones.
-    // This prevents replay of the same refresh token if something goes wrong after this point.
-    logger.log(
-      `[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`
-    );
-    await this.revokeToken(refreshTokenValue, "expired"); // Mark as 'expired' because it's consumed
 
-    const userAgentHash = userAgent ? createHash("sha256").update(userAgent).digest("base64") : "";
-    const ipHash = ip ? createHash("sha256").update(ip).digest("base64") : "";
+    // Double-checked Lock: check cache first before lock
+    if (useRedis && cacheKey) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          logger.log(`[JWTManager] Found cached refresh tokens for JTI: ${jti}. Returning deduplicated result.`);
+          return JSON.parse(cached);
+        }
+      } catch (err) {
+        logger.error(`[JWTManager] Error reading cached refresh result for JTI: ${jti}`, err);
+      }
+    }
 
-    const newAccessToken = this.createAccessToken({
-      publicKey: decodedRefreshToken.sub,
-      nonce: decodedRefreshToken.nonce,
-      userAgentHash,
-      ipHash,
-      authMethod: decodedRefreshToken.authMethod,
-      totpEnabled: decodedRefreshToken.totpEnabled,
-    });
+    // Acquire Lock
+    if (useRedis && lockKey) {
+      try {
+        const maxRetries = 30; // 3 seconds total max wait
+        const retryDelay = 100; // 100ms
+        for (let i = 0; i < maxRetries; i++) {
+          const setRes = await redis.set(lockKey, lockValue, "NX", "PX", 5000); // 5s expiry
+          if (setRes === "OK") {
+            lockAcquired = true;
+            break;
+          }
+          await new Promise((resolve) => setTimeout(resolve, retryDelay));
+        }
+        if (!lockAcquired) {
+          logger.warn(`[JWTManager] Timeout waiting for refresh lock on token ${jti}. Proceeding without lock.`);
+        }
+      } catch (err) {
+        logger.error(`[JWTManager] Error acquiring lock for JTI: ${jti}`, err);
+      }
+    }
 
-    const newRefreshToken = this.createRefreshToken({
-      publicKey: decodedRefreshToken.sub,
-      nonce: decodedRefreshToken.nonce,
-      userAgentHash,
-      ipHash,
-      authMethod: decodedRefreshToken.authMethod,
-      totpEnabled: decodedRefreshToken.totpEnabled,
-    });
+    // Double-checked Lock: check cache again post-lock
+    if (useRedis && cacheKey) {
+      try {
+        const cached = await redis.get(cacheKey);
+        if (cached) {
+          logger.log(`[JWTManager] Found cached refresh tokens for JTI: ${jti} after acquiring lock. Returning deduplicated result.`);
+          if (lockAcquired && lockKey) {
+            try {
+              const currentVal = await redis.get(lockKey);
+              if (currentVal === lockValue) {
+                await redis.del(lockKey);
+              }
+            } catch (err) {
+              logger.error(`[JWTManager] Error releasing lock for ${jti}:`, err);
+            }
+          }
+          return JSON.parse(cached);
+        }
+      } catch (err) {
+        logger.error(`[JWTManager] Error reading cached refresh result for JTI: ${jti} post-lock`, err);
+      }
+    }
 
-    const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;
-    const newRefreshDecoded = jwt.decode(newRefreshToken) as JWTPayload | null;
+    try {
+      const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
+      if (!decodedRefreshToken) {
+        logger.warn(
+          "[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed."
+        );
+        return null;
+      }
 
-    logger.log(`[JWTManager] New tokens generated for ${decodedRefreshToken.sub}`);
-    logger.log(`→ New accessToken JTI: ${newAccessDecoded?.jti}`);
-    logger.log(`→ New refreshToken JTI: ${newRefreshDecoded?.jti}`);
+      // Important: Revoke the old refresh token *after* successfully verifying it and *before* issuing new ones.
+      // This prevents replay of the same refresh token if something goes wrong after this point.
+      logger.log(
+        `[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`
+      );
+      await this.revokeToken(refreshTokenValue, "expired"); // Mark as 'expired' because it's consumed
 
-    return {
-      accessToken: newAccessToken,
-      newRefreshToken: newRefreshToken,
-    };
+      const userAgentHash = userAgent ? createHash("sha256").update(userAgent).digest("base64") : "";
+      const ipHash = ip ? createHash("sha256").update(ip).digest("base64") : "";
+
+      const newAccessToken = this.createAccessToken({
+        publicKey: decodedRefreshToken.sub,
+        nonce: decodedRefreshToken.nonce,
+        userAgentHash,
+        ipHash,
+        authMethod: decodedRefreshToken.authMethod,
+        totpEnabled: decodedRefreshToken.totpEnabled,
+      });
+
+      const newRefreshToken = this.createRefreshToken({
+        publicKey: decodedRefreshToken.sub,
+        nonce: decodedRefreshToken.nonce,
+        userAgentHash,
+        ipHash,
+        authMethod: decodedRefreshToken.authMethod,
+        totpEnabled: decodedRefreshToken.totpEnabled,
+      });
+
+      const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;
+      const newRefreshDecoded = jwt.decode(newRefreshToken) as JWTPayload | null;
+
+      logger.log(`[JWTManager] New tokens generated for ${decodedRefreshToken.sub}`);
+      logger.log(`→ New accessToken JTI: ${newAccessDecoded?.jti}`);
+      logger.log(`→ New refreshToken JTI: ${newRefreshDecoded?.jti}`);
+
+      const result = {
+        accessToken: newAccessToken,
+        newRefreshToken: newRefreshToken,
+      };
+
+      if (useRedis && cacheKey) {
+        try {
+          await redis.set(cacheKey, JSON.stringify(result), "EX", 30); // 30s TTL
+        } catch (err) {
+          logger.error(`[JWTManager] Error caching refresh result for JTI: ${jti}`, err);
+        }
+      }
+
+      return result;
+    } finally {
+      if (lockAcquired && lockKey && useRedis) {
+        try {
+          const currentVal = await redis.get(lockKey);
+          if (currentVal === lockValue) {
+            await redis.del(lockKey);
+          }
+        } catch (err) {
+          logger.error(`[JWTManager] Error releasing lock for ${jti}:`, err);
+        }
+      }
+    }
   }
 
   static extractTokenFromCookies(cookies: string, tokenName: string): string | null {

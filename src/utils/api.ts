@@ -18,7 +18,6 @@ let globalToast: ReturnType<typeof useToast>["toast"] | null = null;
 const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 const REQUEST_TIMEOUT_MS = 60000;
-const REQUEST_DEDUP_TTL = 5000;
 
 const activeRequests = new Map<string, Promise<Response>>();
 
@@ -49,10 +48,10 @@ function generateRequestKey(input: RequestInfo | URL, init?: RequestInit): strin
   return `${method}:${url}:${body}`.slice(0, 200);
 }
 
-// Clean up expired deduplication entries
-setInterval(() => {
-  activeRequests.clear();
-}, REQUEST_DEDUP_TTL);
+// NOTE: We intentionally do NOT use a setInterval to clear activeRequests.
+// Each request promise removes its own key in the finally block below.
+// A periodic clear() would remove in-flight entries and allow duplicate
+// requests to be fired concurrently (different batchId → idempotency bypass).
 
 const validateResponse = async (response: Response): Promise<Response> => {
   const contentType = response.headers.get("content-type");

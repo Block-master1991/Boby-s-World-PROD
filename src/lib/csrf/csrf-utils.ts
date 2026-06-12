@@ -68,8 +68,11 @@ export class CSRFManager {
         logger.warn(
           `[CSRFManager] CSRF token mismatch for session ${sessionId}. Expected: ${storedData.token.substring(0, 5)}..., Got: ${clientToken.substring(0, 5)}...`
         );
-        // For security, delete the token on mismatch to prevent brute-force attempts
-        transaction.delete(docRef);
+        // NOTE: We intentionally do NOT delete the token on mismatch.
+        // Deleting it would create a deadlock: the next request (e.g. a retry or a
+        // parallel game request) would have no CSRF token and also fail, even though
+        // it carries the correct token.  Brute-force protection is handled by the
+        // upstream rate-limiter and audit logger.
         return { success: false, reason: "mismatch" };
       }
 
