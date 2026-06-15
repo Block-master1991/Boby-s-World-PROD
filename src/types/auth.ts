@@ -37,6 +37,12 @@ export interface WebAuthnRegisterOptions {
   [key: string]: unknown;
 }
 
+export interface UserActivity {
+  lastActive: number;
+  isIdle: boolean;
+  idleWarningShown: boolean;
+}
+
 export interface AuthContextType extends AuthState {
   login: () => Promise<boolean>;
   logout: () => Promise<void>;
@@ -55,4 +61,10 @@ export interface AuthContextType extends AuthState {
   securityLevel: "Standard" | "Enhanced" | "Maximum";
   isOnline: boolean;
   performanceStats: { averageLoadTime?: string; cacheHitRate?: string };
+  userActivity: UserActivity;
+  recordUserActivity: () => void;
+  isUserActive: boolean;
+  timeUntilIdle: number;
+  /** Convenience accessor for `userActivity.lastActive` (0 until hydrated). */
+  lastActive: number;
 }

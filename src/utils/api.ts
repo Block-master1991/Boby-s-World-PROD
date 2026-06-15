@@ -19,6 +19,14 @@ const MAX_RETRIES = 2;
 const RETRY_DELAY_MS = 1000;
 const REQUEST_TIMEOUT_MS = 60000;
 
+// Paths that should advertise themselves as live gameplay to the auth
+// middleware. Matches any path under `/api/game/...` except admin/graphql
+// (which are not "in-progress" gameplay).
+const ACTIVE_GAME_PATH_PREFIX = "/api/game/";
+
+const isActiveGamePath = (url: string): boolean =>
+  url.includes(ACTIVE_GAME_PATH_PREFIX) && !url.includes("/api/game/admin");
+
 const activeRequests = new Map<string, Promise<Response>>();
 
 // --- Helper Functions ---
@@ -211,13 +219,22 @@ export const apiFetch: FetchFunction = async (input, init) => {
 
   const rs = { count: 0, attemptFetch: () => Promise.resolve(new Response()) };
 
+  // Mark game requests as "active gameplay" so the server doesn't kick the
+  // user out on transient nonce/timing races. We only add the header when it
+  // is absent — callers can override (e.g. tests) by setting it explicitly.
+  const isActiveGame = isActiveGamePath(url);
+  const baseHeaders = (init?.headers || {}) as Record<string, string>;
+  const headers: Record<string, string> = isActiveGame
+    ? { ...baseHeaders, "X-Active-Game": baseHeaders["X-Active-Game"] || "1" }
+    : baseHeaders;
+
   const attemptFetch = async (): Promise<Response> => {
     const controller = new AbortController();
     const tId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
     try {
-      const res = await fetchWithCsrf(input, { ...init, signal: controller.signal });
+      const res = await fetchWithCsrf(input, { ...init, headers, signal: controller.signal });
       clearTimeout(tId);
-      const statusRes = await handleResponseStatus(res, input, init, rs);
+      const statusRes = await handleResponseStatus(res, input, { ...init, headers }, rs);
       if (statusRes) return statusRes;
       return validateResponse(res);
     } catch (e) {

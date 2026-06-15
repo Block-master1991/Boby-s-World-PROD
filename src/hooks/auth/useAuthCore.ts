@@ -101,10 +101,13 @@ const useOnlineStatus = () => {
   return isOnline;
 };
 
+// Polling cadence (in ms). Long enough to avoid noisy traffic,
+// short enough to catch a freshly-rotated refresh token.
+const SESSION_POLL_INTERVAL_MS = 12 * 60 * 1000; // 12 minutes
+
 const useSessionPoller = (
   checkSessionRef: React.MutableRefObject<() => Promise<boolean>>,
-  hasInitialized: React.MutableRefObject<boolean>,
-  isAuthenticated: boolean
+  hasInitialized: React.MutableRefObject<boolean>
 ) => {
   // Initial check — runs once on mount regardless of auth state.
   useEffect(() => {
@@ -115,11 +118,15 @@ const useSessionPoller = (
   }, [checkSessionRef, hasInitialized]);
 
   // Recurring poll — only while authenticated to avoid noisy 401s after logout.
+  // Activity tracking and idle-detection are handled centrally in AuthContext
+  // (single source of truth) and exposed via `isUserActive`. Keeping a second
+  // poller here would double-fire listeners and skew idle timers.
   useEffect(() => {
-    if (!isAuthenticated) return;
-    const interval = setInterval(() => checkSessionRef.current(), 12 * 60 * 1000);
+    const interval = setInterval(() => {
+      checkSessionRef.current();
+    }, SESSION_POLL_INTERVAL_MS);
     return () => clearInterval(interval);
-  }, [isAuthenticated, checkSessionRef]);
+  }, [checkSessionRef]);
 };
 
 const useSessionCheck = (
@@ -242,7 +249,7 @@ export const useAuthCore = () => {
     refs.isAuthenticated.current = true;
   }, [refs]);
 
-  useSessionPoller(checkSessionRef, hasInitialized, authState.isAuthenticated);
+  useSessionPoller(checkSessionRef, hasInitialized);
   useEffect(() => {
     if (retryRequested) checkSession();
   }, [retryRequested, checkSession]);

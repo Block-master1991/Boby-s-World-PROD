@@ -36,6 +36,19 @@ function isHighFreqGamePath(pathname: string): boolean {
   return HIGH_FREQ_GAME_PATHS.some(p => pathname.startsWith(p));
 }
 
+/**
+ * The client sends `X-Active-Game: 1` on any request that should be treated
+ * as a continuous gameplay signal. When the flag is set we:
+ *  - never clear auth cookies on transient failures (lets the user retry),
+ *  - extend the issued tokens' lifetime via `isActiveUser`.
+ *
+ * Header-based, not query-string, so it cannot leak into URLs / logs and
+ * the value cannot be forged by a malicious page making GET requests.
+ */
+function isActiveGameRequest(request: NextRequest): boolean {
+  return request.headers.get("x-active-game") === "1";
+}
+
 async function verifyWafRequest(request: NextRequest): Promise<NextResponse | null> {
   const { verifyCloudflareRequest } = await import("@/lib/request-utils");
   if (!verifyCloudflareRequest(request)) {
@@ -76,29 +89,45 @@ async function performRateLimit(
   return null;
 }
 
+const ACTIVE_USER_MESSAGE = "Game session in progress. Please continue playing.";
+
+/**
+ * Resolves whether the request should be treated as live gameplay. The header
+ * is only honored for `/api/game/*` paths to prevent arbitrary routes from
+ * triggering token extension.
+ */
+function resolveActiveUser(request: NextRequest): boolean {
+  const isHighFreq = isHighFreqGamePath(request.nextUrl.pathname);
+  const isActiveGame = isActiveGameRequest(request);
+  return isHighFreq || (isActiveGame && request.nextUrl.pathname.startsWith("/api/game/"));
+}
+
+function pickAuthError(code: string, defaultMessage: string, isActiveUser: boolean) {
+  return createAuthErrorResponse({
+    message: isActiveUser ? ACTIVE_USER_MESSAGE : defaultMessage,
+    code,
+    status: 401,
+    clearCookies: !isActiveUser,
+  });
+}
+
 async function handleTokenAuth(
   request: NextRequest,
   metadata: AuthMetadata
 ): Promise<NextResponse | { payload: JWTPayload }> {
   const { accessToken, refreshToken, userAgent, ip } = metadata;
-  const isHighFreq = isHighFreqGamePath(request.nextUrl.pathname);
+  const isActiveUser = resolveActiveUser(request);
+
   const payload = accessToken
     ? await JWTManager.verifyAccessToken(accessToken, userAgent, ip)
     : null;
+
   if (payload) {
     const storedNonce = request.cookies.get("nonce")?.value;
     if (!storedNonce || payload.nonce !== storedNonce) {
       if (!isDev) {
         logger.warn(`[AuthMiddleware] Nonce mismatch for ${payload.sub}. Revoking session.`);
-        // For high-freq game paths: don't clear cookies — the client is in a game loop
-        // and the mismatch may be a transient race after a token rotation.
-        // For all other paths: clear cookies to force re-login.
-        return createAuthErrorResponse({
-          message: "Session nonce invalid. Please login again.",
-          code: "NONCE_MISMATCH",
-          status: 401,
-          clearCookies: !isHighFreq,
-        });
+        return pickAuthError("NONCE_MISMATCH", "Session nonce invalid. Please login again.", isActiveUser);
       }
       logger.warn(
         `[AuthMiddleware] ⚠️ Nonce mismatch bypassed in dev. Payload: ${payload.nonce}, Cookie: ${storedNonce}`
@@ -106,34 +135,27 @@ async function handleTokenAuth(
     }
     return { payload };
   }
+
   if (!refreshToken) {
-    return createAuthErrorResponse({
-      message: "Authentication required.",
-      code: "NO_TOKENS",
-      status: 401,
-      clearCookies: !isHighFreq,
-    });
+    return pickAuthError("NO_TOKENS", "Authentication required.", isActiveUser);
   }
-  const refreshResult = await JWTManager.refreshAccessToken(refreshToken, userAgent, ip);
+
+  const refreshResult = await JWTManager.refreshAccessToken(
+    refreshToken,
+    userAgent,
+    ip,
+    isActiveUser
+  );
   if (refreshResult) {
     const newPayload = await JWTManager.verifyAccessToken(refreshResult.accessToken, userAgent, ip);
     if (newPayload) {
       (request as RequestWithTokens)._nextTokens = refreshResult;
       return { payload: newPayload };
     }
-    return createAuthErrorResponse({
-      message: "Session refresh failed verification.",
-      code: "REFRESH_VERIFY_FAILED",
-      status: 401,
-      clearCookies: !isHighFreq,
-    });
+    return pickAuthError("REFRESH_VERIFY_FAILED", "Session refresh failed verification.", isActiveUser);
   }
-  return createAuthErrorResponse({
-    message: "Invalid session. Please login again.",
-    code: "INVALID_OR_EXPIRED_TOKEN",
-    status: 401,
-    clearCookies: !isHighFreq,
-  });
+
+  return pickAuthError("INVALID_OR_EXPIRED_TOKEN", "Invalid session. Please login again.", isActiveUser);
 }
 
 async function validateSecureSession(
@@ -210,27 +232,28 @@ async function syncAuthCookies(
   nextSeed?: string
 ): Promise<void> {
   const requestHost = request.headers.get("host") || undefined;
+  const isActiveUser = resolveActiveUser(request);
+  const cookies = JWTManager.createSecureCookieOptions(0, requestHost, isActiveUser);
+  const tokens = (request as RequestWithTokens)._nextTokens;
 
-  if ((request as RequestWithTokens)._nextTokens) {
-    const { accessToken, newRefreshToken } = (request as RequestWithTokens)._nextTokens!;
-
+  if (tokens) {
     response.cookies.set(
       "accessToken",
-      accessToken,
-      JWTManager.createSecureCookieOptions(15 * 60, requestHost)
+      tokens.accessToken,
+      JWTManager.createSecureCookieOptions(15 * 60, requestHost, isActiveUser)
     );
     response.cookies.set(
       "refreshToken",
-      newRefreshToken,
-      JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost)
+      tokens.newRefreshToken,
+      JWTManager.createSecureCookieOptions(7 * 24 * 60 * 60, requestHost, isActiveUser)
     );
 
     const { CSRFManager } = await import("@/lib/csrf/csrf-utils");
     const csrfToken = await CSRFManager.getOrCreateToken(payload.sub);
     response.cookies.set("csrfToken", csrfToken, {
       httpOnly: false,
-      secure: JWTManager.createSecureCookieOptions(0, requestHost).secure,
-      sameSite: JWTManager.createSecureCookieOptions(0, requestHost).sameSite,
+      secure: cookies.secure,
+      sameSite: cookies.sameSite,
       maxAge: 30 * 60,
       path: "/",
     });
@@ -240,7 +263,7 @@ async function syncAuthCookies(
     response.cookies.set(
       "session_seed",
       nextSeed,
-      JWTManager.createSecureCookieOptions(30 * 60, requestHost)
+      JWTManager.createSecureCookieOptions(30 * 60, requestHost, isActiveUser)
     );
   }
 }

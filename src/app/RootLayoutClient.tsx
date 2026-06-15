@@ -4,6 +4,7 @@ import { Toaster } from "@/components/ui/toaster";
 import WalletContextProvider from "@/components/wallet/WalletContextProvider";
 import { AudioProvider, useAudio } from "@/contexts/AudioContext";
 import { AuthProvider } from "@/contexts/AuthContext";
+import { SessionManager } from "@/components/ui/SessionManager";
 import { performanceMonitor } from "@/lib/advanced-service-worker";
 import { swrConfig } from "@/lib/swr/swr-config";
 import { logger } from "@/utils/logger";
@@ -66,6 +67,7 @@ export default function RootLayoutClient({
             {children}
             <Toaster />
             <AudioInitializer />
+            <SessionManager />
           </AudioProvider>
         </AuthProvider>
       </WalletContextProvider>

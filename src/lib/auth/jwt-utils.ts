@@ -37,6 +37,17 @@ interface CookieOptions {
   domain?: string;
 }
 
+/**
+ * Minimal Redis client surface used by the refresh flow. We avoid importing
+ * the full ioredis type to keep this module decoupled from the cache layer.
+ */
+type RedisLike = {
+  ping(): Promise<string>;
+  get(key: string): Promise<string | null>;
+  set(...args: unknown[]): Promise<unknown>;
+  del(key: string): Promise<number>;
+};
+
 export class JWTManager {
   private static verifyFingerprint(decoded: JWTPayload, userAgent: string, ip: string): boolean {
     const expectedUserAgentHash = decoded.userAgentHash || "";
@@ -91,6 +102,10 @@ export class JWTManager {
   // Expiry times in seconds
   private static readonly ACCESS_TOKEN_EXPIRY_SECONDS = 15 * 60; // 15 minutes
   private static readonly REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60; // 7 days
+  // Active-game extension applied to access tokens and cookies. Refresh
+  // tokens are NOT extended — they already last 7 days, and stretching them
+  // would weaken the rotation guarantee.
+  private static readonly ACTIVE_USER_TOKEN_EXTENSION = 5 * 60; // +5 minutes
 
   static createAccessToken(params: CreateTokenParams): string {
     const { publicKey, nonce, userAgentHash, ipHash } = params;
@@ -266,10 +281,20 @@ export class JWTManager {
     }
   }
 
+  /**
+   * Refreshes the access token using a valid refresh token.
+   *
+   * - When `isActiveUser` is true the new access token is granted an extra
+   *   `ACTIVE_USER_TOKEN_EXTENSION` window. The refresh token's lifetime is
+   *   NOT extended (it already lasts 7 days).
+   * - Results are cached in Redis (double-checked locking) so concurrent
+   *   refreshes from multiple tabs collapse into a single token rotation.
+   */
   static async refreshAccessToken(
     refreshTokenValue: string,
     userAgent: string,
-    ip: string
+    ip: string,
+    isActiveUser: boolean = false
   ): Promise<{ accessToken: string; newRefreshToken: string } | null> {
     logger.log(
       `[JWTManager] Attempting to refresh access token using refresh token (first 20 chars): ${refreshTokenValue.substring(0, 20)}...`
@@ -277,54 +302,57 @@ export class JWTManager {
 
     const decoded = jwt.decode(refreshTokenValue) as JWTPayload | null;
     const jti = decoded?.jti;
-
     const lockKey = jti ? `lock:refresh:${jti}` : null;
     const cacheKey = jti ? `refreshed:jti:${jti}` : null;
     const lockValue = randomBytes(16).toString("hex");
+    const redis: RedisLike | null = await this.tryConnectRedis();
+    const lockCtx = { redis, cacheKey, lockKey, lockValue, jti };
 
-    let useRedis = false;
+    const deduped = await this.dedupeOrAcquireLock(lockCtx);
+    if (deduped.cached) return JSON.parse(deduped.cached);
+
+    try {
+      return await this.issueNewTokens({
+        refreshTokenValue,
+        userAgent,
+        ip,
+        isActiveUser,
+        redis,
+        cacheKey,
+        jti,
+      });
+    } finally {
+      if (deduped.lockAcquired && lockKey && redis) {
+        await this.releaseLock(redis, lockKey, lockValue, jti);
+      }
+    }
+  }
+
+  /**
+   * Double-checked locking: read cache → acquire lock → re-read cache.
+   * Returns the cached payload (if any) and whether the lock was held.
+   */
+  private static async dedupeOrAcquireLock(ctx: {
+    redis: RedisLike | null;
+    cacheKey: string | null;
+    lockKey: string | null;
+    lockValue: string;
+    jti: string | undefined;
+  }): Promise<{ cached: string | null; lockAcquired: boolean }> {
+    const { redis, cacheKey, lockKey, lockValue, jti } = ctx;
+
+    if (redis && cacheKey) {
+      const cached = await this.readCachedRefresh(redis, cacheKey, jti);
+      if (cached) {
+        logger.log(`[JWTManager] Found cached refresh tokens for JTI: ${jti}. Returning deduplicated result.`);
+        return { cached, lockAcquired: false };
+      }
+    }
+
     let lockAcquired = false;
-    let redis: any = null;
-
-    if (jti) {
+    if (redis && lockKey) {
       try {
-        const redisModule = await import("@/lib/redis");
-        redis = redisModule.default;
-        const ping = await redis.ping();
-        if (ping === "PONG") {
-          useRedis = true;
-        }
-      } catch (err) {
-        useRedis = false;
-      }
-    }
-
-    // Double-checked Lock: check cache first before lock
-    if (useRedis && cacheKey) {
-      try {
-        const cached = await redis.get(cacheKey);
-        if (cached) {
-          logger.log(`[JWTManager] Found cached refresh tokens for JTI: ${jti}. Returning deduplicated result.`);
-          return JSON.parse(cached);
-        }
-      } catch (err) {
-        logger.error(`[JWTManager] Error reading cached refresh result for JTI: ${jti}`, err);
-      }
-    }
-
-    // Acquire Lock
-    if (useRedis && lockKey) {
-      try {
-        const maxRetries = 30; // 3 seconds total max wait
-        const retryDelay = 100; // 100ms
-        for (let i = 0; i < maxRetries; i++) {
-          const setRes = await redis.set(lockKey, lockValue, "NX", "PX", 5000); // 5s expiry
-          if (setRes === "OK") {
-            lockAcquired = true;
-            break;
-          }
-          await new Promise((resolve) => setTimeout(resolve, retryDelay));
-        }
+        lockAcquired = await this.acquireRefreshLock(redis, lockKey, lockValue);
         if (!lockAcquired) {
           logger.warn(`[JWTManager] Timeout waiting for refresh lock on token ${jti}. Proceeding without lock.`);
         }
@@ -333,98 +361,195 @@ export class JWTManager {
       }
     }
 
-    // Double-checked Lock: check cache again post-lock
-    if (useRedis && cacheKey) {
-      try {
-        const cached = await redis.get(cacheKey);
-        if (cached) {
-          logger.log(`[JWTManager] Found cached refresh tokens for JTI: ${jti} after acquiring lock. Returning deduplicated result.`);
-          if (lockAcquired && lockKey) {
-            try {
-              const currentVal = await redis.get(lockKey);
-              if (currentVal === lockValue) {
-                await redis.del(lockKey);
-              }
-            } catch (err) {
-              logger.error(`[JWTManager] Error releasing lock for ${jti}:`, err);
-            }
-          }
-          return JSON.parse(cached);
-        }
-      } catch (err) {
-        logger.error(`[JWTManager] Error reading cached refresh result for JTI: ${jti} post-lock`, err);
+    if (redis && cacheKey) {
+      const cached = await this.readCachedRefresh(redis, cacheKey, jti);
+      if (cached) {
+        logger.log(
+          `[JWTManager] Found cached refresh tokens for JTI: ${jti} after acquiring lock. Returning deduplicated result.`
+        );
+        return { cached, lockAcquired };
       }
     }
 
-    try {
-      const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
-      if (!decodedRefreshToken) {
-        logger.warn(
-          "[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed."
-        );
-        return null;
-      }
+    return { cached: null, lockAcquired };
+  }
 
-      // Important: Revoke the old refresh token *after* successfully verifying it and *before* issuing new ones.
-      // This prevents replay of the same refresh token if something goes wrong after this point.
-      logger.log(
-        `[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`
+  /**
+   * Verifies the supplied refresh token, revokes it, and mints a new pair.
+   * Optionally extends the access-token TTL when `isActiveUser` is true.
+   */
+  private static async issueNewTokens(ctx: {
+    refreshTokenValue: string;
+    userAgent: string;
+    ip: string;
+    isActiveUser: boolean;
+    redis: RedisLike | null;
+    cacheKey: string | null;
+    jti: string | undefined;
+  }): Promise<{ accessToken: string; newRefreshToken: string } | null> {
+    const { refreshTokenValue, userAgent, ip, isActiveUser, redis, cacheKey, jti } = ctx;
+
+    const decodedRefreshToken = await this.verifyRefreshToken(refreshTokenValue, userAgent, ip);
+    if (!decodedRefreshToken) {
+      logger.warn(
+        "[JWTManager] Refresh token verification failed during access token refresh. Cannot proceed."
       );
-      await this.revokeToken(refreshTokenValue, "expired"); // Mark as 'expired' because it's consumed
+      return null;
+    }
 
-      const userAgentHash = userAgent ? createHash("sha256").update(userAgent).digest("base64") : "";
-      const ipHash = ip ? createHash("sha256").update(ip).digest("base64") : "";
+    // Revoke the old refresh token AFTER verifying it and BEFORE issuing new
+    // ones. This prevents replay of the same refresh token if something goes
+    // wrong after this point.
+    logger.log(
+      `[JWTManager] Old refresh token ${decodedRefreshToken.jti} verified. Revoking it as it's being used for refresh.`
+    );
+    await this.revokeToken(refreshTokenValue, "expired");
 
-      const newAccessToken = this.createAccessToken({
-        publicKey: decodedRefreshToken.sub,
-        nonce: decodedRefreshToken.nonce,
-        userAgentHash,
-        ipHash,
-        authMethod: decodedRefreshToken.authMethod,
-        totpEnabled: decodedRefreshToken.totpEnabled,
-      });
+    const nowSeconds = Math.floor(Date.now() / 1000);
+    const sharedFields = this.buildSharedTokenFields(decodedRefreshToken, userAgent, ip);
+    const newAccessToken = this.signAccessToken(sharedFields, nowSeconds, isActiveUser);
+    const newRefreshToken = this.signRefreshToken(sharedFields, nowSeconds);
 
-      const newRefreshToken = this.createRefreshToken({
-        publicKey: decodedRefreshToken.sub,
-        nonce: decodedRefreshToken.nonce,
-        userAgentHash,
-        ipHash,
-        authMethod: decodedRefreshToken.authMethod,
-        totpEnabled: decodedRefreshToken.totpEnabled,
-      });
+    this.logIssuedTokens(decodedRefreshToken.sub, newAccessToken, newRefreshToken, isActiveUser);
 
-      const newAccessDecoded = jwt.decode(newAccessToken) as JWTPayload | null;
-      const newRefreshDecoded = jwt.decode(newRefreshToken) as JWTPayload | null;
+    const result = { accessToken: newAccessToken, newRefreshToken };
+    await this.cacheRefreshResult(redis, cacheKey, jti, result);
+    return result;
+  }
 
-      logger.log(`[JWTManager] New tokens generated for ${decodedRefreshToken.sub}`);
-      logger.log(`→ New accessToken JTI: ${newAccessDecoded?.jti}`);
-      logger.log(`→ New refreshToken JTI: ${newRefreshDecoded?.jti}`);
+  private static buildSharedTokenFields(
+    decoded: JWTPayload,
+    userAgent: string,
+    ip: string
+  ): Omit<JWTPayload, "iat" | "exp" | "jti" | "type"> {
+    return {
+      sub: decoded.sub,
+      nonce: decoded.nonce,
+      userAgentHash: userAgent ? createHash("sha256").update(userAgent).digest("base64") : "",
+      ipHash: ip ? createHash("sha256").update(ip).digest("base64") : "",
+      authMethod: decoded.authMethod,
+      totpEnabled: decoded.totpEnabled,
+    };
+  }
 
-      const result = {
-        accessToken: newAccessToken,
-        newRefreshToken: newRefreshToken,
-      };
+  private static signAccessToken(
+    shared: Omit<JWTPayload, "iat" | "exp" | "jti" | "type">,
+    nowSeconds: number,
+    isActiveUser: boolean
+  ): string {
+    const exp = isActiveUser
+      ? nowSeconds + this.ACCESS_TOKEN_EXPIRY_SECONDS + this.ACTIVE_USER_TOKEN_EXTENSION
+      : nowSeconds + this.ACCESS_TOKEN_EXPIRY_SECONDS;
+    return jwt.sign(
+      { ...shared, iat: nowSeconds, exp, jti: randomBytes(16).toString("hex"), type: "access" } as JWTPayload,
+      this.ACCESS_TOKEN_SECRET,
+      { algorithm: "HS256" }
+    );
+  }
 
-      if (useRedis && cacheKey) {
-        try {
-          await redis.set(cacheKey, JSON.stringify(result), "EX", 30); // 30s TTL
-        } catch (err) {
-          logger.error(`[JWTManager] Error caching refresh result for JTI: ${jti}`, err);
-        }
+  private static signRefreshToken(
+    shared: Omit<JWTPayload, "iat" | "exp" | "jti" | "type">,
+    nowSeconds: number
+  ): string {
+    return jwt.sign(
+      {
+        ...shared,
+        iat: nowSeconds,
+        exp: nowSeconds + this.REFRESH_TOKEN_EXPIRY_SECONDS,
+        jti: randomBytes(16).toString("hex"),
+        type: "refresh",
+      } as JWTPayload,
+      this.REFRESH_TOKEN_SECRET,
+      { algorithm: "HS256" }
+    );
+  }
+
+  private static logIssuedTokens(
+    sub: string,
+    accessToken: string,
+    refreshToken: string,
+    isActiveUser: boolean
+  ): void {
+    logger.log(`[JWTManager] New tokens generated for ${sub}`);
+    logger.log(`→ New accessToken JTI: ${(jwt.decode(accessToken) as JWTPayload | null)?.jti}`);
+    const refreshJti = (jwt.decode(refreshToken) as JWTPayload | null)?.jti;
+    const activeTag = isActiveUser
+      ? ` (active-game: access TTL extended by ${this.ACTIVE_USER_TOKEN_EXTENSION}s)`
+      : "";
+    logger.log(`→ New refreshToken JTI: ${refreshJti}${activeTag}`);
+  }
+
+  private static async cacheRefreshResult(
+    redis: RedisLike | null,
+    cacheKey: string | null,
+    jti: string | undefined,
+    result: { accessToken: string; newRefreshToken: string }
+  ): Promise<void> {
+    if (!redis || !cacheKey) return;
+    try {
+      await redis.set(cacheKey, JSON.stringify(result), "EX", 30);
+    } catch (err) {
+      logger.error(`[JWTManager] Error caching refresh result for JTI: ${jti}`, err);
+    }
+  }
+
+  // ─── Private helpers (refresh flow) ────────────────────────────────────────
+
+  private static async tryConnectRedis(): Promise<RedisLike | null> {
+    try {
+      const redisModule = await import("@/lib/redis");
+      const redis = redisModule.default as unknown as RedisLike;
+      const ping = await redis.ping();
+      return ping === "PONG" ? redis : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private static async readCachedRefresh(
+    redis: RedisLike,
+    cacheKey: string,
+    jti: string | undefined
+  ): Promise<string | null> {
+    try {
+      return await redis.get(cacheKey);
+    } catch (err) {
+      logger.error(`[JWTManager] Error reading cached refresh result for JTI: ${jti}`, err);
+      return null;
+    }
+  }
+
+  private static async acquireRefreshLock(
+    redis: RedisLike,
+    lockKey: string,
+    lockValue: string
+  ): Promise<boolean> {
+    const maxRetries = 30; // 3 seconds total max wait
+    const retryDelay = 100; // 100ms
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      // eslint-disable-next-line no-await-in-loop -- intentional bounded retry loop
+      const setRes = await redis.set(lockKey, lockValue, "NX", "PX", 5000);
+      if (setRes === "OK") return true;
+      // eslint-disable-next-line no-await-in-loop -- intentional delay between attempts
+      await new Promise(resolve => setTimeout(resolve, retryDelay));
+    }
+    return false;
+  }
+
+  private static async releaseLock(
+    redis: RedisLike,
+    lockKey: string,
+    lockValue: string,
+    jti: string | undefined
+  ): Promise<void> {
+    try {
+      const currentVal = await redis.get(lockKey);
+      if (currentVal === lockValue) {
+        await redis.del(lockKey);
       }
-
-      return result;
-    } finally {
-      if (lockAcquired && lockKey && useRedis) {
-        try {
-          const currentVal = await redis.get(lockKey);
-          if (currentVal === lockValue) {
-            await redis.del(lockKey);
-          }
-        } catch (err) {
-          logger.error(`[JWTManager] Error releasing lock for ${jti}:`, err);
-        }
-      }
+    } catch (err) {
+      logger.error(`[JWTManager] Error releasing lock for ${jti}:`, err);
     }
   }
 
@@ -433,10 +558,26 @@ export class JWTManager {
     return match && match[1] ? match[1] : null;
   }
   // maxAge is expected in seconds for cookie
-  static createSecureCookieOptions(maxAgeSeconds: number, requestHost?: string) {
+  /**
+   * Creates secure cookie options with extended expiry for active users
+   * @param maxAgeSeconds Base expiry time in seconds
+   * @param requestHost Optional host for domain configuration
+   * @param isActiveUser Whether to extend expiry for active users
+   * @returns Cookie options object
+   */
+  static createSecureCookieOptions(
+    maxAgeSeconds: number, 
+    requestHost?: string,
+    isActiveUser: boolean = false
+  ) {
     let secureCookie = isProd;
     let sameSiteValue: "none" | "lax" | "strict" = isProd ? "none" : "lax";
     let cookieDomain: string | undefined = undefined;
+    
+    // Extend expiry for active users
+    const finalMaxAge = isActiveUser 
+      ? maxAgeSeconds + this.ACTIVE_USER_TOKEN_EXTENSION 
+      : maxAgeSeconds;
 
     if (requestHost) {
       const baseDomain = getAppBaseDomain(requestHost);
@@ -457,7 +598,7 @@ export class JWTManager {
       httpOnly: true,
       secure: secureCookie,
       sameSite: sameSiteValue,
-      maxAge: maxAgeSeconds,
+      maxAge: finalMaxAge,
       path: "/",
     };
 
@@ -466,7 +607,7 @@ export class JWTManager {
     }
 
     logger.log(
-      `[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProd: ${isProd}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s, Path=${options.path}, Domain=${options.domain || "N/A"} (RequestHost: ${requestHost || "N/A"})`
+      `[JWTManager] Created cookie options: HttpOnly=${options.httpOnly}, Secure=${options.secure} (isProd: ${isProd}), SameSite=${options.sameSite}, MaxAge=${options.maxAge}s (Extended: ${isActiveUser}), Path=${options.path}, Domain=${options.domain || "N/A"} (RequestHost: ${requestHost || "N/A"})`
     );
     return options;
   }
